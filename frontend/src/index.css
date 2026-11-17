@@ -1,0 +1,198 @@
+@import "tailwindcss";
+
+/* Native <dialog> modern-web-guidance compliance */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+/* Accessible tab underline indicator (non-color cue per WCAG 1.4.1) */
+.mwg-tab[role="tab"] {
+  position: relative;
+}
+
+.mwg-tab[role="tab"][aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  border-block-end: 3px solid currentColor;
+}
+
+/* Single-row horizontal scroll tablist without wrapping */
+.mwg-tablist {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.mwg-tablist > .mwg-tab {
+  flex: none;
+}
+
+/* Responsive data table with sticky column & row headers + container query stacking */
+.table-wrapper {
+  overflow: auto;
+  max-inline-size: 100%;
+  max-block-size: min(560px, 75vh);
+  container-type: inline-size;
+}
+
+.mwg-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.mwg-table thead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 2;
+}
+
+.mwg-table tbody th {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  background: #ffffff;
+}
+
+@container (width < 600px) {
+  .mwg-table,
+  .mwg-table thead,
+  .mwg-table tbody,
+  .mwg-table tr,
+  .mwg-table th,
+  .mwg-table td {
+    display: block;
+  }
+
+  .mwg-table thead {
+    display: none;
+  }
+
+  .mwg-table tr {
+    margin-block-end: 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    background: #ffffff;
+  }
+
+  .mwg-table tbody th {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 2;
+    background: #f1f5f9;
+    padding: 0.65rem 0.85rem;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .mwg-table tbody td {
+    padding: 0.5rem 0.85rem;
+    text-align: left !important;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  .mwg-table tbody td::before {
+    font-weight: 600;
+    color: #64748b;
+    font-size: 0.75rem;
+    display: inline-block;
+    margin-inline-end: 0.45rem;
+  }
+
+  .mwg-table[data-table="cfo"] td:nth-child(2)::before { content: var(--label-2, "Tokens:") " "; }
+  .mwg-table[data-table="cfo"] td:nth-child(3)::before { content: var(--label-3, "Field Accuracy:") " "; }
+  .mwg-table[data-table="cfo"] td:nth-child(4)::before { content: var(--label-4, "Per 1k:") " "; }
+  .mwg-table[data-table="cfo"] td:nth-child(5)::before { content: var(--label-5, "100k/mo:") " "; }
+  .mwg-table[data-table="cfo"] td:nth-child(6)::before { content: var(--label-6, "1M/mo:") " "; }
+  .mwg-table[data-table="cfo"] td:nth-child(7)::before { content: var(--label-7, "Savings:") " "; }
+
+  .mwg-table[data-table="batch-items"] td:nth-child(2)::before { content: var(--label-2, "Task:") " "; }
+  .mwg-table[data-table="batch-items"] td:nth-child(3)::before { content: var(--label-3, "Tokens:") " "; }
+  .mwg-table[data-table="batch-items"] td:nth-child(4)::before { content: var(--label-4, "Haiku 5.5 JSON:") " "; }
+  .mwg-table[data-table="batch-items"] td:nth-child(5)::before { content: var(--label-5, "Gemini Decision 1:") " "; }
+  .mwg-table[data-table="batch-items"] td:nth-child(6)::before { content: var(--label-6, "Model Accuracy:") " "; }
+  .mwg-table[data-table="batch-items"] td:nth-child(7)::before { content: var(--label-7, "Regex PII:") " "; }
+
+  .mwg-table[data-table="cat2-risks"] td:nth-child(2)::before { content: var(--label-2, "Severity:") " "; }
+  .mwg-table[data-table="cat2-risks"] td:nth-child(3)::before { content: var(--label-3, "Exposure:") " "; }
+  .mwg-table[data-table="cat2-risks"] td:nth-child(4)::before { content: var(--label-4, "Mitigation:") " "; }
+
+  .mwg-table[data-table="cat3-turns"] td:nth-child(2)::before { content: var(--label-2, "Window:") " "; }
+  .mwg-table[data-table="cat3-turns"] td:nth-child(3)::before { content: var(--label-3, "Uncached In:") " "; }
+  .mwg-table[data-table="cat3-turns"] td:nth-child(4)::before { content: var(--label-4, "Cache W / R:") " "; }
+  .mwg-table[data-table="cat3-turns"] td:nth-child(5)::before { content: var(--label-5, "Out / Sum:") " "; }
+  .mwg-table[data-table="cat3-turns"] td:nth-child(6)::before { content: var(--label-6, "Turn Cost:") " "; }
+  .mwg-table[data-table="cat3-turns"] td:nth-child(7)::before { content: var(--label-7, "Cum. Cost:") " "; }
+}
+
+/* Native <details> accordion following modern-web-guidance accordion guide */
+.mwg-accordion details > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5ch;
+  cursor: pointer;
+}
+
+.mwg-accordion details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.mwg-accordion details > summary::before {
+  content: "";
+  inline-size: 1em;
+  block-size: 1em;
+  flex-shrink: 0;
+  background-color: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat center / contain;
+  rotate: -90deg;
+}
+
+.mwg-accordion details > summary:dir(rtl)::before {
+  rotate: 90deg;
+}
+
+.mwg-accordion details[open] > summary::before {
+  rotate: 0deg;
+}
+
+.mwg-accordion details::details-content {
+  interpolate-size: allow-keywords;
+  overflow: clip;
+  contain: layout;
+}
+
+.mwg-accordion details:not([open])::details-content {
+  block-size: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mwg-accordion details > summary::before {
+    transition: rotate 0.2s;
+  }
+
+  .mwg-accordion details::details-content {
+    transition: block-size, content-visibility, display;
+    transition-duration: 0.25s;
+    transition-timing-function: ease-in-out;
+    transition-behavior: allow-discrete;
+  }
+}
+
+/* Auto-sizing textarea following form-fields-automatically-fit-contents (progressive enhancement) */
+.mwg-auto-textarea {
+  field-sizing: content;
+  height: auto;
+  width: 100%;
+  min-block-size: 3lh;
+  max-block-size: 12lh;
+}

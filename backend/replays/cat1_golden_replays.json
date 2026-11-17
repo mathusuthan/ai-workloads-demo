@@ -1,0 +1,863 @@
+{
+  "presets": {
+    "tkt-01": {
+      "sub_task": "support_triage",
+      "rungs": {
+        "sonnet_naive": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 16940,
+          "input_tokens": 1468,
+          "output_tokens": 2048,
+          "structured_output": {
+            "mode": "unstructured_chat_prose",
+            "char_length": 5267
+          },
+          "raw_text_preview": "# Escalation Analysis: NM-CS-2026-884921\n\n## 1. Executive Summary\n\nA NovaPrime Gold customer (47 lifetime orders, 2.1% return rate) received a 16-piece stoneware dinnerware set (Order NM-ORD-99401283, $189.50) with 10 of 16 pieces shattered (6 plates, 4 soup bowls). She has a hard deadline: guests arrive for a family Diwali dinner tomorrow evening, and she needs a callback by **6 PM PT today**. She also reports a duplicate charge from a failed backup order attempt.\n\n**Telemetry corroborates her account on both issues:**\n\n| Issue | Customer claim | System evidence |\n|---|---|---|\n| Damage | Crushed carton, missing foam divider | `EXCEPTION_REPACK_DAMAGED_CARTON` at OAK-SORT-1 on 11/15. The carton was already flagged damaged in transit, then delivered anyway. Item is `fragile_flag: true`. |\n| Duplicate charge | Charged twice | AUTH-991A is CAPTURED and AUTH-991B is PENDING_HOLD_RETRY_TIMEOUT. This looks like a gateway retry after a checkout timeout, which would make the second charge a **pending hold, not a true second capture**. |\n\n**Key insight:** This is two separate problems, a carrier/fulfillment damage claim and a payment gateway defect. They should be worked in parallel, not sequentially, and the damage claim does not need a carrier investigation to proceed. The damage was recorded in NovaMart's own carrier scan data before delivery.\n\n**Note on the order ambiguity:** The telemetry shows one order at $189.50. The customer describes the second charge as coming from an emergency backup order attempt. Agents should confirm whether a second order was actually created or only a payment hold, since this changes the remedy.\n\n---\n\n## 2. Routing Recommendation\n\n**Primary queue:** Priority Escalations, Fulfillment Damage and Expedited Replacement (VIP)\n**Secondary (parallel) queue:** Payments Operations, Duplicate Charge / Gateway Hold Review\n**Priority:** **P1 (Critical, time-boxed)**\n\n**Reasoning:**\n1. **Hard customer deadline.** Delivery is needed before tomorrow evening, and the callback is requested by 6 PM PT today. The overnight shipping cutoff is the real constraint. Standard SLAs will miss it.\n2. **VIP tier.** NovaPrime Gold with 47 orders and a low return rate points to a high-trust, high-LTV customer with low fraud risk.\n3. **Liability is already established.** The carrier exception scan precedes delivery, so no investigation is needed to approve a replacement. Fulfillment node FBO-OAK-04 should also be reviewed for the missing foam divider (see below).\n4. **Channel failure.** The bot looped her three times, so a specialist handoff is overdue. Escalation fatigue is a retention risk.\n5. **Payment issue is likely low-risk but high-anxiety.** A pending hold usually auto-releases, but she doesn't know that. Resolving it quickly prevents a second complaint.\n\n**Ownership:** Assign a single named agent as owner across both queues so the customer gets one point of contact.\n\n---\n\n## 3. PII Audit and Redacted Summary\n\n### PII Inventory\n\n| # | Element | Where it appears | Sensitivity |\n|---|---|---|---|\n| 1 | Full name: Priya Nair | Email header | Standard PII |\n| 2 | Email address | Email header, body (twice) | Standard PII |\n| 3 | Phone number | Header and body (two formats) | Standard PII |\n| 4 | **Full Visa card number (16 digits)** | Message body (twice) | **Critical, PCI-DSS in scope** |\n| 5 | Card last-4 (0099) | Chat log | Low (permitted for display) |\n| 6 | Order ID, tracking number | Envelope, telemetry | Transactional identifiers (internal) |\n| 7 | Delivery location (indirect) | \"SFO-DEL-02\", \"front porch\" | Indirect location signal |\n| 8 | Purchase behavior (47 orders, return rate) | Telemetry | Profile data |\n| 9 | Religious/cultural context (Diwali observance) | Message body | Potentially sensitive inference |\n\n### \u26a0\ufe0f Compliance Flag: Full PAN in Plaintext\n\nThe customer pasted her **full 16-digit card number** into an email, and it now sits unmasked in the ticket. This should be treated as a data-handling incident:\n- Mask the PAN in the ticket record (retain last-4 only: **0099**).\n- Check whether the email body was replicated to logs, search indexes, or attachments, and purge or tokenize where possible.\n- **Never repeat the full number back to the customer.** Verify the card by last-4 only.\n- Log the exposure per your PCI/security policy. This is customer-initiated, but the stored copy is still NovaMart's responsibility.\n- Do not accept card numbers by email in the future. Consider a templated reminder in the reply.\n\n### Redacted Summary (safe for sharing, analytics, or training)\n\n> NovaPrime Gold customer [NAME REDACTED] reports that a 16-piece ceramic dinnerware set (order [ORDER-REF]) arrived with 10 pieces broken and no internal foam divider. Carrier telemetry shows a pre-delivery damaged-carton exception. Customer has an event requiring replacement within roughly 30 hours. Customer also reports a duplicate charge on card ending **0099** ($189.50 captured and $189.50 pending) following a checkout timeout during a backup order attempt. Customer requests an expedited replacement or refund, with callback before 6 PM PT. Contact details on file: [PHONE REDACTED], [EMAIL REDACTED].\n\n---\n\n## 4. Suggested Next Steps\n\n### Immediate (within 30-60 minutes)\n1. **Take",
+          "decision_probabilities": null
+        },
+        "haiku_calibrated": {
+          "model_id": "claude-haiku-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 1998,
+          "input_tokens": 2063,
+          "output_tokens": 100,
+          "structured_output": {
+            "queue": "shipping_logistics",
+            "priority": "P1_HIGH",
+            "contains_pii": true,
+            "pii_categories": [
+              "PAYMENT_CARD",
+              "EMAIL",
+              "PHONE"
+            ],
+            "auto_action": "route_specialist",
+            "reason_code": "TRANSIT_DAMAGE"
+          },
+          "raw_text_preview": "{\"queue\":\"shipping_logistics\",\"priority\":\"P1_HIGH\",\"contains_pii\":true,\"pii_categories\":[\"PAYMENT_CARD\",\"EMAIL\",\"PHONE\"],\"auto_action\":\"route_specialist\",\"reason_code\":\"TRANSIT_DAMAGE\"}",
+          "decision_probabilities": null
+        },
+        "gemini_decision": {
+          "model_id": "gemini-decision-1",
+          "provider": "Google Gemini Decisions API",
+          "latency_ms": 678,
+          "input_tokens": 1472,
+          "output_tokens": 0,
+          "structured_output": {
+            "severity": 1.916,
+            "auto_action": "auto_replace",
+            "queue": "replacements",
+            "contains_sensitive_pii": true
+          },
+          "raw_text_preview": null,
+          "decision_probabilities": {
+            "severity": {
+              "type": "score",
+              "value": 1.916,
+              "confidence": 0.705,
+              "probabilities": {
+                "3": 0.1096,
+                "1": 0.1774,
+                "2": 0.705,
+                "0": 0.008
+              },
+              "legend": {
+                "2": "P1 High: Broken merchandise, legal/regulatory threat, or blocked seller payout.",
+                "1": "P2 Medium: Standard delivery or billing delay, normal SLA handling.",
+                "0": "P3 Low: Routine inquiry, zero financial loss, no compliance or safety exposure.",
+                "3": "P0 Critical: Active account takeover, fraud drain, or immediate financial/security loss."
+              }
+            },
+            "auto_action": {
+              "type": "choice",
+              "value": "auto_replace",
+              "confidence": 0.5205,
+              "probabilities": {
+                "escalate_security": 0.0257,
+                "route_specialist": 0.4057,
+                "hold_and_audit": 0.0481,
+                "auto_replace": 0.5205
+              }
+            },
+            "queue": {
+              "type": "choice",
+              "value": "replacements",
+              "confidence": 0.8801,
+              "probabilities": {
+                "billing_payouts": 0.0992,
+                "shipping_logistics": 0.0069,
+                "replacements": 0.8801,
+                "trust_and_safety": 0.0084,
+                "general_support": 0.0055
+              }
+            },
+            "contains_sensitive_pii": {
+              "type": "noul",
+              "value": true,
+              "p_true": 0.9791,
+              "confidence": 0.9791
+            }
+          }
+        },
+        "haiku_naive": {
+          "model_id": "claude-haiku-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 10902,
+          "input_tokens": 1468,
+          "output_tokens": 2048,
+          "structured_output": {
+            "mode": "unstructured_chat_prose",
+            "char_length": 5443
+          },
+          "raw_text_preview": "## (1) Executive Summary\n\nPriya Nair (NovaPrime_Gold, 47 lifetime orders, 2.1% prior return rate) received a 16-piece fragile ceramic dinnerware set (order NM-ORD-99401283, SKU NM-HOME-77412, $189.50) with six plates and four bowls shattered. The carrier record shows the carton was already flagged at the Oak sort hub as a damaged-carton repack exception before final delivery, and the foam divider appears to have been missing. She needs either an express replacement before tomorrow evening's Diwali dinner or a refund. Separately, a checkout timeout produced a duplicate $189.50 authorization on her card: one captured, one pending/timeout. She has asked for a callback before 6 PM PT today and has posted this as her third contact.\n\nTwo issues need resolution: (a) a damaged-goods replacement/refund, and (b) a duplicate payment authorization.\n\n## (2) Routing Recommendation\n\n**Queue:** Tier-2 Escalations, with a linked Payments/Billing Integrity sub-task\n**Priority:** P1 (Critical / same-business-day SLA)\n\n**Reasoning:**\n1. **VIP tier:** NovaPrime_Gold status warrants expedited handling.\n2. **Time sensitivity:** Hard deadline of 6 PM PT today, with a real-world event (guests arriving tomorrow) that makes a standard 7-business-day carrier investigation unacceptable.\n3. **Repeated contact:** Third contact in one day after bot loops. Escalation is already overdue.\n4. **Two distinct problems:** Physical damage (fulfillment/carrier liability) and a financial error (payments). The payments piece should be handled in parallel, since a duplicate auth on a customer card is a compliance and trust risk.\n5. **Fragile-flag and hub exception:** The shipment was flagged for damage before delivery, which suggests a fulfillment packaging failure at FBO-OAK-04 and possibly a carrier handling issue. This should also go to the seller/fulfillment quality team (SLR-40192 / FBO-OAK-04) for root-cause review.\n6. **Lower-risk secondary factor:** The 2.1% return rate and long tenure argue against fraud, so the default posture should be goodwill, not scrutiny.\n\n## (3) PII Audit and Redacted Summary\n\n**PII elements found in the thread:**\n\n| # | Element | Location | Sensitivity | Handling |\n|---|---|---|---|---|\n| 1 | Full name (Priya Nair) | From header, signature context | Medium | Retain in CRM only; redact in shared/analytics views |\n| 2 | Email address (priya.nair@customer-demo.example) | From header, body | Medium | Required for callback; restrict access |\n| 3 | Phone number (+1 415-555-0194) | Header, body | Medium | Required for callback; restrict access |\n| 4 | Full Visa card number (4532-8910-4421-0099) | Body, twice | **High (PCI DSS)** | **Must not be stored, forwarded, or displayed in ticket notes.** Mask to last 4 (0099). Flag to Security/PCI team for review of how the full PAN entered the email/ticket channel. |\n| 5 | Order ID, ticket ID, auth IDs, tracking number | Telemetry | Low\u2013Medium (linkable) | Operational; keep, but do not pair with name in external communications |\n| 6 | Customer lifetime order count and return rate | Telemetry | Low (internal) | Internal use only |\n| 7 | Attachments (photos of box and packing slip) | Referenced | Potentially contains address/labels | Review before viewing or sharing; strip shipping label data if forwarded |\n\n**Immediate action required:** The full card number was transmitted in plaintext via email and appears in a ticket record. Mask it in all systems, notify the PCI/Security team, and advise the customer (without repeating the full number) not to send card details by email in the future.\n\n**Cleaned/Redacted Summary (for shared use):**\n\n> Customer (NovaPrime_Gold, VIP) reports a fragile dinnerware order (NM-ORD-99401283, SKU NM-HOME-77412) arrived with multiple broken pieces. Carrier record indicates a damaged-carton exception at origin hub prior to delivery. Customer requests express replacement or refund by 6 PM PT today. Separately, a duplicate $189.50 authorization occurred during a checkout timeout (AUTH-991A captured, AUTH-991B pending/timeout). Card ending in **0099**. Contact via verified callback. Full card data was included in customer correspondence and has been flagged for PCI review.\n\n## (4) Recommended Next Steps and Agent Talking Points\n\n**Next steps (in order):**\n1. **Within 30 minutes:** Mask the card number across the ticket. Notify Security/PCI. Confirm the callback number through the account record, not only the email.\n2. **Within 1 hour:** Call Priya at the verified number. Do not wait for the 6 PM deadline.\n3. **Payments:** Void or release AUTH-991B (pending/timeout), confirm it will not capture, and verify that only one $189.50 charge will settle. If AUTH-991B has already captured, issue a refund of $189.50 to the card and provide the reference number.\n4. **Replacement:** Authorize an express overnight replacement of SKU NM-HOME-77412 from a non-OAK node if possible, with fragile handling and a foam-divider-verified pack. Provide tracking to the customer. If overnight delivery cannot arrive before tomorrow's dinner, offer a partial refund plus a faster-arriving alternative for the rest of the set.\n5. **Goodwill:** Given VIP status and the fulfillment failure, consider a goodwill credit (for example, a percentage off the next order) in addition to the replacement or refund.\n6. **Seller/fulfillment:** Open a quality case for SLR-40192 and FBO-OAK-04 regarding packaging (missing divider) and the dam",
+          "decision_probabilities": null
+        }
+      }
+    },
+    "tkt-02": {
+      "sub_task": "support_triage",
+      "rungs": {
+        "sonnet_naive": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 15433,
+          "input_tokens": 1245,
+          "output_tokens": 2048,
+          "structured_output": {
+            "mode": "unstructured_chat_prose",
+            "char_length": 4948
+          },
+          "raw_text_preview": "# NovaMart Escalation Analysis: NM-SLR-2026-552019\n\n## 1. Executive Summary\n\n**Apex Lumina Electronics LLC** (Platinum tier, ~$412.8K trailing-90-day GMV) has a **$148,920.00** settlement (Batch PAY-2026-W46-88210) frozen in compliance escrow for 96 hours. The system flag is **TAX_TIN_KYC_MISMATCH_TRIGGER_409**: the tax profile shows `PENDING_MANUAL_REVIEW_NAME_VARIANCE`, and the seller reports a mismatch between their W-9/PAN filings and their beneficiary bank account. The last KYC audit was 2025-09-14, over 13 months ago.\n\n**Seller impact:** They claim obligations to logistics suppliers for 4,200 shipped units during Diwali peak.\n\n**Seller threats (24-hour deadline):**\n- Commercial arbitration under Section 14.3 of the Seller Agreement\n- Pausing ~1,850 active Diwali listings\n\n**Account health is strong:** chargeback rate 0.18%, order defect rate 0.42%. The hold is tax/KYC-driven, not performance- or fraud-driven.\n\n**Critical secondary issue:** The seller pasted sensitive identifiers (Aadhaar, PAN, full payment card number) in plain text into a ticket. That is a data-handling incident requiring its own remediation (see Section 3).\n\n**Ledger math check:** $176,400.00 \u2212 $21,168.00 \u2212 $6,312.00 = **$148,920.00**. The figures reconcile.\n\n---\n\n## 2. Recommended Routing & Priority\n\n**Primary queue:** Seller Finance \u2192 Treasury Compliance (KYC/Tax Escrow Review)\n**Secondary (parallel) queues:**\n- **Privacy / Data Security Incident Response** (for the PII exposure)\n- **Legal / Seller Contracts** (cc, awareness only, for the arbitration threat)\n- **Seller Success / Account Management** (Platinum relationship owner)\n\n**Priority: P1, Critical**\n\n**Reasoning:**\n1. **Financial magnitude:** ~$149K held, with a seller-stated cash-flow dependency.\n2. **Time sensitivity:** The seller has set a 24-hour deadline, and the hold is already at 96 hours. Peak-season timing amplifies the harm of delay.\n3. **Platform risk:** A threatened listing pause affects ~1,850 SKUs during peak, which means GMV loss for NovaMart too.\n4. **Legal exposure:** Arbitration language and a Section 14.3 citation warrant Legal awareness.\n5. **Tier and health:** Platinum seller with excellent metrics, so a low fraud likelihood and a high retention value.\n6. **Root cause is resolvable:** A name-variance TIN mismatch is typically cleared through manual document review, so a fast, bounded fix is plausible.\n7. **Compliance guardrail:** This must **not** be solved by \"just releasing the funds.\" The escrow hold is a compliance control. Only authorized Treasury Compliance staff can lift it, after verification. Frontline agents should not promise a release.\n\n**Suggested SLA targets:**\n- Acknowledge seller: within 1 hour\n- Assign named Treasury Compliance specialist: within 4 hours\n- Provide a substantive status and document request: within 8 hours\n- Resolution target: within 24 to 48 hours, pending document verification\n\n---\n\n## 3. PII Audit & Redacted Summary\n\n### Complete PII/sensitive-data inventory\n\n| # | Element | Value found | Sensitivity | Location | Action |\n|---|---------|-------------|-------------|----------|--------|\n| 1 | Aadhaar number (India national ID) | 4829-6173-9042 | **Critical** | Dispute body | Redact; incident report |\n| 2 | PAN (India tax ID) | ABCDE1234F | **High** | Dispute body | Redact; incident report |\n| 3 | Payment card number (full PAN) | 5412-7500-8812-3344 | **Critical (PCI-DSS)** | Dispute body | Redact; PCI incident |\n| 4 | Individual's full name | Vikram Mehta | Medium | Header/body | Pseudonymize |\n| 5 | Email address | vikram.mehta@apexlumina.example | Medium | Header and body (2x) | Mask |\n| 6 | Phone number | +1 (312) 555-0148 | Medium | Header | Mask |\n| 7 | Phone number (same, alt. format) | 312-555-0148 | Medium | Body | Mask |\n| 8 | Seller ID | SLR-88210 | Low (internal ID) | Header | Retain for routing |\n| 9 | Business legal name | Apex Lumina Electronics LLC | Low (business entity) | Header, JSON | Retain; business data |\n| 10 | Financial amounts/batch ID | $148,920.00; PAY-2026-W46-88210 | Low-Med (confidential business) | Throughout | Retain; operationally necessary |\n\n**Notes:**\n- **Aadhaar is regulated** under India's Aadhaar Act and DPDP framework. Storing or displaying it in a support system may create compliance exposure.\n- **The full card number is a PCI-DSS violation** if stored in plaintext in a ticketing system. Card data must not persist here.\n- **Mismatched data types:** The seller is an **LLC with a W-9** (US) but is submitting an **Indian Aadhaar/PAN** as \"beneficial owner\" and \"India Cross-Border Entity PAN.\" That cross-jurisdictional mix may be legitimate (an Indian-origin owner of a US LLC) but plausibly explains the name-variance TIN mismatch and should be flagged for the reviewer.\n- **Duplicate exposure:** The email appears twice and the phone twice (in two formats).\n\n### Required data-handling actions (not optional)\n1. **Mask or purge** the Aad",
+          "decision_probabilities": null
+        },
+        "haiku_calibrated": {
+          "model_id": "claude-haiku-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 1877,
+          "input_tokens": 1843,
+          "output_tokens": 135,
+          "structured_output": {
+            "queue": "billing_payouts",
+            "priority": "P1_HIGH",
+            "contains_pii": true,
+            "pii_categories": [
+              "AADHAAR",
+              "PAYMENT_CARD",
+              "EMAIL",
+              "PHONE",
+              "TAX_PAN_ID",
+              "BANK_ROUTING"
+            ],
+            "auto_action": "hold_and_audit",
+            "reason_code": "SETTLEMENT_HOLD_LEGAL"
+          },
+          "raw_text_preview": "{\"queue\":\"billing_payouts\",\"priority\":\"P1_HIGH\",\"contains_pii\":true,\"pii_categories\":[\"AADHAAR\",\"PAYMENT_CARD\",\"EMAIL\",\"PHONE\",\"TAX_PAN_ID\",\"BANK_ROUTING\"],\"auto_action\":\"hold_and_audit\",\"reason_code\":\"SETTLEMENT_HOLD_LEGAL\"}",
+          "decision_probabilities": null
+        },
+        "gemini_decision": {
+          "model_id": "gemini-decision-1",
+          "provider": "Google Gemini Decisions API",
+          "latency_ms": 864,
+          "input_tokens": 1318,
+          "output_tokens": 0,
+          "structured_output": {
+            "auto_action": "hold_and_audit",
+            "queue": "billing_payouts",
+            "severity": 2.043,
+            "contains_sensitive_pii": true
+          },
+          "raw_text_preview": null,
+          "decision_probabilities": {
+            "auto_action": {
+              "type": "choice",
+              "value": "hold_and_audit",
+              "confidence": 0.9028,
+              "probabilities": {
+                "escalate_security": 0.0262,
+                "hold_and_audit": 0.9028,
+                "auto_replace": 0.0051,
+                "route_specialist": 0.0658
+              }
+            },
+            "queue": {
+              "type": "choice",
+              "value": "billing_payouts",
+              "confidence": 0.9753,
+              "probabilities": {
+                "trust_and_safety": 0.0207,
+                "billing_payouts": 0.9753,
+                "replacements": 0.001,
+                "shipping_logistics": 0.001,
+                "general_support": 0.002
+              }
+            },
+            "severity": {
+              "type": "score",
+              "value": 2.043,
+              "confidence": 0.754,
+              "probabilities": {
+                "3": 0.1483,
+                "2": 0.754,
+                "0": 0.0072,
+                "1": 0.0905
+              },
+              "legend": {
+                "1": "P2 Medium: Standard delivery or billing delay, normal SLA handling.",
+                "0": "P3 Low: Routine inquiry, zero financial loss, no compliance or safety exposure.",
+                "3": "P0 Critical: Active account takeover, fraud drain, or immediate financial/security loss.",
+                "2": "P1 High: Broken merchandise, legal/regulatory threat, or blocked seller payout."
+              }
+            },
+            "contains_sensitive_pii": {
+              "type": "noul",
+              "value": true,
+              "p_true": 0.9567,
+              "confidence": 0.9567
+            }
+          }
+        },
+        "haiku_naive": {
+          "model_id": "claude-haiku-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 9722,
+          "input_tokens": 1245,
+          "output_tokens": 2048,
+          "structured_output": {
+            "mode": "unstructured_chat_prose",
+            "char_length": 5137
+          },
+          "raw_text_preview": "# NovaMart Enterprise Operations: Escalation Analysis\n\n**Ticket:** NM-SLR-2026-552019 | **Seller:** SLR-88210 (Apex Lumina Electronics LLC) | **Tier:** Marketplace_Pro_Platinum | **Received:** 2026-11-16 14:05:44 UTC\n\n---\n\n## 1. Executive Summary\n\nApex Lumina Electronics, a Platinum-tier seller with $412,800 trailing 90-day GMV, reports that its $148,920.00 Diwali peak settlement (Batch PAY-2026-W46-88210) is frozen in COMPLIANCE_ESCROW_HOLD for 96 hours. The system reason is TAX_TIN_KYC_MISMATCH_TRIGGER_409, with the tax TIN verification status \"PENDING_MANUAL_REVIEW_NAME_VARIANCE.\" The seller says it was given no prior notice and must pay upstream logistics suppliers for 4,200 units. It threatens arbitration under Section 14.3 of the Marketplace Seller Agreement and a pause of 1,850 active listings if the funds are not released or a senior Treasury Compliance specialist is not assigned within 24 hours.\n\nKey considerations:\n- The hold stems from a **name variance** between the tax filing and the bank beneficiary. This is a compliance control, not a ledger error, and it should not be released without verification.\n- The ticket includes **sensitive financial identifiers** that the seller should not have sent through a support channel (see Section 3). This is a security and data-handling issue in its own right.\n- The legal threat and the 24-hour deadline require Legal/Compliance coordination.\n- Ledger math reconciles: $176,400 \u2212 $21,168 \u2212 $6,312 = $148,920.00.\n\n---\n\n## 2. Routing Recommendation\n\n**Primary queue:** Seller Finance \u2192 Treasury Compliance (Escrow & KYC Review)\n**Secondary (parallel) queues:** Legal/Commercial Disputes (Section 14.3 threat); Data Privacy & Security (PII exposure)\n**Priority:** P1 \u2013 Critical (financial hold on a Platinum seller plus legal deadline plus PII exposure)\n\n**Reasoning:**\n1. **Financial impact:** $148,920 payout held during a peak period, with seller-side supplier obligations. Platinum tier and $412K GMV raise business stakes.\n2. **Compliance control active:** The 409 KYC/TIN trigger is an intentional safeguard. Routing to a general seller support queue would risk an unverified release, which creates both regulatory and fraud exposure.\n3. **Legal threat with a 24-hour clock:** Arbitration language and a listing-pause threat require Legal awareness the same day, so the matter must not sit in a standard queue.\n4. **PII exposure:** Aadhaar, PAN, and a full card number were transmitted in plaintext through the portal. This must go to Privacy/Security for incident handling independent of the dispute.\n5. **Fraud indicators to weigh (not conclusions):** Name variance, payout timing, and a request to \"release immediately\" with credentials attached are patterns that match both legitimate urgency and social-engineering attempts. Verification must come through independent channels, not through the ticket.\n\n**Routing note:** Do not release funds or change beneficiary details based on this ticket. Verify identity through the seller's registered contact on file (from the original onboarding record, not the email/phone in this submission).\n\n---\n\n## 3. PII Audit\n\n| # | Element | Location in Ticket | Classification | Risk | Handling |\n|---|---|---|---|---|---|\n| 1 | Full name: Vikram Mehta | Submitter line | Personal Identifier | Medium | Retain for case; mask in shared views |\n| 2 | Email: vikram.mehta@apexlumina.example | Submitter line; contact field | Personal Contact | Medium | Retain for case; mask in summaries |\n| 3 | Phone: +1 (312) 555-0148 | Direct Tel; Backup Phone | Personal Contact | Medium | Retain for case; mask in summaries |\n| 4 | **Aadhaar: 4829-6173-9042** | Credentials block | **Government ID (India)** | **Critical** | Redact; quarantine; notify Privacy |\n| 5 | **PAN: ABCDE1234F** | Credentials block | **Tax ID (India)** | **High** | Redact; quarantine; notify Privacy |\n| 6 | **Card: 5412-7500-8812-3344** | Credentials block | **Payment Card Number (PCI scope)** | **Critical** | Redact; quarantine; PCI incident review; verify whether card is on file vs. transmitted |\n| 7 | Entity legal name: Apex Lumina Electronics LLC | Multiple | Business Info | Low | Retain |\n| 8 | Seller ID: SLR-88210 | Multiple | Internal Identifier | Low | Retain |\n| 9 | Batch/ledger figures | Ledger dump | Financial (business) | Low\u2013Medium | Retain for finance |\n\n**Security notes:**\n- Items 4\u20136 were transmitted in clear text in a support channel. Treat as a potential exposure event. Confirm whether the systems storing this ticket are access-controlled and whether they are retained beyond policy.\n- Do not copy items 4\u20136 into internal notes, Slack/Teams threads, or the agent's reply.\n- Item 6 (full card number) may trigger PCI DSS handling obligations; involve the PCI owner.\n- The Aadhaar number is subject to India's Aadhaar Act restrictions on storage and sharing; consult Privacy/Legal before retaining.\n\n### Cleaned / Redacted Summary (safe for shared use)\n\n> Seller SLR-88210 (Apex Lumina Electronics LLC, Platinum) disputes a $148,920.00 settlement hold (Batch PAY-2026-W46-88210) triggered by a TIN/KYC name-variance check (code 409",
+          "decision_probabilities": null
+        }
+      }
+    },
+    "tkt-03": {
+      "sub_task": "support_triage",
+      "rungs": {
+        "sonnet_naive": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 16412,
+          "input_tokens": 1261,
+          "output_tokens": 2048,
+          "structured_output": {
+            "mode": "unstructured_chat_prose",
+            "char_length": 5387
+          },
+          "raw_text_preview": "# NovaMart Escalation Analysis: NM-SEC-2026-910442\n\n## 1. Executive Summary\n\n**Confirmed active account takeover (ATO) in progress.** The customer reports, and telemetry corroborates, that an unauthorized party has:\n\n- Changed the login email at 14:49:11Z, bypassing MFA (`mfa_bypass_flag: true`)\n- Locked the legitimate owner out of the app\n- Queued a **$450 instant-delivery gift card export**, which is the most time-critical exposure because digital delivery is irreversible once sent\n- Placed a **$1,199 console order** routed to a Newark locker, with a pre-auth on the customer's saved card\n- Launched the session from a **Tor exit node** with no device fingerprint match, roughly 3.7 hours after the last legitimate Seattle login\n\nATO model score is **0.984**, and the customer's report matches the system evidence on every point. The caller called within about 3 minutes of the email change, so loss prevention is still possible if action is immediate.\n\n---\n\n## 2. Routing & Priority\n\n**Queue:** Trust & Safety, Account Takeover Response (live-agent, fraud-authorized)\n**Priority:** **P0 / Critical. Immediate human handoff, no callback queue.**\n\n**Reasoning:**\n1. **Active loss in progress.** The gift card export is queued for instant delivery to the attacker's email. Every minute increases the chance of irreversible loss.\n2. **Corroborated, not just claimed.** The email change, MFA bypass, Tor ASN, and device mismatch independently confirm the caller's story, so this is not a \"verify first\" scenario.\n3. **Multiple loss vectors.** Stored value, a card pre-auth, a physical goods shipment, and two saved payment tokens are all exposed.\n4. **Security-authorized actions required.** The recommended playbooks (wallet lock, token revocation, dispatch hold) typically need T&S permissions beyond general support.\n5. **Caller should not stay in IVR.** The IVR response (\"I can help with account questions\") was inadequate for this situation. Route directly, with no re-description required.\n\n---\n\n## 3. PII Audit & Redacted Summary\n\n| # | Element | Location | Sensitivity | Handling |\n|---|---------|----------|-------------|----------|\n| 1 | Customer's real email (`david.chen88@mail-demo.example`) | Transcript, telemetry `old_email` | Medium. Direct identifier, also the verified recovery channel | Redact in summaries, retain in secure case record |\n| 2 | Customer phone (206-555-0173) | Transcript | Medium | Mask to last 4: `***-***-0173` |\n| 3 | **Full Visa PAN (4916-3320-1194-8821)** | Transcript | **High. PCI-DSS in scope** | **Mask to last 4 (`****-8821`). The full number should not persist in transcript storage. Flag for PCI-compliant redaction/purge.** |\n| 4 | Attacker email (`x992_drop_acc@proton-temp.example`) | Telemetry | Low for privacy; **high investigative value** | Preserve as evidence, restrict to T&S/fraud |\n| 5 | Attacker IP (185.220.101.44) | Telemetry | Low for privacy; high evidence value | Preserve for T&S, block-listing |\n| 6 | Account ID (CUST-3091882) | Header | Internal identifier | OK internally, mask in external comms |\n| 7 | Prior login city (Seattle, WA) | Telemetry | Low-Medium (location inference) | Generalize in summaries |\n| 8 | Customer name (inferred \"David Chen\") | Derived from email handle | Low-Medium | Not confirmed in transcript. Do not assume or use until verified |\n\n**Key PII findings:**\n- The caller **spoke a full card number aloud**, so it was captured by speech-to-text. Recommend PCI review of IVR transcript retention, and note that voice-based card disclosure (even by the customer, unprompted) should trigger redaction rules.\n- Do not ask the customer to repeat full card numbers or OTP codes on the call. Verification should use partial data and out-of-band methods.\n\n**Redacted summary (safe for broad distribution):**\n> Customer (acct CUST-***1882) reports active ATO. Login email changed at 14:49Z with MFA bypass; session originates from suspected Tor proxy. Unauthorized $450 digital gift card redemption and $1,199 console order (card ending 8821) pending. Customer locked out; contact phone ending 0173. Immediate containment required.\n\n---\n\n## 4. Recommended Next Steps & Agent Talking Points\n\n### Immediate containment (do first, within minutes)\n1. **Execute `LOCK_WALLET_EXPORT`** to stop the $450 gift card delivery (highest priority)\n2. **Execute `HOLD_LOCKER_DISPATCH`** on NM-ORD-99419009 and cancel/void the $1,199 pre-auth\n3. **Execute `REVOKE_REFRESH_TOKENS`** to kill the attacker's active session\n4. **Execute `NOTIFY_ORIGINAL_EMAIL`**. If the attacker changed the email, confirm whether a reversion link is available\n5. **Disable/suspend the 2 saved payment tokens** pending customer review\n6. Check whether the gift card export already fired. If so, attempt provider-side card freeze/void.\n\n### Identity verification (after containment starts)\n- Verify the caller **without relying on the compromised email or SMS**. Use account history, last order details, or a callback to the number on file *prior to* the incident.\n- Note the caller says 3 unsolicited SMS codes arrived, yet telemetry shows 4 OTPs in 10 minutes. Minor, but log it, since the attacker may have been triggering resets.\n\n### Recovery & follow-up\n- Restore the original email once identity is confirmed, force password reset, and re-enroll MFA\n- Review full order/session history for earlier unauthorized activity\n-",
+          "decision_probabilities": null
+        },
+        "haiku_calibrated": {
+          "model_id": "claude-haiku-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 1838,
+          "input_tokens": 1856,
+          "output_tokens": 104,
+          "structured_output": {
+            "queue": "trust_and_safety",
+            "priority": "P0_CRITICAL",
+            "contains_pii": true,
+            "pii_categories": [
+              "EMAIL",
+              "PHONE",
+              "PAYMENT_CARD"
+            ],
+            "auto_action": "escalate_security",
+            "reason_code": "ACCOUNT_TAKEOVER"
+          },
+          "raw_text_preview": "{\"queue\":\"trust_and_safety\",\"priority\":\"P0_CRITICAL\",\"contains_pii\":true,\"pii_categories\":[\"EMAIL\",\"PHONE\",\"PAYMENT_CARD\"],\"auto_action\":\"escalate_security\",\"reason_code\":\"ACCOUNT_TAKEOVER\"}",
+          "decision_probabilities": null
+        },
+        "gemini_decision": {
+          "model_id": "gemini-decision-1",
+          "provider": "Google Gemini Decisions API",
+          "latency_ms": 424,
+          "input_tokens": 1376,
+          "output_tokens": 0,
+          "structured_output": {
+            "severity": 2.989,
+            "auto_action": "escalate_security",
+            "queue": "trust_and_safety",
+            "contains_sensitive_pii": true
+          },
+          "raw_text_preview": null,
+          "decision_probabilities": {
+            "severity": {
+              "type": "score",
+              "value": 2.989,
+              "confidence": 0.9896,
+              "probabilities": {
+                "3": 0.9896,
+                "2": 0.0096,
+                "0": 0.0002,
+                "1": 0.0006
+              },
+              "legend": {
+                "3": "P0 Critical: Active account takeover, fraud drain, or immediate financial/security loss.",
+                "0": "P3 Low: Routine inquiry, zero financial loss, no compliance or safety exposure.",
+                "1": "P2 Medium: Standard delivery or billing delay, normal SLA handling.",
+                "2": "P1 High: Broken merchandise, legal/regulatory threat, or blocked seller payout."
+              }
+            },
+            "auto_action": {
+              "type": "choice",
+              "value": "escalate_security",
+              "confidence": 0.9717,
+              "probabilities": {
+                "route_specialist": 0.0109,
+                "auto_replace": 0.0027,
+                "escalate_security": 0.9717,
+                "hold_and_audit": 0.0147
+              }
+            },
+            "queue": {
+              "type": "choice",
+              "value": "trust_and_safety",
+              "confidence": 1.0,
+              "probabilities": {
+                "billing_payouts": 0.0,
+                "replacements": 0.0,
+                "shipping_logistics": 0.0,
+                "trust_and_safety": 1.0,
+                "general_support": 0.0
+              }
+            },
+            "contains_sensitive_pii": {
+              "type": "noul",
+              "value": true,
+              "p_true": 0.9804,
+              "confidence": 0.9804
+            }
+          }
+        },
+        "haiku_naive": {
+          "model_id": "claude-haiku-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 10277,
+          "input_tokens": 1261,
+          "output_tokens": 2048,
+          "structured_output": {
+            "mode": "unstructured_chat_prose",
+            "char_length": 5321
+          },
+          "raw_text_preview": "## (1) Executive Summary\n\n**Ticket NM-SEC-2026-910442 is an active, high-confidence account takeover (ATO) in progress.** The caller (account CUST-3091882) reports unsolicited SMS OTPs, a locked-out app session, and an unauthorized email change. Telemetry corroborates the report:\n\n- Email changed to an unfamiliar address at 14:49:11Z with an **MFA bypass flag** set.\n- Login from a **TOR exit proxy** (ASN flagged suspect), with a device fingerprint mismatch and a geo-velocity anomaly versus a Seattle login about 3.5 hours earlier.\n- ATO model score **0.984**, with 4 OTP sends and 3 password-reset attempts in the last 10 minutes.\n- Two pending high-risk orders: a $450.00 digital gift card wallet drain with **instant email delivery already queued**, and $1,199.00 in consoles routed to a Newark locker.\n- A separate unauthorized Visa pre-authorization of $1,199.00 is reported by the caller.\n\nThe financial exposure is imminent. The gift card codes can be exported and the locker dispatch can complete within minutes. Time to containment is the dominant factor.\n\n## (2) Routing and Priority\n\n**Recommended queue:** Trust & Safety \u2013 Account Takeover / Fraud Response (Tier 2, with Payments Fraud as a parallel notification)\n**Priority:** P1 / Critical. Live financial loss and active attacker session.\n\n**Step-by-step reasoning:**\n1. **Active threat, not historical.** The caller reports events in progress (\"right now,\" \"before the codes get exported\"), and the session telemetry shows a live attacker IP. This rules out a standard account-recovery queue.\n2. **Corroboration across independent signals.** Customer report, email-change event, MFA bypass flag, TOR ASN, device mismatch, and ATO score >0.95 all point the same direction. False-positive probability is low.\n3. **Monetary exposure with irreversible fulfillment.** Digital gift codes are effectively cash-equivalent and are irreversible once emailed. The locker dispatch can physically complete. Both require hold actions within minutes.\n4. **Payment rail involvement.** The unauthorized Visa pre-auth ($1,199.00) needs card network dispute timing and possibly issuer notification, so Payments Fraud must be looped in.\n5. **Account age and history (1,420 days)** is a mild trust signal toward a legitimate customer, which supports prioritizing the customer's side over the attacker's session.\n\n**Immediate automated actions to authorize (per recommended playbooks):**\n- LOCK_WALLET_EXPORT: freeze gift card balance and digital code export.\n- REVOKE_REFRESH_TOKENS: terminate all active sessions and tokens.\n- HOLD_LOCKER_DISPATCH: halt the Newark locker order NM-ORD-99419009.\n- NOTIFY_ORIGINAL_EMAIL: send alert to david.chen88@mail-demo.example about the change, with a revert link.\n- Cancel or hold NM-ORD-99419002 (instant digital delivery).\n- Block the 185.220.101.44 IP and associated ASN for this account.\n- Place a hold on saved payment tokens (2) and notify the card issuer / pre-auth reversal workflow.\n\nNote: These are containment steps and should be executed by an authorized Tier 2 agent or automated playbook under current policy. The IVR assistant should not independently execute financial holds without that authorization.\n\n## (3) PII Audit\n\n| # | PII Element | Location | Sensitivity | Handling |\n|---|---|---|---|---|\n| 1 | Customer name (implied, \"David Chen\" not spoken; surname appears in email local part \"david.chen88\") | Email address | Moderate | Redact in summaries |\n| 2 | Email address `david.chen88@mail-demo.example` (old/primary) | Transcript + telemetry | High (account identifier) | Redact in summaries; retain in secure record |\n| 3 | Email address `x992_drop_acc@proton-temp.example` (attacker-controlled) | Telemetry | Moderate (threat indicator) | Retain as IOC, mask in general summaries |\n| 4 | Phone number `206-555-0173` | Transcript | High | Redact |\n| 5 | Visa card number `4916-3320-1194-8821` | Transcript | **Critical (PCI scope)** | Redact immediately; must not be stored in ticket notes or sent to LLM contexts. Recommend PCI-compliant log scrubbing. |\n| 6 | Account ID `CUST-3091882` | Header/telemetry | Moderate (internal identifier) | Use tokenized reference in general comms |\n| 7 | Order IDs `NM-ORD-99419002`, `NM-ORD-99419009` | Telemetry | Low\u2013moderate (transactional) | Retain for ops |\n| 8 | IP address `185.220.101.44` | Telemetry | Low (threat indicator) | Retain as IOC |\n| 9 | Device fingerprint (match=false, no value given) | Telemetry | Low | Retain |\n| 10 | Geographic data: Seattle, WA; Newark locker location | Telemetry | Moderate (location of customer/delivery) | Generalize to state/region in summaries |\n| 11 | Voice recording / transcript itself | Call | High | Store per retention policy |\n\n**Cleaned summary for general distribution:**\n> Customer on account [ACCT-REF] reports unauthorized SMS codes, email change, and lockout. Telemetry indicates active ATO from a suspect anonymizing network. Two pending high-risk orders and one reported unauthorized card pre-authorization. Containment playbooks recommended. P1.\n\n**Additional flag:** The full Visa number was spoken in the transcript and appears in plaintext. Recommend that the transcript be sanitized before it is distributed to any non-PCI team and that the card number be masked in the source system.\n\n## (4) Next Ste",
+          "decision_probabilities": null
+        }
+      }
+    },
+    "sku-01": {
+      "sub_task": "sku_tagging",
+      "rungs": {
+        "sonnet_naive": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 17594,
+          "input_tokens": 1318,
+          "output_tokens": 2048,
+          "structured_output": {
+            "mode": "unstructured_chat_prose",
+            "char_length": 5426
+          },
+          "raw_text_preview": "# NovaMart Catalog Review: ING-APP-2026-773901\n\n## 1. Target Category Taxonomy\n\n**Recommended leaf:** `Apparel > Men's Ethnic Wear > Kurta Sets`\n\n**Reasoning**\n- The seller's hint (Apparel > Ethnic Wear) is correct at the parent level but too shallow. The SKU is a multi-piece men's set (kurta, trouser, dupatta), so it belongs in the *set* leaf rather than single-piece Kurtas, which keeps filters, size logic, and price comparisons clean.\n- The occasion tags (Festive / Wedding / Diwali) are valid and can be indexed as occasion attributes.\n- **Do not map to** any \"Silk Ethnic Wear\" or Banarasi-silk sub-node. Placement there would implicitly assert a material claim the evidence contradicts.\n\n**Attributes safe to enrich now:** Colour = Maroon, Pattern/Detail = Zari border, Piece count = 3, Occasion = Festive/Wedding, Size chart (see \u00a72, item 3).\n\n---\n\n## 2. Factual Contradictions and Compliance Risks\n\n**Hazmat:** None indicated (`hazmat_indicators_present: false`). No hazmat review is needed.\n\n**Primary issue: Class-C Factual Contradiction (material misrepresentation)**\n\n| Field | Seller claim | Verified evidence |\n|---|---|---|\n| Material | 100% Pure Mulberry Silk | 80% Polyester / 20% Viscose (OCR conf. 0.98) |\n| Fibre description | \"Zero synthetic mix,\" \"natural protein fiber\" | Contains 80% synthetic; viscose is regenerated cellulose, not a protein fibre |\n| Care | Hand wash gentle | Dry clean only (label) |\n| Brand/origin | Jaipur Heritage Looms, \"handloom,\" \"authentic Banarasi weave\" | Label shows JHL Fashion Apparels Pvt Ltd, made in Surat |\n\nWhy this is credible: the OCR comes from a zoomed photo of the garment's own inner care tag at 0.98 confidence, so this is garment-attached evidence rather than a model inference. A care label is also the closest thing to a legal fibre declaration the garment carries.\n\n**Additional risks**\n1. **Consumer protection / misdescription.** \"100% pure silk\" against an 80% polyester label is a regulatory exposure (misleading material claim) in addition to a marketplace policy violation. Textile fibre-content claims are typically held to a strict standard.\n2. **Secondary claims that need substantiation:** \"handloom,\" \"authentic Banarasi weave,\" and \"zero synthetic mix.\" The label does not support them, and a Surat-made, polyester-dominant garment is unlikely to be handloom. These cannot be confirmed or disproved from the evidence alone, so treat them as **unverified** rather than false.\n3. **Size chart inconsistency to verify.** The label says Size L (40), but the seller's chart lists Chest 42 in for L and 40 in for M. This is either a sizing-convention difference (garment chest vs body chest) or an error. Flag it, because it is an independent NAD/fit-return driver.\n4. **Care-instruction contradiction.** \"Hand wash gentle\" against the \"dry clean only\" label creates a damage risk if buyers follow the listing.\n5. **Pricing signal.** A 64% discount (MRP \u20b96,999 \u2192 \u20b92,499) is plausible for polyester but is inconsistent with real handloom Banarasi silk pricing, and the MRP itself may be inflated. This does not prove fraud, but it supports escalation.\n6. **Seller risk profile.** The seller's historical NAD rate is 14.8% against a category median of 4.1% (about 3.6\u00d7). Combined with a Diwali demand score of 0.91, indexing a false Pure Silk facet would convert high traffic into high return volume.\n7. **Brand/entity mismatch.** The listed brand is \"Jaipur Heritage Looms,\" while the label names a different manufacturer entity. This is not necessarily a violation (private label or contract manufacturing is common), but ops should confirm the brand-manufacturer relationship.\n\n---\n\n## 3. Recommended Publishing Status\n\n**Status: HOLD, route to Compliance Audit. Do not publish as submitted and do not auto-publish a corrected version.**\n\nPer the Class-C rule, the following must apply:\n\n- **Do not silently rewrite** the seller's title or bullets. Any correction must be made by the seller (or by compliance with an audit trail and seller notification), not by catalog ops quietly editing text.\n- **Suppress the `Material = Pure Silk` facet** and do not index the SKU under it. Do not substitute Polyester/Viscose into the facet until the seller or compliance has confirmed it.\n- **Open a compliance audit ticket** with the evidence bundle attached (photo #4, OCR output, claim-vs-label comparison).\n- **Notify the seller** of the specific contradiction and offer a path to resolution (see \u00a74).\n\nPath to publishability after the hold:\n- **Option A:** Seller corrects the title, bullets, material, and care to match the label, then resubmits. Post-correction status: publish under Kurta Sets with Material = Polyester/Viscose blend.\n- **Option B:** Seller provides proof that the garment differs from the label photo (for example, a mislabelled or different batch) via lab test or supplier invoices. Compliance reviews before any silk claim is allowed.\n- **If the seller does not respond or resubmits the same claim:** escalate under the seller-quality workflow, given the NAD history.\n\nBecause Diwali demand is high (0.91), prioritise this ticket in the compliance queue. Time sensitivity should speed up review but not relax the hold.\n\n---\n\n## 4. Merchandising Recommendations for Catalog Ops\n\n**Immediate actions**\n1. Apply the HOLD and facet suppression described above.\n2. Attach the evidence table from \u00a72 to the audit ticket.\n3. Send the",
+          "decision_probabilities": null
+        },
+        "haiku_calibrated": {
+          "model_id": "claude-haiku-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 2461,
+          "input_tokens": 1904,
+          "output_tokens": 96,
+          "structured_output": {
+            "leaf_category": "apparel_ethnic_kurtas",
+            "hazmat_class": "NONE",
+            "compliance_status": "SUPPRESS_CONTRADICTED_FACET",
+            "contradiction_detected": true,
+            "primary_material_tag": "polyester_viscose_blend"
+          },
+          "raw_text_preview": "{\"leaf_category\":\"apparel_ethnic_kurtas\",\"hazmat_class\":\"NONE\",\"compliance_status\":\"SUPPRESS_CONTRADICTED_FACET\",\"contradiction_detected\":true,\"primary_material_tag\":\"polyester_viscose_blend\"}",
+          "decision_probabilities": null
+        },
+        "gemini_decision": {
+          "model_id": "gemini-decision-1",
+          "provider": "Google Gemini Decisions API",
+          "latency_ms": 339,
+          "input_tokens": 1302,
+          "output_tokens": 0,
+          "structured_output": {
+            "leaf_category": "apparel_ethnic_kurtas",
+            "compliance_status": "SUPPRESS_CONTRADICTED_FACET",
+            "hazmat_compliance_risk": 2.127,
+            "has_factual_contradiction": true
+          },
+          "raw_text_preview": null,
+          "decision_probabilities": {
+            "leaf_category": {
+              "type": "choice",
+              "value": "apparel_ethnic_kurtas",
+              "confidence": 0.9996,
+              "probabilities": {
+                "electronics_power_banks": 0.0001,
+                "audio_bluetooth_speakers": 0.0001,
+                "apparel_ethnic_kurtas": 0.9996,
+                "home_ceramic_dinnerware": 0.0001,
+                "kitchen_espresso_grinders": 0.0001
+              }
+            },
+            "compliance_status": {
+              "type": "choice",
+              "value": "SUPPRESS_CONTRADICTED_FACET",
+              "confidence": 0.9997,
+              "probabilities": {
+                "APPROVED_AUTO_PUBLISH": 0.0001,
+                "SUPPRESS_CONTRADICTED_FACET": 0.9997,
+                "HOLD_MISSING_CERT": 0.0002
+              }
+            },
+            "hazmat_compliance_risk": {
+              "type": "score",
+              "value": 2.127,
+              "confidence": 0.8024,
+              "probabilities": {
+                "2": 0.8024,
+                "3": 0.1629,
+                "1": 0.0333,
+                "0": 0.0015
+              },
+              "legend": {
+                "2": "Level 2: Material misrepresentation or missing regional electrical/safety cert requiring publish hold.",
+                "1": "Level 1: Minor fragile handling requirement or incomplete non-safety attribute.",
+                "0": "Level 0: Benign non-hazardous SKU with fully verified factual metadata.",
+                "3": "Level 3: High-capacity lithium-ion / air-freight hazmat or dangerous misrepresentation requiring strict block."
+              }
+            },
+            "has_factual_contradiction": {
+              "type": "noul",
+              "value": true,
+              "p_true": 0.987,
+              "confidence": 0.987
+            }
+          }
+        },
+        "haiku_naive": {
+          "model_id": "claude-haiku-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 10131,
+          "input_tokens": 1318,
+          "output_tokens": 2048,
+          "structured_output": {
+            "mode": "unstructured_chat_prose",
+            "char_length": 5293
+          },
+          "raw_text_preview": "## NovaMart Cold-Start Merchandising Review\n**SKU Ingestion ID:** ING-APP-2026-773901 | **Seller:** SLR-21904 (Jaipur Heritage Looms)\n\n---\n\n### 1. Target Marketplace Category Taxonomy & Reasoning\n\n**Recommended leaf:** Apparel > Ethnic Wear > Men > Kurta Sets (Festive/Wedding)\n\n**Reasoning:**\n- The garment is a men's two-piece-plus set (kurta, tailored trouser, and dupatta). Under NovaMart's ethnic taxonomy, multi-piece festive sets belong under Kurta Sets rather than generic Kurtas.\n- The predicted hint \"Apparel > Ethnic Wear\" is correct at the branch level but too coarse. Gender (Men) and occasion (Festive/Wedding) are the primary facets buyers use.\n- The dupatta is a component, not the primary product; it should be listed as an included item, not used to route the SKU to a Dupatta or Stoles leaf.\n- Attributes to populate: Gender = Men; Occasion = Diwali, Wedding, Festive; Included Components = Kurta, Trouser, Dupatta; Size = S\u2013XL (the size chart supports M, L, XL; confirm S and any other sizes with the seller).\n- **Material facet: do not populate from seller claim** (see Section 2). Populate from verified data only.\n\n---\n\n### 2. Factual Contradictions & Compliance Risks\n\n**Classification: Class-C Factual Contradiction (per policy rule)**\n\n| Field | Seller Claim | Verified Evidence | Status |\n|---|---|---|---|\n| Material | 100% Pure Mulberry Silk | 80% Polyester / 20% Viscose (shell); 100% Polyester (lining) | **Contradicted** |\n| Care | Hand wash gentle | Dry clean only; do not bleach; cool iron reverse side | **Contradicted** |\n| Brand | Jaipur Heritage Looms | Label reads \"JHL Fashion Apparels Pvt Ltd\" | **Mismatch \u2013 verify** |\n| Origin / Craft | \"Authentic Banarasi weave,\" handloom gold zari | Label says \"Made in Surat\"; no handloom evidence in the record | **Unverified / inconsistent** |\n| Title | \"Royal Banarasi 100% Pure Mulberry Silk\u2026\" | Title asserts contradicted material and unverified craft | **Contradicted** |\n| Bullet 1 & 2 | \"Pure resham mulberry silk,\" \"zero synthetic mix\" | Directly contradicted by OCR (polyester and viscose present) | **Contradicted** |\n\n**Key risks:**\n- **Not-As-Described (NAD) risk:** The seller's historical NAD return rate is 14.8%, versus a category median of 4.1%, roughly 3.6\u00d7 the baseline. The material claim is the most likely driver. Publishing a silk facet that buyers filter on, backed by a polyester/viscose garment, creates a high probability of returns and buyer disputes.\n- **Consumer protection exposure:** Stating \"100% pure silk\" when the garment is polyester/viscose is a material misrepresentation, which can trigger regulatory action under consumer protection rules (e.g., misleading-claims provisions in India's Consumer Protection Act, 2019, and the marketplace's own policies). Price framing (MRP \u20b96,999 vs. selling \u20b92,499, a 64% discount) that is anchored to a silk value proposition compounds the risk.\n- **Care-instruction risk:** Telling buyers \"hand wash gentle\" when the label says \"dry clean only\" can lead to garment damage and buyer complaints, and creates liability if the garment is damaged following the listed care.\n- **Brand/identity mismatch:** The label manufacturer (JHL Fashion Apparels Pvt Ltd) differs from the seller brand. This may be a private-label or contract-manufacturing arrangement, but it must be verified to avoid brand-authenticity disputes.\n- **Hazmat:** None indicated (hazmat_indicators_present = false). No restricted-substance flags were identified.\n- **Image evidence:** The OCR source is photo #4 (zoomed neck tag). Confidence is 0.98, but a human reviewer should visually confirm the label text, given the stakes of the material claim.\n\n**Note on the telemetry:** The size chart reports Chest/Length/Shoulder measurements that look internally plausible for L and XL, but they have not been validated against the garment. Treat them as seller-supplied until measured.\n\n---\n\n### 3. Recommended Publishing Status\n\n**Status: HOLD \u2013 Route to Compliance Audit. Do not publish in current form.**\n\nPer the policy rule, this SKU must not be published with the contradicted \"Pure Silk\" material facet indexed, and the seller's claims must not be silently rewritten.\n\n**Required actions before any publication:**\n1. Route ING-APP-2026-773901 to the compliance audit queue with this report and the OCR artifact attached.\n2. Notify the seller (SLR-21904) of the discrepancy and request one of: (a) corrected listing with verified material and care, or (b) documentary proof (e.g., mill/fabric certificate, burn/fiber test report) if they contend silk is present.\n3. Confirm brand relationship with JHL Fashion Apparels Pvt Ltd (authorization or private-label documentation).\n4. Obtain a supplier statement on craft origin (handloom vs. powerloom; Banarasi vs. Surat production) or remove those claims.\n5. Verify the size chart by measurement or seller attestation.\n\n**Conditional path to publishing:** If the seller submits a corrected listing (polyester/viscose material, dry-clean care, verified brand), the SKU may be republished as a festive kurta set at the verified attributes, with the Material=Pure Silk facet excluded. A fiber test showing silk would reopen the claim, but would require a fresh OCR/lab reconciliation against the physical garment photographed",
+          "decision_probabilities": null
+        }
+      }
+    },
+    "sku-02": {
+      "sub_task": "sku_tagging",
+      "rungs": {
+        "sonnet_naive": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 17335,
+          "input_tokens": 1275,
+          "output_tokens": 2048,
+          "structured_output": {
+            "mode": "unstructured_chat_prose",
+            "char_length": 5095
+          },
+          "raw_text_preview": "# NovaMart SKU Analysis: ING-ELC-2026-441082\n**Seller:** SLR-67330 (VoltEdge Distribution Co.) | **Model:** VE-TC27K-140\n\n## Bottom line\n**Recommend: HOLD. Do not publish and do not release to any air-eligible lane.** The listing has a hazmat misdeclaration, missing mandatory safety documentation, and technical specs that don't fully reconcile. All of these are fixable by the seller, but none can be fixed by catalog ops alone.\n\n---\n\n## 1. Target Category Taxonomy\n\n**Recommended:** `Electronics > Mobile & Laptop Accessories > Portable Chargers & Power Banks` (a leaf equivalent to the seller's declared path is correct).\n\n**Reasoning:**\n- It's a standalone battery pack with USB-C PD and USB-A outputs, charging external devices. No product-type ambiguity.\n- The 140W PD 3.1 output and laptop-charging positioning justify a **\"Laptop / High-Wattage (>65W)\"** sub-attribute or facet if NovaMart supports one. Shoppers filter on this.\n- **Required routing flag:** Even though the category is correct, the SKU must carry a **Lithium Battery / Class 9 Dangerous Goods** attribute, which drives logistics lane eligibility. The category alone does not enforce this, so the attribute must be set explicitly.\n\n---\n\n## 2. Contradictions and Compliance Risks\n\n### \ud83d\udd34 Critical (blocking)\n\n**A. Hazmat misdeclaration**\n- Seller declares `declared_hazmat_flag: false` and `declared_dangerous_goods: \"NONE - Safe Standard Ground & Air Parcel\"`.\n- This is **factually incorrect**. A standalone lithium-ion battery pack of ~100Wh is a regulated Class 9 dangerous good for transport (UN3480 if shipped alone, UN3481 only if packed with or contained in equipment, which a power bank is not).\n- Note: the audit text lists \"UN3480/UN3481.\" For a **standalone power bank**, **UN3480** is the relevant classification. Ops should not carry both forward as if interchangeable.\n\n**B. Missing UN38.3 test summary**\n- Mandatory for lithium cell/battery transport (all modes, including ground in most regulated frameworks). Its absence blocks shipment under the dangerous goods rules we apply, and certainly blocks air.\n\n**C. Missing SDS/MSDS**\n- Required for hazmat handling, fulfillment-center safety protocols, and emergency response.\n\n**D. \"Airline Approved\" / \"TSA/FAA friendly\" claims**\n- Misleading as a *marketing* claim. Airlines and regulators do not \"approve\" individual products. The relevant rule is a **Wh rating threshold (\u2264100Wh in carry-on, no passenger-checked power banks)**. Marketing this as \"airline approved\" is unsubstantiated and could create consumer-protection and regulatory exposure. It also conflates **passenger carry-on rules** with **cargo shipping rules**, which are different regimes.\n\n### \ud83d\udfe0 High (needs seller clarification)\n\n**E. Energy math is marginal and unverified**\n- Calculation: 27,000 mAh \u00d7 3.7 V \u00f7 1000 = **99.9 Wh**. Arithmetically correct, **but** it sits 0.1 Wh under the 100 Wh threshold, so any real-world variance matters.\n- The 99.9Wh figure is computed from *nominal* values. Regulators and test labs use **rated** watt-hours; if the cells' actual rated capacity or nominal voltage differs even slightly (e.g., 3.6 V or 3.85 V cells), the pack could be **above or below** 100 Wh.\n- This is a classic pattern of a rating engineered to sit just beneath a regulatory threshold. It needs a lab-verified figure, not a calculated one.\n\n**F. Cell configuration inconsistency**\n- Spec says **6 \u00d7 21700 cells**. A 21700 cell typically holds ~4,000-5,000 mAh. In a 3.7V pack, 6 cells in **parallel** would be ~24,000-30,000 mAh (plausible for 27,000 mAh), but a **140W output at 3.7V nominal** is not feasible with all six in parallel (current too high). Delivering 140W via PD (up to 28V at 5A) requires **series** cell groups plus boost conversion.\n- A realistic high-output design would use series/parallel strings (e.g., 3S2P), which changes the pack's nominal voltage and Wh calculation, and the \"27000mAh @ 3.7V\" figure would be a **cell-level** rating, not the pack's true rated energy.\n- **This is a red flag on the spec's technical credibility** and a reason to demand the actual pack-level test data.\n\n**G. Input/output spec mismatch**\n- The OCR line says input is \"USB-C1 5V-20V/5A MAX **100W**,\" while the product is marketed as **140W** and \"PD 3.1.\" Output may be 140W but input is 100W, which is plausible, but means a full recharge of a 99.9Wh pack at 100W takes ~1+ hr. Worth verifying, and the listing shouldn't imply symmetric 140W in/out.\n- Note: PD 3.1 EPR (Extended Power Range) at 140W requires **28V at 5A**. The OCR input range lists 5-20V, which tops out at 100W and is **inconsistent with true 140W EPR operation on the input side**. Confirm output voltage range (should include 28V for 140W).\n\n**H. Performance claim unsubstantiated**\n- \"Charge MacBook Pro 16\" to 50% in 26 minutes\" has no test basis provided. A 16\" MacBook Pro battery is ~100 Wh; 50 Wh in 26 min requires ~115W sustained delivery, borderline at best given conversion losses and cable limits. Treat as an unverified claim; require test methodology or remove.\n\n### \ud83d\udfe1 Moderate\n\n**I",
+          "decision_probabilities": null
+        },
+        "haiku_calibrated": {
+          "model_id": "claude-haiku-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 1865,
+          "input_tokens": 1861,
+          "output_tokens": 99,
+          "structured_output": {
+            "leaf_category": "electronics_power_banks",
+            "hazmat_class": "LITHIUM_ION_DECLARED",
+            "compliance_status": "HOLD_MISSING_CERT",
+            "contradiction_detected": true,
+            "primary_material_tag": "lithium_polymer_abs"
+          },
+          "raw_text_preview": "{\"leaf_category\": \"electronics_power_banks\", \"hazmat_class\": \"LITHIUM_ION_DECLARED\", \"compliance_status\": \"HOLD_MISSING_CERT\", \"contradiction_detected\": true, \"primary_material_tag\": \"lithium_polymer_abs\"}",
+          "decision_probabilities": null
+        },
+        "gemini_decision": {
+          "model_id": "gemini-decision-1",
+          "provider": "Google Gemini Decisions API",
+          "latency_ms": 613,
+          "input_tokens": 1327,
+          "output_tokens": 0,
+          "structured_output": {
+            "hazmat_compliance_risk": 2.943,
+            "has_factual_contradiction": true,
+            "compliance_status": "HOLD_MISSING_CERT",
+            "leaf_category": "electronics_power_banks"
+          },
+          "raw_text_preview": null,
+          "decision_probabilities": {
+            "hazmat_compliance_risk": {
+              "type": "score",
+              "value": 2.943,
+              "confidence": 0.9469,
+              "probabilities": {
+                "0": 0.0002,
+                "2": 0.0498,
+                "3": 0.9469,
+                "1": 0.0031
+              },
+              "legend": {
+                "2": "Level 2: Material misrepresentation or missing regional electrical/safety cert requiring publish hold.",
+                "1": "Level 1: Minor fragile handling requirement or incomplete non-safety attribute.",
+                "0": "Level 0: Benign non-hazardous SKU with fully verified factual metadata.",
+                "3": "Level 3: High-capacity lithium-ion / air-freight hazmat or dangerous misrepresentation requiring strict block."
+              }
+            },
+            "has_factual_contradiction": {
+              "type": "noul",
+              "value": true,
+              "p_true": 0.5267,
+              "confidence": 0.5267
+            },
+            "compliance_status": {
+              "type": "choice",
+              "value": "HOLD_MISSING_CERT",
+              "confidence": 0.9335,
+              "probabilities": {
+                "APPROVED_AUTO_PUBLISH": 0.0027,
+                "SUPPRESS_CONTRADICTED_FACET": 0.0637,
+                "HOLD_MISSING_CERT": 0.9335
+              }
+            },
+            "leaf_category": {
+              "type": "choice",
+              "value": "electronics_power_banks",
+              "confidence": 0.9999,
+              "probabilities": {
+                "home_ceramic_dinnerware": 0.0,
+                "kitchen_espresso_grinders": 0.0,
+                "electronics_power_banks": 0.9999,
+                "apparel_ethnic_kurtas": 0.0,
+                "audio_bluetooth_speakers": 0.0001
+              }
+            }
+          }
+        },
+        "haiku_naive": {
+          "model_id": "claude-haiku-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 9389,
+          "input_tokens": 1275,
+          "output_tokens": 2048,
+          "structured_output": {
+            "mode": "unstructured_chat_prose",
+            "char_length": 4963
+          },
+          "raw_text_preview": "# NovaMart Cold-Start Review: ING-ELC-2026-441082\n\n**Seller:** SLR-67330 (VoltEdge Distribution Co.)\n**Product:** VoltEdge TitanCharge 27000mAh 140W PD 3.1 GaN Laptop Power Bank\n**Recommended Status: HOLD (Do Not Publish)**\n\n---\n\n## 1. Target Marketplace Category Taxonomy and Reasoning\n\n**Recommended path:**\nElectronics > Mobile & Laptop Accessories > Portable Power Banks > Laptop Power Banks (140W+ PD)\n\n**Reasoning:**\n- The product is a portable USB-C power bank with Power Delivery output, so it belongs in the portable charging family rather than general chargers or batteries.\n- The \"Laptop\" sub-node is justified by the 140W PD 3.1 output and the MacBook Pro 16\" reference in the marketing copy.\n- The seller-declared path \"Portable Chargers\" is acceptable but too generic. It should map to the more specific Laptop Power Bank node so buyers can filter by wattage and laptop compatibility.\n- Because the product contains lithium cells, it must carry a hazmat attribute (see Section 2). Category placement alone cannot clear it for sale.\n\n**Attribute mapping to enforce:**\n- Output wattage: 140W (USB-C PD 3.1), 65W per port, 22.5W USB-A\n- Capacity: 27000 mAh / 99.9 Wh\n- Cell chemistry: Lithium-Ion Polymer\n- Ports: 2x USB-C PD 3.1, 1x USB-A QC 3.0\n- Input: USB-C 5V-20V/5A (100W max)\n- Dimensions and weight: 155 x 54 x 49 mm, 585 g\n\n---\n\n## 2. Factual Contradictions and Hazmat/Compliance Risks\n\n### 2a. Contradictions in the seller submission\n\n| Field | Seller Claim | Evidence | Assessment |\n|---|---|---|---|\n| declared_dangerous_goods | \"NONE - Safe Standard Ground & Air Parcel\" | 99.9 Wh lithium-ion cell pack; the audit itself states Class 9 / UN3480 rules apply | **Direct contradiction.** A 99.9 Wh lithium battery is regulated dangerous goods. |\n| declared_hazmat_flag | false | Same as above | **Incorrect.** Must be true. |\n| Air shipping | \"Airline Approved\" / \"Ships fast via NovaMart Express Air\" | air_express_eligible_without_un38_3: false | **Not supported.** Air eligibility is blocked. |\n| Marketing claim | \"TSA/FAA friendly\" | Regulatory status depends on carrier and package rules, not a seller claim | **Unverified and misleading** as stated. |\n| Safety | \"Safe Standard Ground & Air Parcel\" | Safety is not established; UN38.3 and SDS are missing | **Unsupported claim.** |\n\n**Note on the 99.9 Wh figure:** The 27000 mAh \u00d7 3.7 V / 1000 = 99.9 Wh calculation is correct. This sits just under the 100 Wh threshold, which is why many power banks are sold near this limit. Being under 100 Wh does not remove hazmat status. Lithium-ion batteries of any size are Class 9 dangerous goods for transport. Under 100 Wh it generally means limited air quantity rules and no airline approval requirement for carry-on, but the UN38.3 test summary and hazmat labeling are still mandatory for shipping.\n\n**Also note:** The product page claims \"Airline Approved,\" which is a regulatory term for carrier acceptance, not a standard certification. Remove or qualify it.\n\n### 2b. Compliance gaps\n\n| Requirement | Status | Risk |\n|---|---|---|\n| UN38.3 test summary | MISSING | Blocks air shipping; required for all lithium transport |\n| Safety Data Sheet (SDS/MSDS) | MISSING | Required for hazmat shipment and carrier acceptance |\n| Hazmat declaration | Declared NONE | Mis-declared shipment; carrier and regulatory violation risk |\n| Class 9 labeling and packaging | Not evidenced | Required for lithium battery shipments |\n| BIS CRS registration | R-41099281 (Valid) | Acceptable for India market; verify it is valid for the exact model VE-TC27K-140 |\n\n**Note on the BIS registration:** The registration number is marked valid, but it should be verified against the specific model number and not assumed to cover the whole product line.\n\n### 2c. Operational risks\n\n- **Shipping violation:** Shipping this item by air under a NONE declaration exposes NovaMart and the seller to carrier suspension, fines, and liability in the event of a fire.\n- **Fulfillment center exposure:** FBO-DEL-01, FBO-BLR-03, and FBO-OAK-04 are flagged as impacted. Inventory should not be received or stored there until hazmat handling is confirmed.\n- **Consumer safety:** Lithium-polymer cells rated at 99.9 Wh with 140 W output carry thermal runaway risk if defective. The \"DO NOT CRUSH, INCINERATE OR EXPOSE ABOVE 60C\" warning confirms the product hazard. Without a valid test report, the safety of the cell design cannot be confirmed.\n- **Customer-facing claims:** \"Safe\" and \"Airline Approved\" language could be considered deceptive.\n- **Mismatch within the spec:** The OCR shows INPUT \"5V-20V/5A MAX 100W\" and OUTPUT \"140W MAX.\" Output exceeding input is not a contradiction by itself, because the device stores energy and delivers power at its own rate, but the listed input must be confirmed against the actual charger spec, since 100 W input is a limit that should be checked against the 140 W PD spec.\n\n---\n\n## 3. Recommended Publishing Status\n\n**Status: HOLD",
+          "decision_probabilities": null
+        }
+      }
+    },
+    "sku-03": {
+      "sub_task": "sku_tagging",
+      "rungs": {
+        "sonnet_naive": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 16168,
+          "input_tokens": 1329,
+          "output_tokens": 2048,
+          "structured_output": {
+            "mode": "unstructured_chat_prose",
+            "char_length": 5287
+          },
+          "raw_text_preview": "# NovaMart Catalog Review: ING-KIT-2026-119044\n\n## Summary\n**Recommendation: APPROVE for auto-publish** with minor merchandising edits. The evidence bundle is internally consistent, and I found no hazmat flags, hard contradictions, or compliance gaps. I did identify a few claim-language items worth tightening before go-live (detailed in Section 2).\n\n---\n\n## 1. Target Category Taxonomy and Reasoning\n\n**Recommended path:** `Home & Kitchen > Coffee & Espresso > Coffee Grinders > Burr Grinders > Electric Flat Burr Grinders`\n\n| Evidence | Reasoning |\n|---|---|\n| 64mm flat steel burr assembly | Core defining attribute of a burr grinder; flat geometry belongs in the flat-burr leaf, not conical |\n| Stepless micrometric dial | Espresso-grade adjustment, so tag as an espresso-capable grinder |\n| 58mm dosing cup, RDT spray bottle, bellows | Single-dose/espresso workflow accessories confirm the intended use case |\n| Duty cycle \"light-commercial / prosumer\" | Supports the prosumer segment rather than entry-level; do not list under blade grinders or manual grinders |\n\n**Taxonomy notes**\n- The seller's declared category (\"Burr Grinders\") is correct but one level shallower than ideal. Push to the flat-burr leaf node if NovaMart's taxonomy supports it, since this improves facet filtering.\n- Do not dual-list under commercial foodservice equipment. The \"light-commercial\" duty note is a usage descriptor, not a commercial equipment certification (no NSF mark is present).\n\n**Verified search facets to map directly:** Burr Type = Flat Steel, Burr Size = 64mm, Voltage = 110-120V, Motor = Brushless DC.\n\n---\n\n## 2. Contradiction, Hazmat, and Compliance Review\n\n### Cross-checks passed\n- **Model number:** Rating plate OCR (BC-FG64-PRO) matches the title and metadata exactly.\n- **Electrical:** 110-120V / 60Hz / 400W matches the declared spec and the NEMA 5-15P plug (correct for North America).\n- **Certifications:** UL Listed (E492104), FCC Part 15, and RoHS are stamped on the plate. The UL file number should be confirmed against the UL Product iQ database as a routine step.\n- **Hazmat:** No battery, no hazardous materials. Standard shipping classification applies.\n- **Food contact:** FDA 21 CFR and LFGB certification for the hopper is on file (REF-BC-2026-09). Note that this covers the **hopper only**. Burr and chute food-contact status isn't separately documented in this bundle.\n- **Weight and dimensions:** 5.4 kg for a die-cast aluminum body with a 400W motor is plausible.\n\n### Items to tighten (not blockers)\n\n1. **\"Zero-retention\" vs. \"<0.2g retention\"**\n   The marketing bullet says \"zero-retention,\" but the spec PDF says \"<0.2g with bellows.\" These are not identical claims. \"Zero-retention\" is an absolute that the spec doesn't support, and it requires the bellows to reach the stated figure. **Fix:** Change to \"ultra-low retention (<0.2g with bellows).\"\n\n2. **\"Plasma ionizer chute\" is an unverified feature**\n   The spec table doesn't list an ionizer, and the box contents don't mention one. An ionizer would also be an electrical component that should appear in the rating plate or certification scope. **Fix:** Hold this bullet until the seller provides documentation, or cut it. If it's real, confirm it falls under the UL listing.\n\n3. **\"Tool-free magnetic upper burr carrier\" is unsupported by the spec table**\n   Plausible given the product class, but not backed by an extracted attribute. Low risk, but request a manual excerpt or photo.\n\n4. **\"Calibrated at 1,400 RPM\" vs. \"Brushless DC motor\"**\n   The RPM figure appears only in marketing copy, not in the spec table. Low risk, but request a spec confirmation before it appears as a hard attribute.\n\n5. **Warranty service region ambiguity**\n   \"BaristaCraft USA/IN service centers\" is unclear to a US buyer. **Fix:** Clarify whether US customers have a domestic service route, and display the warranty exactly as written in the spec.\n\n6. **\"DLC Coated\" burrs**\n   Appears in the materials field but not in the spec PDF attributes. Likely legitimate, but confirm before using it as a headline claim.\n\n7. **Duty cycle language**\n   \"Continuous light-commercial\" is a strong claim. If NovaMart policy restricts commercial-use warranty language, align the displayed text with the seller's actual warranty terms (which don't mention commercial use).\n\n---\n\n## 3. Recommended Publishing Status\n\n**APPROVE, auto-publish OK, with a content hold on unverified bullets.**\n\n| Check | Status |\n|---|---|\n| Brand authorization | Authorized direct manufacturer |\n| Category fit | Pass |\n| Electrical/safety marks | Pass (verify UL file in routine audit) |\n| Hazmat / battery | None |\n| Food-contact compliance | On file |\n| Factual contradictions | None blocking; one claim-precision issue (\"zero-retention\") |\n| Unverified marketing claims | 3-4 items to soften or hold |\n\n**Condition:** Publish the listing with the verified spec facets and revised bullets below. Route the unverified claims (ionizer, magnetic carrier, RPM) to a seller-clarification queue. They can be added post-publish without relisting.\n\n---\n\n## 4. Rewritten Merchandising Recommendations for Catalog Ops\n\n**Suggested title (\u2264150 chars):**\n> BaristaCraft BC-FG64-PRO 64mm Flat Burr Espresso Grinder, Stepless Dial, Matte Obsidian (110-120V)\n\n**",
+          "decision_probabilities": null
+        },
+        "haiku_calibrated": {
+          "model_id": "claude-haiku-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 1915,
+          "input_tokens": 1915,
+          "output_tokens": 91,
+          "structured_output": {
+            "leaf_category": "kitchen_espresso_grinders",
+            "hazmat_class": "NONE",
+            "compliance_status": "APPROVED_AUTO_PUBLISH",
+            "contradiction_detected": false,
+            "primary_material_tag": "stainless_steel_burr"
+          },
+          "raw_text_preview": "{\"leaf_category\":\"kitchen_espresso_grinders\",\"hazmat_class\":\"NONE\",\"compliance_status\":\"APPROVED_AUTO_PUBLISH\",\"contradiction_detected\":false,\"primary_material_tag\":\"stainless_steel_burr\"}",
+          "decision_probabilities": null
+        },
+        "gemini_decision": {
+          "model_id": "gemini-decision-1",
+          "provider": "Google Gemini Decisions API",
+          "latency_ms": 649,
+          "input_tokens": 1343,
+          "output_tokens": 0,
+          "structured_output": {
+            "leaf_category": "kitchen_espresso_grinders",
+            "compliance_status": "APPROVED_AUTO_PUBLISH",
+            "has_factual_contradiction": false,
+            "hazmat_compliance_risk": 0.112
+          },
+          "raw_text_preview": null,
+          "decision_probabilities": {
+            "leaf_category": {
+              "type": "choice",
+              "value": "kitchen_espresso_grinders",
+              "confidence": 1.0,
+              "probabilities": {
+                "apparel_ethnic_kurtas": 0.0,
+                "electronics_power_banks": 0.0,
+                "audio_bluetooth_speakers": 0.0,
+                "home_ceramic_dinnerware": 0.0,
+                "kitchen_espresso_grinders": 1.0
+              }
+            },
+            "compliance_status": {
+              "type": "choice",
+              "value": "APPROVED_AUTO_PUBLISH",
+              "confidence": 0.9979,
+              "probabilities": {
+                "HOLD_MISSING_CERT": 0.0008,
+                "APPROVED_AUTO_PUBLISH": 0.9979,
+                "SUPPRESS_CONTRADICTED_FACET": 0.0013
+              }
+            },
+            "has_factual_contradiction": {
+              "type": "noul",
+              "value": false,
+              "p_true": 0.0161,
+              "confidence": 0.9839
+            },
+            "hazmat_compliance_risk": {
+              "type": "score",
+              "value": 0.112,
+              "confidence": 0.9022,
+              "probabilities": {
+                "3": 0.0021,
+                "0": 0.9022,
+                "1": 0.086,
+                "2": 0.0096
+              },
+              "legend": {
+                "2": "Level 2: Material misrepresentation or missing regional electrical/safety cert requiring publish hold.",
+                "3": "Level 3: High-capacity lithium-ion / air-freight hazmat or dangerous misrepresentation requiring strict block.",
+                "1": "Level 1: Minor fragile handling requirement or incomplete non-safety attribute.",
+                "0": "Level 0: Benign non-hazardous SKU with fully verified factual metadata."
+              }
+            }
+          }
+        },
+        "haiku_naive": {
+          "model_id": "claude-haiku-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 10077,
+          "input_tokens": 1329,
+          "output_tokens": 2048,
+          "structured_output": {
+            "mode": "unstructured_chat_prose",
+            "char_length": 5587
+          },
+          "raw_text_preview": "# NovaMart Catalog Review: ING-KIT-2026-119044\n\n**Product:** BaristaCraft Precision 64mm Flat Steel Burr Espresso Grinder, BC-FG64-PRO\n**Seller:** SLR-10482 (BaristaCraft Official Store), authorized direct manufacturer\n**Overall assessment:** Largely clean, with a few items that need verification or correction before publishing.\n\n---\n\n## 1. Target Marketplace Category Taxonomy\n\n**Recommended path:** Home & Kitchen > Coffee, Tea & Espresso > Coffee Grinders > Burr Grinders\n\n**Reasoning:**\n- The declared category (Coffee & Espresso > Burr Grinders) is appropriate. The product is a countertop electric burr grinder for espresso and drip use, which fits this node.\n- Search facets verified in the feed (Burr Type = Flat Steel, Burr Size = 64mm, Voltage = 110-120V, Motor = Brushless DC) should be mapped to the category's filterable attributes so the item surfaces in comparison searches.\n- Consider a secondary, non-primary placement under Commercial & Food Service Equipment only if NovaMart's policy permits, since the spec sheet describes \"light-commercial / prosumer\" duty. Do not list it as commercial-grade in the title or primary category without a commercial rating.\n- Accessories (dosing cup, RDT spray bottle, bellows) should be linked as bundled components, not separate listings, unless the seller offers them standalone.\n\n---\n\n## 2. Factual Contradictions and Compliance Risks\n\n### Contradictions and discrepancies to resolve\n\n1. **\"Ready for auto-publish\" flag vs. empty contradiction field.** The telemetry reports `ready_for_auto_publish: true` and an empty `factual_contradictions` array. Several items below conflict with the claimed data or require verification. The auto-publish flag should not be trusted as-is.\n\n2. **\"Zero-retention\" vs. \"<0.2g grind retention with bellows.\"** Zero-retention is a marketing claim that implies zero grounds remain in the grinder. The spec sheet supports only sub-0.2g retention *with bellows*. Retention without bellows is not stated. Revise to the measured figure and drop \"zero-retention.\"\n\n3. **\"Low-static plasma ionizer chute.\"** This feature does not appear in the declared materials, the spec table, or the box contents. It is not verified anywhere in the evidence bundle. It may be a real feature, but it is unsupported and must be removed or substantiated before publication.\n\n4. **\"Calibrated at 1,400 RPM low-heat grind speed.\"** The 1,400 RPM figure does not appear in the structured spec table. It is supported only by a marketing bullet. Confirm the figure against the spec PDF or engineering data before publishing. Also, \"low-heat\" should be substantiated if it is kept.\n\n5. **\"Smoked Tritan\" hopper vs. \"Matte Obsidian\" finish.** The title says Matte Obsidian (a chassis color), and the hopper is described as smoked Tritan. These are not in conflict, but confirm that the color descriptor refers to the chassis only, so customers are not misled about hopper color.\n\n6. **Burr material and coating.** Materials list \"64mm Hardened Stainless Steel Flat Burrs (DLC Coated).\" The marketing bullet says \"precision CNC-machined 64mm hardened steel flat burrs.\" These are broadly consistent, but the stainless vs. steel distinction should be standardized. Confirm which the facet \"Flat Steel\" reflects.\n\n7. **Duty cycle claim.** \"Continuous light-commercial / prosumer espresso bar\" implies continuous-duty rating. Verify this against the manufacturer's rated duty cycle. If the rating is intermittent, the continuous claim is misleading.\n\n8. **Noise level.** 64.5 dBA is stated, but the test conditions (distance, load, grind setting) are not. Add the measurement context or omit the figure, since unqualified dBA numbers are often challenged.\n\n### Compliance and safety observations\n\n- **Electrical / certification:** UL Listed E492104, FCC Part 15, and RoHS are stamped on the rating plate, and OCR matches the declared voltage, wattage, and model exactly. This is a strong result. Confirm that the UL file number E492104 is verifiable in UL's public directory before display, since the OCR confirms the plate text but not the certification's validity.\n- **Plug:** NEMA 5-15P grounded is appropriate for 110-120V North America. No issue.\n- **Battery / hazmat:** None present, consistent with the feed. No lithium or other hazmat flags.\n- **Food contact:** FDA 21 CFR and LFGB BPA-free hopper certification is referenced (REF-BC-2026-09). The reference is on file, but NovaMart should confirm the certificate covers the Tritan hopper specifically and is current.\n- **Electrical safety for consumer use:** Ensure the unit is not presented as suitable for outdoor use or non-North American voltage in listings.\n- **Warranty:** The 24-month warranty is limited to motor and burr housing. Make the scope explicit in the listing so customers do not assume full coverage.\n- **Shipping:** ISTA 3A pass is documented. No dangerous-goods concern.\n\n---\n\n## 3. Recommended Publishing Status\n\n**Status: HOLD for Content Correction, then Publish**\n\nDo not auto-publish. The structured data (model, electrical, certifications, dimensions, materials) is clean and verified. However, three marketing claims lack support in the evidence bundle and could mislead customers, which is a policy and consumer-protection risk:\n\n- Plasma ionizer chute (unsupported)\n- Zero-retention wording (overstated relative to data)\n- 1,400 RPM figure (not in structured specs)\n\n**Path to publish:**\n1. Seller removes or substantiates the ionizer claim.\n2. Seller revises retention wording to the measured figure with bellows.\n3. Seller confirms the R",
+          "decision_probabilities": null
+        }
+      }
+    }
+  },
+  "batch_items": {
+    "tkt-04": {
+      "input_tokens": 931,
+      "haiku_output_tokens": 89,
+      "sonnet_est_output_tokens": 270,
+      "haiku_decision": {
+        "queue": "shipping_logistics",
+        "priority": "P2_MEDIUM",
+        "contains_pii": true,
+        "pii_categories": [
+          "EMAIL",
+          "PHONE"
+        ],
+        "auto_action": "route_specialist",
+        "reason_code": "DELIVERY_DELAY"
+      },
+      "gemini_decision": {
+        "queue": "shipping_logistics",
+        "severity": 1.049,
+        "contains_sensitive_pii": true,
+        "auto_action": "route_specialist"
+      },
+      "gemini_confidence": 0.857,
+      "haiku_latency_ms": 2033,
+      "gemini_latency_ms": 479,
+      "sonnet_input_tokens": 336,
+      "sonnet_output_tokens": 2048,
+      "sonnet_latency_ms": 16322,
+      "sonnet_raw_text": "# Escalation Analysis: NM-CS-2026-885102\n\n## 1. Executive Summary\n\nCustomer Rahul Verma's order NM-ORD-99301122 (Ergonomic Mesh Office Chair, $279.00) has been stuck at \"LABEL CREATED - AWAITING CARRIER PICKUP\" at fulfillment node FBO-DAL-02 for 5 consecutive business days. This is a **fulfillment-to-carrier handoff failure**. The shipping label was generated, but the package has not been physically scanned into carrier custody. The customer reports no damage, no account compromise, and no billing dispute. He has made two specific, actionable requests:\n\n1. A **carrier dock scan trace** for the package\n2. An **updated delivery ETA before Friday**\n\nThe only urgency driver is the customer's Friday deadline. The root cause is unconfirmed. It could be a missed carrier pickup, a package never staged for pickup, or a scan failure at the dock.\n\n**Open question for the agent:** The ticket doesn't state which day the thread was opened, so the actual number of business days remaining before Friday is unknown. That determines how urgent this really is.\n\n## 2. Routing and Priority Recommendation\n\n**Recommended queue: Fulfillment Operations, Carrier Exceptions (FBO-DAL-02 node team)**\n**Secondary: Customer Service retains ownership of customer communication**\n**Recommended priority: P2 (High), upgrade to P1 if less than 2 business days remain before Friday**\n\n### Step-by-step reasoning\n\n| Step | Reasoning |\n|---|---|\n| **1. Classify the issue type** | This is a logistics/handoff exception, not a product, billing, or account issue. That rules out Payments, Trust & Safety, and Product Quality queues. |\n| **2. Identify where the failure sits** | The status \"LABEL CREATED\" means the label exists in the system, but no carrier scan has occurred. The failure point is physical (the package at the node) or a carrier pickup miss. Only the fulfillment node team and carrier liaison can verify this. Customer Service cannot resolve it alone. |\n| **3. Rule out other routing paths** | No damage means no Claims queue. No unauthorized login means no Security queue. No refund or billing complaint means no Payments queue. |\n| **4. Assess severity** | Five business days stalled is well beyond a normal pickup window, which suggests a systemic or node-level problem rather than a one-off delay. It also raises the possibility that other orders at FBO-DAL-02 are affected. |\n| **5. Assess urgency** | The customer has a concrete deadline (Friday). That's a time-bound commitment that raises priority. However, the order value ($279) is moderate and no safety or compliance risk exists. That supports P2 rather than P1, unless the Friday deadline is imminent. |\n| **6. Check for pattern risk** | A 5-day stall at a single node warrants a flag to the node supervisor. If multiple orders are stuck, this becomes an operational incident and may need escalation beyond a single ticket. |\n\n## 3. PII Audit and Redacted Summary\n\n### PII elements identified\n\n| # | Element | Value as received | PII category | Required in downstream handling? |\n|---|---|---|---|---|\n| 1 | Customer full name | Rahul Verma | Direct identifier | Only for customer-facing replies. Not needed by node/carrier teams. |\n| 2 | Email address | rahul.v@demo.example | Direct identifier / contact | Only for customer-facing replies. |\n| 3 | Phone number | 408-555-0122 | Direct identifier / contact | Only if a callback is chosen as the contact method. |\n\n### Items reviewed and not classified as PII\n- **Ticket ID** (NM-CS-2026-885102): internal reference\n- **Order ID** (NM-ORD-99301122): internal reference, but it can be linked to a person through the order system, so treat it as **linkable**. Fine for internal teams, not for public channels.\n- **Fulfillment node** (FBO-DAL-02): operational data\n- **Product and price**: transaction data, not identifying on its own\n\n**Notable absences:** No shipping address, payment data, or government ID appeared in the thread. The shipping address will likely be needed for the carrier trace. Pull it from the order system and don't ask the customer to resend it in a ticket thread.\n\n### Redacted version for sharing with fulfillment/carrier teams\n\n> **Ticket NM-CS-2026-885102** | Order NM-ORD-99301122 (Ergonomic Mesh Office Chair, $279.00) has shown \"LABEL CREATED - AWAITING CARRIER PICKUP\" at node FBO-DAL-02 for 5 consecutive business days. No damage reported. No account security concern. **Customer requests:** (a) carrier dock scan trace, (b) updated ETA before Friday. **Customer contact details withheld; CS retains customer communication.**\n\n**Handling guidance:** Share only the redacted version outside Customer Service. The node team and carrier liaison don't need the customer's name, email, or phone to investigate.\n\n## 4. Suggested Next Steps and Empathy Talking Points\n\n### Recommended actions (in order)\n\n1. **Verify current status** in the order and carrier systems to confirm the 5-day stall and check for any unlogged scans.\n2. **Open a carrier exception / node inquiry** with FBO-DAL-02 using the redacted summary. Ask specifically:\n   - Is the package physically staged at the dock?\n   - Was a carrier pickup scheduled, and was it missed?\n   - Are other orders at this node stuck in the same status?\n3. **Request the dock scan trace** from the carrier liaison, since that's the customer's explicit ask.\n4. **Set an internal deadline** for a response from the node team (suggest same business day, given the Friday target).\n5. **Contact the customer proactively** with a status update, even if the answer isn't final yet. Don't wait for the trace to come back before reaching out.\n6. **Prepare a fallback.** If the package can't be confirmed in carrier custody",
+      "haiku_naive_input_tokens": 336,
+      "haiku_naive_output_tokens": 1488,
+      "haiku_naive_latency_ms": 7424,
+      "haiku_naive_raw_text": "**(1) Executive Summary**\n\nTicket NM-CS-2026-885102 concerns order NM-ORD-99301122 (Ergonomic Mesh Office Chair, $279.00). The order has been stuck at fulfillment node FBO-DAL-02 in \"LABEL CREATED - AWAITING CARRIER PICKUP\" for five consecutive business days. There is no reported damage and no account security concern. The customer is requesting a carrier dock scan trace and an updated ETA by Friday. The core problem appears to be a handoff failure between fulfillment and the carrier, not a product or account issue.\n\n**(2) Routing and Priority**\n\n- **Recommended queue:** Order Fulfillment Exceptions / Carrier Escalations (with a copy to Customer Care for customer communication).\n- **Priority:** P2 (High). Reasoning:\n  1. Stalled shipment for five business days is well beyond typical dwell-time thresholds, indicating a real exception.\n  2. The customer has a hard deadline (Friday), creating a time-bound commitment risk.\n  3. No safety, security, fraud, or damage concern, so it does not warrant P1.\n  4. Dollar value is moderate and the issue is recoverable, so it does not need P3 handling.\n- **Immediate actions for the fulfillment team:** Confirm whether the label is active with the carrier, pull the carrier dock scan history, verify whether the package physically exists at FBO-DAL-02, and determine whether a reship or re-label is needed. Set a target to provide the customer an updated ETA within one business day to leave margin before Friday.\n\n**(3) PII Audit and Redacted Summary**\n\nPII elements found in the thread:\n\n| Element | Type | Value Present |\n|---|---|---|\n| Customer full name | Direct identifier | Rahul Verma |\n| Email address | Contact PII | rahul.v@demo.example |\n| Phone number | Contact PII | 408-555-0122 |\n| Order number | Transactional identifier (linkable to customer) | NM-ORD-99301122 |\n| Ticket ID | Internal identifier | NM-CS-2026-885102 (not PII by itself) |\n| Purchase amount / product | Transactional data (not directly identifying) | $279.00, Ergonomic Mesh Office Chair |\n| Fulfillment node | Operational data (not PII) | FBO-DAL-02 |\n\nNote: The order number and ticket ID link back to the customer, so they should be treated as sensitive in any shared or external context.\n\nRedacted summary for broader distribution:\n\n> Ticket NM-CS-2026-885102 | Customer: [REDACTED] | Contact: [REDACTED] | Order: [ORDER-ID-REDACTED] | Item: Ergonomic Mesh Office Chair ($279.00) | Status: \"LABEL CREATED - AWAITING CARRIER PICKUP\" at FBO-DAL-02 for 5 consecutive business days | No damage reported, no account security concern | Customer requests carrier dock scan trace and updated ETA before Friday.\n\n**(4) Next Steps and Agent Talking Points**\n\nSuggested next steps:\n1. Open a carrier trace request and request dock scan history for the label.\n2. Ask FBO-DAL-02 to physically verify the package and confirm pickup status.\n3. If the carrier cannot account for the package within an agreed window, initiate a reship or refund under the standard exception policy.\n4. Send the customer a proactive update with the findings and a committed ETA, even if the investigation is ongoing.\n5. Log all actions on the ticket and set a follow-up reminder for Thursday to ensure the Friday deadline is met.\n\nDraft empathy talking points for the agent:\n- \"Thank you for your patience, Mr. Verma. I understand you need this chair by Friday, and I'm treating this as a priority.\"\n- \"Your order has been sitting at our fulfillment center without moving for five business days. That isn't the experience we want for you, and I'm sorry for the frustration it's caused.\"\n- \"I've requested a full carrier scan trace and asked our fulfillment team to verify the package directly. I'll share what I find and a confirmed ETA by [date].\"\n- \"If we can't get this moving on the current label, I'll arrange a replacement shipment or a refund, whichever you prefer, so you aren't left waiting.\"\n- Avoid promising a specific delivery date until the carrier trace confirms the package's location.",
+      "gemini_input_tokens": 642
+    },
+    "tkt-05": {
+      "input_tokens": 878,
+      "haiku_output_tokens": 83,
+      "sonnet_est_output_tokens": 270,
+      "haiku_decision": {
+        "queue": "billing_payouts",
+        "priority": "P2_MEDIUM",
+        "contains_pii": true,
+        "pii_categories": [
+          "EMAIL"
+        ],
+        "auto_action": "route_specialist",
+        "reason_code": "POLICY_INQUIRY"
+      },
+      "gemini_decision": {
+        "auto_action": "route_specialist",
+        "severity": 1.192,
+        "contains_sensitive_pii": false,
+        "queue": "billing_payouts"
+      },
+      "gemini_confidence": 0.862,
+      "haiku_latency_ms": 1739,
+      "gemini_latency_ms": 560,
+      "sonnet_input_tokens": 283,
+      "sonnet_output_tokens": 2048,
+      "sonnet_latency_ms": 16406,
+      "sonnet_raw_text": "NovaMart Enterprise Operations Review: Ticket NM-CS-2026-885319\n\n1. Executive Summary\n\nNovaCorp Procurement was billed $3,420.00 on Order NM-ORD-99100441 without the uploaded tax-exempt certificate (EX-99120) being applied. Their accounting team is requesting a credit memo and an invoice adjustment within the current billing cycle.\n\nThis is a billing/tax-compliance error, not a dispute over goods or services. The core questions are:\n- Was certificate EX-99120 received, validated, and on file at the time of invoicing? (Determines whether this is a system/process failure on our side or a documentation gap.)\n- What portion of the $3,420.00 is tax? The ticket doesn't say. The credit memo should cover only the improperly collected tax, not the full order amount. Confirm the figure before anyone commits to a number.\n- Is the certificate valid for this ship-to jurisdiction and still unexpired? Exemption certificates are often state-specific and have expiration dates.\n\nThe time-sensitive element is the \"current billing cycle\" requirement. If the adjustment misses that window, NovaCorp's AP team may have to carry a disputed balance into the next cycle, which creates reconciliation friction for a corporate account.\n\n2. Routing and Priority Recommendation\n\nRecommended queue: Enterprise Billing & Tax Compliance (Accounts Receivable Adjustments), with a secondary notification to the Tax Exemption Certificate team if that function is separate.\n\nRecommended priority: High (P2), not Critical (P1)\n\nReasoning:\n1. Issue type: Tax exemption not applied is a billing accuracy and compliance matter. It should go to the team with authority to issue credit memos and verify certificate records, not general customer support.\n2. Account type: This is a corporate procurement account, which typically carries contractual SLAs and higher relationship value than a consumer ticket.\n3. Time constraint: The \"current billing cycle\" deadline creates a real clock. P3 would risk missing it.\n4. Why not P1: There's no indication of service outage, safety issue, fraud, or regulatory enforcement action. The financial exposure is bounded, and the customer isn't blocked from operating. P1 should be reserved for those cases.\n5. Escalation trigger: Upgrade to P1 if the billing-cycle cutoff is within 24-48 hours, or if this is a repeat failure for NovaCorp (check ticket history for prior exemption issues).\n\nSuggested internal SLA: Acknowledge to customer within 4 business hours; resolution or firm ETA within 1 business day.\n\n3. PII Audit and Redacted Summary\n\nPII/sensitive data elements identified:\n\n| Element | Value in Ticket | Classification | Risk Notes |\n|---|---|---|---|\n| Buyer email | ap@novacorp-demo.example | Business contact (role-based mailbox) | Low sensitivity. It's a shared AP inbox, not an individual's address. Still should not be pasted into public or broad internal channels. |\n| Company name | NovaCorp Procurement | Business entity | Not personal data. Standard account identifier. |\n| Tax-exempt certificate ID | EX-99120 | Sensitive business/tax identifier | Moderate sensitivity. Tied to tax status. Treat as confidential, and limit to billing/tax teams. |\n| Order number | NM-ORD-99100441 | Internal reference | Low. Not PII, but links to transaction details. |\n| Ticket ID | NM-CS-2026-885319 | Internal reference | Low. |\n| Transaction amount | $3,420.00 | Financial data | Low-moderate. Business-confidential. |\n\nNot present in this ticket: No individual names, phone numbers, street addresses, payment card data, bank details, SSNs, or EINs. That's a good result. The ticket contains minimal personal data.\n\nRedacted/cleaned summary (safe for broader internal sharing):\n\n> Ticket NM-CS-2026-885319: Corporate buyer [ACCOUNT: NovaCorp Procurement] reports Order NM-ORD-99100441 (amount: $3,420.00) was billed without applying an uploaded tax-exempt certificate [CERT ID REDACTED]. Accounting requests credit memo reissue and invoice adjustment within the current billing cycle. Contact: [AP MAILBOX REDACTED].\n\nHandling note: Keep the certificate ID and AP mailbox within the Billing/Tax Compliance workflow. Don't copy the certificate ID into chat tools, general email threads, or reports.\n\n4. Suggested Next Steps and Agent Talking Points\n\nRecommended actions (in order):\n\n1. Verify the certificate. Confirm EX-99120 is on file, was received before the invoice date, is valid for the ship-to jurisdiction, and hasn't expired.\n2. Identify root cause. Determine whether the certificate was uploaded but not linked to the account or order, linked but not applied at checkout or invoicing, or received after the invoice was generated. This determines whether it's a one-off fix or a systemic issue to flag to the product/tax-engine team.\n3. Calculate the correct adjustment. Pull the invoice, isolate the tax amount charged, and confirm the credit memo amount. Don't assume it's the full $3,420.00.\n4. Issue the credit memo and adjusted invoice within the current cycle, and confirm the cutoff date with the AR team up front.\n5. Confirm the certificate is correctly attached to the NovaCorp account going forward so future orders are exempt automatically.\n6. Close the loop in writing with NovaCorp's AP team, including the credit memo reference, revised invoice number, and expected posting date.\n\nDraft talking points for the agent:\n\n- Acknowledge and own it: *\"Thank you for flagging this. I can see you uploaded your tax-exempt certificate, and it should have been applied to this order. I'm sorry for the extra work this creates for your accounting team.\"*\n- Show you understand the stakes: *\"I understand you need this corrected within the current billing cycle, so I'm priorit",
+      "haiku_naive_input_tokens": 283,
+      "haiku_naive_output_tokens": 1617,
+      "haiku_naive_latency_ms": 8379,
+      "haiku_naive_raw_text": "**(1) Executive Summary**\n\nNovaCorp Procurement (ap@novacorp-demo.example) reports that Order NM-ORD-99100441 ($3,420.00) was billed to their corporate account without applying the tax-exempt certificate EX-99120, which they uploaded previously. They request a credit memo reissue and invoice adjustment within the current billing cycle. This is a billing/tax-exemption error on a B2B account with a time-sensitive accounting deadline. The customer's claim appears substantiated by the existence of an uploaded certificate, but this should be verified against the account record before adjustments are made.\n\n**(2) Routing and Priority**\n\nRecommended queue: Billing & Tax Adjustments (Enterprise Accounts tier), with secondary notification to Tax Compliance for certificate validation.\n\nRecommended priority: High (P2).\n\nReasoning:\n- Financial impact is $3,420.00 on a corporate account, which is material for enterprise handling.\n- The error is systemic in nature if the certificate was on file and not applied. Tax-exemption failures can affect other orders on the same account, so a scope check is warranted.\n- The customer has a stated billing-cycle deadline, which creates time pressure.\n- The request is not a simple refund; it requires a credit memo reissue and invoice adjustment, which need billing-team authority.\n- It is not Critical (P1) because no service outage, data exposure, or legal/regulatory escalation is indicated. Priority may be raised if the certificate is found to be expired or invalid, or if the customer escalates to legal or audit.\n\n**(3) PII Audit**\n\nPII elements found in the thread:\n\n| Element | Type | Location | Handling |\n|---|---|---|---|\n| ap@novacorp-demo.example | Business email address (contact PII) | Buyer field | Retain in internal ticket system only; redact from any shared or exported summary |\n| \"NovaCorp Procurement\" | Organization name (business identifier, not personal) | Buyer field | Non-personal; may be retained |\n| NM-ORD-99100441 | Order ID (transactional identifier) | Body | Non-sensitive internal identifier; retain |\n| EX-99120 | Tax-exempt certificate number | Body | Sensitive business/compliance identifier; restrict access to billing and tax staff; redact from broad-distribution summaries |\n| $3,420.00 | Transaction amount | Body | Financial data; retain internally, limit distribution |\n\nNo individual personal names, home addresses, phone numbers, payment card data, or government ID numbers were found. The email address is the only direct contact identifier. The certificate number is a compliance identifier and should be treated as confidential.\n\nCleaned/redacted summary (for broad distribution):\n> Enterprise buyer reports that Order [REDACTED-ORDER-ID] (amount $[REDACTED]) on corporate account was billed without applying an uploaded tax-exemption certificate [REDACTED-CERT-ID]. Customer requests credit memo reissue and invoice adjustment in the current billing cycle.\n\n**(4) Suggested Next Steps and Agent Talking Points**\n\nNext steps:\n1. Verify in the account record that certificate EX-99120 is on file, active, unexpired, and matches the buyer's account and jurisdiction.\n2. Confirm the tax treatment that should have applied to NM-ORD-99100441 and calculate the exact overcharge amount.\n3. Check other orders on the NovaCorp account within the affected period for the same error.\n4. Obtain billing-team approval to issue the credit memo and reissue the invoice.\n5. Issue the corrected credit memo and reissued invoice, and confirm the adjusted totals in the current billing cycle.\n6. Notify the customer with confirmation, reference numbers, and expected posting timeline.\n7. Log root cause (e.g., certificate not linked to account, workflow gap) and open an internal defect or process ticket if systemic.\n8. Close the ticket only after the customer confirms receipt of the adjusted invoice.\n\nDraft empathy talking points for the agent:\n- \"Thank you for flagging this promptly, and I'm sorry the exemption certificate wasn't applied to your order. I understand this creates extra work for your accounting team during an active billing cycle.\"\n- \"I've verified that your certificate EX-99120 is on file, and I'm working with our billing team to issue a corrected credit memo and reissued invoice.\"\n- \"I'll confirm the adjusted totals with you once they're posted, and I'll check whether any other orders on your account were affected so you aren't left with surprises later.\"\n- \"I appreciate your patience while we validate the details. I'll keep you updated at each step, and you'll have a direct point of contact through resolution.\"\n\nAvoid promising specific posting dates until billing confirms them, and avoid speculating on the root cause until verification is complete.",
+      "gemini_input_tokens": 607
+    },
+    "tkt-06": {
+      "input_tokens": 856,
+      "haiku_output_tokens": 71,
+      "sonnet_est_output_tokens": 270,
+      "haiku_decision": {
+        "queue": "general_support",
+        "priority": "P3_LOW",
+        "contains_pii": false,
+        "pii_categories": [],
+        "auto_action": "route_specialist",
+        "reason_code": "POLICY_INQUIRY"
+      },
+      "gemini_decision": {
+        "auto_action": "route_specialist",
+        "contains_sensitive_pii": false,
+        "queue": "general_support",
+        "severity": 0.169
+      },
+      "gemini_confidence": 0.954,
+      "haiku_latency_ms": 1738,
+      "gemini_latency_ms": 448,
+      "sonnet_input_tokens": 261,
+      "sonnet_output_tokens": 2048,
+      "sonnet_latency_ms": 17599,
+      "sonnet_raw_text": "# Ticket Analysis: NM-CS-2026-885490\n\n## 1. Executive Summary\n\nA prospective customer is mid-purchase and has two questions about the NovaMart Essentials Tailored Wool Coat (SKU: NM-APP-3301):\n\n1. **Sizing:** Does the coat run true to size when worn over a heavy sweater?\n2. **Fulfillment:** Is expedited gift-wrapping available in time for a Thursday delivery?\n\nThere is no complaint, defect, or order problem. This is a pre-sale conversion opportunity. The shopper is likely to complete the purchase if both questions are answered quickly and accurately. The Thursday deadline suggests a gift purchase with a fixed occasion, so response speed matters more than usual.\n\n**Note on data provided:** The ticket includes only the inquiry summary. I don't have the original message text, the shopper's order or cart details, their delivery location, or any product fit data. Everything below is based on what was provided, and I've flagged where agents will need to verify information.\n\n## 2. Routing Recommendation\n\n**Recommended queue:** Pre-Sales Support / Product Inquiries (Apparel). If your org has a Gift Services sub-queue, copy that team on the gift-wrap portion.\n\n**Recommended priority:** Medium-High (time-sensitive pre-sale)\n\n**Reasoning:**\n1. **Issue type:** Neither question involves an order defect, payment problem, safety issue, or policy dispute, so this doesn't belong in Returns, Escalations, or Trust & Safety.\n2. **Customer stage:** The shopper hasn't checked out, so this is a conversion-critical interaction. Unanswered pre-checkout questions are a leading cause of cart abandonment.\n3. **Time sensitivity:** \"Thursday delivery\" implies a hard deadline. Both the answer and the shipping/wrap cutoff may expire within hours or days, depending on today's date.\n4. **Why not Urgent/P1:** No financial loss, no customer harm, and no existing order at risk. If Thursday is within 24-48 hours, I'd bump this to High.\n5. **Skill fit:** Sizing questions are best answered by an agent with access to the product's size chart and fit notes. Gift-wrap and delivery timing require checking fulfillment cutoffs.\n\n**SLA suggestion:** First response within 1 hour, ideally under 30 minutes, since the customer is likely actively shopping.\n\n## 3. PII Audit and Redacted Summary\n\n**PII found in the ticket as provided: None.**\n\n| Element checked | Present? |\n|---|---|\n| Customer name | No |\n| Email address | No |\n| Phone number | No |\n| Shipping/billing address | No |\n| Payment information | No |\n| Account/order numbers | No (ticket ID and SKU are internal references, not personal data) |\n| Recipient identity (gift) | No |\n| Delivery location | No |\n\n**Items that look like identifiers but are not PII:** Ticket ID NM-CS-2026-885490 and SKU NM-APP-3301 are business reference numbers. They're safe to retain in notes and summaries.\n\n**Redacted/clean summary (safe for sharing and logging):**\n> Pre-checkout shopper asks about fit of NM-APP-3301 over bulky knitwear and availability of expedited gift-wrap for Thursday delivery.\n\n**Handling reminder:** When the agent replies, avoid asking the customer to post their address, payment details, or recipient's name in an open chat. If delivery feasibility depends on location, collect only a ZIP/postal code, or direct them to the secure checkout flow.\n\n## 4. Suggested Next Steps and Draft Talking Points\n\n**Agent checklist:**\n1. **Verify fit guidance** for NM-APP-3301 in the product catalog (size chart, fit notes, customer review themes). Do not guess. Tailored wool coats often fit closer to the body, but confirm against actual product data.\n2. **Check gift-wrap options:** whether expedited gift-wrap exists for this SKU and what its order cutoff is.\n3. **Confirm delivery feasibility:** Thursday delivery depends on the shipping method selected, order cutoff time, and delivery location. If the agent can't confirm from available tools, escalate to Fulfillment rather than promising.\n4. **Offer a fallback:** If Thursday isn't achievable with wrapping, present alternatives (gift receipt, unwrapped expedited shipping, gift message card).\n5. **Mention return/exchange policy** for the coat if fit is uncertain, since this reduces purchase hesitation.\n6. **Tag the ticket** as pre-sale / apparel / gift-wrap for reporting.\n\n**Draft empathy and response points (adapt once facts are verified):**\n\n> \"Thanks for reaching out before ordering. Happy to help you get this right, especially with a Thursday timeline.\"\n\n> **Sizing:** \"Great question about layering. [Insert verified fit info: e.g., 'This coat has a tailored cut, so if you plan to wear it over heavy knits, many customers size up. Here's the size chart with measurements...']. If you'd like, share your usual size and the sweater thickness and I can suggest the best option.\"\n\n> **Gift-wrap/delivery:** \"Regarding gift-wrapping and Thursday delivery: [Insert verified details: availability, cutoff time, shipping method needed]. If the timing is tight, here's what I'd recommend to make sure it arrives in time...\"\n\n> **Reassurance:** \"And if the fit isn't perfect, [insert return/exchange policy] so you can order with confidence.\"\n\n**Tone guidance:** Warm, concise, and decisive. Lead with the answer, then the caveat. This customer is close to buying, so avoid long preambles.\n\n**Escalation trigger:** If the agent cannot confirm gift-wrap plus Thursday delivery within the response window, loop in Fulfillment/Gift Services immediately and tell the customer a specific follow-up time instead of a vague \"we'll get back to you.\"\n\nIf you can share the original message text, the shopper's chosen shipping method",
+      "haiku_naive_input_tokens": 261,
+      "haiku_naive_output_tokens": 1337,
+      "haiku_naive_latency_ms": 7444,
+      "haiku_naive_raw_text": "**(1) Executive Summary**\n\nTicket NM-CS-2026-885490 is a pre-purchase product inquiry from a shopper considering the NovaMart Essentials Tailored Wool Coat (SKU NM-APP-3301). The shopper asks two things: (a) whether the coat fits true to size when worn over a heavy sweater, and (b) whether expedited gift-wrapping is available for delivery by Thursday. No order exists yet, no account or payment issue is raised, and no complaint is present. This is a low-severity, time-sensitive sales-assist question with a conversion opportunity.\n\n**(2) Routing and Priority**\n\n- **Recommended queue:** Pre-Sales Product Support (fit and sizing), with a cc/handoff to Fulfillment & Shipping Support for the delivery/gift-wrap question.\n- **Priority:** Medium-High. Reasoning, step by step:\n  1. Type: pre-purchase inquiry, not a post-purchase issue, so no SLA breach risk to existing orders.\n  2. Revenue impact: the shopper is at checkout, so a fast answer directly affects conversion. This raises priority above standard.\n  3. Time sensitivity: the Thursday delivery deadline means the shopper needs an answer quickly to decide whether ordering now is feasible. This pushes priority to Medium-High rather than High, since no order is at risk of failing yet.\n  4. Complexity: fit guidance needs product-specific sizing data (garment measurements, layering recommendations) and the shipping question needs carrier cutoff times. Both are answerable by tier-1 with reference material; escalation to a specialist is unlikely unless sizing data for this SKU is unavailable.\n  5. Target response time: within 2 business hours, ideally same-session if chat-based.\n\n**(3) PII Audit**\n\nThe ticket as provided contains:\n- Ticket ID (NM-CS-2026-885490): internal reference number, not personal data on its own, but linkable to a customer record. Retain internally; do not expose outside the support system.\n- SKU (NM-APP-3301): product identifier, not PII.\n- No customer name, email, phone number, address, account ID, payment data, or order number is present.\n\n**Result:** No direct personal identifiers were found. Only internal reference identifiers exist. Cleaned summary: no redaction required beyond standard internal-reference handling. If the full source thread contains additional messages with contact details, those must be redacted before sharing outside the support team.\n\n**(4) Next Steps and Agent Talking Points**\n\nSuggested next steps:\n1. Pull the sizing guide and fit notes for SKU NM-APP-3301. Confirm whether the coat runs true to size and whether it is designed to accommodate a heavy knit layer (e.g., relaxed vs. slim cut, shoulder and chest allowance).\n2. If fit data is incomplete, check reviews for reports of layering fit and provide only what is verified; do not guess.\n3. Confirm the expedited gift-wrap option, its add-on cost, and whether it is available for the shopper's ZIP/region.\n4. Confirm the carrier cutoff time and Thursday delivery feasibility based on the shopper's location and the order time.\n5. Offer to hold the product in the cart or provide a link to the sizing guide, and note that the shopper can contact support again if they still have questions.\n\nDraft empathy and talking points:\n- \"Thanks for reaching out before you order. Layering is a great question, and I want to make sure you pick the right size.\"\n- \"Here's what I can confirm about how this coat fits over a heavier sweater: [verified fit detail].\"\n- \"Good news on the gift-wrapping: [available option and cost]. For Thursday delivery, you'll want to place your order by [cutoff time] to make that work.\"\n- \"If you'd prefer, I can also share the size chart so you can compare your measurements directly. Would that help?\"\n- Avoid promising delivery dates or fit outcomes that are not confirmed by the sizing and shipping data.",
+      "gemini_input_tokens": 581
+    },
+    "sku-04": {
+      "input_tokens": 896,
+      "haiku_output_tokens": 106,
+      "sonnet_est_output_tokens": 270,
+      "haiku_decision": {
+        "leaf_category": "home_ceramic_dinnerware",
+        "hazmat_class": "FRAGILE_GLASS_CERAMIC",
+        "compliance_status": "APPROVED_AUTO_PUBLISH",
+        "contradiction_detected": false,
+        "primary_material_tag": "stoneware_ceramic"
+      },
+      "gemini_decision": {
+        "has_factual_contradiction": false,
+        "leaf_category": "home_ceramic_dinnerware",
+        "hazmat_compliance_risk": 0.929,
+        "compliance_status": "APPROVED_AUTO_PUBLISH"
+      },
+      "gemini_confidence": 0.955,
+      "haiku_latency_ms": 1848,
+      "gemini_latency_ms": 462,
+      "sonnet_input_tokens": 310,
+      "sonnet_output_tokens": 1982,
+      "sonnet_latency_ms": 17028,
+      "sonnet_raw_text": "# Catalog Analysis: ING-HOME-2026-209114\n\n## 1. Target Marketplace Category Taxonomy\n\n**Recommended path:**\n`Home & Kitchen > Kitchen & Dining > Drinkware > Coffee & Espresso Cups & Mugs > Espresso Cups`\n\n**Reasoning:**\n- **90ml (~3 oz)** is the standard espresso/demitasse volume. A standard coffee mug is typically 240-350ml, so this should not be placed in general mugs.\n- **Set of 4** supports multi-pack/set attribute tagging.\n- **Stoneware** is a relevant filter facet (shoppers frequently filter by material in this category).\n- **Secondary cross-listing candidates:** Coffee & Espresso > Barista Accessories (only if NovaMart permits dual-placement), plus gift/hosting merchandising collections.\n\n## 2. Contradiction, Hazmat, and Compliance Review\n\n**Contradictions:** None found. Title, material field, and box OCR are mutually consistent (stoneware, 90ml, set of 4, fragility language). The seller note's \"no contradictions\" claim checks out against the data provided.\n\n**Hazmat:** None. No batteries, liquids, aerosols, magnets, or flammables. Standard non-hazmat ceramic goods.\n\n**Compliance considerations (not blockers, but verify):**\n\n| Item | Risk Level | Note |\n|---|---|---|\n| **Food-contact safety documentation** | Medium | Ceramic drinkware is a food-contact article. Lead/cadmium leaching compliance (FDA/California Prop 65 in the US; equivalent regimes elsewhere) typically requires seller documentation. This is not evidenced in the feed. Request a test report or compliance attestation if not already on file for this seller or brand. |\n| **\"Dishwasher & Microwave Safe\" claim** | Low-Medium | This is a performance claim, not just a label. Matte glazes and metallic or decorative trims can sometimes be non-microwave-safe. Confirm there are no metallic accents and that the claim covers the glaze, not just the body. |\n| **Prop 65 warning** | Low | Often applicable to ceramicware sold in California. Confirm whether the seller has a warning or an exemption basis. |\n| **\"100% Stoneware Ceramic\"** | Low | Slightly redundant phrasing but not misleading. Glaze is technically a non-stoneware component, so ops may want to normalize the attribute as \"Material: Stoneware\" rather than echoing \"100%\". |\n\n**Data gaps to flag (not contradictions):**\n- No dimensions beyond capacity (height, diameter, handle presence).\n- No weight (needed for shipping calculations).\n- No color/finish specified beyond \"Matte\"; color variants should be a separate attribute.\n- No confirmation of saucers included, which matters for how shoppers interpret \"set of 4.\"\n\n## 3. Recommended Publishing Status\n\n**Status: Conditional Approve, publish after light documentation check**\n\n- **Content/taxonomy:** Clean and ready.\n- **Logistics routing:** Apply the Fragile Corrugated Drop-Pack flag as noted in the feed.\n- **Gating item:** Verify food-contact compliance documentation exists on the seller or brand record. If it does, publish immediately. If it doesn't, hold in a \"Pending Compliance Docs\" queue rather than rejecting.\n- **Priority:** Low risk overall. If the seller has a good compliance history, this can go through auto-publish with a post-publish audit.\n\n## 4. Merchandising Recommendations for Catalog Ops\n\n**Title (optimized):**\n> CraftKiln Matte Stoneware Espresso Cups, Set of 4 (3 oz / 90ml), Dishwasher & Microwave Safe\n\n*Rationale:* Adds the oz conversion for US search behavior and surfaces key benefit claims early. Remove \"Ceramic\" redundancy since stoneware is already ceramic, unless search data shows \"ceramic\" outperforms.\n\n**Required attributes to populate:**\n- Capacity: 90ml / 3 oz\n- Set Size: 4\n- Material: Stoneware\n- Finish: Matte\n- Dishwasher Safe: Yes\n- Microwave Safe: Yes\n- Handle Type: *(request from seller)*\n- Saucers Included: *(request from seller)*\n\n**Suggested bullet points (draft for seller review):**\n1. **Authentic espresso size:** 90ml (3 oz) capacity, ideal for espresso, ristretto, and macchiato\n2. **High-fired stoneware:** Durable, chip-resistant construction with a smooth matte finish\n3. **Everyday convenience:** Dishwasher and microwave safe\n4. **Set of 4:** Great for hosting, gifting, or daily use\n5. **Packaged with care:** Shipped in protective packaging for safe delivery\n\n*Avoid claiming \"chip-proof\" or \"unbreakable\"; stoneware is durable but still fragile.*\n\n**Image/content asks:**\n- Scale shot with hand or standard espresso machine for size context\n- Lifestyle image with espresso poured (shows capacity visually)\n- Close-up of matte texture and handle\n\n**Logistics:**\n- Maintain Fragile / Corrugated Drop-Pack routing\n- Recommend verifying that \"Set of 4\" ships as inner-divided packaging to prevent cup-on-cup contact damage; this is a common source of breakage returns for ceramic sets.\n\n**Cross-sell opportunities:** Espresso machines, milk frothers, coffee beans, demitasse spoons, and other CraftKiln ceramic lines.\n\n**Summary:** This is a clean, low-risk listing. The only real action item is confirming food-contact compliance paperwork. Everything else is optimization, not remediation.",
+      "haiku_naive_input_tokens": 310,
+      "haiku_naive_output_tokens": 2048,
+      "haiku_naive_latency_ms": 10423,
+      "haiku_naive_raw_text": "**NovaMart Catalog Merchandising Review**\n**SKU Ingestion ID:** ING-HOME-2026-209114\n\n---\n\n### 1. Target Marketplace Category Taxonomy and Reasoning\n\n**Recommended primary category:** Home & Kitchen > Kitchen & Dining > Dinnerware > Cups & Mugs > Espresso Cups & Demitasse Sets\n\n**Recommended secondary/alternate placements:**\n- Home & Kitchen > Kitchen & Dining > Coffee, Tea & Espresso > Espresso Accessories > Espresso Cups\n- Home & Kitchen > Kitchen & Dining > Dinnerware > Sets (only if the catalog supports cross-listing by set count)\n\n**Reasoning:**\n- The title identifies the product as espresso cups sold as a set of four, with a 90 ml capacity. Espresso/demitasse sizing is the defining attribute, so the Espresso Cups & Demitasse Sets node is the most specific and accurate fit.\n- Material (high-fired stoneware ceramic) and finish (matte) are filterable attributes, not category drivers, and should be captured in the attribute fields.\n- Placing the item under Coffee/Espresso accessories is a valid secondary path for shoppers searching by beverage use rather than tableware.\n- Avoid placing it under general \"Mugs\" because 90 ml is well below standard mug capacity and would mislead buyers.\n\n**Suggested filterable attributes:** Material = Stoneware Ceramic; Finish = Matte; Capacity = 90 ml (approx. 3 fl oz); Piece Count = 4; Dishwasher Safe = Yes; Microwave Safe = Yes; Batteries Required = No.\n\n---\n\n### 2. Factual Contradictions and Hazmat/Compliance Risks\n\n**Contradictions:** None identified. The title, material field, OCR box label, and ingestion notes are consistent on material (stoneware ceramic), piece count (set of 4), capacity (90 ml), and care claims (dishwasher and microwave safe). The \"no batteries\" note is consistent with a non-electronic product.\n\n**Hazmat assessment:** No hazmat classification is indicated. Ceramic dinnerware is not a hazardous material for shipping purposes. No lithium, flammable, or pressurized components are present.\n\n**Compliance considerations to verify (not contradictions, but items ops should confirm before listing goes live):**\n- **Lead and cadmium in glaze:** Ceramic dishware that contacts food is subject to FDA food-contact standards in the US and comparable regulations elsewhere (EU Regulation 1935/2004 and related limits, California Prop 65 for lead/cadmium warnings). The listing should not claim food safety certification unless the seller provides documentation (test reports or certificate of compliance). Request this documentation from the seller.\n- **Prop 65 warning:** If the product ships to California and the glaze contains regulated substances above thresholds, a Prop 65 warning may be required. Obtain seller attestation or test data.\n- **\"Microwave Safe\" and \"Dishwasher Safe\" claims:** These are marketing claims that should be supported by seller testing or industry-standard assurance. Flag for seller substantiation, since they are common claim-substantiation requirements (FTC Act truthful advertising principles).\n- **Fragile shipping:** The ingestion notes call for a fragile corrugated drop-pack. This is a handling requirement, not a hazmat issue, but it should be reflected in the fulfillment profile to avoid breakage claims.\n\n---\n\n### 3. Recommended Publishing Status\n\n**Recommended status: Publish, conditional on documentation.**\n\n- The catalog data is internally consistent and complete for basic listing.\n- Publish the listing with the required attributes filled.\n- Before final activation, obtain from the seller: (a) food-contact safety/compliance documentation, (b) Prop 65 attestation or test data, and (c) substantiation for dishwasher and microwave safe claims.\n- If the marketplace requires compliance documentation as a condition of publishing for kitchenware, hold status as \"Pending Compliance Documents\" until received.\n\n**Fulfillment profile:** Fragile, corrugated drop-pack, non-hazmat, non-battery.\n\n---\n\n### 4. Rewritten Merchandising Recommendations for Catalog Ops\n\n**Suggested listing title:**\nCraftKiln Matte Stoneware Espresso Cups, Set of 4, 90 ml (3 oz) \u2014 Dishwasher & Microwave Safe Ceramic Demitasse Cups\n\n**Suggested bullet points:**\n- Set of 4 matte stoneware espresso cups, each holding 90 ml (about 3 fl oz), sized for a single shot of espresso or a short pour.\n- Crafted from high-fired stoneware ceramic for a durable, substantial feel with a soft matte finish.\n- Dishwasher and microwave safe for everyday convenience (seller to substantiate).\n- Pairs well with espresso machines, Turkish-style coffee, and small servings of tea or dessert wine.\n- Packed in protective corrugated drop-pack packaging to reduce breakage in transit.\n\n**Suggested short description:**\nBring caf\u00e9-style presentation home with this four-piece set of matte stoneware espresso cups. Each 90 ml cup is made from high-fired ceramic for durability and a refined, tactile finish. Dishwasher and microwave safe, they suit daily use as well as entertaining.\n\n**Attribute and search keyword recommendations:**\n- Keywords: stoneware espresso cups, demitasse set, matte ceramic cups, 90ml espresso cup, set of 4 espresso cups, dishwasher safe espresso cups\n- Avoid keyword stuffing and avoid unverified claims such as \"lead-free\" or \"FDA approved\" unless documentation is provided.\n\n**Ops action items:**\n1. Request food-contact compliance and Prop 65 documentation from the seller.\n2. Request substantiation for dishwasher/microwave safe claims.\n3",
+      "gemini_input_tokens": 633
+    },
+    "sku-05": {
+      "input_tokens": 879,
+      "haiku_output_tokens": 104,
+      "sonnet_est_output_tokens": 270,
+      "haiku_decision": {
+        "leaf_category": "audio_bluetooth_speakers",
+        "hazmat_class": "LITHIUM_ION_DECLARED",
+        "compliance_status": "APPROVED_AUTO_PUBLISH",
+        "contradiction_detected": false,
+        "primary_material_tag": "lithium_polymer_abs"
+      },
+      "gemini_decision": {
+        "compliance_status": "APPROVED_AUTO_PUBLISH",
+        "leaf_category": "audio_bluetooth_speakers",
+        "hazmat_compliance_risk": 1.3,
+        "has_factual_contradiction": false
+      },
+      "gemini_confidence": 0.834,
+      "haiku_latency_ms": 1823,
+      "gemini_latency_ms": 651,
+      "sonnet_input_tokens": 293,
+      "sonnet_output_tokens": 2048,
+      "sonnet_latency_ms": 24668,
+      "sonnet_raw_text": "# NovaMart Catalog Review: ING-AUD-2026-308215\n\n## Summary\nThe submission is internally consistent on the checks I can perform from the data provided. However, the feed is thin: no category hints, no ingress rating, no output specs, no packaging or handling data. Several items below are things I could not verify from this feed. Treat \"all spec claims match label OCR\" as a seller-side or upstream assertion, since I was not given the OCR text to compare against.\n\n---\n\n## 1. Target Marketplace Category Taxonomy\n\n**Recommended path:** `Electronics > Audio > Portable Speakers > Bluetooth Speakers`\n\n**Reasoning:**\n- Title explicitly identifies the product as a Bluetooth speaker.\n- A 30W rating and 5200mAh battery indicate a portable, battery-powered unit rather than a home or powered-dock speaker.\n- \"Waterproof\" is a feature attribute and not a category driver. It should map to a filter/attribute (see Section 4), not a sub-category.\n\n**Not recommended:** Outdoor/Sports or Party Speakers as primary category. These can be secondary browse nodes only if NovaMart's taxonomy supports multi-node placement and the seller supplies supporting specs.\n\n---\n\n## 2. Contradiction, Hazmat, and Compliance Review\n\n### Arithmetic check: passes\n5,200 mAh \u00d7 3.7 V = 19,240 mWh = **19.24 Wh**, which matches the declared figure. No energy-rating discrepancy.\n\n### Hazmat classification\n- Lithium-ion batteries are regulated dangerous goods for transport (UN3480 if shipped alone, UN3481 if packed with or contained in equipment).\n- At 19.24 Wh the cell/battery is under the 20 Wh per-cell threshold and the 100 Wh per-battery threshold, which is the range where limited-quantity/exempted provisions commonly apply. **However, this depends on the cell configuration.** The feed gives a pack rating of 19.24 Wh but not the cell count. If the pack contains multiple cells, per-cell Wh rating must also be confirmed.\n- **Action:** Confirm cell count and per-cell Wh rating before assigning final hazmat/shipping attributes. Do not auto-assume the \"small battery\" exemption path.\n\n### UN 38.3 certification\n- Field reads `ATTACHED_VERIFIED_2026`. This indicates a document is attached and flagged verified, but I cannot validate its contents from this feed.\n- **Items to confirm on the actual test summary:** manufacturer/model name matches this SKU, battery model and Wh rating match 19.24 Wh, test lab identified, and report date is within acceptable validity window.\n- The \"2026\" token could refer to the verification date or the test date. Clarify which, since a stale test report is a common failure point.\n\n### FCC\n- FCC ID `2A9SP-GO30`: the `2A9SP` portion is a grantee code. Verify against the FCC database that the grantee code, product code, and the device description (Bluetooth speaker) match this product.\n- Confirm the grant covers Bluetooth/2.4 GHz and that the device has not been modified from the granted configuration.\n\n### Other gaps and risks\n- **\"Waterproof\" is an unsupported claim as given.** No IP rating (e.g., IPX7) is provided. \"Waterproof\" is regulated advertising language in several jurisdictions and a frequent source of returns and complaints. Require a specific IP rating with supporting test evidence, or downgrade the wording to \"water-resistant\" with the rating cited.\n- **30W claim is unspecified.** Is this peak, RMS, or amplifier rating? Inflated wattage claims are common in this category. Require clarification of the measurement basis.\n- **Other compliance items not evidenced:** Bluetooth SIG listing/QDID, safety certification (e.g., UL/ETL for the charger or device where applicable), and for relevant regions, CE/UKCA, RoHS, and battery directive markings. Not necessarily required on every path, but absence from the feed means they are unverified.\n- **Label OCR match:** the feed asserts a match but does not show the OCR text. If this assertion is machine-generated, spot-check at least the battery Wh marking and FCC ID on the physical label image.\n\n---\n\n## 3. Recommended Publishing Status\n\n**Recommendation: HOLD for targeted clarification (do not publish yet, do not reject).**\n\nRationale: No hard contradictions were found, and the battery math and certification flags look good. But \"waterproof\" is an unsupported claim and hazmat attributes depend on missing cell data. Publishing as-is risks a misleading claim live on the listing and incorrect shipping classification.\n\n**Fast-track path:** If the seller supplies (a) IP rating evidence and (b) cell count/per-cell Wh, this can likely move to **Publish** with no further review. A lower-risk alternative, if ops wants to move faster, is **Publish with restrictions**: list under \"water-resistant\" (no \"waterproof\" claim), apply conservative lithium-battery shipping attributes by default, and update after seller response.\n\n---\n\n## 4. Merchandising Recommendations for Catalog Ops\n\n**Title rewrite (clean and compliant, pending IP confirmation):**\n> SoundPulse Go 30W Portable Bluetooth Speaker \u2013 Water-Resistant, 5200mAh Battery\n\nIf an IP rating is confirmed (e.g., IPX7), a stronger version is:\n> SoundPulse Go 30W Portable Bluetooth Speaker \u2013 IPX7 Waterproof, 5200mAh Rechargeable\n\n**Attributes to populate:**\n- Battery type: Lithium-ion\n- Battery capacity: 5200 mAh / 19.24 Wh\n- Battery voltage: 3.7 V\n- Wireless technology: Bluetooth (version to be supplied)\n- Water resistance rating: *pending seller input*\n- Power output: 30W *(specify RMS vs. peak once confirmed)*\n- Dangerous goods flag: Lithium battery (cont",
+      "haiku_naive_input_tokens": 293,
+      "haiku_naive_output_tokens": 1808,
+      "haiku_naive_latency_ms": 8992,
+      "haiku_naive_raw_text": "**SKU Ingestion Audit: ING-AUD-2026-308215**\n**Product:** SoundPulse Go 30W Waterproof Bluetooth Speaker\n\n---\n\n## 1. Target Marketplace Category Taxonomy\n\n**Recommended primary category:** Electronics > Audio > Portable Speakers > Bluetooth Speakers\n\n**Suggested secondary attributes:**\n- Connectivity: Bluetooth (wireless)\n- Power output: 30W\n- Water resistance: Waterproof (verify IP rating, see Section 4)\n- Battery type: Built-in rechargeable lithium-ion\n- Use case: Outdoor / portable / travel\n\n**Reasoning:**\n- The title and feature set (Bluetooth, portable, waterproof) map directly to the portable speaker subcategory rather than home audio systems or car audio.\n- The presence of an FCC ID confirms the product is an intentional radiator in the U.S. market, which is consistent with consumer electronics classification.\n- The battery declaration indicates a lithium-ion battery-powered device, which should be surfaced as a filterable attribute, since many marketplaces require battery disclosure for listings in this category.\n\n---\n\n## 2. Factual Contradictions and Hazmat/Compliance Risks\n\n**Contradictions:** None identified. The title, battery declaration, certification status, FCC ID, and label OCR are reported as consistent.\n\n**Hazmat / compliance assessment:**\n\n- **Battery energy rating:** 5200mAh \u00d7 3.7V = 19.24Wh. This arithmetic is correct. Lithium-ion cells at or below 100Wh are generally classified as Class 9 lithium batteries for transport, and cells in this range typically do not require the more stringent handling for batteries over 100Wh. The figure is well under the 100Wh threshold.\n\n- **UN 38.3 certification:** Marked as attached and verified (2026). UN 38.3 is the required transport test standard for lithium batteries, and its presence is a positive compliance signal. The certification document should be checked to confirm it covers this specific battery model/cell and is current, but its status is reported as verified.\n\n- **Shipping implications:** Because the battery is installed in equipment (not shipped standalone), the product is generally handled under the lithium-ion battery-packed-with-equipment provisions. Sellers should still ensure correct hazmat labeling (Class 9 lithium battery mark) on shipments, as carriers and marketplaces may request it.\n\n- **Waterproof and 30W claims:** These are performance claims that carry potential consumer-protection and advertising-accuracy risk if unsupported. The waterproof claim should be backed by a stated IP rating (e.g., IPX7) and the 30W figure should be clarified as RMS or peak output, since unqualified wattage claims are a common source of listing disputes.\n\n**Overall risk level: Low**, contingent on the UN 38.3 document being spot-checked and the water-resistance and wattage claims being substantiated.\n\n---\n\n## 3. Recommended Publishing Status\n\n**Recommendation: APPROVE FOR PUBLISH**, with two conditions noted for the ops team:\n\n1. Confirm the IP rating is listed in the product specifications. \"Waterproof\" without an IP rating is a weak claim and may trigger marketplace review.\n2. Clarify the 30W figure (RMS vs. peak) in the spec sheet.\n\nThese are listing-quality items rather than blocking compliance issues. The product can publish once they are addressed, or publish now with the corrected copy queued.\n\n---\n\n## 4. Rewritten Merchandising Recommendations\n\n**Suggested title:**\nSoundPulse Go 30W Portable Bluetooth Speaker, IPX7 Waterproof, Rechargeable Lithium-Ion Battery (5200mAh)\n\n*(Replace \"IPX7\" with the verified rating. Add \"RMS\" to the wattage if confirmed.)*\n\n**Suggested bullet points:**\n- **30W Output:** [RMS/peak clarified] powerful, full-range sound for outdoor and indoor use.\n- **Waterproof Design:** [IP rating, e.g., IPX7] protection against splashes, rain, and brief submersion, suited to pool, beach, and shower use.\n- **Long Battery Life:** 5200mAh rechargeable lithium-ion battery (19.24Wh) for extended playback.\n- **Wireless Bluetooth Connectivity:** Stream from phones, tablets, and laptops with no cables.\n- **Certified & Compliant:** FCC-certified (ID: 2A9SP-GO30); battery meets UN 38.3 transport testing standards.\n\n**Attribute fields to populate:**\n- Connectivity: Bluetooth\n- Battery type: Lithium-ion, 5200mAh, 3.7V, 19.24Wh\n- Water resistance rating: [to be confirmed]\n- Output power: 30W [RMS/peak to be confirmed]\n- Regulatory: FCC ID 2A9SP-GO30; UN 38.3 verified\n\n**Operations notes:**\n- Attach the UN 38.3 test summary to the compliance record for audit retention.\n- Flag the SKU for Class 9 lithium battery shipping labeling in fulfillment instructions.\n- Re-verify the FCC ID against the FCC equipment authorization database before final publish, as a routine check.",
+      "gemini_input_tokens": 643
+    },
+    "sku-06": {
+      "input_tokens": 867,
+      "haiku_output_tokens": 105,
+      "sonnet_est_output_tokens": 270,
+      "haiku_decision": {
+        "leaf_category": "kitchen_espresso_grinders",
+        "hazmat_class": "HIGH_VOLTAGE_COMMERCIAL",
+        "compliance_status": "HOLD_MISSING_CERT",
+        "contradiction_detected": false,
+        "primary_material_tag": "stainless_steel_burr"
+      },
+      "gemini_decision": {
+        "hazmat_compliance_risk": 2.103,
+        "compliance_status": "HOLD_MISSING_CERT",
+        "leaf_category": "kitchen_espresso_grinders",
+        "has_factual_contradiction": false
+      },
+      "gemini_confidence": 0.929,
+      "haiku_latency_ms": 2003,
+      "gemini_latency_ms": 531,
+      "sonnet_input_tokens": 281,
+      "sonnet_output_tokens": 2048,
+      "sonnet_latency_ms": 17311,
+      "sonnet_raw_text": "NovaMart Catalog Merchandising Review: ING-KIT-2026-511908\n\n## 1. Target Marketplace Category Taxonomy and Reasoning\n\n**Primary issue: the title describes two different product types.** \"Countertop Grinder\" and \"Induction Prep Station\" are different appliance classes, and the feed gives no way to tell which one the SKU is. Possible readings:\n\n- **A combo/multi-function unit.** Rare at 3500W, and it would need a clear component breakdown.\n- **A bundle of two separate items.** This would need to be split or flagged as a kit/bundle listing.\n- **A keyword-stuffed title.** The seller may be combining terms to capture search traffic.\n\n**Provisional category path, pending clarification:**\n\n| Scenario | Suggested Taxonomy |\n|---|---|\n| Grinder (wet/dry, spice, meat, or masala) | Home & Kitchen > Small Appliances > Grinders & Food Processors (or Commercial Foodservice Equipment > Food Preparation) |\n| Induction cooktop | Home & Kitchen > Kitchen Appliances > Cooktops > Induction |\n| Verified combo unit | Commercial Foodservice Equipment > Multi-Function Prep Equipment (or create a bundle/kit listing) |\n\n**Do not assign a final category yet.** Misfiling affects search placement, filter attributes, compliance rule triggers, and return rates. The \"Commercial\" claim also needs verification, since commercial-grade equipment typically carries different certification requirements (e.g., NSF, higher duty-cycle ratings) than residential appliances.\n\n## 2. Factual Contradictions and Compliance/Hazmat Risks\n\n### A. Missing electrical specifications (critical)\n- **Voltage rating is omitted.** A 3500W rating alone is incomplete. Depending on voltage (120V, 230V, 240V), this unit draws roughly 29A at 120V or 15A at 230V. At 120V it exceeds standard 15A/20A household circuit capacity. At 230V it's within range for a 16A circuit but needs dedicated wiring in many markets. Without voltage, we cannot confirm the product is safe or even usable in the destination market.\n- **Rating plate photo is blurry.** The only independent verification source is illegible, so we have no way to cross-check the seller's claims.\n\n### B. Missing safety certification (critical)\n- **The UL/BIS certificate field is empty.** For a high-wattage electrical appliance, this is a hard compliance gate. UL covers US/Canada-oriented listings; BIS covers India, where it is mandatory for many electrical appliances. The mention of both suggests either a multi-market listing or a seller unsure which applies. Certification requirements depend on the actual selling region.\n- **No evidence the product has been tested.** A 3500W appliance with unverified certification presents fire, shock, and overheating risk to end users.\n\n### C. Title/spec ambiguity\n- **\"Commercial\" is unsubstantiated.** No duty-cycle rating, NSF/commercial certification, or build specification is provided.\n- **Product identity is unclear** (see Section 1). If it is two products, a single SKU with a single wattage spec is misleading.\n\n### D. Hazmat considerations\n- No battery, fuel, or chemical components are indicated, so standard hazmat classification likely does not apply. This should be confirmed with the seller, particularly if the induction component includes any specialty coolants or sealed electronics.\n\n## 3. Recommended Publishing Status\n\n**HOLD: Do not publish.**\n\nThis is consistent with the feed's own note (\"Must hold until voltage & safety certificate verified\"), and I agree with that gate. The reasons:\n\n1. Voltage is missing, which is a safety-critical attribute and not a cosmetic gap.\n2. The certification field is empty and the supporting photo is unreadable.\n3. Product identity is ambiguous.\n4. Publishing an uncertified 3500W appliance creates real consumer safety exposure and marketplace liability.\n\n**Status code recommendation:** `HOLD_PENDING_COMPLIANCE` (not `REJECT`, since this may be resolved with seller documentation).\n\n## 4. Merchandising Recommendations for Catalog Ops\n\n### Immediate seller outreach (request all of the following)\n1. **Voltage and frequency rating** (e.g., 220-240V / 50Hz or 120V / 60Hz) plus amperage draw.\n2. **Clear, high-resolution photo of the rating plate** showing model number, voltage, wattage, and certification marks.\n3. **Valid certification documents:** UL listing (with file number), BIS registration (R-number), or other applicable regional certification (CE, ETL, etc.), matched to the target marketplace region.\n4. **Clarification of product type:** a single combo unit, a two-item bundle, or something else, with component-level specs.\n5. **Evidence supporting the \"Commercial\" claim:** duty cycle, NSF listing, or commercial build specs. If unsupported, retitle without it.\n6. **Dimensions, weight, material, and plug type/cord rating** for completeness.\n\n### Verification steps for ops\n- Validate certificate numbers against the issuing body's public database (e.g., UL Product iQ, BIS portal) and don't rely on uploaded PDFs alone.\n- Confirm the certified model number matches the SKU being listed.\n- Check for any existing recalls or safety notices on the brand/model.\n\n### Suggested title rewrite (once verified)\nAvoid keyword-stuffing and state the product accurately. Example structure, to be finalized after product identity is confirmed:\n\n> **[Brand] [Model] 3500W Commercial Countertop [Grinder / Induction Cooktop], [Voltage]V**\n\nIf it is a bundle: *\"[Brand] Commercial Prep Set: 3500W Countertop Grinder + Induction Cooktop, [Voltage]V\"*\n\n### Listing attributes to require before go-live\n- Voltage / wattage / amperage\n- Certification type and number\n- Product type (single vs. bundle)\n- Int",
+      "haiku_naive_input_tokens": 281,
+      "haiku_naive_output_tokens": 2048,
+      "haiku_naive_latency_ms": 11066,
+      "haiku_naive_raw_text": "**SKU Analysis Report: ING-KIT-2026-511908**\n\n**1. Target Marketplace Category Taxonomy and Reasoning**\n\nProposed primary category: *Home & Kitchen > Kitchen Appliances > Food Preparation Appliances > Countertop Grinders & Food Processors*\n\nSecondary/alternate considered: *Commercial Foodservice Equipment > Food Prep Equipment > Grinders* (only if seller confirms commercial-grade and the marketplace supports a B2B/foodservice storefront).\n\nReasoning:\n- The title combines two distinct product types: a commercial countertop grinder and an \"induction prep station.\" These are not the same product, and the title does not establish which one this SKU actually is.\n- \"Induction\" in kitchen appliances normally refers to an induction cooktop or heating unit. If the item includes induction heating, it likely belongs in a cooking-appliance subcategory and needs a separate electrical and safety classification. If it is only a grinder, the \"induction\" term is misleading.\n- The \"Commercial\" descriptor pushes toward foodservice categories, which typically carry stricter compliance expectations than consumer kitchen categories. Category placement should follow the verified intended use, not the marketing language.\n- Final category should be confirmed once the seller clarifies whether this is a grinder, a heating/induction unit, or a combined device.\n\n**2. Factual Contradictions, Hazmat, and Compliance Risks**\n\n*Factual contradictions and gaps:*\n- Title describes a \"Grinder & Induction Prep Station,\" but the spec sheet lists only a motor rating. No heating element, induction coil, or cooktop specification is provided, so the \"induction\" claim is unsupported.\n- The spec sheet lists a 3500W motor, but the voltage rating is omitted and the rating plate photo is blurry. Wattage cannot be evaluated for electrical safety without voltage (and current draw) \u2014 a 3500W load on a 120V circuit draws roughly 29A, which is well beyond a standard 15A household circuit. This is a material safety and consumer-information issue, not a cosmetic one.\n- \"TurboChef\" may be a registered trademark of a separate commercial oven manufacturer. Brand authorization must be verified before publishing to avoid IP and counterfeit concerns.\n\n*Compliance risks:*\n- **Electrical safety certification:** The UL (North America) / BIS (India) certificate field is empty. Countertop motorized appliances and heating appliances generally require listing or certification before sale. Publishing without this exposes the marketplace and buyers to fire and shock risk and creates regulatory liability.\n- **Voltage-dependent market eligibility:** The correct voltage determines which regions the product can legally be sold and shipped to. An unknown voltage means the listing could reach buyers for whom the product is unsafe or non-compliant.\n- **Heating/induction components:** If the unit heats food or includes induction elements, additional standards (e.g., UL 197 for commercial electric cooking appliances, or equivalent IEC/CE requirements) may apply.\n- **Food-contact materials:** Commercial food-prep equipment that contacts food typically requires food-safety material certifications (e.g., NSF/ANSI 8 for commercial food equipment, or FDA-compliant materials). None are listed.\n- **Product-safety labeling:** Warnings and instructions for motorized blades and heating surfaces are required in most markets and are absent from the feed.\n- **Hazmat:** No lithium battery or flammable component is indicated, so standard hazmat classification likely does not apply. This should be confirmed if the unit includes any battery or refrigerant-containing component.\n\n**3. Recommended Publishing Status**\n\n**HOLD \u2014 Do not publish.**\n\nRationale: The SKU has a missing voltage rating, an unreadable rating plate, an empty safety certificate field, an unverified brand, and an unsupported \"induction\" claim. Any one of these would justify a hold; together they represent a clear safety and compliance gap. The ingestion note already instructs that this item must be held until voltage and safety certification are verified, and that instruction should be followed.\n\nRelease conditions (all required):\n1. Verified voltage and current rating, supplied by the seller and confirmed against a legible rating plate or manufacturer documentation.\n2. Valid UL, ETL, or BIS certificate (as applicable to target markets) with certificate number, listed product model, and expiry date.\n3. Confirmed product type (grinder only vs. induction/heating unit) and corrected title accordingly.\n4. Brand authorization or trademark clearance for \"TurboChef,\" or a rename of the product.\n5. Food-contact material documentation if the unit is marketed for food preparation.\n\n**4. Rewritten Merchandising Recommendations for Catalog Ops**\n\n*Action items for the ops team:*\n- Place the SKU in a **held/quarantine** status in the catalog system; do not expose it in search, storefront, or feeds.\n- Send a verification request to the seller requesting: voltage and amperage rating, a high-resolution photo of the rating plate, the UL/BIS/ETL certificate with number, brand authorization documentation, and a clear statement of whether the unit heats food.\n- Do not accept estimated or \"typical\" voltage values from the seller; require documentation.\n- Once verified, use the following draft listing structure (to be finalized with confirmed specs):\n\n*Draft title (conditional on verification):* \"[Verified Brand] [Verified Model] 3500W Commercial Countertop Food Grinder, [Verified Voltage]V, UL/ETL Listed\"\n\n*Draft bullet points (conditional):*\n- Powerful 3500W motor for commercial-grade grinding \u2014 [verified voltage] operation.\n- Safety certified: [UL/ETL/BIS] Listing No. [number].\n- Built for continuous food-prep use in foodservice environments. [Include only if verified.]\n- Remove any reference to \"induction prep station\" unless the unit is confirmed to have an induction heating function, in which case document the heating specs separately.\n\n*Draft description guidance:* Include the verified voltage, pl",
+      "gemini_input_tokens": 624
+    }
+  }
+}

@@ -1,0 +1,467 @@
+"""Backend test suite for NovaMart AI Workload Archetypes (Phase 0 + Category 1)."""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+import pytest
+from fastapi.testclient import TestClient
+
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(BACKEND_DIR))
+
+from app.core.pricing import compute_run_finops  # noqa: E402
+from app.data.cat1_fixtures import CAT1_PRESETS  # noqa: E402
+from app.main import app  # noqa: E402
+
+
+client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolated_traces_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Keep test runs out of the real backend/traces directory."""
+    test_traces = tmp_path / "traces"
+    monkeypatch.setenv("NOVAMART_TRACES_DIR", str(test_traces))
+    return test_traces
+
+
+def test_list_archetypes_returns_all_six_and_finops_rules() -> None:
+    resp = client.get("/api/archetypes")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["archetypes"]) == 6
+    assert len(body["autonomy_tiers"]) == 4
+    assert len(body["token_bands"]) == 5
+    assert len(body["finops_rules"]) == 3
+    assert body["archetypes"][0]["status"] == "live"
+    assert body["archetypes"][1]["status"] == "live"
+    assert body["archetypes"][2]["status"] == "live"
+    assert all(a["status"] == "coming_soon" for a in body["archetypes"][3:])
+
+
+def test_cat1_presets_are_realistic_high_token_payloads() -> None:
+    resp = client.get("/api/cat1/presets")
+    assert resp.status_code == 200
+    presets = resp.json()["presets"]
+    assert len(presets) == 6
+    assert all(len(p["payload"]) >= 2000 for p in presets)
+
+
+def test_cat1_run_replay_support_triage_and_pii_masking() -> None:
+    resp = client.post(
+        "/api/cat1/run",
+        json={
+            "preset_id": "tkt-02",
+            "sub_task": "support_triage",
+            "rungs": ["sonnet_naive", "haiku_naive", "haiku_calibrated", "gemini_decision"],
+            "mode": "replay",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["mode_used"] == "replay"
+    by_rung = {r["rung_id"]: r for r in data["results"]}
+
+    sonnet = by_rung["sonnet_naive"]
+    haiku_naive = by_rung["haiku_naive"]
+    haiku = by_rung["haiku_calibrated"]
+    gemini = by_rung["gemini_decision"]
+
+    assert sonnet["finops"]["output_tokens"] > 200
+    assert haiku_naive["finops"]["output_tokens"] > 200
+    assert haiku_naive["finops"]["cost_per_1k_usd"] < sonnet["finops"]["cost_per_1k_usd"]
+    assert haiku["finops"]["cost_per_1k_usd"] < haiku_naive["finops"]["cost_per_1k_usd"]
+    assert haiku["finops"]["io_ratio"] >= 12.0
+    assert haiku["savings_vs_naive_pct"] > 80.0
+    assert gemini["finops"]["output_tokens"] == 0
+    assert gemini["finops"]["output_cost_usd"] == 0.0
+    assert gemini["decision_probabilities"]["contains_sensitive_pii"]["type"] == "noul"
+
+    # PII scrubbing assertions
+    pii = data["pii_redaction"]
+    assert pii["contains_pii"] is True
+    assert pii["total_redactions"] >= 4
+    assert "4829-6173-9042" not in pii["masked_preview"]
+    assert "5412-7500-8812-3344" not in pii["masked_preview"]
+    assert "[REDACTED_AADHAAR_PII]" in pii["masked_preview"]
+    assert "[REDACTED_CARD_PII]" in pii["masked_preview"]
+
+    # Ensure unseparated 12-digit FedEx tracking number on tkt-01 is not misclassified as Aadhaar
+    tkt01 = client.post(
+        "/api/cat1/run",
+        json={
+            "preset_id": "tkt-01",
+            "sub_task": "support_triage",
+            "rungs": ["haiku_calibrated"],
+            "mode": "replay",
+        },
+    ).json()
+    assert "AADHAAR" not in tkt01["pii_redaction"]["counts_by_type"]
+    assert "774920194812" in tkt01["pii_redaction"]["masked_preview"]
+
+
+def test_cat1_run_replay_sku_tagging() -> None:
+    resp = client.post(
+        "/api/cat1/run",
+        json={
+            "preset_id": "sku-01",
+            "sub_task": "sku_tagging",
+            "rungs": ["sonnet_naive", "haiku_calibrated", "gemini_decision"],
+            "mode": "replay",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    by_rung = {r["rung_id"]: r for r in data["results"]}
+    assert by_rung["haiku_calibrated"]["structured_output"]["contradiction_detected"] is True
+    assert by_rung["gemini_decision"]["structured_output"]["has_factual_contradiction"] is True
+    assert by_rung["gemini_decision"]["finops"]["output_tokens"] == 0
+    assert data["jev_comparator"]["input_rate_per_1m_usd"] == 0.042
+    assert data["ground_truth"]["leaf_category"] == "apparel_ethnic_kurtas"
+    assert by_rung["sonnet_naive"]["accuracy"]["schema_valid"] is False
+    assert by_rung["haiku_calibrated"]["accuracy"]["schema_valid"] is True
+    assert by_rung["gemini_decision"]["accuracy"]["exact_match"] is True
+
+
+def test_cat1_batch_returns_12_items_and_5_tier_cfo_table() -> None:
+    resp = client.post("/api/cat1/batch", json={"sub_task": "mixed", "mode": "replay"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_items"] == 12
+    assert len(data["items"]) == 12
+    cfo_ids = [r["tier_id"] for r in data["cfo_comparison"]]
+    assert cfo_ids == [
+        "sonnet_naive",
+        "haiku_naive",
+        "haiku_realtime",
+        "haiku_batch",
+        "gemini_decision",
+        "typesafe_jev",
+    ]
+    assert data["cfo_comparison"][2]["cost_per_1k_usd"] < data["cfo_comparison"][1]["cost_per_1k_usd"]
+    assert data["cfo_comparison"][3]["cost_per_1k_usd"] < data["cfo_comparison"][2]["cost_per_1k_usd"]
+    assert data["cfo_comparison"][5]["cost_per_1k_usd"] < data["cfo_comparison"][4]["cost_per_1k_usd"]
+    assert data["cfo_comparison"][0]["avg_output_tokens"] != data["cfo_comparison"][1]["avg_output_tokens"]
+    assert data["cfo_comparison"][0]["avg_input_tokens"] < data["cfo_comparison"][2]["avg_input_tokens"]
+    assert data["cfo_comparison"][4]["avg_input_tokens"] < data["cfo_comparison"][2]["avg_input_tokens"]
+    assert data["cfo_comparison"][5]["field_accuracy_pct"] is None
+    assert len(data["accuracy_rollup"]) == 4
+    for row in data["accuracy_rollup"]:
+        assert 0.0 < row["field_accuracy_pct"] <= 100.0
+
+
+def test_credit_shield_blocks_missing_keys_cleanly_with_402(
+    monkeypatch,
+    isolated_traces_dir: Path,
+) -> None:
+    # Ensure missing keys return clean 402 rather than 500
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("GEMINI_API_KEY", "")
+    from app import config
+
+    monkeypatch.setattr(
+        config,
+        "get_settings",
+        lambda: config.Settings(
+            anthropic_api_key="",
+            gemini_api_key="",
+            author_passcode="",
+            daily_live_budget_usd=2.0,
+            anthropic_sonnet_model="claude-sonnet-5-5",
+            anthropic_haiku_model="claude-haiku-5-5",
+            gemini_decision_model="gemini-decision-1",
+            frontend_dist_dir=Path("/nonexistent"),
+            replays_dir=BACKEND_DIR / "replays",
+            traces_dir=isolated_traces_dir,
+        ),
+    )
+    from app.core import credit_shield as cs_mod
+    monkeypatch.setattr(cs_mod, "get_settings", config.get_settings)
+
+    resp = client.post(
+        "/api/cat1/run",
+        json={
+            "preset_id": "tkt-01",
+            "sub_task": "support_triage",
+            "rungs": ["haiku_calibrated", "gemini_decision"],
+            "mode": "live",
+        },
+    )
+    assert resp.status_code == 402
+
+
+def test_replay_rejects_modified_custom_input_with_400() -> None:
+    resp = client.post(
+        "/api/cat1/run",
+        json={
+            "preset_id": "tkt-01",
+            "custom_input": "Some brand new custom payload not in golden replays",
+            "sub_task": "support_triage",
+            "rungs": ["haiku_calibrated"],
+            "mode": "replay",
+        },
+    )
+    assert resp.status_code == 400
+
+
+def test_pricing_output_multiplier_5x() -> None:
+    f = compute_run_finops("claude-sonnet-5-5", input_tokens=1000, output_tokens=1000)
+    assert f.input_cost_usd == 0.002
+    assert f.output_cost_usd == 0.01
+    assert round(f.output_cost_usd / f.input_cost_usd, 1) == 5.0
+
+
+def test_spa_routes_serve_html_when_built() -> None:
+    dist_index = Path(BACKEND_DIR).parent / "frontend" / "dist" / "index.html"
+    if not dist_index.is_file():
+        return
+    for path in ("/", "/archetype/1", "/archetype/2", "/archetype/3"):
+        resp = client.get(path)
+        assert resp.status_code == 200
+        assert "text/html" in resp.headers["content-type"]
+
+
+def test_trace_capture_partitions_by_category_use_case_model_pattern(
+    isolated_traces_dir: Path,
+) -> None:
+    resp = client.post(
+        "/api/cat1/run",
+        json={
+            "preset_id": "tkt-01",
+            "sub_task": "support_triage",
+            "rungs": ["sonnet_naive", "haiku_naive", "haiku_calibrated", "gemini_decision"],
+            "mode": "replay",
+        },
+    )
+    assert resp.status_code == 200
+
+    expected_dirs = [
+        isolated_traces_dir
+        / "category=cat1_classification_routing"
+        / "use_case=support_triage"
+        / "model=claude-sonnet-5-5"
+        / "pattern=naive_chatbot",
+        isolated_traces_dir
+        / "category=cat1_classification_routing"
+        / "use_case=support_triage"
+        / "model=claude-haiku-5-5"
+        / "pattern=naive_unconstrained_prose",
+        isolated_traces_dir
+        / "category=cat1_classification_routing"
+        / "use_case=support_triage"
+        / "model=claude-haiku-5-5"
+        / "pattern=strict_json_schema",
+        isolated_traces_dir
+        / "category=cat1_classification_routing"
+        / "use_case=support_triage"
+        / "model=gemini-decision-1"
+        / "pattern=system1_decisions_api",
+    ]
+    for d in expected_dirs:
+        files = list(d.glob("*.json"))
+        assert len(files) == 1
+        trace = json.loads(files[0].read_text(encoding="utf-8"))
+        assert trace["request"]["input_payload"]
+        assert trace["finops"]["cost_per_1k_usd"] > 0
+        raw_str = files[0].read_text(encoding="utf-8")
+        assert "sk-ant-" not in raw_str
+        assert "AIza" not in raw_str
+
+    summary_resp = client.get("/api/traces/summary")
+    assert summary_resp.status_code == 200
+    summary = summary_resp.json()
+    assert summary["total_traces"] == 4
+    assert len(summary["partitions"]) == 4
+
+
+def test_cat2_presets_match_slide4_input_token_band() -> None:
+    resp = client.get("/api/cat2/presets")
+    assert resp.status_code == 200
+    body = resp.json()
+    presets = body["presets"]
+    assert len(presets) == 4
+    assert all(len(p["payload"]) >= 7000 for p in presets)
+    assert "executive_summary" in body["reviewer_presets"]
+
+
+def test_cat2_run_replay_proves_output_dominated_cost_and_template_savings() -> None:
+    distinct_unbounded_out: set[int] = set()
+    for pid, sub_task in (
+        ("brief-01", "exec_synthesis"),
+        ("brief-02", "exec_synthesis"),
+        ("reg-01", "regulatory_filing"),
+        ("reg-02", "regulatory_filing"),
+    ):
+        resp = client.post(
+            "/api/cat2/run",
+            json={
+                "preset_id": pid,
+                "sub_task": sub_task,
+                "rungs": ["sonnet_unbounded", "sonnet_templated", "haiku_templated"],
+                "mode": "replay",
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["mode_used"] == "replay"
+        by_rung = {r["rung_id"]: r for r in data["results"]}
+
+        unbounded = by_rung["sonnet_unbounded"]
+        templated = by_rung["sonnet_templated"]
+        haiku = by_rung["haiku_templated"]
+
+        assert len(unbounded["raw_markdown"] or "") >= 3000
+        assert unbounded["finops"]["input_tokens"] >= 1500
+        assert unbounded["finops"]["output_tokens"] != 4500
+        assert unbounded["finops"]["output_tokens"] < 8000
+        assert unbounded["finops"]["input_tokens"] < templated["finops"]["input_tokens"]
+        assert unbounded["finops"]["output_cost_share_pct"] >= 75.0
+        assert templated["finops"]["output_tokens"] >= 800
+        assert templated["finops"]["output_tokens"] != haiku["finops"]["output_tokens"]
+        assert templated["savings_vs_unbounded_pct"] >= 30.0
+        assert haiku["savings_vs_unbounded_pct"] >= 95.0
+        assert "executive_summary" in templated["structured_draft"]
+        assert len(templated["structured_draft"]["key_findings"]) == 3
+        distinct_unbounded_out.add(unbounded["finops"]["output_tokens"])
+
+    assert len(distinct_unbounded_out) >= 3
+
+
+def test_cat2_hitl_section_regeneration_and_partitioned_traces(
+    isolated_traces_dir: Path,
+) -> None:
+    resp = client.post(
+        "/api/cat2/regenerate-section",
+        json={
+            "preset_id": "brief-01",
+            "sub_task": "exec_synthesis",
+            "section_key": "executive_summary",
+            "reviewer_instruction": "",
+            "model_tier": "claude-sonnet-5-5",
+            "mode": "replay",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["section_key"] == "executive_summary"
+    assert body["finops_comparison"]["revision_savings_pct"] >= 65.0
+    assert "headline" in body["updated_section"]
+
+    bad_custom = client.post(
+        "/api/cat2/regenerate-section",
+        json={
+            "preset_id": "brief-01",
+            "sub_task": "exec_synthesis",
+            "section_key": "executive_summary",
+            "reviewer_instruction": "Rewrite everything in haiku verse",
+            "model_tier": "claude-sonnet-5-5",
+            "mode": "replay",
+        },
+    )
+    assert bad_custom.status_code == 400
+
+    regen_dir = (
+        isolated_traces_dir
+        / "category=cat2_synthesis_drafting"
+        / "use_case=exec_synthesis"
+        / "model=claude-sonnet-5-5"
+        / "pattern=hitl_section_regen"
+    )
+    trace_files = list(regen_dir.glob("*.json"))
+    assert len(trace_files) == 1
+    raw_str = trace_files[0].read_text(encoding="utf-8")
+    assert "sk-ant-" not in raw_str
+    assert "AIza" not in raw_str
+
+
+def test_cat3_presets_cover_single_it_hr_service_desk_use_case() -> None:
+    resp = client.get("/api/cat3/presets")
+    assert resp.status_code == 200
+    body = resp.json()
+    presets = body["presets"]
+    assert len(presets) == 2
+    assert all(p["use_case"] == "it_hr_service_desk" for p in presets)
+    assert all(len(p["turns"]) == 10 for p in presets)
+    assert body["handbook_char_count"] >= 11500
+    assert "compacted_through_turn" in body["memory_schema"]["properties"]
+    assert "prefix_cached_summarized" in body["code_snippets"]
+
+
+def test_cat3_run_replay_proves_prefix_caching_and_sliding_summary_savings(
+    isolated_traces_dir: Path,
+) -> None:
+    for pid in ("desk-01", "desk-02"):
+        resp = client.post(
+            "/api/cat3/run",
+            json={
+                "preset_id": pid,
+                "use_case": "it_hr_service_desk",
+                "rungs": [
+                    "naive_full_history",
+                    "prefix_cached_history",
+                    "prefix_cached_summarized",
+                ],
+                "mode": "replay",
+            },
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["mode_used"] == "replay"
+        assert body["use_case"] == "it_hr_service_desk"
+        by_rung = {r["rung_id"]: r for r in body["results"]}
+
+        naive = by_rung["naive_full_history"]
+        cached = by_rung["prefix_cached_history"]
+        compacted = by_rung["prefix_cached_summarized"]
+
+        for r in (naive, cached, compacted):
+            assert r["model_id"] == "claude-sonnet-5-5"
+            assert len(r["turns"]) == 10
+
+        # Turns 2..10 must read >= 4,096 cached handbook tokens
+        for r in (cached, compacted):
+            assert r["turns"][0]["finops"]["cache_creation_tokens"] + r["turns"][0]["finops"]["cache_read_tokens"] >= 4096
+            for t in r["turns"][1:]:
+                assert t["finops"]["cache_read_tokens"] >= 4096
+
+        assert compacted["summarizer_calls"] == 2
+        assert compacted["summarizer_cost_usd"] > 0.0
+        assert compacted["turns"][4]["compaction_triggered_before_turn"] is True
+        assert compacted["turns"][7]["compaction_triggered_before_turn"] is True
+
+        assert compacted["total_session_cost_usd"] < cached["total_session_cost_usd"] < naive["total_session_cost_usd"]
+        assert compacted["warm_fleet_session_cost_usd"] < cached["warm_fleet_session_cost_usd"] < naive["warm_fleet_session_cost_usd"]
+
+    cat3_dir = (
+        isolated_traces_dir
+        / "category=cat3_conversational_assistants"
+        / "use_case=it_hr_service_desk"
+        / "model=claude-sonnet-5-5"
+        / "pattern=prefix_cached_sliding_summary"
+    )
+    files = list(cat3_dir.glob("*.json"))
+    assert len(files) == 2
+    for f in files:
+        raw = f.read_text(encoding="utf-8")
+        assert "sk-ant-" not in raw
+        assert "AIza" not in raw
+
+
+def test_cat3_chat_turn_rejects_replay_mode_cleanly() -> None:
+    resp = client.post(
+        "/api/cat3/chat-turn",
+        json={
+            "preset_id": "desk-01",
+            "rung_id": "prefix_cached_summarized",
+            "user_message": "What is my Bridge Wire SLA?",
+            "mode": "replay",
+        },
+    )
+    assert resp.status_code == 400
+
+
+
+
