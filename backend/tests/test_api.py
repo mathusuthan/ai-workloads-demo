@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 import pytest
@@ -39,7 +40,12 @@ def test_list_archetypes_returns_all_six_and_finops_rules() -> None:
     assert body["archetypes"][0]["status"] == "live"
     assert body["archetypes"][1]["status"] == "live"
     assert body["archetypes"][2]["status"] == "live"
-    assert all(a["status"] == "coming_soon" for a in body["archetypes"][3:])
+    assert body["archetypes"][3]["status"] == "live"
+    assert body["archetypes"][4]["status"] == "live"
+    assert body["archetypes"][3]["autonomy_tier_label"] == "Tier 2+ (HITL Deep RAG)"
+    assert body["archetypes"][4]["autonomy_tier_label"] == "Tier 3+ (Bounded Agentic)"
+    assert body["archetypes"][5]["autonomy_tier_label"] == "Tier 4 (Agentic Swarm)"
+    assert all(a["status"] == "live" for a in body["archetypes"])
 
 
 def test_cat1_presets_are_realistic_high_token_payloads() -> None:
@@ -218,7 +224,7 @@ def test_spa_routes_serve_html_when_built() -> None:
     dist_index = Path(BACKEND_DIR).parent / "frontend" / "dist" / "index.html"
     if not dist_index.is_file():
         return
-    for path in ("/", "/archetype/1", "/archetype/2", "/archetype/3"):
+    for path in ("/", "/archetype/1", "/archetype/2", "/archetype/3", "/archetype/4", "/archetype/5", "/archetype/6"):
         resp = client.get(path)
         assert resp.status_code == 200
         assert "text/html" in resp.headers["content-type"]
@@ -463,5 +469,296 @@ def test_cat3_chat_turn_rejects_replay_mode_cleanly() -> None:
     assert resp.status_code == 400
 
 
+# --- Category 4: Multi-Doc RAG & Deep Ingestion Tests ---
 
 
+def test_no_10k_or_slide_references_in_catalog_and_cat4() -> None:
+    arch_resp = client.get("/api/archetypes")
+    assert arch_resp.status_code == 200
+    arch_json = arch_resp.json()
+    arch_blob = json.dumps(arch_json).lower()
+    assert "10-k" not in arch_blob
+    assert not re.search(r"\bform\s*10\s*-?\s*k\b", arch_blob)
+    assert not re.search(r"\bslides?\b", arch_blob)
+    cat4_meta_blob = json.dumps(arch_json["archetypes"][3]).lower()
+    assert "10-k" not in cat4_meta_blob and "10k" not in cat4_meta_blob
+
+    cat4_resp = client.get("/api/cat4/presets")
+    assert cat4_resp.status_code == 200
+    cat4_blob = json.dumps(cat4_resp.json()).lower()
+    assert "10-k" not in cat4_blob
+    assert not re.search(r"\b10k\b", cat4_blob)
+    assert not re.search(r"\bslides?\b", cat4_blob)
+
+
+def test_cat4_presets_expose_7_india_deal_room_docs_and_28_chunks() -> None:
+    resp = client.get("/api/cat4/presets")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_docs"] == 7
+    assert data["total_chunks"] == 28
+    assert len(data["documents"]) == 7
+    assert data["corpus_char_count"] >= 38_000
+    assert data["approx_corpus_tokens"] >= 15_000
+    assert len(data["presets"]) == 2
+    for preset in data["presets"]:
+        assert preset["use_case"] == "supplier_msa_due_diligence"
+        assert len(preset["questions"]) == 4
+
+
+def test_cat4_run_replay_proves_prefix_cache_and_hybrid_rag_savings_with_citations(
+    isolated_traces_dir: Path,
+) -> None:
+    for pid in ("audit-01", "audit-02"):
+        resp = client.post(
+            "/api/cat4/run",
+            json={"preset_id": pid, "mode": "replay"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["mode_used"] == "replay"
+        assert data["total_docs"] == 7
+        assert data["total_chunks"] == 28
+
+        by_rung = {r["rung_id"]: r for r in data["results"]}
+        naive = by_rung["naive_full_corpus"]
+        cached = by_rung["cached_full_corpus_citations"]
+        hybrid = by_rung["hybrid_rag_rerank_citations"]
+
+        assert len(naive["queries"]) == 4
+        assert len(cached["queries"]) == 4
+        assert len(hybrid["queries"]) == 4
+
+        assert naive["avg_citations_per_query"] == 0.0
+        assert cached["avg_citations_per_query"] >= 5.0
+        assert hybrid["avg_citations_per_query"] >= 5.0
+
+        for q in cached["queries"][1:]:
+            assert q["finops"]["cache_read_tokens"] >= 14_000
+
+        assert hybrid["reranker_calls"] == 4
+        assert hybrid["reranker_cost_usd"] > 0.0
+        assert hybrid["avg_reranker_recall_pct"] >= 90.0
+        for q in hybrid["queries"]:
+            assert len(q["retrieval_funnel"]) == 28
+            assert q["context_reduction_pct"] >= 65.0
+
+        assert hybrid["single_query_cold_per_1k_usd"] < naive["single_query_cold_per_1k_usd"] * 0.65
+        assert cached["cost_per_1k_audits_warm_usd"] < naive["cost_per_1k_audits_warm_usd"] * 0.50
+
+    cat4_dir = (
+        isolated_traces_dir
+        / "category=cat4_multidoc_rag"
+        / "use_case=supplier_msa_due_diligence"
+        / "model=claude-sonnet-5-5"
+        / "pattern=hybrid_bm25_haiku_rerank_citations"
+    )
+    files = list(cat4_dir.glob("*.json"))
+    assert len(files) == 2
+    for f in files:
+        raw = f.read_text(encoding="utf-8")
+        assert "sk-ant-" not in raw
+        assert "AIza" not in raw
+
+
+def test_cat4_adhoc_query_rejects_replay_mode_cleanly() -> None:
+    resp = client.post(
+        "/api/cat4/query",
+        json={
+            "preset_id": "audit-01",
+            "question": "When does CPCB EPR certificate EPR-KA-2025-08814 expire?",
+            "mode": "replay",
+        },
+    )
+    assert resp.status_code == 400
+
+
+# --- Category 5: Autonomous Process Orchestration (SQLite ERP Agent) ---
+
+
+def test_cat5_presets_and_no_slide_or_10k_references() -> None:
+    resp = client.get("/api/cat5/presets")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["presets"]) == 3
+    assert body["policy_char_count"] >= 14_000
+    assert body["approx_policy_tokens"] >= 5_000
+    assert "CREATE TABLE reconciliation_vouchers" in body["erp_ddl_schema"]
+    blob = json.dumps(body).lower()
+    assert "10-k" not in blob
+    assert not re.search(r"\b10k\b", blob)
+    assert not re.search(r"\bslides?\b", blob)
+
+
+def test_cat5_sqlite_erp_and_policy_tolerance_gate_determinism() -> None:
+    from app.archetypes.cat5_orchestration.erp_db import Cat5ErpSession
+
+    # Ungoverned commit should work on Rung 1, while Governed commit must reject before gate runs
+    sess = Cat5ErpSession(rung_id="bounded_sonnet_cached_gate")
+    reject_str, _, _, is_opt, _ = sess.execute_tool(
+        "commit_reconciliation_voucher",
+        {
+            "invoice_id": "INV-KA-2026-9921",
+            "po_id": "PO-NM-BLR-7740",
+            "decision": "APPROVE_CLEAN",
+            "authorized_net_principal_inr": 1840000.0,
+            "authorized_gst_payout_inr": 331200.0,
+            "gst_escrow_holdback_inr": 0.0,
+            "debit_note_deduction_inr": 0.0,
+            "audit_summary": "unverified",
+        },
+    )
+    assert "REJECTED_BY_GOVERNANCE_GATE" in reject_str
+    assert is_opt is False
+
+    # Running gate yields exact ground truth + escalation flags
+    for inv_id, exp_dec, exp_esc, exp_halt in (
+        ("INV-KA-2026-9921", "APPROVE_WITH_GST_ESCROW", False, False),
+        ("INV-MH-2026-4418", "APPROVE_PARTIAL_DEBIT_NOTE", True, False),
+        ("INV-DL-2026-8803", "BLOCK_EXCEPTION_HOLD", False, True),
+    ):
+        _, _, _, _, gate = sess.execute_tool("run_policy_tolerance_gate", {"invoice_id": inv_id})
+        assert gate is not None
+        assert gate["recommended_decision"] == exp_dec
+        assert gate["escalation_required"] is exp_esc
+        assert gate["circuit_breaker_halt"] is exp_halt
+    sess.close()
+
+
+def test_cat5_run_replay_proves_loop_governance_haiku_routing_and_100pct_accuracy(
+    isolated_traces_dir: Path,
+) -> None:
+    expected_esc = {"inv-01": False, "inv-02": True, "inv-03": False}
+    for pid, esc in expected_esc.items():
+        resp = client.post("/api/cat5/run", json={"preset_id": pid, "mode": "replay"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["mode_used"] == "replay"
+        assert len(data["portfolio_scorecard"]) == 3
+
+        by_rung = {r["rung_id"]: r for r in data["results"]}
+        naive = by_rung["unbounded_sonnet_loop"]
+        bounded = by_rung["bounded_sonnet_cached_gate"]
+        hybrid = by_rung["hybrid_haiku_sonnet_governed"]
+
+        naive_tot = (
+            naive["total_uncached_input_tokens"]
+            + naive["total_cache_creation_tokens"]
+            + naive["total_cache_read_tokens"]
+        )
+        assert naive_tot >= 25_000
+
+        for gov in (bounded, hybrid):
+            ev = gov["evaluation"]
+            assert ev["exact_match"] is True
+            assert ev["field_accuracy_pct"] == 100.0
+            assert ev["evidence_recall_pct"] == 100.0
+            assert ev["tool_precision_pct"] == 100.0
+            assert ev["within_step_budget"] is True
+            assert ev["gate_verified"] is True
+            assert gov["steps"][1]["finops"]["cache_read_tokens"] >= 4096
+
+        assert hybrid["escalated_to_sonnet"] is esc
+        assert hybrid["cold_run_cost_usd"] < bounded["cold_run_cost_usd"] < naive["cold_run_cost_usd"]
+
+    cat5_dir = (
+        isolated_traces_dir
+        / "category=cat5_process_orchestration"
+        / "use_case=invoice_3way_reconciliation"
+    )
+    assert cat5_dir.is_dir()
+    trace_files = list(cat5_dir.rglob("*.json"))
+    assert len(trace_files) == 9
+    for tf in trace_files:
+        raw = tf.read_text(encoding="utf-8")
+        assert "sk-ant-" not in raw
+        assert "AIza" not in raw
+
+
+
+
+
+
+
+# --- Category 6: Multi-Agent Swarms & Auto Eng (Checkout CI Swarm + CpO) ---
+
+
+def test_cat6_presets_and_no_slide_or_10k_references() -> None:
+    resp = client.get("/api/cat6/presets")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["presets"]) == 3
+    assert body["shared_repo_char_count"] >= 20_000
+    assert body["approx_shared_repo_tokens"] >= 6_000
+    assert "ENG-STD-04" in body["shared_repo_preview"]
+    assert "SEC-STD-02" in body["shared_repo_preview"]
+    assert "CONC-STD-07" in body["shared_repo_preview"]
+    blob = json.dumps(body).lower()
+    assert "10-k" not in blob
+    assert not re.search(r"\b10k\b", blob)
+    assert not re.search(r"\bslides?\b", blob)
+
+
+def test_cat6_python_sandbox_rejects_buggy_and_enforces_ast_security_rules() -> None:
+    from app.archetypes.cat6_swarms.sandbox_verifier import evaluate_patch_in_sandbox
+    from app.data.cat6_fixtures import CAT6_PRESETS
+
+    for preset in CAT6_PRESETS:
+        sbx = evaluate_patch_in_sandbox(preset["id"], preset["buggy_code"])
+        assert sbx["total_checks"] == 10
+        assert sbx["verified_outcome"] is False
+        assert sbx["passed_checks"] < 10
+
+    unsafe_res = evaluate_patch_in_sandbox(
+        "inc-02",
+        "import subprocess\nclass UpiWebhookProcessor: pass\n",
+    )
+    assert unsafe_res["verified_outcome"] is False
+    safe_chk = next(c for c in unsafe_res["checks"] if c["check_id"] == "AST-SAFE-02")
+    assert safe_chk["passed"] is False
+
+
+def test_cat6_run_replay_proves_context_isolation_prefix_caching_and_cpo(
+    isolated_traces_dir: Path,
+) -> None:
+    for pid in ("inc-01", "inc-02", "inc-03"):
+        resp = client.post("/api/cat6/run", json={"preset_id": pid, "mode": "replay"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["mode_used"] == "replay"
+        assert len(data["portfolio_scorecard"]) == 3
+
+        by_rung = {r["rung_id"]: r for r in data["results"]}
+        naive = by_rung["unisolated_broadcast_swarm"]
+        iso = by_rung["isolated_cached_sonnet_swarm"]
+        hybrid = by_rung["tiered_hybrid_cpo_swarm"]
+
+        naive_tot = (
+            naive["total_uncached_input_tokens"]
+            + naive["total_cache_creation_tokens"]
+            + naive["total_cache_read_tokens"]
+        )
+        assert naive_tot >= 100_000
+
+        for gov in (iso, hybrid):
+            sbx = gov["sandbox_report"]
+            assert sbx["verified_outcome"] is True
+            assert sbx["passed_checks"] == 10
+            assert gov["agent_turns"][1]["finops"]["cache_read_tokens"] >= 4096
+
+        assert hybrid["haiku_turns"] >= 4
+        assert hybrid["sonnet_turns"] >= 1
+        assert hybrid["cold_run_cost_usd"] < iso["cold_run_cost_usd"] < naive["cold_run_cost_usd"]
+
+    cat6_dir = (
+        isolated_traces_dir
+        / "category=cat6_multi_agent_swarms"
+        / "use_case=checkout_ci_self_healing_swarm"
+    )
+    assert cat6_dir.is_dir()
+    trace_files = list(cat6_dir.rglob("*.json"))
+    assert len(trace_files) == 9
+    for tf in trace_files:
+        raw = tf.read_text(encoding="utf-8")
+        assert "sk-ant-" not in raw
+        assert "AIza" not in raw

@@ -475,3 +475,413 @@ async def run_cat3_memory_summarizer(
         stop_reason=getattr(resp, "stop_reason", None),
         thinking_tokens=think_tok,
     )
+
+
+
+async def run_cat4_haiku_reranker(
+    rerank_payload: str,
+    system_prompt: str,
+    schema: dict[str, Any],
+    api_key: str,
+    max_tokens: int = 800,
+) -> AnthropicRawResult:
+    """Category 4 Stage-2 cross-chunk reranker on Haiku 5.5 with strict JSON schema."""
+    settings = get_settings()
+    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=45.0)
+    thinking_cfg: dict[str, str] = {"type": "disabled"}
+    request_params: dict[str, Any] = {
+        "max_tokens": max_tokens,
+        "endpoint": "messages.create",
+        "thinking": thinking_cfg,
+        "output_config": {"format": {"type": "json_schema"}},
+    }
+
+    t0 = time.perf_counter()
+    used_model, resp = await _create_with_fallback(
+        client,
+        settings.anthropic_haiku_model,
+        ["claude-haiku-5-5", "claude-haiku-4-5"],
+        max_tokens=max_tokens,
+        thinking=thinking_cfg,
+        system=system_prompt,
+        output_config={
+            "format": {
+                "type": "json_schema",
+                "schema": schema,
+            }
+        },
+        messages=[{"role": "user", "content": rerank_payload}],
+    )
+    latency_ms = int((time.perf_counter() - t0) * 1000)
+
+    raw_text = "\n".join(
+        b.text for b in resp.content if getattr(b, "type", None) == "text"
+    ).strip()
+    if getattr(resp, "stop_reason", None) == "max_tokens":
+        out_cnt = int(getattr(resp.usage, "output_tokens", 0) or 0)
+        raise RuntimeError(
+            f"Category 4 Haiku reranker hit max_tokens={max_tokens} ({out_cnt} out tokens)"
+        )
+    structured = json.loads(raw_text) if raw_text else {}
+    in_tok, out_tok, c_write, c_read, think_tok = _extract_usage_tokens(resp.usage)
+
+    return AnthropicRawResult(
+        model_id=used_model,
+        latency_ms=latency_ms,
+        input_tokens=in_tok,
+        output_tokens=out_tok,
+        cache_creation_tokens=c_write,
+        cache_read_tokens=c_read,
+        raw_text=raw_text,
+        structured=structured,
+        system_prompt=system_prompt,
+        request_params=request_params,
+        stop_reason=getattr(resp, "stop_reason", None),
+        thinking_tokens=think_tok,
+    )
+
+
+async def run_cat4_rag_synthesis(
+    system_prompt: str,
+    user_question: str,
+    documents_for_blocks: list[dict[str, Any]] | None,
+    uncached_corpus_text: str | None,
+    use_prefix_cache: bool,
+    api_key: str,
+    max_tokens: int = 2048,
+) -> AnthropicRawResult:
+    """Category 4 Sonnet 5.5 RAG synthesis supporting native DocumentBlocks + citations + cache_control."""
+    settings = get_settings()
+    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=90.0)
+    thinking_cfg: dict[str, str] = {"type": "between_tools"}
+
+    if documents_for_blocks is not None:
+        user_content: list[dict[str, Any]] = []
+        last_idx = len(documents_for_blocks) - 1
+        for idx, doc in enumerate(documents_for_blocks):
+            block: dict[str, Any] = {
+                "type": "document",
+                "title": doc["block_title"],
+                "context": doc["block_context"],
+                "source": {
+                    "type": "text",
+                    "media_type": "text/plain",
+                    "data": doc["data"],
+                },
+                "citations": {"enabled": True},
+            }
+            if use_prefix_cache and idx == last_idx:
+                block["cache_control"] = {"type": "ephemeral"}
+            user_content.append(block)
+        user_content.append({"type": "text", "text": user_question})
+        messages_arg: list[dict[str, Any]] = [{"role": "user", "content": user_content}]
+    else:
+        messages_arg = [
+            {
+                "role": "user",
+                "content": (
+                    f"=== DEAL ROOM CORPUS ===\n{uncached_corpus_text or ''}\n\n"
+                    f"=== ANALYST DUE-DILIGENCE QUESTION ===\n{user_question}"
+                ),
+            }
+        ]
+
+    request_params: dict[str, Any] = {
+        "max_tokens": max_tokens,
+        "endpoint": "messages.create",
+        "thinking": thinking_cfg,
+        "prefix_cache_enabled": use_prefix_cache,
+        "native_document_citations": documents_for_blocks is not None,
+        "document_blocks_count": len(documents_for_blocks) if documents_for_blocks else 0,
+    }
+
+    t0 = time.perf_counter()
+    used_model, resp = await _create_with_fallback(
+        client,
+        settings.anthropic_sonnet_model,
+        ["claude-sonnet-5-5", "claude-sonnet-4-6"],
+        max_tokens=max_tokens,
+        thinking=thinking_cfg,
+        system=system_prompt,
+        messages=messages_arg,
+    )
+    latency_ms = int((time.perf_counter() - t0) * 1000)
+
+    if getattr(resp, "stop_reason", None) == "max_tokens":
+        out_cnt = int(getattr(resp.usage, "output_tokens", 0) or 0)
+        raise RuntimeError(
+            f"Category 4 synthesis hit max_tokens={max_tokens} ({out_cnt} out tokens)"
+        )
+
+    parts: list[str] = []
+    segments: list[dict[str, Any]] = []
+    citations_out: list[dict[str, Any]] = []
+    cite_key_to_num: dict[tuple[str, int, int], int] = {}
+
+    for block in resp.content:
+        if getattr(block, "type", None) != "text":
+            continue
+        txt = getattr(block, "text", "") or ""
+        parts.append(txt)
+        seg_cite_nums: list[int] = []
+        raw_cits = getattr(block, "citations", None) or []
+        if documents_for_blocks is not None and raw_cits:
+            for cit in raw_cits:
+                cdict = cit.model_dump() if hasattr(cit, "model_dump") else dict(cit)
+                doc_idx = int(cdict.get("document_index", -1))
+                if 0 <= doc_idx < len(documents_for_blocks):
+                    meta = documents_for_blocks[doc_idx]
+                    s_raw = int(cdict.get("start_char_index") or 0)
+                    e_raw = int(cdict.get("end_char_index") or s_raw)
+                    offset = int(meta.get("doc_char_offset") or 0)
+                    doc_s = offset + s_raw
+                    doc_e = offset + e_raw
+                    dedup_key = (str(meta["doc_id"]), doc_s, doc_e)
+                    if dedup_key not in cite_key_to_num:
+                        cnum = len(citations_out) + 1
+                        cite_key_to_num[dedup_key] = cnum
+                        citations_out.append(
+                            {
+                                "cite_number": cnum,
+                                "doc_id": str(meta["doc_id"]),
+                                "document_title": str(
+                                    cdict.get("document_title") or meta["block_title"]
+                                ),
+                                "clause_ref": str(meta.get("clause_ref") or ""),
+                                "cited_text": str(cdict.get("cited_text") or ""),
+                                "start_char_index": doc_s,
+                                "end_char_index": doc_e,
+                            }
+                        )
+                    cnum_found = cite_key_to_num[dedup_key]
+                    if cnum_found not in seg_cite_nums:
+                        seg_cite_nums.append(cnum_found)
+        segments.append({"text": txt, "cite_numbers": seg_cite_nums})
+
+    # CRITICAL: Join TextBlocks with empty string to avoid breaking sentences around citations
+    raw_text = "".join(parts).strip()
+    if not segments and raw_text:
+        segments = [{"text": raw_text, "cite_numbers": []}]
+
+    in_tok, out_tok, c_write, c_read, think_tok = _extract_usage_tokens(resp.usage)
+
+    return AnthropicRawResult(
+        model_id=used_model,
+        latency_ms=latency_ms,
+        input_tokens=in_tok,
+        output_tokens=out_tok,
+        cache_creation_tokens=c_write,
+        cache_read_tokens=c_read,
+        raw_text=raw_text,
+        structured={
+            "mode": "cat4_rag_synthesis",
+            "segments": segments,
+            "citations": citations_out,
+        },
+        system_prompt=system_prompt,
+        request_params=request_params,
+        stop_reason=getattr(resp, "stop_reason", None),
+        thinking_tokens=think_tok,
+    )
+
+
+def _serialize_content_blocks(blocks: list[Any]) -> list[dict[str, Any]]:
+    serialized: list[dict[str, Any]] = []
+    for b in blocks:
+        b_type = getattr(b, "type", None)
+        if b_type == "thinking":
+            serialized.append(
+                {
+                    "type": "thinking",
+                    "thinking": getattr(b, "thinking", ""),
+                    "signature": getattr(b, "signature", ""),
+                }
+            )
+        elif b_type == "redacted_thinking":
+            serialized.append(
+                {
+                    "type": "redacted_thinking",
+                    "data": getattr(b, "data", ""),
+                }
+            )
+        elif b_type == "tool_use":
+            serialized.append(
+                {
+                    "type": "tool_use",
+                    "id": getattr(b, "id", ""),
+                    "name": getattr(b, "name", ""),
+                    "input": dict(getattr(b, "input", {}) or {}),
+                }
+            )
+        elif b_type == "text":
+            serialized.append(
+                {
+                    "type": "text",
+                    "text": getattr(b, "text", ""),
+                }
+            )
+    return serialized
+
+
+async def run_cat5_tool_loop_step(
+    *,
+    model_tier: str,
+    system_text: str,
+    tools: list[dict[str, Any]],
+    messages: list[dict[str, Any]],
+    use_prefix_cache: bool,
+    api_key: str,
+    max_tokens: int = 2048,
+) -> AnthropicRawResult:
+    """Execute one LLM step inside Category 5 SQLite ERP agent tool-use loop."""
+    settings = get_settings()
+    is_sonnet = "sonnet" in model_tier
+    primary_model = settings.anthropic_sonnet_model if is_sonnet else settings.anthropic_haiku_model
+    fallback_models = (
+        ["claude-sonnet-5-5", "claude-sonnet-4-6"]
+        if is_sonnet
+        else ["claude-haiku-5-5", "claude-haiku-4-5"]
+    )
+    thinking_cfg: dict[str, str] = (
+        {"type": "between_tools"} if is_sonnet else {"type": "disabled"}
+    )
+    system_arg: Any = (
+        [
+            {
+                "type": "text",
+                "text": system_text,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+        if use_prefix_cache
+        else system_text
+    )
+
+    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=60.0)
+    request_params: dict[str, Any] = {
+        "max_tokens": max_tokens,
+        "endpoint": "messages.create",
+        "thinking": thinking_cfg,
+        "prefix_cache_enabled": use_prefix_cache,
+        "tools_count": len(tools),
+    }
+
+    t0 = time.perf_counter()
+    used_model, resp = await _create_with_fallback(
+        client,
+        primary_model,
+        fallback_models,
+        max_tokens=max_tokens,
+        thinking=thinking_cfg,
+        system=system_arg,
+        tools=tools,
+        messages=messages,
+    )
+    latency_ms = int((time.perf_counter() - t0) * 1000)
+
+    blocks_serialized = _serialize_content_blocks(list(resp.content))
+    text_parts = [b["text"] for b in blocks_serialized if b["type"] == "text" and b["text"]]
+    thinking_parts = [
+        b["thinking"] for b in blocks_serialized if b["type"] == "thinking" and b.get("thinking")
+    ]
+    tool_uses = [b for b in blocks_serialized if b["type"] == "tool_use"]
+
+    raw_text = "\n".join(text_parts).strip()
+    in_tok, out_tok, c_write, c_read, think_tok = _extract_usage_tokens(resp.usage)
+
+    return AnthropicRawResult(
+        model_id=used_model,
+        latency_ms=latency_ms,
+        input_tokens=in_tok,
+        output_tokens=out_tok,
+        cache_creation_tokens=c_write,
+        cache_read_tokens=c_read,
+        raw_text=raw_text,
+        structured={
+            "assistant_blocks": blocks_serialized,
+            "tool_uses": tool_uses,
+            "thinking_text": "\n".join(thinking_parts).strip(),
+        },
+        system_prompt=system_text,
+        request_params=request_params,
+        stop_reason=getattr(resp, "stop_reason", None),
+        thinking_tokens=think_tok,
+    )
+
+
+async def run_cat6_swarm_agent_call(
+    *,
+    model_tier: str,
+    shared_repo_prefix: str,
+    role_instructions: str,
+    messages: list[dict[str, Any]],
+    use_prefix_cache: bool,
+    api_key: str,
+    max_tokens: int = 3200,
+) -> AnthropicRawResult:
+    """Execute one sub-agent call for Category 6 (isolated prefix-cached vs shared omnibus bus)."""
+    settings = get_settings()
+    is_sonnet = "sonnet" in model_tier
+    primary_model = settings.anthropic_sonnet_model if is_sonnet else settings.anthropic_haiku_model
+    fallback_models = (
+        ["claude-sonnet-5-5", "claude-sonnet-4-6"]
+        if is_sonnet
+        else ["claude-haiku-5-5", "claude-haiku-4-5"]
+    )
+    thinking_cfg: dict[str, str] = (
+        {"type": "between_tools"} if is_sonnet else {"type": "disabled"}
+    )
+    if use_prefix_cache:
+        system_arg: Any = [
+            {
+                "type": "text",
+                "text": shared_repo_prefix,
+                "cache_control": {"type": "ephemeral"},
+            },
+            {
+                "type": "text",
+                "text": role_instructions,
+            },
+        ]
+    else:
+        system_arg = role_instructions
+
+    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=120.0)
+    request_params: dict[str, Any] = {
+        "max_tokens": max_tokens,
+        "endpoint": "messages.create",
+        "thinking": thinking_cfg,
+        "prefix_cache_enabled": use_prefix_cache,
+    }
+
+    t0 = time.perf_counter()
+    used_model, resp = await _create_with_fallback(
+        client,
+        primary_model,
+        fallback_models,
+        max_tokens=max_tokens,
+        thinking=thinking_cfg,
+        system=system_arg,
+        messages=messages,
+    )
+    latency_ms = int((time.perf_counter() - t0) * 1000)
+
+    blocks_serialized = _serialize_content_blocks(list(resp.content))
+    text_parts = [b["text"] for b in blocks_serialized if b["type"] == "text" and b["text"]]
+    raw_text = "\n".join(text_parts).strip()
+    in_tok, out_tok, c_write, c_read, think_tok = _extract_usage_tokens(resp.usage)
+
+    return AnthropicRawResult(
+        model_id=used_model,
+        latency_ms=latency_ms,
+        input_tokens=in_tok,
+        output_tokens=out_tok,
+        cache_creation_tokens=c_write,
+        cache_read_tokens=c_read,
+        raw_text=raw_text,
+        structured={"role_instructions": role_instructions[:400]},
+        system_prompt=role_instructions,
+        request_params=request_params,
+        stop_reason=getattr(resp, "stop_reason", None),
+        thinking_tokens=think_tok,
+    )

@@ -1,4 +1,4 @@
-"""Slide 1-9 Matrix Catalog & NovaMart Enterprise Narrative Across All 6 Archetypes."""
+"""Matrix Catalog & NovaMart Enterprise Narrative Across All 6 Archetypes."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ NOVAMART_PROFILE = {
     "company_name": "NovaMart Enterprise",
     "tagline": "Omnichannel Retail & Marketplace Platform · 12M SKUs · 45,000 Sellers · $2.4B GMV",
     "series_title": "Six Key AI Archetypes for Enterprise Workloads",
-    "deck_attribution": "Based on Eric Lam's AI Workload Archetypes Matrix (Slides 01–09)",
+    "deck_attribution": "Based on Eric Lam's AI Workload Archetypes Matrix",
 }
 
 AUTONOMY_TIERS = [
@@ -126,9 +126,9 @@ ARCHETYPES_CATALOG = [
         "slug": "multi-doc-rag-deep-ingestion",
         "category_label": "CATEGORY 4",
         "title": "Multi-Doc RAG & Deep Ingestion",
-        "novamart_product_name": "NovaMart Supplier Contract & 10-K Due Diligence",
+        "novamart_product_name": "NovaMart Supplier Deal-Room & Statutory Due Diligence",
         "autonomy_tier": 2,
-        "autonomy_tier_label": "Tier 2+: HITL Deep RAG",
+        "autonomy_tier_label": "Tier 2+ (HITL Deep RAG)",
         "token_band": "Band 4L (15k–100k+ tok)",
         "matrix_x_band": 4,
         "matrix_y_tier": 2,
@@ -137,19 +137,20 @@ ARCHETYPES_CATALOG = [
         "dynamics": "~20:1 to 100:1 (Extreme Context Load)",
         "color_hex": "#D97706",
         "deck_use_cases": [
-            "Legal Due Diligence",
+            "Supplier MSA Legal Due Diligence",
             "Grounding Repositories",
-            "Financial 10-K Analysis",
+            "MCA AOC-4 & Statutory Audit Schedules",
         ],
         "architectural_lever": (
             "Pair hybrid chunk retrieval & reranking with Anthropic Context Caching (cache_control) and "
             "native Document Citations on shared supplier policy & contract repositories."
         ),
         "novamart_story": (
-            "Cross-examines 40k+ tokens of wholesale supplier MSAs, Diwali SLA addenda, and compliance "
-            "handbooks into zero-hallucination clause risk matrices."
+            "Cross-examines ~18k+ tokens of wholesale supplier MSAs, Diwali Peak SLA addenda, DPDP Act 2023 "
+            "data schedules, BIS/GST indemnification riders, and MCA AOC-4 statutory audit notes into grounded "
+            "clause risk readouts with character-exact citations."
         ),
-        "status": "coming_soon",
+        "status": "live",
         "blog_post_number": 4,
     },
     {
@@ -159,7 +160,7 @@ ARCHETYPES_CATALOG = [
         "title": "Autonomous Process Orchestration",
         "novamart_product_name": "NovaMart 3-Way Invoice Reconciliation Agent",
         "autonomy_tier": 3,
-        "autonomy_tier_label": "Tier 3+: Bounded Agentic",
+        "autonomy_tier_label": "Tier 3+ (Bounded Agentic)",
         "token_band": "Band 4R (25k–150k+ tok)",
         "matrix_x_band": 4,
         "matrix_y_tier": 3,
@@ -180,7 +181,7 @@ ARCHETYPES_CATALOG = [
             "Reconciles vendor invoices against Purchase Orders and warehouse Goods Receipts in a live "
             "SQLite ERP, stopping immediately on tolerance violations or step-budget limits."
         ),
-        "status": "coming_soon",
+        "status": "live",
         "blog_post_number": 5,
     },
     {
@@ -190,7 +191,7 @@ ARCHETYPES_CATALOG = [
         "title": "Multi-Agent Swarms & Auto Eng",
         "novamart_product_name": "NovaMart Checkout & Pricing CI Self-Healing Swarm",
         "autonomy_tier": 4,
-        "autonomy_tier_label": "Tier 4: Agentic Swarm",
+        "autonomy_tier_label": "Tier 4 (Agentic Swarm)",
         "token_band": "Band 5 (1.5M–10M+ tok/day)",
         "matrix_x_band": 5,
         "matrix_y_tier": 4,
@@ -211,7 +212,7 @@ ARCHETYPES_CATALOG = [
             "Lead Orchestrator dispatches isolated specialist agents to fix a failing NovaMart pricing "
             "micro-service, verify unit & security checks, and report exact CpO."
         ),
-        "status": "coming_soon",
+        "status": "live",
         "blog_post_number": 6,
     },
 ]

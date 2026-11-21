@@ -95,7 +95,7 @@ def _cat2_rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
     if rung_id == "sonnet_templated":
         return (
             "Rung 2 · Sonnet 5.5 + Bounded Section Template",
-            "Slide 4 Lever: Section-Bounded Schema",
+            "Calibrated Lever: Section-Bounded Schema",
             [
                 "Same frontier Sonnet 5.5 quality anchored to a 4-section JSON schema with strict word caps & disabled thinking.",
                 "Cuts output tokens by ~50%–65%, cutting unit cost >45% while enabling single-section HITL locking & regen.",

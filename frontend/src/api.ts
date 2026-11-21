@@ -15,6 +15,16 @@ import type {
   Cat3PresetsResponse,
   Cat3RungId,
   Cat3RunResponse,
+  Cat4AdhocQueryResponse,
+  Cat4PresetsResponse,
+  Cat4RungId,
+  Cat4RunResponse,
+  Cat5PresetsResponse,
+  Cat5RungId,
+  Cat5RunResponse,
+  Cat6PresetsResponse,
+  Cat6RungId,
+  Cat6RunResponse,
   CreditShieldCredentials,
   ExecutionMode,
   RungId,
@@ -196,6 +206,82 @@ export function sendCat3ChatTurn(
   creds: CreditShieldCredentials
 ): Promise<Cat3ChatTurnResponse> {
   return fetchJson<Cat3ChatTurnResponse>('/api/cat3/chat-turn', {
+    method: 'POST',
+    headers: buildAuthHeaders(creds),
+    body: JSON.stringify(params),
+  })
+}
+
+export function fetchCat4Presets(): Promise<Cat4PresetsResponse> {
+  return fetchJson<Cat4PresetsResponse>('/api/cat4/presets')
+}
+
+export function runCat4Arena(
+  params: {
+    preset_id: string
+    use_case?: 'supplier_msa_due_diligence'
+    rungs?: Cat4RungId[]
+    mode: ExecutionMode
+  },
+  creds: CreditShieldCredentials
+): Promise<Cat4RunResponse> {
+  return fetchJson<Cat4RunResponse>('/api/cat4/run', {
+    method: 'POST',
+    headers: buildAuthHeaders(creds),
+    body: JSON.stringify(params),
+  })
+}
+
+export function runCat4CustomQuery(
+  params: {
+    preset_id: string
+    question: string
+    rungs?: Cat4RungId[]
+    mode: ExecutionMode
+  },
+  creds: CreditShieldCredentials
+): Promise<Cat4AdhocQueryResponse> {
+  return fetchJson<Cat4AdhocQueryResponse>('/api/cat4/query', {
+    method: 'POST',
+    headers: buildAuthHeaders(creds),
+    body: JSON.stringify(params),
+  })
+}
+
+export function fetchCat5Presets(): Promise<Cat5PresetsResponse> {
+  return fetchJson<Cat5PresetsResponse>('/api/cat5/presets')
+}
+
+export function runCat5Arena(
+  params: {
+    preset_id: string
+    use_case?: 'invoice_3way_reconciliation'
+    rungs?: Cat5RungId[]
+    mode: ExecutionMode
+  },
+  creds: CreditShieldCredentials
+): Promise<Cat5RunResponse> {
+  return fetchJson<Cat5RunResponse>('/api/cat5/run', {
+    method: 'POST',
+    headers: buildAuthHeaders(creds),
+    body: JSON.stringify(params),
+  })
+}
+
+export function fetchCat6Presets(): Promise<Cat6PresetsResponse> {
+  return fetchJson<Cat6PresetsResponse>('/api/cat6/presets')
+}
+
+export function runCat6Arena(
+  params: {
+    preset_id: string
+    use_case?: 'checkout_ci_self_healing_swarm'
+    rungs?: Cat6RungId[]
+    mode: ExecutionMode
+  },
+  creds: CreditShieldCredentials
+): Promise<Cat6RunResponse> {
+  return fetchJson<Cat6RunResponse>('/api/cat6/run', {
     method: 'POST',
     headers: buildAuthHeaders(creds),
     body: JSON.stringify(params),

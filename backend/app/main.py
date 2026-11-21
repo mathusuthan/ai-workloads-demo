@@ -10,6 +10,9 @@ from fastapi.staticfiles import StaticFiles
 from app.archetypes.cat1_triage.router import router as cat1_router
 from app.archetypes.cat2_drafting.router import router as cat2_router
 from app.archetypes.cat3_assistants.router import router as cat3_router
+from app.archetypes.cat4_rag.router import router as cat4_router
+from app.archetypes.cat5_orchestration.router import router as cat5_router
+from app.archetypes.cat6_swarms.router import router as cat6_router
 from app.config import get_settings
 from app.core.credit_shield import credit_shield
 from app.core.trace_store import summarize_traces
@@ -37,6 +40,9 @@ app.add_middleware(
 app.include_router(cat1_router)
 app.include_router(cat2_router)
 app.include_router(cat3_router)
+app.include_router(cat4_router)
+app.include_router(cat5_router)
+app.include_router(cat6_router)
 
 
 @app.get("/api/health")

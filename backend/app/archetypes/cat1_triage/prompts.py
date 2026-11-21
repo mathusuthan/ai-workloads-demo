@@ -52,7 +52,7 @@ resp = await anthropic_client.messages.create(
     messages=[{"role": "user", "content": ticket_payload}],
 )
 # Saves 95% vs Sonnet 5.5, yet output prose still bloats cost & breaks schema contracts!''',
-    "haiku_calibrated": '''# RUNG 2 SLIDE 3 LEVER: Haiku 5.5 + Strict JSON Schema ($0.10/M in · $0.50/M out)
+    "haiku_calibrated": '''# RUNG 2 CALIBRATED LEVER: Haiku 5.5 + Strict JSON Schema ($0.10/M in · $0.50/M out)
 # Disable thinking on Tier-1 classification to avoid 100+ extra thinking output tokens!
 # Plus 50% discount when routed via Anthropic Message Batches ($0.05/M in · $0.25/M out)
 resp = await anthropic_client.messages.create(

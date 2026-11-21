@@ -32,6 +32,15 @@ PROSE_PATTERNS = (
     "uncached_full_history",
     "prefix_cached_full_history",
     "prefix_cached_sliding_summary",
+    "uncached_full_corpus_stuffing",
+    "prefix_cached_full_corpus_citations",
+    "hybrid_bm25_haiku_rerank_citations",
+    "unbounded_uncached_react_loop",
+    "bounded_sonnet_cached_gate",
+    "hybrid_haiku_sonnet_governed_loop",
+    "unisolated_shared_bus_swarm",
+    "isolated_repo_cached_swarm",
+    "tiered_hybrid_cpo_swarm",
 )
 JSON_PATTERNS = (
     "strict_json_schema",
@@ -39,6 +48,7 @@ JSON_PATTERNS = (
     "tier_routed_template_draft",
     "hitl_section_regen",
     "sliding_window_memory_compactor",
+    "haiku_cross_chunk_reranker",
 )
 
 

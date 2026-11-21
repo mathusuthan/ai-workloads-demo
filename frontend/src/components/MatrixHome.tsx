@@ -20,7 +20,7 @@ export function MatrixHome({ catalog }: MatrixHomeProps) {
           {enterprise.company_name} · {enterprise.tagline}
         </div>
         <div className="flex flex-col justify-between gap-6 px-6 py-6 lg:flex-row lg:items-center">
-          <div className="max-w-3xl space-y-2">
+          <div className="min-w-0 max-w-2xl space-y-2">
             <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
               {enterprise.series_title}
             </h1>
@@ -30,28 +30,49 @@ export function MatrixHome({ catalog }: MatrixHomeProps) {
               calibrated Autonomy Tier, Token Band, and FinOps lever.
             </p>
           </div>
-          <div className="flex shrink-0 flex-col items-start gap-2 sm:flex-row lg:flex-col lg:items-end">
-            <div className="flex flex-wrap gap-2">
+          <div className="flex min-w-0 shrink-0 flex-col items-start gap-2 lg:items-end">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Link
                 to="/archetype/1"
-                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-950/50 transition hover:bg-blue-500 sm:text-sm"
+                className="inline-flex items-center justify-between gap-2 rounded-xl bg-blue-600 px-3.5 py-2.5 text-xs font-bold text-white shadow-lg shadow-blue-950/50 transition hover:bg-blue-500"
               >
                 <span>Launch Category 1 Workbench</span>
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="h-4 w-4 shrink-0" />
               </Link>
               <Link
                 to="/archetype/2"
-                className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-red-950/50 transition hover:bg-red-500 sm:text-sm"
+                className="inline-flex items-center justify-between gap-2 rounded-xl bg-red-600 px-3.5 py-2.5 text-xs font-bold text-white shadow-lg shadow-red-950/50 transition hover:bg-red-500"
               >
                 <span>Launch Category 2 Studio</span>
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="h-4 w-4 shrink-0" />
               </Link>
               <Link
                 to="/archetype/3"
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-950/50 transition hover:bg-emerald-600 sm:text-sm"
+                className="inline-flex items-center justify-between gap-2 rounded-xl bg-emerald-700 px-3.5 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-950/50 transition hover:bg-emerald-600"
               >
                 <span>Launch Category 3 Desk</span>
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="h-4 w-4 shrink-0" />
+              </Link>
+              <Link
+                to="/archetype/4"
+                className="inline-flex items-center justify-between gap-2 rounded-xl bg-amber-600 px-3.5 py-2.5 text-xs font-bold text-white shadow-lg shadow-amber-950/50 transition hover:bg-amber-500"
+              >
+                <span>Launch Category 4 RAG Lab</span>
+                <ArrowRight className="h-4 w-4 shrink-0" />
+              </Link>
+              <Link
+                to="/archetype/5"
+                className="inline-flex items-center justify-between gap-2 rounded-xl bg-teal-700 px-3.5 py-2.5 text-xs font-bold text-white shadow-lg shadow-teal-950/50 transition hover:bg-teal-600"
+              >
+                <span>Launch Category 5 3-Way ERP Agent</span>
+                <ArrowRight className="h-4 w-4 shrink-0" />
+              </Link>
+              <Link
+                to="/archetype/6"
+                className="inline-flex items-center justify-between gap-2 rounded-xl bg-violet-700 px-3.5 py-2.5 text-xs font-bold text-white shadow-lg shadow-violet-950/50 transition hover:bg-violet-600"
+              >
+                <span>Launch Category 6 Swarm Lab</span>
+                <ArrowRight className="h-4 w-4 shrink-0" />
               </Link>
             </div>
             <span className="text-[11px] text-slate-400">{enterprise.deck_attribution}</span>
@@ -59,12 +80,12 @@ export function MatrixHome({ catalog }: MatrixHomeProps) {
         </div>
       </section>
 
-      {/* Slide 2 Calibrated Matrix */}
+      {/* Calibrated Autonomy × Token Scale Matrix */}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700">
-              Slide 02 · Calibrated Autonomy × Logarithmic Token Scale Matrix
+              Calibrated Autonomy × Logarithmic Token Scale Matrix
             </span>
             <h2 className="text-lg font-extrabold text-slate-900">
               Monotonic Token Load (Cat 1 &lt; Cat 2 &lt; Cat 3 &lt; Cat 4 &lt; Cat 5 &lt;&lt; Cat 6) vs. 4 Autonomy Tiers
@@ -162,7 +183,7 @@ export function MatrixHome({ catalog }: MatrixHomeProps) {
             The 6 NovaMart Enterprise AI Workloads
           </h2>
           <span className="text-xs text-slate-500">
-            Building incrementally — Categories 1–3 Live Now, Categories 4–6 Next
+            Building incrementally — Categories 1–5 Live Now, Category 6 Next
           </span>
         </div>
 
@@ -225,7 +246,13 @@ export function MatrixHome({ catalog }: MatrixHomeProps) {
                           ? 'Open 4-Rung Arena & Batch Lab'
                           : arch.id === 2
                             ? 'Open 3-Rung Synthesis & HITL Studio'
-                            : 'Open IT & HR Session Caching Desk'
+                            : arch.id === 3
+                              ? 'Open IT & HR Session Caching Desk'
+                              : arch.id === 4
+                                ? 'Open Multi-Doc RAG & Citations Lab'
+                                : arch.id === 5
+                                  ? 'Open 3-Way ERP Reconciliation Agent'
+                                  : 'Open Multi-Agent Swarm & CpO Lab'
                         : 'Preview Architecture Plan'}
                     </span>
                     <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
@@ -237,13 +264,13 @@ export function MatrixHome({ catalog }: MatrixHomeProps) {
         </div>
       </section>
 
-      {/* Slide 9: 3 Matrix-Aligned FinOps Rules */}
+      {/* 3 Matrix-Aligned FinOps Rules */}
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center gap-2">
           <ShieldAlert className="h-5 w-5 text-blue-600" />
           <div>
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Slide 09 · From Token Volume to ROI
+              From Token Volume to ROI
             </span>
             <h2 className="text-lg font-extrabold text-slate-900">
               3 Architectural FinOps Rules by Matrix Tier

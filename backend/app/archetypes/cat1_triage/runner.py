@@ -190,7 +190,7 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
     if rung_id == "haiku_calibrated":
         return (
             "Rung 2 · Haiku 5.5 + Strict JSON Schema",
-            "Slide 3 Lever: Haiku 5.5 + Strict JSON",
+            "Calibrated Lever: Haiku 5.5 + Strict JSON",
             [
                 "Routes stateless triage to Claude Haiku 5.5 ($0.10/M in · $0.50/M out) with thinking disabled.",
                 "Strict JSON schema compresses output to ~90–125 tokens (cuts ~50% vs Haiku prose!).",

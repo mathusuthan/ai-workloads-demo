@@ -24,7 +24,7 @@ def get_unbounded_draft_system_prompt(sub_task: str) -> str:
 
 
 def get_templated_draft_system_prompt(sub_task: str) -> str:
-    """Rung 2 / Rung 3 Slide 4 Lever: Strict section template & token/word caps."""
+    """Rung 2 / Rung 3 Calibrated Lever: Strict section template & token/word caps."""
     doc_focus = (
         "executive operational readout or commercial B2B partnership proposal"
         if sub_task == "exec_synthesis"
@@ -70,7 +70,7 @@ resp = await client.messages.create(
     system="Write a comprehensive, publication-grade multi-page report...",
     messages=[{"role": "user", "content": source_bundle}],
 )""",
-    "sonnet_templated": """# RUNG 2 (SLIDE 4 LEVER): Strict Section Template + Length Bounds (Sonnet 5.5)
+    "sonnet_templated": """# RUNG 2 (CALIBRATED LEVER): Strict Section Template + Length Bounds (Sonnet 5.5)
 # Caps array lengths & word budgets (~1,200–1,600 out tokens -> ~35%–50% cost cut!)
 resp = await client.messages.create(
     model="claude-sonnet-5-5",

@@ -1,4 +1,4 @@
-"""Strict Section-Templated JSON Schemas for Category 2 (Slide 4 Lever)."""
+"""Strict Section-Templated JSON Schemas for Category 2 (Section-Bounded Lever)."""
 
 from __future__ import annotations
 

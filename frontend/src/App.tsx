@@ -5,6 +5,9 @@ import {
   fetchCat1Presets,
   fetchCat2Presets,
   fetchCat3Presets,
+  fetchCat4Presets,
+  fetchCat5Presets,
+  fetchCat6Presets,
   fetchSystemStatus,
   loadCredentials,
   saveCredentials,
@@ -12,6 +15,9 @@ import {
 import { Cat1Workbench } from './components/Cat1Workbench'
 import { Cat2Workbench } from './components/Cat2Workbench'
 import { Cat3Workbench } from './components/Cat3Workbench'
+import { Cat4Workbench } from './components/Cat4Workbench'
+import { Cat5Workbench } from './components/Cat5Workbench'
+import { Cat6Workbench } from './components/Cat6Workbench'
 import { MatrixHome } from './components/MatrixHome'
 import { RoadmapPreview } from './components/RoadmapPreview'
 import { TopNavBar } from './components/TopNavBar'
@@ -20,6 +26,9 @@ import type {
   Cat1PresetsResponse,
   Cat2PresetsResponse,
   Cat3PresetsResponse,
+  Cat4PresetsResponse,
+  Cat5PresetsResponse,
+  Cat6PresetsResponse,
   CreditShieldCredentials,
   SystemStatusResponse,
 } from './types'
@@ -29,6 +38,9 @@ function ArchetypeRouteDispatcher({
   cat1Presets,
   cat2Presets,
   cat3Presets,
+  cat4Presets,
+  cat5Presets,
+  cat6Presets,
   creds,
   onRefreshSystemStatus,
 }: {
@@ -36,6 +48,9 @@ function ArchetypeRouteDispatcher({
   cat1Presets: Cat1PresetsResponse
   cat2Presets: Cat2PresetsResponse
   cat3Presets: Cat3PresetsResponse
+  cat4Presets: Cat4PresetsResponse
+  cat5Presets: Cat5PresetsResponse
+  cat6Presets: Cat6PresetsResponse
   creds: CreditShieldCredentials
   onRefreshSystemStatus: () => void
 }) {
@@ -80,6 +95,39 @@ function ArchetypeRouteDispatcher({
     )
   }
 
+  if (arch.id === 4) {
+    return (
+      <Cat4Workbench
+        archetype={arch}
+        presetsData={cat4Presets}
+        creds={creds}
+        onRefreshSystemStatus={onRefreshSystemStatus}
+      />
+    )
+  }
+
+  if (arch.id === 5) {
+    return (
+      <Cat5Workbench
+        archetype={arch}
+        presetsData={cat5Presets}
+        creds={creds}
+        onRefreshSystemStatus={onRefreshSystemStatus}
+      />
+    )
+  }
+
+  if (arch.id === 6) {
+    return (
+      <Cat6Workbench
+        archetype={arch}
+        presetsData={cat6Presets}
+        creds={creds}
+        onRefreshSystemStatus={onRefreshSystemStatus}
+      />
+    )
+  }
+
   return <RoadmapPreview archetype={arch} />
 }
 
@@ -88,6 +136,9 @@ export function App() {
   const [cat1Presets, setCat1Presets] = useState<Cat1PresetsResponse | null>(null)
   const [cat2Presets, setCat2Presets] = useState<Cat2PresetsResponse | null>(null)
   const [cat3Presets, setCat3Presets] = useState<Cat3PresetsResponse | null>(null)
+  const [cat4Presets, setCat4Presets] = useState<Cat4PresetsResponse | null>(null)
+  const [cat5Presets, setCat5Presets] = useState<Cat5PresetsResponse | null>(null)
+  const [cat6Presets, setCat6Presets] = useState<Cat6PresetsResponse | null>(null)
   const [systemStatus, setSystemStatus] = useState<SystemStatusResponse | null>(null)
   const [creds, setCreds] = useState<CreditShieldCredentials>(() => loadCredentials())
   const [bootError, setBootError] = useState<string | null>(null)
@@ -102,15 +153,32 @@ export function App() {
       fetchCat1Presets(),
       fetchCat2Presets(),
       fetchCat3Presets(),
+      fetchCat4Presets(),
+      fetchCat5Presets(),
+      fetchCat6Presets(),
       fetchSystemStatus(),
     ])
-      .then(([archData, c1Presets, c2Presets, c3Presets, statusData]) => {
-        setCatalog(archData)
-        setCat1Presets(c1Presets)
-        setCat2Presets(c2Presets)
-        setCat3Presets(c3Presets)
-        setSystemStatus(statusData)
-      })
+      .then(
+        ([
+          archData,
+          c1Presets,
+          c2Presets,
+          c3Presets,
+          c4Presets,
+          c5Presets,
+          c6Presets,
+          statusData,
+        ]) => {
+          setCatalog(archData)
+          setCat1Presets(c1Presets)
+          setCat2Presets(c2Presets)
+          setCat3Presets(c3Presets)
+          setCat4Presets(c4Presets)
+          setCat5Presets(c5Presets)
+          setCat6Presets(c6Presets)
+          setSystemStatus(statusData)
+        }
+      )
       .catch((err) => {
         setBootError(err instanceof Error ? err.message : 'Failed to load backend metadata.')
       })
@@ -132,7 +200,15 @@ export function App() {
     )
   }
 
-  if (!catalog || !cat1Presets || !cat2Presets || !cat3Presets) {
+  if (
+    !catalog ||
+    !cat1Presets ||
+    !cat2Presets ||
+    !cat3Presets ||
+    !cat4Presets ||
+    !cat5Presets ||
+    !cat6Presets
+  ) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 text-xs font-semibold text-slate-600">
         Loading NovaMart AI Workload Matrix...
@@ -160,6 +236,9 @@ export function App() {
                   cat1Presets={cat1Presets}
                   cat2Presets={cat2Presets}
                   cat3Presets={cat3Presets}
+                  cat4Presets={cat4Presets}
+                  cat5Presets={cat5Presets}
+                  cat6Presets={cat6Presets}
                   creds={creds}
                   onRefreshSystemStatus={refreshStatus}
                 />

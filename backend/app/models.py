@@ -361,3 +361,414 @@ class Cat3ChatTurnResponse(BaseModel):
     turn_result: Cat3TurnResult
     updated_verbatim_turns: list[Cat3ChatTurnEntry] = Field(default_factory=list)
     updated_memory_summary: dict[str, Any] | None = None
+
+
+# --- Category 4: Multi-Doc RAG & Deep Ingestion (Supplier Deal-Room Due Diligence) ---
+
+Cat4UseCaseType = Literal["supplier_msa_due_diligence"]
+Cat4RungId = Literal[
+    "naive_full_corpus",
+    "cached_full_corpus_citations",
+    "hybrid_rag_rerank_citations",
+]
+
+
+class Cat4CitationSpan(BaseModel):
+    cite_number: int
+    doc_id: str
+    document_title: str
+    clause_ref: str = ""
+    cited_text: str
+    start_char_index: int
+    end_char_index: int
+
+
+class Cat4AnswerSegment(BaseModel):
+    text: str
+    cite_numbers: list[int] = Field(default_factory=list)
+
+
+class Cat4RetrievalChunkTrace(BaseModel):
+    chunk_id: str
+    doc_id: str
+    doc_title: str
+    clause_ref: str
+    section_heading: str
+    char_count: int
+    approx_tokens: int
+    bm25_score: float
+    bm25_rank: int
+    stage: Literal["selected_by_reranker", "pruned_by_reranker", "pruned_by_bm25"]
+    reranker_score: int | None = None
+    reranker_rationale: str | None = None
+    is_expected_gold: bool = False
+
+
+class Cat4QueryResult(BaseModel):
+    question_id: str
+    question_number: int
+    topic_tag: str
+    question: str
+    expected_doc_ids: list[str] = Field(default_factory=list)
+    expected_chunk_ids: list[str] = Field(default_factory=list)
+    answer_markdown: str
+    segments: list[Cat4AnswerSegment] = Field(default_factory=list)
+    citations: list[Cat4CitationSpan] = Field(default_factory=list)
+    cited_doc_ids: list[str] = Field(default_factory=list)
+    doc_citation_coverage_pct: float = 0.0
+    latency_ms: int
+    finops: FinOpsBreakdown
+    cold_query_cost_usd: float
+    warm_query_cost_usd: float
+    reranker_finops: FinOpsBreakdown | None = None
+    reranker_latency_ms: int = 0
+    retrieval_funnel: list[Cat4RetrievalChunkTrace] = Field(default_factory=list)
+    bm25_recall_pct: float | None = None
+    reranker_recall_pct: float | None = None
+    context_tokens_sent: int = 0
+    context_reduction_pct: float = 0.0
+
+
+class Cat4RungSummary(BaseModel):
+    rung_id: Cat4RungId
+    rung_title: str
+    badge_text: str
+    pattern: str
+    model_id: str
+    reranker_model_id: str | None = None
+    provider: str = "Anthropic"
+    status: Literal["ok", "error"] = "ok"
+    error_message: str | None = None
+    queries: list[Cat4QueryResult] = Field(default_factory=list)
+    total_uncached_input_tokens: int = 0
+    total_cache_creation_tokens: int = 0
+    total_cache_read_tokens: int = 0
+    total_output_tokens: int = 0
+    reranker_calls: int = 0
+    reranker_input_tokens: int = 0
+    reranker_output_tokens: int = 0
+    reranker_cost_usd: float = 0.0
+    cold_audit_cost_usd: float = 0.0
+    warm_audit_cost_usd: float = 0.0
+    cost_per_1k_audits_cold_usd: float = 0.0
+    cost_per_1k_audits_warm_usd: float = 0.0
+    single_query_cold_per_1k_usd: float = 0.0
+    savings_vs_naive_cold_pct: float = 0.0
+    savings_vs_naive_warm_pct: float = 0.0
+    avg_citations_per_query: float = 0.0
+    avg_doc_coverage_pct: float = 0.0
+    avg_reranker_recall_pct: float | None = None
+    total_latency_ms: int = 0
+    architectural_notes: list[str] = Field(default_factory=list)
+
+
+class Cat4RunRequest(BaseModel):
+    preset_id: str = "audit-01"
+    use_case: Cat4UseCaseType = "supplier_msa_due_diligence"
+    rungs: list[Cat4RungId] = Field(
+        default_factory=lambda: [
+            "naive_full_corpus",
+            "cached_full_corpus_citations",
+            "hybrid_rag_rerank_citations",
+        ]
+    )
+    mode: ExecutionMode = "replay"
+
+
+class Cat4RunResponse(BaseModel):
+    mode_used: ExecutionMode
+    preset_id: str
+    use_case: Cat4UseCaseType = "supplier_msa_due_diligence"
+    title: str
+    deal_room_profile: dict[str, Any]
+    total_docs: int
+    total_chunks: int
+    corpus_char_count: int
+    approx_corpus_tokens: int
+    results: list[Cat4RungSummary]
+    rag_callout: str
+
+
+class Cat4AdhocQueryRequest(BaseModel):
+    preset_id: str = "audit-01"
+    question: str
+    rungs: list[Cat4RungId] = Field(
+        default_factory=lambda: [
+            "naive_full_corpus",
+            "cached_full_corpus_citations",
+            "hybrid_rag_rerank_citations",
+        ]
+    )
+    mode: ExecutionMode = "live"
+
+
+class Cat4AdhocQueryResponse(BaseModel):
+    mode_used: ExecutionMode
+    preset_id: str
+    question: str
+    results: list[Cat4RungSummary]
+
+
+# --- Category 5: Autonomous Process Orchestration (3-Way ERP Invoice Agent) ---
+
+Cat5UseCaseType = Literal["invoice_3way_reconciliation"]
+Cat5RungId = Literal[
+    "unbounded_sonnet_loop",
+    "bounded_sonnet_cached_gate",
+    "hybrid_haiku_sonnet_governed",
+]
+
+
+class Cat5ToolCallTrace(BaseModel):
+    tool_use_id: str
+    tool_name: str
+    tool_input: dict[str, Any] = Field(default_factory=dict)
+    sql_executed: str = ""
+    tables_touched: list[str] = Field(default_factory=list)
+    is_optimal_call: bool = True
+    result_preview: str = ""
+    gate_snapshot: dict[str, Any] | None = None
+
+
+class Cat5LoopStep(BaseModel):
+    step_number: int
+    model_id: str
+    escalated_from_haiku: bool = False
+    stop_reason: str
+    assistant_thought: str = ""
+    tool_calls: list[Cat5ToolCallTrace] = Field(default_factory=list)
+    latency_ms: int
+    finops: FinOpsBreakdown
+    cumulative_cold_cost_usd: float
+    cumulative_warm_cost_usd: float
+
+
+class Cat5CommittedVoucher(BaseModel):
+    voucher_id: str
+    invoice_id: str
+    po_id: str
+    decision: str
+    authorized_net_principal_inr: float
+    authorized_gst_payout_inr: float
+    gst_escrow_holdback_inr: float
+    debit_note_deduction_inr: float
+    gate_verified: bool = False
+    audit_summary: str = ""
+
+
+class Cat5EvaluationResult(BaseModel):
+    voucher_committed: bool
+    matched_fields: int
+    total_fields: int
+    field_accuracy_pct: float
+    exact_match: bool
+    evidence_recall_pct: float
+    tool_precision_pct: float
+    within_step_budget: bool
+    gate_verified: bool
+    field_checks: list[FieldCheckResult] = Field(default_factory=list)
+
+
+class Cat5RungResult(BaseModel):
+    rung_id: Cat5RungId
+    rung_title: str
+    badge_text: str
+    pattern: str
+    primary_model_id: str
+    status: Literal["ok", "error"] = "ok"
+    error_message: str | None = None
+    max_step_budget: int
+    steps_used: int
+    haiku_steps: int = 0
+    sonnet_steps: int = 0
+    escalated_to_sonnet: bool = False
+    circuit_breaker_triggered: bool = False
+    steps: list[Cat5LoopStep] = Field(default_factory=list)
+    total_uncached_input_tokens: int = 0
+    total_cache_creation_tokens: int = 0
+    total_cache_read_tokens: int = 0
+    total_output_tokens: int = 0
+    cold_run_cost_usd: float = 0.0
+    warm_run_cost_usd: float = 0.0
+    cost_per_1k_invoices_cold_usd: float = 0.0
+    cost_per_1k_invoices_warm_usd: float = 0.0
+    savings_vs_naive_cold_pct: float = 0.0
+    savings_vs_naive_warm_pct: float = 0.0
+    total_latency_ms: int = 0
+    final_readout: str = ""
+    committed_voucher: Cat5CommittedVoucher | None = None
+    evaluation: Cat5EvaluationResult | None = None
+    architectural_notes: list[str] = Field(default_factory=list)
+
+
+class Cat5PortfolioRungRollup(BaseModel):
+    rung_id: Cat5RungId
+    label: str
+    model_routing_summary: str
+    invoices_evaluated: int
+    avg_steps: float
+    avg_prompt_tokens: int
+    avg_output_tokens: int
+    fields_matched: int
+    fields_total: int
+    adjudication_accuracy_pct: float
+    exact_vouchers_matched: int
+    avg_evidence_recall_pct: float
+    avg_tool_precision_pct: float
+    avg_cost_per_1k_cold_usd: float
+    avg_cost_per_1k_warm_usd: float
+    savings_vs_naive_cold_pct: float
+
+
+class Cat5RunRequest(BaseModel):
+    preset_id: str = "inv-01"
+    use_case: Cat5UseCaseType = "invoice_3way_reconciliation"
+    rungs: list[Cat5RungId] = Field(
+        default_factory=lambda: [
+            "unbounded_sonnet_loop",
+            "bounded_sonnet_cached_gate",
+            "hybrid_haiku_sonnet_governed",
+        ]
+    )
+    mode: ExecutionMode = "replay"
+
+
+class Cat5RunResponse(BaseModel):
+    mode_used: ExecutionMode
+    preset_id: str
+    use_case: Cat5UseCaseType = "invoice_3way_reconciliation"
+    title: str
+    invoice_id: str
+    po_id: str
+    vendor_name: str
+    fc_hub: str
+    policy_char_count: int
+    approx_policy_tokens: int
+    ground_truth: dict[str, Any]
+    results: list[Cat5RungResult]
+    portfolio_scorecard: list[Cat5PortfolioRungRollup] = Field(default_factory=list)
+    orchestration_callout: str
+
+
+# --- Category 6: Multi-Agent Swarms & Auto Eng (Checkout CI Swarm + CpO) ---
+
+Cat6UseCaseType = Literal["checkout_ci_self_healing_swarm"]
+Cat6RungId = Literal[
+    "unisolated_broadcast_swarm",
+    "isolated_cached_sonnet_swarm",
+    "tiered_hybrid_cpo_swarm",
+]
+
+
+class Cat6AgentTurnTrace(BaseModel):
+    step_number: int
+    agent_role: str
+    agent_label: str
+    model_id: str
+    context_mode: Literal["shared_omnibus_bus", "isolated_prefix_cached"]
+    attempt: int = 1
+    latency_ms: int
+    finops: FinOpsBreakdown
+    cumulative_cold_cost_usd: float
+    cumulative_warm_cost_usd: float
+    prompt_preview: str = ""
+    output_preview: str = ""
+
+
+class Cat6SandboxCheckResult(BaseModel):
+    check_id: str
+    category: Literal["ci_unit", "adversarial", "ast"]
+    name: str
+    passed: bool
+    detail: str
+
+
+class Cat6SandboxReport(BaseModel):
+    total_checks: int
+    passed_checks: int
+    ci_unit_passed: int
+    adversarial_passed: int
+    ast_passed: int
+    verified_outcome: bool
+    execution_ms: int
+    checks: list[Cat6SandboxCheckResult] = Field(default_factory=list)
+    unified_diff: str = ""
+
+
+class Cat6RungResult(BaseModel):
+    rung_id: Cat6RungId
+    rung_title: str
+    badge_text: str
+    pattern: str
+    primary_model_id: str
+    status: Literal["ok", "error"] = "ok"
+    error_message: str | None = None
+    agent_turns: list[Cat6AgentTurnTrace] = Field(default_factory=list)
+    retries_used: int = 0
+    haiku_turns: int = 0
+    sonnet_turns: int = 0
+    total_uncached_input_tokens: int = 0
+    total_cache_creation_tokens: int = 0
+    total_cache_read_tokens: int = 0
+    total_output_tokens: int = 0
+    cold_run_cost_usd: float = 0.0
+    warm_run_cost_usd: float = 0.0
+    cost_per_1k_runs_cold_usd: float = 0.0
+    cost_per_1k_runs_warm_usd: float = 0.0
+    cpo_cold_per_1k_usd: float = 0.0
+    cpo_warm_per_1k_usd: float = 0.0
+    savings_vs_naive_cold_pct: float = 0.0
+    savings_vs_naive_warm_pct: float = 0.0
+    total_latency_ms: int = 0
+    patched_code: str = ""
+    final_signoff_memo: str = ""
+    sandbox_report: Cat6SandboxReport | None = None
+    architectural_notes: list[str] = Field(default_factory=list)
+
+
+class Cat6PortfolioRungRollup(BaseModel):
+    rung_id: Cat6RungId
+    label: str
+    routing_summary: str
+    prs_evaluated: int
+    verified_outcomes_count: int
+    verified_outcome_rate_pct: float
+    checks_passed_total: int
+    checks_total: int
+    avg_prompt_tokens: int
+    avg_output_tokens: int
+    daily_tokens_per_dev_at_25_runs: int
+    avg_cpr_cold_per_1k_usd: float
+    avg_cpr_warm_per_1k_usd: float
+    portfolio_cpo_cold_per_1k_usd: float
+    portfolio_cpo_warm_per_1k_usd: float
+    cpo_savings_vs_naive_cold_pct: float
+
+
+class Cat6RunRequest(BaseModel):
+    preset_id: str = "inc-01"
+    use_case: Cat6UseCaseType = "checkout_ci_self_healing_swarm"
+    rungs: list[Cat6RungId] = Field(
+        default_factory=lambda: [
+            "unisolated_broadcast_swarm",
+            "isolated_cached_sonnet_swarm",
+            "tiered_hybrid_cpo_swarm",
+        ]
+    )
+    mode: ExecutionMode = "replay"
+
+
+class Cat6RunResponse(BaseModel):
+    mode_used: ExecutionMode
+    preset_id: str
+    use_case: Cat6UseCaseType = "checkout_ci_self_healing_swarm"
+    title: str
+    pr_id: str
+    service_name: str
+    target_file: str
+    use_case_tag: str
+    shared_repo_char_count: int
+    approx_shared_repo_tokens: int
+    results: list[Cat6RungResult]
+    portfolio_scorecard: list[Cat6PortfolioRungRollup] = Field(default_factory=list)
+    swarm_callout: str

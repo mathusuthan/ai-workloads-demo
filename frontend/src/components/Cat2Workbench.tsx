@@ -705,7 +705,7 @@ export function Cat2Workbench({
 
           {runResponse && (
             <>
-              {/* Slide 4 Callout Banner */}
+              {/* Output-Tax Callout Banner */}
               <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-950">
                 {runResponse.output_tax_callout}
               </div>
