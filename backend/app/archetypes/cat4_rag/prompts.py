@@ -47,8 +47,8 @@ resp = await client.messages.create(
         "content": f"=== FULL 7-DOC DEAL ROOM ===\\n{all_7_docs_text}\\n\\nQUESTION: {query}",
     }],
 )""",
-    "cached_full_corpus_citations": """# RUNG 2 LEVER 1: Document Block Prefix Caching (-90% Cache Read) + Native Character Citations
-# Attaches cache_control on the 7th document block so Q2..Q4 hit $0.20/M cache reads across the entire deal room!
+    "cached_full_corpus_citations": """# RUNG 2 LEVER 1: Document Block Prefix Caching (-95% Cache Read) + Native Character Citations
+# Attaches cache_control on the 7th document block so Q2..Q4 hit $0.10/M cache reads across the entire deal room!
 doc_blocks = [
     {
         "type": "document",

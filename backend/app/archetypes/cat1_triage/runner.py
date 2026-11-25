@@ -13,6 +13,7 @@ from app.config import get_settings
 from app.core.anthropic_service import run_haiku_calibrated, run_haiku_naive, run_sonnet_naive
 from app.core.credit_shield import credit_shield
 from app.core.gemini_decision_service import run_gemini_decision
+from app.core.measured_claims import fmt_pct, pct_cut, set_note
 from app.core.pricing import compute_jev_reference, compute_run_finops
 from app.core.trace_store import (
     TracePartition,
@@ -184,7 +185,8 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
             "Ablation: Model Swap Only (No Schema)",
             [
                 "Same stateless single-pass messages.create API on Haiku 5.5 ($0.10/M in · $0.50/M out) — NOT multi-turn chat.",
-                "Model swap cuts 95% vs Sonnet 5.5, yet unconstrained prose + default thinking still bloat output tokens.",
+                # replaced with the measured saving by _apply_measured_claims
+                "Model swap cuts cost vs Sonnet 5.5, yet unconstrained prose + default thinking still bloat output tokens.",
             ],
         )
     if rung_id == "haiku_calibrated":
@@ -193,7 +195,8 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
             "Calibrated Lever: Haiku 5.5 + Strict JSON",
             [
                 "Routes stateless triage to Claude Haiku 5.5 ($0.10/M in · $0.50/M out) with thinking disabled.",
-                "Strict JSON schema compresses output to ~90–125 tokens (cuts ~50% vs Haiku prose!).",
+                # replaced with the measured output size and saving by _apply_measured_claims
+                "Strict JSON schema compresses output to a compact typed record, cutting cost vs Haiku prose.",
                 "Companion <1ms deterministic regex gate masks raw PII without LLM echo.",
             ],
         )
@@ -206,6 +209,29 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
             "Boundary: cannot rewrite text for inline PII masking — pairs with <1ms regex gate.",
         ],
     )
+
+
+def _apply_measured_claims(results: list[RungExecutionResult]) -> None:
+    """Rewrite result-dependent rung notes with numbers measured on this run."""
+    ok = {r.rung_id: r for r in results if r.status == "ok"}
+    sonnet, h_prose, h_schema = ok.get("sonnet_naive"), ok.get("haiku_naive"), ok.get("haiku_calibrated")
+    if h_prose and sonnet:
+        set_note(
+            h_prose,
+            1,
+            f"Model swap alone cuts {fmt_pct(h_prose.savings_vs_naive_pct)} vs Sonnet 5.5 prose on this item, yet "
+            f"unconstrained prose still emits {h_prose.finops.output_tokens:,} output tokens.",
+        )
+    if h_schema:
+        text = f"Strict JSON schema caps output at {h_schema.finops.output_tokens:,} tokens"
+        cut = pct_cut(h_prose.finops.total_cost_usd, h_schema.finops.total_cost_usd) if h_prose else None
+        if h_prose and cut is not None:
+            text += (
+                f" vs {h_prose.finops.output_tokens:,} for Haiku prose, cutting cost {fmt_pct(cut)} on the same model"
+            )
+        if sonnet:
+            text += f" ({fmt_pct(h_schema.savings_vs_naive_pct)} vs Sonnet prose)"
+        set_note(h_schema, 1, text + ".")
 
 
 def _build_rung_result(
@@ -425,6 +451,7 @@ async def execute_cat1_run(
                 structured_output=res.structured_output,
                 raw_text=res.raw_text_preview,
             )
+    _apply_measured_claims(results)
 
     # Persist partitioned traces (category / use_case / model / pattern) for every rung
     for res in results:

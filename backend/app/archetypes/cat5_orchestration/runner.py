@@ -22,7 +22,8 @@ from app.archetypes.cat5_orchestration.prompts import (
 from app.config import get_settings
 from app.core.anthropic_service import run_cat5_tool_loop_step
 from app.core.credit_shield import credit_shield
-from app.core.pricing import compute_run_finops
+from app.core.measured_claims import fmt_pct, pct_cut, set_note
+from app.core.pricing import compute_run_finops, rollup_multi_call_finops
 from app.core.trace_store import (
     TracePartition,
     TraceRecord,
@@ -74,8 +75,9 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
             "1. Unbounded ReAct Loop (Sonnet 5.5)",
             "Anti-Pattern: Uncached SELECT * Loop",
             [
-                "Fires unprojected SELECT * SQLite calls (WMS barcode dumps + 3-yr vendor audit trails) across 5–7 uncached Sonnet turns.",
-                "Cumulative prompt tokens explode into Band 4R (35k–70k+ tokens) with NO AP-POL-GATE-01 deterministic check before commit.",
+                # both notes replaced with measured steps / prompt tokens by _apply_measured_claims
+                "Fires unprojected SELECT * SQLite calls (WMS barcode dumps + 3-yr vendor audit trails) across multiple uncached Sonnet turns.",
+                "Cumulative prompt tokens explode into Band 4R with NO AP-POL-GATE-01 deterministic check before commit.",
             ],
         )
     if rung_id == "bounded_sonnet_cached_gate":
@@ -83,13 +85,14 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
             "2. Governed Loop + Cached Policy + Gate",
             "Lever 1: Step Budget + Prefix Cache + Gate",
             [
-                "Projected JOIN bundle shrinks tool noise >75%, attaches cache_control on the ~5.5k-tok SOP manual (-90% reads), and enforces max 4 steps.",
-                "AP-POL-GATE-01 runs deterministic Python math before commit_reconciliation_voucher — guaranteeing 100% rupee accuracy.",
+                # both notes replaced with measured values by _apply_measured_claims
+                "Projected JOIN bundle shrinks tool noise, attaches cache_control on the SOP manual (-95% reads), and enforces a step budget.",
+                "AP-POL-GATE-01 runs deterministic Python math before commit_reconciliation_voucher.",
             ],
         )
     return (
         "3. Hybrid Haiku-First + Sonnet Escalation",
-        "Lever 2: Tier-Routed Agent (-90%+ Cost)",
+        "Lever 2: Tier-Routed Agent",  # measured saving added by _apply_measured_claims
         [
             "Runs bundle fetch & AP-POL-GATE-01 on Haiku 5.5 ($0.10/M in · $0.01/M cached read); stays on Haiku for routine escrow & hard blocks.",
             "Deterministically escalates Step 3+ to Sonnet 5.5 ONLY when AP-POL-GATE-01 flags a multi-factor commercial/amendment dispute.",
@@ -242,6 +245,50 @@ def finalize_cat5_rung_result(
         evaluation=evaluation,
         architectural_notes=notes,
     )
+
+
+def _apply_measured_claims(results: list[Cat5RungResult]) -> None:
+    """Rewrite result-dependent rung badges/notes with numbers measured on this invoice."""
+    ok = {r.rung_id: r for r in results if r.status == "ok" and r.steps}
+    naive = ok.get("unbounded_sonnet_loop")
+    bounded = ok.get("bounded_sonnet_cached_gate")
+    hybrid = ok.get("hybrid_haiku_sonnet_governed")
+
+    def prompt_tok(r: Cat5RungResult) -> int:
+        return r.total_uncached_input_tokens + r.total_cache_creation_tokens + r.total_cache_read_tokens
+
+    if naive:
+        set_note(
+            naive,
+            0,
+            "Fires unprojected SELECT * SQLite calls (WMS barcode dumps + 3-yr vendor audit trails) across "
+            f"{naive.steps_used} uncached Sonnet turns.",
+        )
+        set_note(
+            naive,
+            1,
+            f"Cumulative prompt tokens reach {prompt_tok(naive):,} with NO AP-POL-GATE-01 deterministic check before commit.",
+        )
+    if bounded:
+        prefix = max(s.finops.cache_creation_tokens + s.finops.cache_read_tokens for s in bounded.steps)
+        text = f"Projected JOIN bundle + a cached ~{prefix / 1000:.1f}k-tok SOP prefix (-95% reads)"
+        cut = pct_cut(naive.total_uncached_input_tokens, bounded.total_uncached_input_tokens) if naive else None
+        if cut is not None:
+            text += (
+                f" cut uncached prompt tokens {fmt_pct(cut)} vs Rung 1 "
+                f"({naive.total_uncached_input_tokens:,} → {bounded.total_uncached_input_tokens:,})"
+            )
+        set_note(bounded, 0, text + f", within a max {bounded.max_step_budget}-step budget.")
+        if bounded.evaluation is not None:
+            ev = bounded.evaluation
+            set_note(
+                bounded,
+                1,
+                "AP-POL-GATE-01 runs deterministic Python math before commit_reconciliation_voucher — "
+                f"rupee fields matched {ev.matched_fields}/{ev.total_fields} on this invoice.",
+            )
+    if hybrid and naive:
+        hybrid.badge_text = f"Lever 2: Tier-Routed Agent (-{fmt_pct(hybrid.savings_vs_naive_cold_pct)} Cost)"
 
 
 def _apply_cross_rung_savings(results: list[Cat5RungResult]) -> None:
@@ -698,39 +745,17 @@ async def execute_cat5_run(
         mode_used = "live"
 
     _apply_cross_rung_savings(results)
+    _apply_measured_claims(results)
 
     # Persist 1 partitioned trace rollup per rung
     for res in results:
         if res.status != "ok":
             continue
-        rollup_fin = FinOpsBreakdown(
+        rollup_fin = rollup_multi_call_finops(
+            calls=[s.finops for s in res.steps],
+            total_cost_usd=res.cold_run_cost_usd,
             model_id="claude-sonnet-5-5" if "sonnet" in res.primary_model_id else "claude-haiku-5-5",
             model_label=res.primary_model_id,
-            provider="Anthropic",
-            input_tokens=res.total_uncached_input_tokens,
-            output_tokens=res.total_output_tokens,
-            cache_creation_tokens=res.total_cache_creation_tokens,
-            cache_read_tokens=res.total_cache_read_tokens,
-            total_tokens=(
-                res.total_uncached_input_tokens
-                + res.total_cache_creation_tokens
-                + res.total_cache_read_tokens
-                + res.total_output_tokens
-            ),
-            input_cost_usd=round(max(0.0, res.cold_run_cost_usd - (res.total_output_tokens / 1e6) * 10.0), 8),
-            output_cost_usd=round((res.total_output_tokens / 1e6) * 10.0, 8),
-            total_cost_usd=res.cold_run_cost_usd,
-            cost_per_1k_usd=res.cost_per_1k_invoices_cold_usd,
-            monthly_cost_at_100k_usd=round(res.cold_run_cost_usd * 100_000, 2),
-            annual_cost_at_1m_per_mo_usd=round(res.cold_run_cost_usd * 12_000_000, 2),
-            io_ratio=round(
-                (res.total_uncached_input_tokens + res.total_cache_creation_tokens + res.total_cache_read_tokens)
-                / max(1, res.total_output_tokens),
-                1,
-            ),
-            io_ratio_label=f"{round((res.total_uncached_input_tokens + res.total_cache_creation_tokens + res.total_cache_read_tokens) / max(1, res.total_output_tokens), 1)}:1",
-            output_cost_share_pct=0.0,
-            output_rate_multiplier="5x output weight",
         )
         persist_cat5_trace(
             source_mode=mode_used,

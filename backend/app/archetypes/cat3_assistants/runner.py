@@ -14,12 +14,22 @@ from app.archetypes.cat3_assistants.prompts import (
     get_memory_summarizer_system_prompt,
 )
 from app.archetypes.cat3_assistants.schemas import SESSION_MEMORY_JSON_SCHEMA
+from app.archetypes.cat3_assistants.scoring import (
+    cached_quality_keys,
+    classify_probe_answer,
+    compact_quality,
+    fact_hit,
+    probes_for,
+    quality_metrics,
+    score_session,
+)
 from app.config import get_settings
 from app.core.anthropic_service import (
     run_cat3_memory_summarizer,
     run_cat3_service_desk_turn,
 )
 from app.core.credit_shield import credit_shield
+from app.core.measured_claims import set_note
 from app.core.pricing import compute_run_finops
 from app.core.trace_store import (
     TracePartition,
@@ -33,6 +43,10 @@ from app.models import (
     Cat3ChatTurnEntry,
     Cat3ChatTurnRequest,
     Cat3ChatTurnResponse,
+    Cat3Measure,
+    Cat3ProbeResult,
+    Cat3QualityPortfolio,
+    Cat3RungQuality,
     Cat3RunRequest,
     Cat3RunResponse,
     Cat3RungId,
@@ -64,31 +78,104 @@ def load_cat3_replays() -> dict[str, Any]:
     return json.loads(replays_file.read_text(encoding="utf-8"))
 
 
+LIVE_PROBES_REASON = (
+    "Recall probes are not run in live mode (each adds paid API calls); the recorded rerun has them."
+)
+NO_PROBES_REASON = "This recorded capture has no recall probes."
+
+
+def load_cat3_quality_portfolio() -> Cat3QualityPortfolio | None:
+    """Pooled quality-rerun summary (replays/cat3_quality_summary.json); None if absent or unreadable."""
+    path = Path(get_settings().replays_dir) / "cat3_quality_summary.json"
+    if not path.is_file():
+        return None
+    try:
+        return Cat3QualityPortfolio.model_validate(json.loads(path.read_text(encoding="utf-8")))
+    except (ValueError, OSError):
+        return None
+
+
+def build_rung_quality(
+    *,
+    preset_id: str,
+    turn_texts: dict[int, str],
+    probe_phase: dict[str, Any] | None,
+    probes_unavailable_reason: str | None,
+) -> Cat3RungQuality | None:
+    """Score one session with the answer key: turn facts and ledger always; probes when recorded."""
+    try:
+        keys = cached_quality_keys()
+    except (OSError, ValueError):
+        return None
+    probe_rows = list((probe_phase or {}).get("probes") or [])
+    answers = {str(p["probe_id"]): str(p.get("answer") or "") for p in probe_rows} if probe_rows else None
+    rows = score_session(preset_id=preset_id, turn_texts=turn_texts, probe_answers=answers, keys=keys)
+    if not rows:
+        return None
+    q = compact_quality(quality_metrics([rows]))
+    probes: list[Cat3ProbeResult] | None = None
+    if answers is not None:
+        probes = []
+        for key in probes_for(keys, preset_id):
+            if key["probe_id"] not in answers:
+                continue
+            answer = answers[key["probe_id"]]
+            hit = fact_hit(answer, key["any_of"])
+            probes.append(
+                Cat3ProbeResult(
+                    probe_id=key["probe_id"],
+                    origin_turn=int(key["origin_turn"]),
+                    question=key["question"],
+                    expected=str(key.get("expected_display") or key["any_of"][0]),
+                    answer=answer,
+                    hit=hit,
+                    outcome=classify_probe_answer(answer, hit),  # type: ignore[arg-type]
+                )
+            )
+    return Cat3RungQuality(
+        keys_version=(keys.get("meta") or {}).get("keys_version"),
+        turn_recall=Cat3Measure(**q["turn_recall"]),
+        ledger_recall=Cat3Measure(**q["ledger_recall"]),
+        ledger_by_origin={k: Cat3Measure(**v) for k, v in q["ledger_by_origin"].items()},
+        probe_accuracy=Cat3Measure(**q["probe_accuracy"]) if probes is not None else None,
+        probes=probes,
+        probes_unavailable_reason=None if probes is not None else probes_unavailable_reason,
+    )
+
+
 def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
     if rung_id == "naive_full_history":
         return (
             "1. Uncached Full History (Naive Chat)",
             "Anti-Pattern: Quadratic O(N²) Session",
             [
-                "Re-sends the ~9,680-tok IT/HR Handbook + full verbatim multi-turn log stack at full $2.00/M input price on every turn.",
+                # replaced with the measured prefix size by _apply_measured_claims
+                "Re-sends the IT/HR Handbook + full verbatim multi-turn log stack at full $2.00/M input price on every turn.",
                 "Cumulative session spend explodes quadratically across 10 turns because prior raw JSON/CLI telemetry is re-read repeatedly.",
             ],
         )
     if rung_id == "prefix_cached_history":
         return (
             "2. Prefix Context Caching Only",
-            "Lever 1: 90% Cache Read Discount",
+            "Lever 1: 95% Cache Read Discount",
             [
-                "Attaches cache_control={'type': 'ephemeral'} to the static IT/HR Handbook prefix (~9,680 tok -> $0.20/M on cache hits).",
+                # replaced with the measured prefix size by _apply_measured_claims
+                "Attaches cache_control={'type': 'ephemeral'} to the static IT/HR Handbook prefix ($0.10/M on cache hits).",
                 "Eliminates static prefix bloat, but uncached verbatim log history still ramps linearly per turn unless compacted.",
+                # replaced with this session's measured answer-key scores by _apply_measured_claims
+                "Keeps the full verbatim history, so caching changes the cost but not what the model can see.",
             ],
         )
     return (
         "3. Prefix Caching + Sliding-Window Memory",
         "Lever 1 + Lever 2 (Flat Tail)",
         [
-            "Combines the cached IT/HR Handbook prefix with automatic Sonnet 5.5 JSON memory compaction every 4 turns ([T1..T3] before T5, +[T4..T6] before T8).",
-            "100% of summarizer input/output spend is billed transparently here — yet net session cost stays lowest while keeping Turn 10 context flat.",
+            "Combines the cached IT/HR Handbook prefix with automatic Sonnet 5.5 JSON memory compaction whenever more than 4 turns are verbatim ([T1..T3] before T5, +[T4..T6] before T8).",
+            # replaced with the measured final-turn context by _apply_measured_claims
+            "100% of summarizer input/output spend is billed transparently here — yet net session cost stays lowest while keeping late-turn context bounded.",
+            # replaced with this session's measured answer-key scores by _apply_measured_claims
+            "Quality trade-off: details the compacted memory drops are no longer available, so specifics from early "
+            "turns can't be recalled later in the session.",
         ],
     )
 
@@ -147,7 +234,7 @@ def assemble_cat3_messages(
 
 
 def compute_warm_turn_cost(finops: FinOpsBreakdown) -> float:
-    """Price cold Turn-1 cache creation tokens at warm shared-prefix cache-read rate ($0.20/M)."""
+    """Price cold Turn-1 cache creation tokens at warm shared-prefix cache-read rate ($0.10/M)."""
     if finops.cache_creation_tokens <= 0:
         return finops.total_cost_usd
     warm_fin = compute_run_finops(
@@ -282,6 +369,115 @@ def finalize_cat3_rung_summary(
     )
 
 
+def _cached_prefix_tokens(results: list[Cat3RungSummary]) -> int | None:
+    """Measured size of the cached handbook prefix (cache write + read on the first cached turn)."""
+    for r in results:
+        if r.status == "ok" and r.rung_id != "naive_full_history" and r.turns:
+            f = r.turns[0].finops
+            if f.cache_creation_tokens + f.cache_read_tokens > 0:
+                return f.cache_creation_tokens + f.cache_read_tokens
+    return None
+
+
+def _frac(m: Cat3Measure | None) -> str:
+    return f"{m.hits}/{m.total}" if m is not None else "n/a"
+
+
+def _portfolio_rung(portfolio: Cat3QualityPortfolio | None, rung_id: str):
+    return next((r for r in portfolio.rungs if r.rung_id == rung_id), None) if portfolio else None
+
+
+def _quality_notes(
+    results: list[Cat3RungSummary],
+    portfolio: Cat3QualityPortfolio | None,
+) -> None:
+    """Note 3 of the cached rungs: this session's answer-key scores (fallback text stays if unscored)."""
+    ok = {r.rung_id: r for r in results if r.status == "ok" and r.quality is not None}
+    naive, cached, summ = ok.get("naive_full_history"), ok.get("prefix_cached_history"), ok.get("prefix_cached_summarized")
+
+    def early(r: Cat3RungSummary) -> Cat3Measure | None:
+        return r.quality.ledger_by_origin.get("1-3") if r.quality else None
+
+    if cached and cached.quality:
+        q = cached.quality
+        parts = []
+        if q.probe_accuracy is not None:
+            parts.append(f"answered {_frac(q.probe_accuracy)} recall questions")
+        parts.append(f"kept {_frac(early(cached))} turn 1–3 details in the final summary")
+        text = "Keeps the full verbatim history; on this session it " + " and ".join(parts)
+        if naive and naive.quality:
+            ref = [f"{_frac(naive.quality.probe_accuracy)} recall"] if naive.quality.probe_accuracy is not None else []
+            ref.append(f"{_frac(early(naive))} early details")
+            text += f" (Rung 1: {', '.join(ref)})"
+        set_note(cached, 2, text + ".")
+
+    if summ and summ.quality:
+        q = summ.quality
+        ref_rung = cached or naive
+        ref_label = "Rung 2" if cached else "Rung 1"
+        rq = ref_rung.quality if ref_rung else None
+        if q.probe_accuracy is not None:
+            text = f"Quality trade-off on this session: answered {_frac(q.probe_accuracy)} recall questions"
+            if rq is not None and rq.probe_accuracy is not None:
+                text += f" vs {_frac(rq.probe_accuracy)} with full history ({ref_label})"
+            text += f", and kept {_frac(early(summ))} turn 1–3 details in the final summary"
+        else:
+            text = f"Quality trade-off on this session: kept {_frac(early(summ))} turn 1–3 details in the final summary"
+        if rq is not None:
+            text += f" vs {_frac(early(ref_rung))}"
+        if q.probe_accuracy is None and q.probes_unavailable_reason:
+            text += " (recall probes are not run live)"
+        pf_s = _portfolio_rung(portfolio, "prefix_cached_summarized")
+        pf_r = _portfolio_rung(portfolio, ref_rung.rung_id) if ref_rung else None
+        if pf_s is not None and pf_r is not None and portfolio is not None:
+            text += (
+                f". Across the {portfolio.runs}-run rerun ({pf_s.runs} sessions per rung): "
+                f"{_frac(pf_s.probe_accuracy)} recall questions vs {_frac(pf_r.probe_accuracy)}"
+            )
+        set_note(summ, 2, text + ".")
+
+
+def _apply_measured_claims(
+    results: list[Cat3RungSummary],
+    portfolio: Cat3QualityPortfolio | None = None,
+) -> None:
+    """Rewrite result-dependent rung notes with numbers measured on this session."""
+    ok = {r.rung_id: r for r in results if r.status == "ok" and r.turns}
+    naive, cached, summ = ok.get("naive_full_history"), ok.get("prefix_cached_history"), ok.get("prefix_cached_summarized")
+    prefix = _cached_prefix_tokens(results)
+
+    def context(t: Any) -> int:
+        return t.finops.input_tokens + t.finops.cache_creation_tokens + t.finops.cache_read_tokens
+
+    if naive and prefix:
+        set_note(
+            naive,
+            0,
+            f"Re-sends the ~{prefix:,}-tok IT/HR Handbook prefix + full verbatim multi-turn log stack at full "
+            "$2.00/M input price on every turn.",
+        )
+    if cached and prefix:
+        set_note(
+            cached,
+            0,
+            "Attaches cache_control={'type': 'ephemeral'} to the static IT/HR Handbook prefix "
+            f"(~{prefix:,} tok -> $0.10/M on cache hits).",
+        )
+    if summ:
+        last = summ.turns[-1]
+        others = [r.total_session_cost_usd for r in (naive, cached) if r is not None]
+        lowest = bool(others) and summ.total_session_cost_usd <= min(others)
+        text = (
+            "100% of summarizer input/output spend is billed transparently here"
+            + (" — yet net session cost stays lowest" if lowest else "")
+            + f"{' while holding' if lowest else ', and it holds'} Turn {last.turn_number} context to {context(last):,} tok"
+        )
+        if naive and len(naive.turns) >= len(summ.turns):
+            text += f" (vs {context(naive.turns[len(summ.turns) - 1]):,} uncompacted)"
+        set_note(summ, 1, text + ".")
+    _quality_notes(results, portfolio)
+
+
 def _apply_cross_rung_savings(results: list[Cat3RungSummary]) -> None:
     naive = next((r for r in results if r.rung_id == "naive_full_history" and r.status == "ok"), None)
     cached_only = next(
@@ -314,6 +510,40 @@ def _apply_cross_rung_savings(results: list[Cat3RungSummary]) -> None:
             )
 
 
+def _quality_callout(
+    summ: Cat3RungSummary,
+    cached: Cat3RungSummary,
+    portfolio: Cat3QualityPortfolio | None,
+) -> str:
+    """Quality sentence for the session callout; number-free when this session was not scored."""
+    sq, cq = summ.quality, cached.quality
+    if sq is None or cq is None:
+        return (
+            "Compaction is not free of quality cost: specifics the compacted memory drops can't be recalled "
+            "later in the session."
+        )
+    early_s, early_c = sq.ledger_by_origin.get("1-3"), cq.ledger_by_origin.get("1-3")
+    if sq.probe_accuracy is not None and cq.probe_accuracy is not None:
+        text = (
+            f"Quality trade-off: with compaction the assistant answered {_frac(sq.probe_accuracy)} recall questions "
+            f"about earlier turns vs {_frac(cq.probe_accuracy)} with full history, and its final summary kept "
+            f"{_frac(early_s)} turn 1–3 details vs {_frac(early_c)}"
+        )
+    else:
+        text = (
+            f"Quality trade-off: with compaction the final summary kept {_frac(early_s)} turn 1–3 details vs "
+            f"{_frac(early_c)} with full history (recall probes are not run live)"
+        )
+    pf_s = _portfolio_rung(portfolio, "prefix_cached_summarized")
+    pf_c = _portfolio_rung(portfolio, "prefix_cached_history")
+    if portfolio is not None and pf_s is not None and pf_c is not None:
+        text += (
+            f"; across the {portfolio.runs}-run rerun ({pf_s.runs} sessions per rung), {_frac(pf_s.probe_accuracy)} vs "
+            f"{_frac(pf_c.probe_accuracy)} recall questions"
+        )
+    return text + "."
+
+
 async def _run_live_cat3_session_for_rung(
     *,
     preset: dict[str, Any],
@@ -343,6 +573,7 @@ async def _run_live_cat3_session_for_rung(
         compaction_finops: FinOpsBreakdown | None = None
         compaction_latency = 0
         compaction_payload_text: str | None = None
+        compaction_stop_reason: str | None = None
 
         if summarize and len(verbatim_turns) >= MAX_VERBATIM_TURNS:
             evict = verbatim_turns[:-KEEP_RECENT_TURNS]
@@ -357,6 +588,7 @@ async def _run_live_cat3_session_for_rung(
             )
             compaction_triggered = True
             compaction_latency = sum_raw.latency_ms
+            compaction_stop_reason = sum_raw.stop_reason
             compaction_finops = compute_run_finops(
                 model_id=sum_raw.model_id,
                 input_tokens=sum_raw.input_tokens,
@@ -428,6 +660,7 @@ async def _run_live_cat3_session_for_rung(
                 "stop_reason": turn_raw.stop_reason,
                 "input_tokens": turn_raw.input_tokens,
                 "output_tokens": turn_raw.output_tokens,
+                "thinking_tokens": turn_raw.thinking_tokens,
                 "cache_creation_tokens": turn_raw.cache_creation_tokens,
                 "cache_read_tokens": turn_raw.cache_read_tokens,
                 "active_history_turns": active_hist,
@@ -439,7 +672,7 @@ async def _run_live_cat3_session_for_rung(
                 "compaction_latency_ms": compaction_latency,
                 "compaction_input_tokens": compaction_finops.input_tokens if compaction_finops else 0,
                 "compaction_output_tokens": compaction_finops.output_tokens if compaction_finops else 0,
-                "compaction_stop_reason": "end_turn" if compaction_finops else None,
+                "compaction_stop_reason": compaction_stop_reason,
             }
         )
         verbatim_turns.append(
@@ -547,7 +780,15 @@ async def execute_cat3_run(
                     status_code=404,
                     detail=f"Replay trace missing rung `{rung_id}` on {preset['id']}.",
                 )
-            results.append(_build_cat3_summary_from_replay(rung_id=rung_id, raw_turns=r_turns))
+            summary = _build_cat3_summary_from_replay(rung_id=rung_id, raw_turns=r_turns)
+            probe_phase = (preset_trace.get("probe_phase") or {}).get(rung_id)
+            summary.quality = build_rung_quality(
+                preset_id=preset["id"],
+                turn_texts={t.turn_number: t.assistant_message for t in summary.turns},
+                probe_phase=probe_phase,
+                probes_unavailable_reason=None if probe_phase else NO_PROBES_REASON,
+            )
+            results.append(summary)
         mode_used = "replay"
     else:
         creds = credit_shield.resolve_live_credentials(
@@ -563,6 +804,12 @@ async def execute_cat3_run(
                     preset=preset,
                     rung_id=rid,
                     api_key=creds.anthropic_api_key or "",
+                )
+                summary.quality = build_rung_quality(
+                    preset_id=preset["id"],
+                    turn_texts={t.turn_number: t.assistant_message for t in summary.turns},
+                    probe_phase=None,
+                    probes_unavailable_reason=LIVE_PROBES_REASON,
                 )
                 return summary
             except Exception as exc:
@@ -580,7 +827,9 @@ async def execute_cat3_run(
             credit_shield.record_server_spend(total_spend)
         mode_used = "live"
 
+    portfolio = load_cat3_quality_portfolio()
     _apply_cross_rung_savings(results)
+    _apply_measured_claims(results, portfolio)
 
     handbook_preview = build_cat3_system_handbook(
         "prefix_cached_summarized",
@@ -629,6 +878,7 @@ async def execute_cat3_run(
                 "summarizer_cost_usd": res.summarizer_cost_usd,
                 "savings_vs_naive_pct": res.savings_vs_naive_pct,
                 "final_memory_summary": last_turn.memory_summary_snapshot if last_turn else None,
+                "quality": res.quality.model_dump() if res.quality else None,
             },
             request_params={
                 "endpoint": "messages.create",
@@ -654,16 +904,18 @@ async def execute_cat3_run(
         (r for r in results if r.rung_id == "prefix_cached_summarized" and r.status == "ok"),
         None,
     )
+    measured_prefix = _cached_prefix_tokens(results) or int(preset["approx_handbook_tokens"])
     if naive_res and cached_res and compacted_res:
         callout = (
             f"10-Turn Sonnet 5.5 Session FinOps: Uncached Full History costs ${naive_res.cost_per_1k_sessions_usd:.2f}/1k sessions "
-            f"(O(N²) context growth). Enabling Prefix Context Caching (-90% reads on ~{preset['approx_handbook_tokens']:,}-tok handbook) "
+            f"(O(N²) context growth). Enabling Prefix Context Caching (-95% reads on ~{measured_prefix:,}-tok handbook prefix) "
             f"drops cost to ${cached_res.cost_per_1k_sessions_usd:.2f}/1k (-{cached_res.savings_vs_naive_pct:.1f}% cold, "
             f"-{cached_res.warm_savings_vs_naive_pct:.1f}% warm fleet), and adding Sliding-Window Memory Compaction "
             f"({compacted_res.summarizer_calls} Sonnet summarizer calls = ${compacted_res.summarizer_cost_usd * 1000:.2f}/1k overhead included) "
             f"cuts total session spend further to ${compacted_res.cost_per_1k_sessions_usd:.2f}/1k "
             f"(-{compacted_res.savings_vs_naive_pct:.1f}% cold / -{compacted_res.warm_savings_vs_naive_pct:.1f}% warm vs Rung 1)."
         )
+        callout += " " + _quality_callout(compacted_res, cached_res, portfolio)
     else:
         callout = (
             "Category 3 compares Uncached Full History vs Prefix Context Caching vs "
@@ -671,6 +923,7 @@ async def execute_cat3_run(
         )
 
     return Cat3RunResponse(
+        quality_portfolio=portfolio,
         mode_used=mode_used,  # type: ignore[arg-type]
         preset_id=preset["id"],
         use_case="it_hr_service_desk",

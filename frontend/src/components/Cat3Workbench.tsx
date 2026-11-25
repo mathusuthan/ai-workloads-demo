@@ -41,6 +41,7 @@ import type {
   CreditShieldCredentials,
 } from '../types'
 import { NativeModal } from './NativeModal'
+import { Cat3QualityPanel } from './Cat3QualityPanel'
 
 interface Cat3WorkbenchProps {
   archetype: ArchetypeSpec
@@ -68,7 +69,7 @@ const SONNET_RATE = {
   inPer1M: 2.0,
   outPer1M: 10.0,
   writePer1M: 2.5,
-  readPer1M: 0.2,
+  readPer1M: 0.1,
 } as const
 
 type CacheEntryMode = 'cold_first_turn' | 'warm_fleet_prefix'
@@ -380,7 +381,7 @@ export function Cat3Workbench({
 
   // X-Ray proportions on activeFocusTurn
   const xRayStats = useMemo(() => {
-    const handbookTokens = runResponse?.approx_handbook_tokens ?? 9680
+    const handbookTokens = runResponse?.approx_handbook_tokens ?? 9860
     const isUncached = simRungId === 'naive_full_history'
     const rawFocus = activeFocusTurn
     if (!rawFocus) {
@@ -539,8 +540,9 @@ export function Cat3Workbench({
             </h1>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-600 sm:text-sm">
               Hold <strong>Claude Sonnet 5.5</strong> ($2.00/M in · $10.00/M out) constant across a 10-turn IT &amp; HR
-              Service Desk escalation: measure how <strong>Prefix Context Caching</strong> ($0.20/M reads, -90%) and{' '}
-              <strong>Sliding-Window Memory Summarization</strong> eliminate quadratic <strong>O(N²)</strong> session cost bloat.
+              Service Desk escalation: measure how <strong>Prefix Context Caching</strong> ($0.10/M reads, -95%) and{' '}
+              <strong>Sliding-Window Memory Summarization</strong> cut quadratic <strong>O(N²)</strong> session cost — and
+              what the compacted memory forgets, scored against a fixed answer key.
             </p>
           </div>
 
@@ -750,13 +752,13 @@ export function Cat3Workbench({
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    Warm Shared Prefix Fleet ($0.20/M)
+                    Warm Shared Prefix Fleet ($0.10/M)
                   </button>
                 </div>
                 <p className="text-[11px] text-slate-500">
                   {cacheMode === 'cold_first_turn'
-                    ? 'Single-session view: Turn 1 pays 1.25x ($2.50/M) ephemeral write before Turns 2–10 read at -90% ($0.20/M).'
-                    : 'Production fleet view: handbook prefix stays warm across 18,000 employees, so Turn 1 also reads at $0.20/M.'}
+                    ? 'Single-session view: Turn 1 pays 1.25x ($2.50/M) ephemeral write before Turns 2–10 read at -95% ($0.10/M).'
+                    : 'Production fleet view: handbook prefix stays warm across 18,000 employees, so Turn 1 also reads at $0.10/M.'}
                 </p>
               </div>
             </div>
@@ -931,6 +933,9 @@ export function Cat3Workbench({
                 })}
               </div>
 
+              {/* Answer quality vs cost (answer-key scores + pooled rerun) */}
+              <Cat3QualityPanel results={runResponse.results} portfolio={runResponse.quality_portfolio} />
+
               {/* FinOps HUD & Charts */}
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
@@ -1073,7 +1078,7 @@ export function Cat3Workbench({
                           <Tooltip formatter={(val: number) => `$${val.toFixed(2)} / 1k`} />
                           <Legend wrapperStyle={{ fontSize: 11 }} />
                           <Bar dataKey="uncachedIn1k" name="Uncached In ($2/M)" stackId="s" fill="#dc2626" />
-                          <Bar dataKey="cache1k" name="Cache W/R ($2.5/$0.2)" stackId="s" fill="#15803d" />
+                          <Bar dataKey="cache1k" name="Cache W/R ($2.5/$0.1)" stackId="s" fill="#15803d" />
                           <Bar dataKey="output1k" name="Output ($10/M)" stackId="s" fill="#475569" />
                           <Bar
                             dataKey="summarizer1k"
@@ -1487,7 +1492,7 @@ export function Cat3Workbench({
                       <summary className="font-bold text-slate-900">
                         <span>
                           Layer 1 · IT &amp; HR Prefix (
-                          {simRungId === 'naive_full_history' ? 'Uncached $2.00/M' : 'Cached -90% $0.20/M'})
+                          {simRungId === 'naive_full_history' ? 'Uncached $2.00/M' : 'Cached -95% $0.10/M'})
                         </span>
                       </summary>
                       <div className="mt-2 space-y-1.5 text-[11px] text-slate-600">
@@ -1516,9 +1521,15 @@ export function Cat3Workbench({
                       </summary>
                       <div className="mt-2 text-[11px] text-slate-600">
                         {xRayStats.memorySnapshot ? (
-                          <pre className="max-h-60 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-950 p-2.5 font-mono text-[10px] text-emerald-300">
-                            {JSON.stringify(xRayStats.memorySnapshot, null, 2)}
-                          </pre>
+                          <>
+                            <pre className="max-h-60 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-950 p-2.5 font-mono text-[10px] text-emerald-300">
+                              {JSON.stringify(xRayStats.memorySnapshot, null, 2)}
+                            </pre>
+                            <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
+                              This JSON is all the model sees of the compacted turns: any detail not written here can&rsquo;t be
+                              recalled later in the session.
+                            </p>
+                          </>
                         ) : (
                           <p className="rounded-lg bg-white p-2.5 text-[11px] text-slate-500 ring-1 ring-slate-200">
                             {simRungId === 'prefix_cached_summarized'

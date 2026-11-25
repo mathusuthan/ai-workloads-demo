@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,11 @@ from app.archetypes.cat2_drafting.prompts import (
     get_templated_draft_system_prompt,
     get_unbounded_draft_system_prompt,
 )
+from app.archetypes.cat2_drafting.quality_scoring import (
+    LIVE_JUDGE_REASON,
+    deterministic_quality_for_text,
+    render_draft,
+)
 from app.archetypes.cat2_drafting.schemas import (
     STRUCTURED_DRAFT_JSON_SCHEMA,
     get_single_section_schema,
@@ -24,6 +30,7 @@ from app.core.anthropic_service import (
     run_cat2_unbounded_sonnet,
 )
 from app.core.credit_shield import credit_shield
+from app.core.measured_claims import fmt_pct, pct_cut, set_note
 from app.core.pricing import compute_run_finops
 from app.core.trace_store import (
     TracePartition,
@@ -34,8 +41,10 @@ from app.core.trace_store import (
 )
 from app.data.cat2_fixtures import CAT2_PRESETS, CAT2_REVIEWER_PRESETS
 from app.models import (
+    Cat2QualityPortfolio,
     Cat2RunRequest,
     Cat2RunResponse,
+    Cat2RungQuality,
     Cat2RungResult,
     Cat2SectionRegenRequest,
     Cat2SectionRegenResponse,
@@ -49,6 +58,15 @@ CAT2_RUNG_TO_PATTERN: dict[str, str] = {
     "haiku_templated": "tier_routed_template_draft",
 }
 HITL_REGEN_PATTERN = "hitl_section_regen"
+CAT2_QUALITY_SUMMARY_FILE = "cat2_quality_summary.json"
+REPLAY_GRADES_STALE_REASON = (
+    "The stored grades are for a different version of this draft, so only the free checks are shown."
+)
+RUNG_LABEL = {
+    "sonnet_unbounded": "unbounded",
+    "sonnet_templated": "Sonnet template",
+    "haiku_templated": "Haiku template",
+}
 
 
 def _preset_map() -> dict[str, dict[str, Any]]:
@@ -89,7 +107,8 @@ def _cat2_rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
             "Anti-Pattern: Uncapped Output Tax",
             [
                 "Prompts Claude Sonnet 5.5 ($2.00/M in · $10.00/M out) for an exhaustive multi-page narrative + appendices.",
-                "At 5x output token pricing, ~4,700+ unbounded output tokens drive >85% of your entire inference bill.",
+                # replaced with the measured output tokens and cost share by _apply_measured_claims
+                "At 5x output token pricing, unbounded output tokens drive most of the inference bill.",
             ],
         )
     if rung_id == "sonnet_templated":
@@ -97,18 +116,256 @@ def _cat2_rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
             "Rung 2 · Sonnet 5.5 + Bounded Section Template",
             "Calibrated Lever: Section-Bounded Schema",
             [
-                "Same frontier Sonnet 5.5 quality anchored to a 4-section JSON schema with strict word caps & disabled thinking.",
-                "Cuts output tokens by ~50%–65%, cutting unit cost >45% while enabling single-section HITL locking & regen.",
+                "Same Sonnet 5.5 model, constrained to a 4-section JSON schema with strict word caps.",
+                # replaced with the measured output and cost cut by _apply_measured_claims
+                "Caps output tokens and unit cost while enabling single-section HITL locking & regen.",
             ],
         )
     return (
         "Rung 3 · Haiku 5.5 First-Draft Template",
-        "Tier-Routed Draft (-97% Cost)",
+        "Tier-Routed Draft",  # measured saving appended by _apply_measured_claims
         [
             "Runs the exact same 4-section bounded schema on Haiku 5.5 ($0.10/M in · $0.50/M out).",
-            "Generates a complete auditable first draft for <$0.001 so reviewers escalate only critical sections to Sonnet 5.5.",
+            # replaced with the measured draft cost by _apply_measured_claims
+            "Drafts all four sections at a fraction of Sonnet cost; a reviewer can regenerate any single section on Sonnet 5.5.",
         ],
     )
+
+
+def _apply_measured_claims(results: list[Cat2RungResult]) -> None:
+    """Rewrite result-dependent rung badges/notes with numbers measured on this run."""
+    ok = {r.rung_id: r for r in results if r.status == "ok"}
+    unb, tmpl, haiku = ok.get("sonnet_unbounded"), ok.get("sonnet_templated"), ok.get("haiku_templated")
+    if unb:
+        set_note(
+            unb,
+            1,
+            f"At 5x output token pricing, {unb.finops.output_tokens:,} unbounded output tokens drive "
+            f"{fmt_pct(unb.finops.output_cost_share_pct)} of this draft's inference bill.",
+        )
+    if tmpl and unb:
+        out_cut = pct_cut(unb.finops.output_tokens, tmpl.finops.output_tokens)
+        if out_cut is not None:
+            set_note(
+                tmpl,
+                1,
+                f"Cuts output tokens {fmt_pct(out_cut)} vs the unbounded draft "
+                f"({unb.finops.output_tokens:,} → {tmpl.finops.output_tokens:,}) and unit cost "
+                f"{fmt_pct(tmpl.savings_vs_unbounded_pct)}, while enabling single-section HITL locking & regen.",
+            )
+    if haiku:
+        if unb:
+            haiku.badge_text = f"Tier-Routed Draft (-{fmt_pct(haiku.savings_vs_unbounded_pct)} Cost)"
+        set_note(
+            haiku,
+            1,
+            f"Drafts all four sections for ${haiku.finops.total_cost_usd:.4f}; a reviewer can regenerate "
+            "any single section on Sonnet 5.5.",
+        )
+
+
+# --------------------------------------------------------------------------------------------------
+# Draft quality (blind-judge summary in replay mode; free deterministic checks in live mode)
+# --------------------------------------------------------------------------------------------------
+
+
+def load_cat2_quality_summary() -> dict[str, Any] | None:
+    """replays/cat2_quality_summary.json (scripts/build_cat2_quality_summary.py); None if absent or unreadable."""
+    path = Path(get_settings().replays_dir) / CAT2_QUALITY_SUMMARY_FILE
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def load_cat2_quality_portfolio(summary: dict[str, Any] | None = None) -> Cat2QualityPortfolio | None:
+    summary = summary if summary is not None else load_cat2_quality_summary()
+    if not summary:
+        return None
+    try:
+        return Cat2QualityPortfolio.model_validate(summary)
+    except ValueError:
+        return None
+
+
+def build_cat2_rung_quality(
+    *,
+    result: Cat2RungResult,
+    payload_text: str,
+    preset_id: str | None,
+    mode: str,
+    summary: dict[str, Any] | None,
+) -> Cat2RungQuality | None:
+    """Replay: the judged cell for this preset x rung (only if the draft text is the one that was graded).
+    Live (or stale replay): fact coverage + unsupported numbers on the fresh draft, judge fields None."""
+    if result.status != "ok":
+        return None
+    text = render_draft({"structured_draft": result.structured_draft, "raw_markdown": result.raw_markdown})
+    if not text.strip():
+        return None
+    reason = LIVE_JUDGE_REASON
+    if mode == "replay" and summary and preset_id:
+        cell = (((summary.get("presets") or {}).get(preset_id) or {}).get("rungs") or {}).get(result.rung_id)
+        if cell:
+            if cell.get("text_sha256") == hashlib.sha256(text.encode("utf-8")).hexdigest():
+                try:
+                    return Cat2RungQuality.model_validate(
+                        {
+                            **cell,
+                            "source": "replay_judged",
+                            "preset_id": preset_id,
+                            "keys_version": summary.get("keys_version"),
+                            "judge_model": summary.get("judge_model"),
+                            "passes": summary.get("passes_per_draft"),
+                        }
+                    )
+                except ValueError:
+                    pass
+            reason = REPLAY_GRADES_STALE_REASON
+    try:
+        det = deterministic_quality_for_text(text, payload_text, preset_id)
+    except (OSError, ValueError, KeyError):
+        return None
+    facts = det["facts"] or {}
+    return Cat2RungQuality.model_validate(
+        {
+            "source": "live_deterministic",
+            "preset_id": preset_id,
+            "keys_version": facts.get("keys_version"),
+            "core_facts": facts.get("core_facts"),
+            "detail_facts": facts.get("detail_facts"),
+            "missed_facts": facts.get("missed_facts") or [],
+            "numbers": det["numbers"],
+            "judge_unavailable_reason": reason,
+        }
+    )
+
+
+def _g(x: float) -> str:
+    return f"{x:.1f}"
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
+def _doc_record(q: Cat2RungQuality, opponent: str | None = None) -> tuple[int, int]:
+    """(wins, comparisons) on this document, against one opponent or all."""
+    wins = total = 0
+    for h in q.head_to_head or []:
+        if opponent and h.opponent != opponent:
+            continue
+        for o in h.results:
+            if o.winner is None:
+                continue
+            total += 1
+            wins += o.winner not in (h.opponent, "tie")
+    return wins, total
+
+
+def _judged(r: Cat2RungResult | None) -> Cat2RungQuality | None:
+    q = r.quality if r else None
+    return q if q is not None and q.rubric and q.serious_errors is not None else None
+
+
+def _apply_quality_claims(results: list[Cat2RungResult], portfolio: Cat2QualityPortfolio | None) -> None:
+    """Note 3 (and 4 for templated rungs): measured quality on this document, or the pooled stored-draft
+    results when this run was not graded. No note is added when nothing was measured."""
+    ok = {r.rung_id: r for r in results if r.status == "ok"}
+    unb_q = _judged(ok.get("sonnet_unbounded"))
+    pooled = {p.rung_id: p for p in (portfolio.rungs if portfolio else [])}
+    n_docs = len(portfolio.documents) if portfolio else 0
+    for rid, r in ok.items():
+        q = _judged(r)
+        if q is not None:
+            acc, cov = q.rubric["factual_accuracy"].mean, q.rubric["coverage"].mean
+            text = (
+                f"Measured quality on this document (blind grading, 1–5): accuracy {_g(acc)}, coverage {_g(cov)}, "
+                f"{_plural(q.serious_errors, 'serious error')}"
+            )
+            if rid == "sonnet_unbounded":
+                w, t = _doc_record(q)
+                if t:
+                    text += f"; preferred over the templated drafts in {w} of {t} head-to-head comparisons"
+            else:
+                if unb_q is not None:
+                    text += (
+                        f" (unbounded: accuracy {_g(unb_q.rubric['factual_accuracy'].mean)}, coverage "
+                        f"{_g(unb_q.rubric['coverage'].mean)}, {unb_q.serious_errors})"
+                    )
+                w, t = _doc_record(q, "sonnet_unbounded")
+                if t:
+                    text += f"; preferred over the unbounded draft in {w} of {t} head-to-head comparisons"
+            set_note(r, 2, text + ".")
+            if q.action_items and q.action_items.total:
+                ai = q.action_items
+                set_note(
+                    r,
+                    3,
+                    "The template requires an owner and a time window for every action item; on this document the "
+                    f"grader flagged an owner or deadline the source does not support in {ai.flagged} of {ai.total} "
+                    f"action items ({ai.flagged_serious} serious).",
+                )
+            continue
+        p = pooled.get(rid)
+        if p is None or not n_docs:
+            continue
+        acc, cov = p.rubric["factual_accuracy"].mean, p.rubric["coverage"].mean
+        if acc is None or cov is None:
+            continue
+        text = (
+            f"Quality is not graded on this run; on the {n_docs} stored documents this version averaged accuracy "
+            f"{acc:.2f} and coverage {cov:.2f} (1–5) with {_plural(p.serious_errors, 'serious error')} in total"
+        )
+        if rid != "sonnet_unbounded" and "sonnet_unbounded" in p.head_to_head:
+            rec = p.head_to_head["sonnet_unbounded"]
+            text += f", and was preferred over the unbounded draft in {rec.wins} of {rec.wins + rec.losses + rec.ties} comparisons"
+        set_note(r, 2, text + ".")
+        if p.action_items and p.action_items.total:
+            set_note(
+                r,
+                3,
+                "The template requires an owner and a time window for every action item; on the stored documents "
+                f"the grader flagged an owner or deadline the source does not support in {p.action_items.flagged} "
+                f"of {p.action_items.total} action items.",
+            )
+
+
+def _quality_callout(results: list[Cat2RungResult], portfolio: Cat2QualityPortfolio | None) -> str:
+    ok = {r.rung_id: r for r in results if r.status == "ok"}
+    unb_q = _judged(ok.get("sonnet_unbounded"))
+    templ = [(rid, _judged(ok.get(rid))) for rid in ("sonnet_templated", "haiku_templated")]
+    templ = [(rid, q) for rid, q in templ if q is not None]
+    if unb_q is not None and templ:
+        wins = sum(_doc_record(unb_q, rid)[0] for rid, _ in templ)
+        total = sum(_doc_record(unb_q, rid)[1] for rid, _ in templ)
+        errs = " and ".join(f"{q.serious_errors} ({RUNG_LABEL[rid]})" for rid, q in templ)
+        return (
+            f" The savings are not free on this document: the blind grader preferred the unbounded draft in {wins} of "
+            f"{total} head-to-head comparisons, and the templated drafts had {errs} serious errors vs "
+            f"{unb_q.serious_errors} for the unbounded draft."
+        )
+    if portfolio:
+        pooled = {p.rung_id: p for p in portfolio.rungs}
+        unb = pooled.get("sonnet_unbounded")
+        tp = [(rid, pooled[rid]) for rid in ("sonnet_templated", "haiku_templated") if rid in pooled and rid in ok]
+        if unb and tp:
+            wins = sum(unb.head_to_head[rid].wins for rid, _ in tp if rid in unb.head_to_head)
+            total = sum(
+                unb.head_to_head[rid].wins + unb.head_to_head[rid].losses + unb.head_to_head[rid].ties
+                for rid, _ in tp
+                if rid in unb.head_to_head
+            )
+            errs = " and ".join(f"{p.serious_errors} ({RUNG_LABEL[rid]})" for rid, p in tp)
+            return (
+                f" Quality is not graded on this run; on the {len(portfolio.documents)} stored documents the blind "
+                f"grader preferred the unbounded draft in {wins} of {total} comparisons, and the templated drafts had "
+                f"{errs} serious errors vs {unb.serious_errors}."
+            )
+    return " Draft quality is not graded on this run."
 
 
 def build_cat2_rung_result(
@@ -344,8 +601,7 @@ async def execute_cat2_run(
         for rung_id in req.rungs:
             r_data = preset_trace["rungs"][rung_id]
             trace_extras[rung_id] = (None, r_data.get("stop_reason") or "end_turn")
-            results.append(
-                build_cat2_rung_result(
+            res = build_cat2_rung_result(
                     rung_id=rung_id,
                     model_id=r_data["model_id"],
                     provider=r_data["provider"],
@@ -356,7 +612,8 @@ async def execute_cat2_run(
                     raw_markdown=r_data.get("raw_markdown"),
                     thinking_tokens=int(r_data.get("thinking_tokens") or 0),
                 )
-            )
+            res.stop_reason = r_data.get("stop_reason")
+            results.append(res)
         mode_used = "replay"
     else:
         # Category 2 uses Anthropic ONLY (user constraint: Gemini Decision Model for Category 1 only)
@@ -376,7 +633,7 @@ async def execute_cat2_run(
                         creds.anthropic_api_key or "",
                     )
                     trace_extras[rung_id] = (raw.request_params, raw.stop_reason)
-                    return build_cat2_rung_result(
+                    res = build_cat2_rung_result(
                         rung_id="sonnet_unbounded",
                         model_id=raw.model_id,
                         provider="Anthropic",
@@ -387,6 +644,8 @@ async def execute_cat2_run(
                         raw_markdown=raw.raw_text,
                         thinking_tokens=raw.thinking_tokens,
                     )
+                    res.stop_reason = raw.stop_reason
+                    return res
 
                 model_tier = (
                     "claude-sonnet-5-5" if rung_id == "sonnet_templated" else "claude-haiku-5-5"
@@ -400,7 +659,7 @@ async def execute_cat2_run(
                     max_tokens=3000,
                 )
                 trace_extras[rung_id] = (raw.request_params, raw.stop_reason)
-                return build_cat2_rung_result(
+                res = build_cat2_rung_result(
                     rung_id=rung_id,
                     model_id=raw.model_id,
                     provider="Anthropic",
@@ -411,6 +670,8 @@ async def execute_cat2_run(
                     raw_markdown=raw.raw_text,
                     thinking_tokens=raw.thinking_tokens,
                 )
+                res.stop_reason = raw.stop_reason
+                return res
             except Exception as exc:
                 fallback_model = (
                     "claude-haiku-5-5" if rung_id == "haiku_templated" else "claude-sonnet-5-5"
@@ -456,6 +717,22 @@ async def execute_cat2_run(
             res.savings_vs_unbounded_pct = round(
                 ((unbounded_cost - res.finops.total_cost_usd) / unbounded_cost) * 100, 2
             )
+    _apply_measured_claims(results)
+
+    quality_summary = load_cat2_quality_summary()
+    portfolio = load_cat2_quality_portfolio(quality_summary)
+    quality_preset_id = (
+        preset["id"] if preset is not None and payload_text.strip() == preset["payload"].strip() else None
+    )
+    for res in results:
+        res.quality = build_cat2_rung_quality(
+            result=res,
+            payload_text=payload_text,
+            preset_id=quality_preset_id,
+            mode=mode_used,
+            summary=quality_summary,
+        )
+    _apply_quality_claims(results, portfolio)
 
     # Persist partitioned traces (category / use_case / model / pattern)
     for res in results:
@@ -509,10 +786,10 @@ async def execute_cat2_run(
     h_save = haiku_res.savings_vs_unbounded_pct if haiku_res else 97.0
 
     callout = (
-        f"5x Output Tax Exposed: Unbounded Sonnet 5.5 emitted {unb_out:,} output tokens "
-        f"({unb_share:.1f}% of the entire invoice!). Adding Section Templates & Length Bounds cut Sonnet 5.5 output "
-        f"to {tmp_out:,} tokens (-{tmp_save:.1f}% on the same frontier model), while Haiku 5.5 First-Draft routing drops "
-        f"initial synthesis cost by -{h_save:.1f}% with selective HITL escalation."
+        f"5x Output Tax: Unbounded Sonnet 5.5 emitted {unb_out:,} output tokens "
+        f"({unb_share:.1f}% of its draft's bill). Section templates & length bounds cut Sonnet 5.5 output "
+        f"to {tmp_out:,} tokens (-{tmp_save:.1f}% cost on the same model), and the same template on Haiku 5.5 cuts "
+        f"draft cost by -{h_save:.1f}%." + _quality_callout(results, portfolio)
     )
 
     return Cat2RunResponse(
@@ -524,6 +801,7 @@ async def execute_cat2_run(
         results=results,
         haiku_batch_comparator=haiku_batch,
         output_tax_callout=callout,
+        quality_portfolio=portfolio,
     )
 
 

@@ -1,0 +1,3013 @@
+{
+ "schema_version": 1,
+ "generated_at": "2026-11-25T17:29:19.370333+00:00",
+ "keys_version": "2026-11-25.1",
+ "key_counts": {
+  "audit-01/q1": {
+   "facts": 7,
+   "supplier_specific": 3,
+   "commercial": 3,
+   "structure": 3,
+   "statutory": 1
+  },
+  "audit-01/q2": {
+   "facts": 7,
+   "supplier_specific": 7,
+   "commercial": 7
+  },
+  "audit-01/q3": {
+   "facts": 7,
+   "supplier_specific": 6,
+   "commercial": 6,
+   "structure": 1
+  },
+  "audit-01/q4": {
+   "facts": 5,
+   "supplier_specific": 3,
+   "commercial": 3,
+   "mechanism": 1,
+   "statutory": 1
+  },
+  "audit-02/q1": {
+   "facts": 6,
+   "supplier_specific": 1,
+   "commercial": 1,
+   "statutory": 4,
+   "mechanism": 1
+  },
+  "audit-02/q2": {
+   "facts": 7,
+   "supplier_specific": 7,
+   "commercial": 7
+  },
+  "audit-02/q3": {
+   "facts": 7,
+   "supplier_specific": 3,
+   "statutory": 4,
+   "commercial": 3
+  },
+  "audit-02/q4": {
+   "facts": 7,
+   "supplier_specific": 7,
+   "commercial": 7
+  }
+ },
+ "rung_ids": [
+  "naive_full_corpus",
+  "cached_full_corpus_citations",
+  "hybrid_rag_rerank_citations",
+  "cached_rerank_hybrid"
+ ],
+ "scales": [
+  1,
+  3
+ ],
+ "corpus": {
+  "1": {
+   "scale": 1,
+   "documents": 7,
+   "chunks": 28,
+   "chars": 38758,
+   "estimated_tokens": 16149,
+   "ratio_to_base_chars": 1.0,
+   "chars_per_token_assumed": 2.4
+  },
+  "3": {
+   "scale": 3,
+   "documents": 21,
+   "chunks": 84,
+   "chars": 116511,
+   "estimated_tokens": 48546,
+   "ratio_to_base_chars": 3.006,
+   "chars_per_token_assumed": 2.4
+  }
+ },
+ "rerun": {
+  "record_count": 0,
+  "ok_sessions_used": 0,
+  "groups": {},
+  "per_question": {},
+  "break_even": {
+   "1": [],
+   "3": []
+  },
+  "data_quality": {
+   "error_sessions": [],
+   "non_end_turn_calls": [],
+   "model_mismatches": [],
+   "cache_anomalies": [],
+   "haiku_calls_over_100k_prompt": []
+  }
+ },
+ "original_capture": {
+  "groups": {
+   "naive_full_corpus": {
+    "rung_id": "naive_full_corpus",
+    "scale": 1,
+    "sessions": 1,
+    "answers": 8,
+    "fact_recall": {
+     "hits": 52,
+     "total": 53,
+     "rate": 0.9811320754716981,
+     "ci_low": 0.9005708794749876,
+     "ci_high": 0.9966615466117361
+    },
+    "fact_recall_supplier_specific": {
+     "hits": 37,
+     "total": 37,
+     "rate": 1.0,
+     "ci_low": 0.9059421741627975,
+     "ci_high": 1.0
+    },
+    "fact_recall_non_specific": {
+     "hits": 15,
+     "total": 16,
+     "rate": 0.9375,
+     "ci_low": 0.7167126242970107,
+     "ci_high": 0.9888806552353576
+    },
+    "fact_recall_statutory": {
+     "hits": 9,
+     "total": 10,
+     "rate": 0.9,
+     "ci_low": 0.5958499732047615,
+     "ci_high": 0.9821237869049271
+    },
+    "citations_requested": false,
+    "citations_per_answer_mean": null,
+    "zero_citation_answers": null,
+    "expected_chunk_recall": null,
+    "citations_at_expected": null,
+    "citations_at_deccan": null,
+    "citations_at_distractor": null,
+    "cited_support": null,
+    "contaminated_answers": {
+     "hits": 0,
+     "total": 8,
+     "rate": 0.0,
+     "ci_low": 0.0,
+     "ci_high": 0.32440756488388023
+    },
+    "value_contaminated_answers": {
+     "hits": 0,
+     "total": 8,
+     "rate": 0.0,
+     "ci_low": 0.0,
+     "ci_high": 0.32440756488388023
+    },
+    "citation_contaminated_answers": {
+     "hits": 0,
+     "total": 8,
+     "rate": 0.0,
+     "ci_low": 0.0,
+     "ci_high": 0.32440756488388023
+    },
+    "retrieval": null,
+    "cost_per_question": {
+     "billed": {
+      "sonnet": 0.046288750000000004,
+      "haiku": 0.0,
+      "total": 0.046288750000000004
+     },
+     "cold": {
+      "sonnet": 0.046288750000000004,
+      "haiku": 0.0,
+      "total": 0.046288750000000004
+     },
+     "warm": {
+      "sonnet": 0.046288750000000004,
+      "haiku": 0.0,
+      "total": 0.046288750000000004
+     }
+    },
+    "cost_per_session_8q": {
+     "billed": {
+      "sonnet": 0.37031000000000003,
+      "haiku": 0.0,
+      "total": 0.37031000000000003
+     },
+     "cold": {
+      "sonnet": 0.37031000000000003,
+      "haiku": 0.0,
+      "total": 0.37031000000000003
+     },
+     "warm": {
+      "sonnet": 0.37031000000000003,
+      "haiku": 0.0,
+      "total": 0.37031000000000003
+     }
+    },
+    "cache_write_premium_usd": 0.0,
+    "tokens": {
+     "synthesis": {
+      "prompt": {
+       "mean": 18418.75,
+       "min": 18391,
+       "max": 18438
+      },
+      "output": {
+       "mean": 945.125,
+       "min": 798,
+       "max": 1039
+      },
+      "cache_write": {
+       "mean": 0.0,
+       "min": 0,
+       "max": 0
+      },
+      "cache_read": {
+       "mean": 0.0,
+       "min": 0,
+       "max": 0
+      },
+      "thinking": {
+       "mean": 0.0,
+       "min": 0,
+       "max": 0
+      }
+     }
+    },
+    "judge": null,
+    "per_question": {
+     "audit-01/q1": {
+      "preset_id": "audit-01",
+      "question_id": "q1",
+      "facts": [
+       {
+        "fact_id": "a1q1-cap-4-50-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q1-schedule-b",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "structure",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q1-dpdp-250-cr",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q1-cyber-15-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q1-schedule-c",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "structure",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q1-product-liability-25-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q1-schedule-d",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "structure",
+        "cited_support": null
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 3,
+       "total": 3
+      },
+      "fact_recall_non_specific": {
+       "hits": 4,
+       "total": 4
+      },
+      "fact_recall_statutory": {
+       "hits": 1,
+       "total": 1
+      },
+      "answer_chars": 2041,
+      "citations_requested": false,
+      "citation_count": null,
+      "zero_citations": null,
+      "expected_chunk_recall": null,
+      "citations_at_expected": null,
+      "citations_at_deccan": null,
+      "citations_at_distractor": null,
+      "cited_support": null,
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": null
+     },
+     "audit-01/q2": {
+      "preset_id": "audit-01",
+      "question_id": "q2",
+      "facts": [
+       {
+        "fact_id": "a1q2-peak-otif-98-8",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q2-baseline-otif-96-5",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q2-pallet-fee-1250",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q2-flash-deduction-3-5",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q2-peak-cap-6-5",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q2-baseline-cap-2-0",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q2-baseline-fm-24h",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_non_specific": {
+       "hits": 0,
+       "total": 0
+      },
+      "fact_recall_statutory": {
+       "hits": 0,
+       "total": 0
+      },
+      "answer_chars": 2068,
+      "citations_requested": false,
+      "citation_count": null,
+      "zero_citations": null,
+      "expected_chunk_recall": null,
+      "citations_at_expected": null,
+      "citations_at_deccan": null,
+      "citations_at_distractor": null,
+      "cited_support": null,
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": null
+     },
+     "audit-01/q3": {
+      "preset_id": "audit-01",
+      "question_id": "q3",
+      "facts": [
+       {
+        "fact_id": "a1q3-coc-threshold-25",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q3-tooling-clawback-3-80-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q3-noc-5-business-days",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q3-charge-id",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q3-telemetry-firewall-b2",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "structure",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q3-exclusivity-9-months",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q3-po-hurdle-85-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 6,
+       "total": 6
+      },
+      "fact_recall_non_specific": {
+       "hits": 1,
+       "total": 1
+      },
+      "fact_recall_statutory": {
+       "hits": 0,
+       "total": 0
+      },
+      "answer_chars": 2232,
+      "citations_requested": false,
+      "citation_count": null,
+      "zero_citations": null,
+      "expected_chunk_recall": null,
+      "citations_at_expected": null,
+      "citations_at_deccan": null,
+      "citations_at_distractor": null,
+      "cited_support": null,
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": null
+     },
+     "audit-01/q4": {
+      "preset_id": "audit-01",
+      "question_id": "q4",
+      "facts": [
+       {
+        "fact_id": "a1q4-primary-region",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q4-dr-region",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q4-key-rotation-90-day",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q4-customer-managed-keys",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "mechanism",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a1q4-certin-6-hours",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": null
+       }
+      ],
+      "fact_recall": {
+       "hits": 5,
+       "total": 5
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 3,
+       "total": 3
+      },
+      "fact_recall_non_specific": {
+       "hits": 2,
+       "total": 2
+      },
+      "fact_recall_statutory": {
+       "hits": 1,
+       "total": 1
+      },
+      "answer_chars": 2008,
+      "citations_requested": false,
+      "citation_count": null,
+      "zero_citations": null,
+      "expected_chunk_recall": null,
+      "citations_at_expected": null,
+      "citations_at_deccan": null,
+      "citations_at_distractor": null,
+      "cited_support": null,
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": null
+     },
+     "audit-02/q1": {
+      "preset_id": "audit-02",
+      "question_id": "q1",
+      "facts": [
+       {
+        "fact_id": "a2q1-principal-t-plus-43",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q1-gst-only-holdback",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q1-itc-16-2-aa",
+        "hit": false,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q1-cure-sept-30",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q1-permanent-debit-note",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "mechanism",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q1-interest-sec-50-3",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": null
+       }
+      ],
+      "fact_recall": {
+       "hits": 5,
+       "total": 6
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 1,
+       "total": 1
+      },
+      "fact_recall_non_specific": {
+       "hits": 4,
+       "total": 5
+      },
+      "fact_recall_statutory": {
+       "hits": 3,
+       "total": 4
+      },
+      "answer_chars": 1771,
+      "citations_requested": false,
+      "citation_count": null,
+      "zero_citations": null,
+      "expected_chunk_recall": null,
+      "citations_at_expected": null,
+      "citations_at_deccan": null,
+      "citations_at_distractor": null,
+      "cited_support": null,
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": null
+     },
+     "audit-02/q2": {
+      "preset_id": "audit-02",
+      "question_id": "q2",
+      "facts": [
+       {
+        "fact_id": "a2q2-revenue-312-40",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q2-net-worth-74-10",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q2-gst-dispute-6-85",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q2-pre-deposit-0-685",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q2-dscr-covenant-1-40",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q2-dscr-actual-1-62",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q2-warranty-reserve-2-85",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_non_specific": {
+       "hits": 0,
+       "total": 0
+      },
+      "fact_recall_statutory": {
+       "hits": 0,
+       "total": 0
+      },
+      "answer_chars": 1962,
+      "citations_requested": false,
+      "citation_count": null,
+      "zero_citations": null,
+      "expected_chunk_recall": null,
+      "citations_at_expected": null,
+      "citations_at_deccan": null,
+      "citations_at_distractor": null,
+      "cited_support": null,
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": null
+     },
+     "audit-02/q3": {
+      "preset_id": "audit-02",
+      "question_id": "q3",
+      "facts": [
+       {
+        "fact_id": "a2q3-is-16046",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q3-bis-registration",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q3-epr-expiry",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q3-threshold-100-wh",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q3-class-9",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q3-soc-30-pct",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q3-misdeclaration-5-lakh",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 3,
+       "total": 3
+      },
+      "fact_recall_non_specific": {
+       "hits": 4,
+       "total": 4
+      },
+      "fact_recall_statutory": {
+       "hits": 4,
+       "total": 4
+      },
+      "answer_chars": 1969,
+      "citations_requested": false,
+      "citation_count": null,
+      "zero_citations": null,
+      "expected_chunk_recall": null,
+      "citations_at_expected": null,
+      "citations_at_deccan": null,
+      "citations_at_distractor": null,
+      "cited_support": null,
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": null
+     },
+     "audit-02/q4": {
+      "preset_id": "audit-02",
+      "question_id": "q4",
+      "facts": [
+       {
+        "fact_id": "a2q4-cash-discount-1-75",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q4-peak-cap-6-5",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q4-baseline-cap-2-0",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q4-exclusivity-9-months",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q4-hurdle-date",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q4-interim-42-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q4-rebate-2-75",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_non_specific": {
+       "hits": 0,
+       "total": 0
+      },
+      "fact_recall_statutory": {
+       "hits": 0,
+       "total": 0
+      },
+      "answer_chars": 2084,
+      "citations_requested": false,
+      "citation_count": null,
+      "zero_citations": null,
+      "expected_chunk_recall": null,
+      "citations_at_expected": null,
+      "citations_at_deccan": null,
+      "citations_at_distractor": null,
+      "cited_support": null,
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": null
+     }
+    }
+   },
+   "cached_full_corpus_citations": {
+    "rung_id": "cached_full_corpus_citations",
+    "scale": 1,
+    "sessions": 1,
+    "answers": 8,
+    "fact_recall": {
+     "hits": 52,
+     "total": 53,
+     "rate": 0.9811320754716981,
+     "ci_low": 0.9005708794749876,
+     "ci_high": 0.9966615466117361
+    },
+    "fact_recall_supplier_specific": {
+     "hits": 37,
+     "total": 37,
+     "rate": 1.0,
+     "ci_low": 0.9059421741627975,
+     "ci_high": 1.0
+    },
+    "fact_recall_non_specific": {
+     "hits": 15,
+     "total": 16,
+     "rate": 0.9375,
+     "ci_low": 0.7167126242970107,
+     "ci_high": 0.9888806552353576
+    },
+    "fact_recall_statutory": {
+     "hits": 9,
+     "total": 10,
+     "rate": 0.9,
+     "ci_low": 0.5958499732047615,
+     "ci_high": 0.9821237869049271
+    },
+    "citations_requested": true,
+    "citations_per_answer_mean": 11.125,
+    "zero_citation_answers": {
+     "hits": 0,
+     "total": 8,
+     "rate": 0.0,
+     "ci_low": 0.0,
+     "ci_high": 0.32440756488388023
+    },
+    "expected_chunk_recall": {
+     "hits": 28,
+     "total": 30,
+     "rate": 0.9333333333333333,
+     "ci_low": 0.7867654163738308,
+     "ci_high": 0.9815229762087295
+    },
+    "citations_at_expected": {
+     "hits": 67,
+     "total": 89,
+     "rate": 0.7528089887640449,
+     "ci_low": 0.6539796168565029,
+     "ci_high": 0.8307176355521335
+    },
+    "citations_at_deccan": {
+     "hits": 89,
+     "total": 89,
+     "rate": 1.0,
+     "ci_low": 0.9586234547637477,
+     "ci_high": 1.0
+    },
+    "citations_at_distractor": {
+     "hits": 0,
+     "total": 89,
+     "rate": 0.0,
+     "ci_low": 6.938893903907228e-18,
+     "ci_high": 0.04137654523625251
+    },
+    "cited_support": {
+     "hits": 51,
+     "total": 52,
+     "rate": 0.9807692307692307,
+     "ci_low": 0.8987948887210774,
+     "ci_high": 0.9965971919290547
+    },
+    "contaminated_answers": {
+     "hits": 0,
+     "total": 8,
+     "rate": 0.0,
+     "ci_low": 0.0,
+     "ci_high": 0.32440756488388023
+    },
+    "value_contaminated_answers": {
+     "hits": 0,
+     "total": 8,
+     "rate": 0.0,
+     "ci_low": 0.0,
+     "ci_high": 0.32440756488388023
+    },
+    "citation_contaminated_answers": {
+     "hits": 0,
+     "total": 8,
+     "rate": 0.0,
+     "ci_low": 0.0,
+     "ci_high": 0.32440756488388023
+    },
+    "retrieval": null,
+    "cost_per_question": {
+     "billed": {
+      "sonnet": 0.01979045,
+      "haiku": 0.0,
+      "total": 0.01979045
+     },
+     "cold": {
+      "sonnet": 0.01979045,
+      "haiku": 0.0,
+      "total": 0.01979045
+     },
+     "warm": {
+      "sonnet": 0.01335455,
+      "haiku": 0.0,
+      "total": 0.01335455
+     }
+    },
+    "cost_per_session_8q": {
+     "billed": {
+      "sonnet": 0.1583236,
+      "haiku": 0.0,
+      "total": 0.1583236
+     },
+     "cold": {
+      "sonnet": 0.1583236,
+      "haiku": 0.0,
+      "total": 0.1583236
+     },
+     "warm": {
+      "sonnet": 0.1068364,
+      "haiku": 0.0,
+      "total": 0.1068364
+     }
+    },
+    "cache_write_premium_usd": 0.0514872,
+    "tokens": {
+     "synthesis": {
+      "prompt": {
+       "mean": 21565.75,
+       "min": 21538,
+       "max": 21585
+      },
+      "output": {
+       "mean": 1098.375,
+       "min": 903,
+       "max": 1709
+      },
+      "cache_write": {
+       "mean": 2681.625,
+       "min": 0,
+       "max": 21453
+      },
+      "cache_read": {
+       "mean": 18771.375,
+       "min": 0,
+       "max": 21453
+      },
+      "thinking": {
+       "mean": 0.0,
+       "min": 0,
+       "max": 0
+      }
+     }
+    },
+    "judge": null,
+    "per_question": {
+     "audit-01/q1": {
+      "preset_id": "audit-01",
+      "question_id": "q1",
+      "facts": [
+       {
+        "fact_id": "a1q1-cap-4-50-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q1-schedule-b",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "structure",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q1-dpdp-250-cr",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q1-cyber-15-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q1-schedule-c",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "structure",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q1-product-liability-25-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q1-schedule-d",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "structure",
+        "cited_support": true
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 3,
+       "total": 3
+      },
+      "fact_recall_non_specific": {
+       "hits": 4,
+       "total": 4
+      },
+      "fact_recall_statutory": {
+       "hits": 1,
+       "total": 1
+      },
+      "answer_chars": 1822,
+      "citations_requested": true,
+      "citation_count": 11,
+      "zero_citations": false,
+      "expected_chunk_recall": {
+       "hits": 4,
+       "total": 4
+      },
+      "citations_at_expected": {
+       "hits": 9,
+       "total": 11
+      },
+      "citations_at_deccan": {
+       "hits": 11,
+       "total": 11
+      },
+      "citations_at_distractor": {
+       "hits": 0,
+       "total": 11
+      },
+      "cited_support": {
+       "hits": 7,
+       "total": 7
+      },
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": null
+     },
+     "audit-01/q2": {
+      "preset_id": "audit-01",
+      "question_id": "q2",
+      "facts": [
+       {
+        "fact_id": "a1q2-peak-otif-98-8",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q2-baseline-otif-96-5",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q2-pallet-fee-1250",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q2-flash-deduction-3-5",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q2-peak-cap-6-5",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q2-baseline-cap-2-0",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q2-baseline-fm-24h",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_non_specific": {
+       "hits": 0,
+       "total": 0
+      },
+      "fact_recall_statutory": {
+       "hits": 0,
+       "total": 0
+      },
+      "answer_chars": 1861,
+      "citations_requested": true,
+      "citation_count": 16,
+      "zero_citations": false,
+      "expected_chunk_recall": {
+       "hits": 4,
+       "total": 4
+      },
+      "citations_at_expected": {
+       "hits": 12,
+       "total": 16
+      },
+      "citations_at_deccan": {
+       "hits": 16,
+       "total": 16
+      },
+      "citations_at_distractor": {
+       "hits": 0,
+       "total": 16
+      },
+      "cited_support": {
+       "hits": 7,
+       "total": 7
+      },
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": null
+     },
+     "audit-01/q3": {
+      "preset_id": "audit-01",
+      "question_id": "q3",
+      "facts": [
+       {
+        "fact_id": "a1q3-coc-threshold-25",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q3-tooling-clawback-3-80-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q3-noc-5-business-days",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q3-charge-id",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q3-telemetry-firewall-b2",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "structure",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q3-exclusivity-9-months",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q3-po-hurdle-85-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 6,
+       "total": 6
+      },
+      "fact_recall_non_specific": {
+       "hits": 1,
+       "total": 1
+      },
+      "fact_recall_statutory": {
+       "hits": 0,
+       "total": 0
+      },
+      "answer_chars": 1650,
+      "citations_requested": true,
+      "citation_count": 8,
+      "zero_citations": false,
+      "expected_chunk_recall": {
+       "hits": 3,
+       "total": 4
+      },
+      "citations_at_expected": {
+       "hits": 5,
+       "total": 8
+      },
+      "citations_at_deccan": {
+       "hits": 8,
+       "total": 8
+      },
+      "citations_at_distractor": {
+       "hits": 0,
+       "total": 8
+      },
+      "cited_support": {
+       "hits": 7,
+       "total": 7
+      },
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": null
+     },
+     "audit-01/q4": {
+      "preset_id": "audit-01",
+      "question_id": "q4",
+      "facts": [
+       {
+        "fact_id": "a1q4-primary-region",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q4-dr-region",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q4-key-rotation-90-day",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q4-customer-managed-keys",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "mechanism",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q4-certin-6-hours",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       }
+      ],
+      "fact_recall": {
+       "hits": 5,
+       "total": 5
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 3,
+       "total": 3
+      },
+      "fact_recall_non_specific": {
+       "hits": 2,
+       "total": 2
+      },
+      "fact_recall_statutory": {
+       "hits": 1,
+       "total": 1
+      },
+      "answer_chars": 1665,
+      "citations_requested": true,
+      "citation_count": 11,
+      "zero_citations": false,
+      "expected_chunk_recall": {
+       "hits": 2,
+       "total": 3
+      },
+      "citations_at_expected": {
+       "hits": 6,
+       "total": 11
+      },
+      "citations_at_deccan": {
+       "hits": 11,
+       "total": 11
+      },
+      "citations_at_distractor": {
+       "hits": 0,
+       "total": 11
+      },
+      "cited_support": {
+       "hits": 5,
+       "total": 5
+      },
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": null
+     },
+     "audit-02/q1": {
+      "preset_id": "audit-02",
+      "question_id": "q1",
+      "facts": [
+       {
+        "fact_id": "a2q1-principal-t-plus-43",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q1-gst-only-holdback",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q1-itc-16-2-aa",
+        "hit": false,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q1-cure-sept-30",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q1-permanent-debit-note",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "mechanism",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q1-interest-sec-50-3",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       }
+      ],
+      "fact_recall": {
+       "hits": 5,
+       "total": 6
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 1,
+       "total": 1
+      },
+      "fact_recall_non_specific": {
+       "hits": 4,
+       "total": 5
+      },
+      "fact_recall_statutory": {
+       "hits": 3,
+       "total": 4
+      },
+      "answer_chars": 1823,
+      "citations_requested": true,
+      "citation_count": 9,
+      "zero_citations": false,
+      "expected_chunk_recall": {
+       "hits": 4,
+       "total": 4
+      },
+      "citations_at_expected": {
+       "hits": 7,
+       "total": 9
+      },
+      "citations_at_deccan": {
+       "hits": 9,
+       "total": 9
+      },
+      "citations_at_distractor": {
+       "hits": 0,
+       "total": 9
+      },
+      "cited_support": {
+       "hits": 5,
+       "total": 5
+      },
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": null
+     },
+     "audit-02/q2": {
+      "preset_id": "audit-02",
+      "question_id": "q2",
+      "facts": [
+       {
+        "fact_id": "a2q2-revenue-312-40",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q2-net-worth-74-10",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q2-gst-dispute-6-85",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q2-pre-deposit-0-685",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q2-dscr-covenant-1-40",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q2-dscr-actual-1-62",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q2-warranty-reserve-2-85",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_non_specific": {
+       "hits": 0,
+       "total": 0
+      },
+      "fact_recall_statutory": {
+       "hits": 0,
+       "total": 0
+      },
+      "answer_chars": 1833,
+      "citations_requested": true,
+      "citation_count": 15,
+      "zero_citations": false,
+      "expected_chunk_recall": {
+       "hits": 4,
+       "total": 4
+      },
+      "citations_at_expected": {
+       "hits": 13,
+       "total": 15
+      },
+      "citations_at_deccan": {
+       "hits": 15,
+       "total": 15
+      },
+      "citations_at_distractor": {
+       "hits": 0,
+       "total": 15
+      },
+      "cited_support": {
+       "hits": 7,
+       "total": 7
+      },
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": null
+     },
+     "audit-02/q3": {
+      "preset_id": "audit-02",
+      "question_id": "q3",
+      "facts": [
+       {
+        "fact_id": "a2q3-is-16046",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q3-bis-registration",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": false
+       },
+       {
+        "fact_id": "a2q3-epr-expiry",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q3-threshold-100-wh",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q3-class-9",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q3-soc-30-pct",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q3-misdeclaration-5-lakh",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 3,
+       "total": 3
+      },
+      "fact_recall_non_specific": {
+       "hits": 4,
+       "total": 4
+      },
+      "fact_recall_statutory": {
+       "hits": 4,
+       "total": 4
+      },
+      "answer_chars": 1750,
+      "citations_requested": true,
+      "citation_count": 9,
+      "zero_citations": false,
+      "expected_chunk_recall": {
+       "hits": 3,
+       "total": 3
+      },
+      "citations_at_expected": {
+       "hits": 7,
+       "total": 9
+      },
+      "citations_at_deccan": {
+       "hits": 9,
+       "total": 9
+      },
+      "citations_at_distractor": {
+       "hits": 0,
+       "total": 9
+      },
+      "cited_support": {
+       "hits": 6,
+       "total": 7
+      },
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": null
+     },
+     "audit-02/q4": {
+      "preset_id": "audit-02",
+      "question_id": "q4",
+      "facts": [
+       {
+        "fact_id": "a2q4-cash-discount-1-75",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q4-peak-cap-6-5",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q4-baseline-cap-2-0",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q4-exclusivity-9-months",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q4-hurdle-date",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q4-interim-42-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q4-rebate-2-75",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_non_specific": {
+       "hits": 0,
+       "total": 0
+      },
+      "fact_recall_statutory": {
+       "hits": 0,
+       "total": 0
+      },
+      "answer_chars": 1932,
+      "citations_requested": true,
+      "citation_count": 10,
+      "zero_citations": false,
+      "expected_chunk_recall": {
+       "hits": 4,
+       "total": 4
+      },
+      "citations_at_expected": {
+       "hits": 8,
+       "total": 10
+      },
+      "citations_at_deccan": {
+       "hits": 10,
+       "total": 10
+      },
+      "citations_at_distractor": {
+       "hits": 0,
+       "total": 10
+      },
+      "cited_support": {
+       "hits": 7,
+       "total": 7
+      },
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": null
+     }
+    }
+   },
+   "hybrid_rag_rerank_citations": {
+    "rung_id": "hybrid_rag_rerank_citations",
+    "scale": 1,
+    "sessions": 1,
+    "answers": 8,
+    "fact_recall": {
+     "hits": 51,
+     "total": 53,
+     "rate": 0.9622641509433962,
+     "ci_low": 0.8724571280258164,
+     "ci_high": 0.9895897127241731
+    },
+    "fact_recall_supplier_specific": {
+     "hits": 36,
+     "total": 37,
+     "rate": 0.972972972972973,
+     "ci_low": 0.861759301362695,
+     "ci_high": 0.9952130255480596
+    },
+    "fact_recall_non_specific": {
+     "hits": 15,
+     "total": 16,
+     "rate": 0.9375,
+     "ci_low": 0.7167126242970107,
+     "ci_high": 0.9888806552353576
+    },
+    "fact_recall_statutory": {
+     "hits": 9,
+     "total": 10,
+     "rate": 0.9,
+     "ci_low": 0.5958499732047615,
+     "ci_high": 0.9821237869049271
+    },
+    "citations_requested": true,
+    "citations_per_answer_mean": 10.75,
+    "zero_citation_answers": {
+     "hits": 0,
+     "total": 8,
+     "rate": 0.0,
+     "ci_low": 0.0,
+     "ci_high": 0.32440756488388023
+    },
+    "expected_chunk_recall": {
+     "hits": 29,
+     "total": 30,
+     "rate": 0.9666666666666667,
+     "ci_low": 0.8332960900859082,
+     "ci_high": 0.9940914096183874
+    },
+    "citations_at_expected": {
+     "hits": 69,
+     "total": 86,
+     "rate": 0.8023255813953488,
+     "ci_low": 0.7060408872053765,
+     "ci_high": 0.872756481877663
+    },
+    "citations_at_deccan": {
+     "hits": 86,
+     "total": 86,
+     "rate": 1.0,
+     "ci_low": 0.9572418027142576,
+     "ci_high": 0.9999999999999999
+    },
+    "citations_at_distractor": {
+     "hits": 0,
+     "total": 86,
+     "rate": 0.0,
+     "ci_low": 3.469446951953614e-18,
+     "ci_high": 0.04275819728574222
+    },
+    "cited_support": {
+     "hits": 51,
+     "total": 51,
+     "rate": 1.0,
+     "ci_low": 0.9299533801014687,
+     "ci_high": 1.0
+    },
+    "contaminated_answers": {
+     "hits": 0,
+     "total": 8,
+     "rate": 0.0,
+     "ci_low": 0.0,
+     "ci_high": 0.32440756488388023
+    },
+    "value_contaminated_answers": {
+     "hits": 0,
+     "total": 8,
+     "rate": 0.0,
+     "ci_low": 0.0,
+     "ci_high": 0.32440756488388023
+    },
+    "citation_contaminated_answers": {
+     "hits": 0,
+     "total": 8,
+     "rate": 0.0,
+     "ci_low": 0.0,
+     "ci_high": 0.32440756488388023
+    },
+    "retrieval": {
+     "recall_after_bm25": {
+      "hits": 30,
+      "total": 30,
+      "rate": 1.0,
+      "ci_low": 0.8864866068260312,
+      "ci_high": 0.9999999999999999
+     },
+     "recall_after_rerank": {
+      "hits": 30,
+      "total": 30,
+      "rate": 1.0,
+      "ci_low": 0.8864866068260312,
+      "ci_high": 0.9999999999999999
+     },
+     "distractors_selected": {
+      "hits": 0,
+      "total": 40,
+      "rate": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.08762160119728665
+     },
+     "backfilled": 0,
+     "invalid_picks": 0
+    },
+    "cost_per_question": {
+     "billed": {
+      "sonnet": 0.023256,
+      "haiku": 0.0010753375,
+      "total": 0.0243313375
+     },
+     "cold": {
+      "sonnet": 0.023256,
+      "haiku": 0.0010753375,
+      "total": 0.0243313375
+     },
+     "warm": {
+      "sonnet": 0.023256,
+      "haiku": 0.0010753375,
+      "total": 0.0243313375
+     }
+    },
+    "cost_per_session_8q": {
+     "billed": {
+      "sonnet": 0.186048,
+      "haiku": 0.0086027,
+      "total": 0.1946507
+     },
+     "cold": {
+      "sonnet": 0.186048,
+      "haiku": 0.0086027,
+      "total": 0.1946507
+     },
+     "warm": {
+      "sonnet": 0.186048,
+      "haiku": 0.0086027,
+      "total": 0.1946507
+     }
+    },
+    "cache_write_premium_usd": 0.0,
+    "tokens": {
+     "rerank": {
+      "prompt": {
+       "mean": 9045.875,
+       "min": 8734,
+       "max": 9334
+      },
+      "output": {
+       "mean": 341.5,
+       "min": 330,
+       "max": 357
+      },
+      "cache_write": {
+       "mean": 0.0,
+       "min": 0,
+       "max": 0
+      },
+      "cache_read": {
+       "mean": 0.0,
+       "min": 0,
+       "max": 0
+      },
+      "thinking": {
+       "mean": 0.0,
+       "min": 0,
+       "max": 0
+      }
+     },
+     "synthesis": {
+      "prompt": {
+       "mean": 6116.75,
+       "min": 5742,
+       "max": 6740
+      },
+      "output": {
+       "mean": 1102.25,
+       "min": 960,
+       "max": 1773
+      },
+      "cache_write": {
+       "mean": 0.0,
+       "min": 0,
+       "max": 0
+      },
+      "cache_read": {
+       "mean": 0.0,
+       "min": 0,
+       "max": 0
+      },
+      "thinking": {
+       "mean": 0.0,
+       "min": 0,
+       "max": 0
+      }
+     }
+    },
+    "judge": null,
+    "per_question": {
+     "audit-01/q1": {
+      "preset_id": "audit-01",
+      "question_id": "q1",
+      "facts": [
+       {
+        "fact_id": "a1q1-cap-4-50-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q1-schedule-b",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "structure",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q1-dpdp-250-cr",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q1-cyber-15-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q1-schedule-c",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "structure",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q1-product-liability-25-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q1-schedule-d",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "structure",
+        "cited_support": true
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 3,
+       "total": 3
+      },
+      "fact_recall_non_specific": {
+       "hits": 4,
+       "total": 4
+      },
+      "fact_recall_statutory": {
+       "hits": 1,
+       "total": 1
+      },
+      "answer_chars": 1840,
+      "citations_requested": true,
+      "citation_count": 9,
+      "zero_citations": false,
+      "expected_chunk_recall": {
+       "hits": 4,
+       "total": 4
+      },
+      "citations_at_expected": {
+       "hits": 8,
+       "total": 9
+      },
+      "citations_at_deccan": {
+       "hits": 9,
+       "total": 9
+      },
+      "citations_at_distractor": {
+       "hits": 0,
+       "total": 9
+      },
+      "cited_support": {
+       "hits": 7,
+       "total": 7
+      },
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": {
+       "recall_after_bm25": {
+        "hits": 4,
+        "total": 4
+       },
+       "recall_after_rerank": {
+        "hits": 4,
+        "total": 4
+       },
+       "selected": 5,
+       "distractors_selected": 0,
+       "backfilled": 0,
+       "invalid_picks": 0
+      }
+     },
+     "audit-01/q2": {
+      "preset_id": "audit-01",
+      "question_id": "q2",
+      "facts": [
+       {
+        "fact_id": "a1q2-peak-otif-98-8",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q2-baseline-otif-96-5",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q2-pallet-fee-1250",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q2-flash-deduction-3-5",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q2-peak-cap-6-5",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q2-baseline-cap-2-0",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q2-baseline-fm-24h",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_non_specific": {
+       "hits": 0,
+       "total": 0
+      },
+      "fact_recall_statutory": {
+       "hits": 0,
+       "total": 0
+      },
+      "answer_chars": 1690,
+      "citations_requested": true,
+      "citation_count": 14,
+      "zero_citations": false,
+      "expected_chunk_recall": {
+       "hits": 4,
+       "total": 4
+      },
+      "citations_at_expected": {
+       "hits": 11,
+       "total": 14
+      },
+      "citations_at_deccan": {
+       "hits": 14,
+       "total": 14
+      },
+      "citations_at_distractor": {
+       "hits": 0,
+       "total": 14
+      },
+      "cited_support": {
+       "hits": 7,
+       "total": 7
+      },
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": {
+       "recall_after_bm25": {
+        "hits": 4,
+        "total": 4
+       },
+       "recall_after_rerank": {
+        "hits": 4,
+        "total": 4
+       },
+       "selected": 5,
+       "distractors_selected": 0,
+       "backfilled": 0,
+       "invalid_picks": 0
+      }
+     },
+     "audit-01/q3": {
+      "preset_id": "audit-01",
+      "question_id": "q3",
+      "facts": [
+       {
+        "fact_id": "a1q3-coc-threshold-25",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q3-tooling-clawback-3-80-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q3-noc-5-business-days",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q3-charge-id",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q3-telemetry-firewall-b2",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "structure",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q3-exclusivity-9-months",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q3-po-hurdle-85-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 6,
+       "total": 6
+      },
+      "fact_recall_non_specific": {
+       "hits": 1,
+       "total": 1
+      },
+      "fact_recall_statutory": {
+       "hits": 0,
+       "total": 0
+      },
+      "answer_chars": 2067,
+      "citations_requested": true,
+      "citation_count": 10,
+      "zero_citations": false,
+      "expected_chunk_recall": {
+       "hits": 4,
+       "total": 4
+      },
+      "citations_at_expected": {
+       "hits": 8,
+       "total": 10
+      },
+      "citations_at_deccan": {
+       "hits": 10,
+       "total": 10
+      },
+      "citations_at_distractor": {
+       "hits": 0,
+       "total": 10
+      },
+      "cited_support": {
+       "hits": 7,
+       "total": 7
+      },
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": {
+       "recall_after_bm25": {
+        "hits": 4,
+        "total": 4
+       },
+       "recall_after_rerank": {
+        "hits": 4,
+        "total": 4
+       },
+       "selected": 5,
+       "distractors_selected": 0,
+       "backfilled": 0,
+       "invalid_picks": 0
+      }
+     },
+     "audit-01/q4": {
+      "preset_id": "audit-01",
+      "question_id": "q4",
+      "facts": [
+       {
+        "fact_id": "a1q4-primary-region",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q4-dr-region",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q4-key-rotation-90-day",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q4-customer-managed-keys",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "mechanism",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a1q4-certin-6-hours",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       }
+      ],
+      "fact_recall": {
+       "hits": 5,
+       "total": 5
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 3,
+       "total": 3
+      },
+      "fact_recall_non_specific": {
+       "hits": 2,
+       "total": 2
+      },
+      "fact_recall_statutory": {
+       "hits": 1,
+       "total": 1
+      },
+      "answer_chars": 1904,
+      "citations_requested": true,
+      "citation_count": 10,
+      "zero_citations": false,
+      "expected_chunk_recall": {
+       "hits": 2,
+       "total": 3
+      },
+      "citations_at_expected": {
+       "hits": 6,
+       "total": 10
+      },
+      "citations_at_deccan": {
+       "hits": 10,
+       "total": 10
+      },
+      "citations_at_distractor": {
+       "hits": 0,
+       "total": 10
+      },
+      "cited_support": {
+       "hits": 5,
+       "total": 5
+      },
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": {
+       "recall_after_bm25": {
+        "hits": 3,
+        "total": 3
+       },
+       "recall_after_rerank": {
+        "hits": 3,
+        "total": 3
+       },
+       "selected": 5,
+       "distractors_selected": 0,
+       "backfilled": 0,
+       "invalid_picks": 0
+      }
+     },
+     "audit-02/q1": {
+      "preset_id": "audit-02",
+      "question_id": "q1",
+      "facts": [
+       {
+        "fact_id": "a2q1-principal-t-plus-43",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q1-gst-only-holdback",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q1-itc-16-2-aa",
+        "hit": false,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": null
+       },
+       {
+        "fact_id": "a2q1-cure-sept-30",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q1-permanent-debit-note",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "mechanism",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q1-interest-sec-50-3",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       }
+      ],
+      "fact_recall": {
+       "hits": 5,
+       "total": 6
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 1,
+       "total": 1
+      },
+      "fact_recall_non_specific": {
+       "hits": 4,
+       "total": 5
+      },
+      "fact_recall_statutory": {
+       "hits": 3,
+       "total": 4
+      },
+      "answer_chars": 1835,
+      "citations_requested": true,
+      "citation_count": 9,
+      "zero_citations": false,
+      "expected_chunk_recall": {
+       "hits": 4,
+       "total": 4
+      },
+      "citations_at_expected": {
+       "hits": 8,
+       "total": 9
+      },
+      "citations_at_deccan": {
+       "hits": 9,
+       "total": 9
+      },
+      "citations_at_distractor": {
+       "hits": 0,
+       "total": 9
+      },
+      "cited_support": {
+       "hits": 5,
+       "total": 5
+      },
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": {
+       "recall_after_bm25": {
+        "hits": 4,
+        "total": 4
+       },
+       "recall_after_rerank": {
+        "hits": 4,
+        "total": 4
+       },
+       "selected": 5,
+       "distractors_selected": 0,
+       "backfilled": 0,
+       "invalid_picks": 0
+      }
+     },
+     "audit-02/q2": {
+      "preset_id": "audit-02",
+      "question_id": "q2",
+      "facts": [
+       {
+        "fact_id": "a2q2-revenue-312-40",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q2-net-worth-74-10",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q2-gst-dispute-6-85",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q2-pre-deposit-0-685",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q2-dscr-covenant-1-40",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q2-dscr-actual-1-62",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q2-warranty-reserve-2-85",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_non_specific": {
+       "hits": 0,
+       "total": 0
+      },
+      "fact_recall_statutory": {
+       "hits": 0,
+       "total": 0
+      },
+      "answer_chars": 1763,
+      "citations_requested": true,
+      "citation_count": 12,
+      "zero_citations": false,
+      "expected_chunk_recall": {
+       "hits": 4,
+       "total": 4
+      },
+      "citations_at_expected": {
+       "hits": 12,
+       "total": 12
+      },
+      "citations_at_deccan": {
+       "hits": 12,
+       "total": 12
+      },
+      "citations_at_distractor": {
+       "hits": 0,
+       "total": 12
+      },
+      "cited_support": {
+       "hits": 7,
+       "total": 7
+      },
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": {
+       "recall_after_bm25": {
+        "hits": 4,
+        "total": 4
+       },
+       "recall_after_rerank": {
+        "hits": 4,
+        "total": 4
+       },
+       "selected": 5,
+       "distractors_selected": 0,
+       "backfilled": 0,
+       "invalid_picks": 0
+      }
+     },
+     "audit-02/q3": {
+      "preset_id": "audit-02",
+      "question_id": "q3",
+      "facts": [
+       {
+        "fact_id": "a2q3-is-16046",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q3-bis-registration",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q3-epr-expiry",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q3-threshold-100-wh",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q3-class-9",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q3-soc-30-pct",
+        "hit": true,
+        "supplier_specific": false,
+        "category": "statutory",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q3-misdeclaration-5-lakh",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       }
+      ],
+      "fact_recall": {
+       "hits": 7,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 3,
+       "total": 3
+      },
+      "fact_recall_non_specific": {
+       "hits": 4,
+       "total": 4
+      },
+      "fact_recall_statutory": {
+       "hits": 4,
+       "total": 4
+      },
+      "answer_chars": 1833,
+      "citations_requested": true,
+      "citation_count": 13,
+      "zero_citations": false,
+      "expected_chunk_recall": {
+       "hits": 3,
+       "total": 3
+      },
+      "citations_at_expected": {
+       "hits": 9,
+       "total": 13
+      },
+      "citations_at_deccan": {
+       "hits": 13,
+       "total": 13
+      },
+      "citations_at_distractor": {
+       "hits": 0,
+       "total": 13
+      },
+      "cited_support": {
+       "hits": 7,
+       "total": 7
+      },
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": {
+       "recall_after_bm25": {
+        "hits": 3,
+        "total": 3
+       },
+       "recall_after_rerank": {
+        "hits": 3,
+        "total": 3
+       },
+       "selected": 5,
+       "distractors_selected": 0,
+       "backfilled": 0,
+       "invalid_picks": 0
+      }
+     },
+     "audit-02/q4": {
+      "preset_id": "audit-02",
+      "question_id": "q4",
+      "facts": [
+       {
+        "fact_id": "a2q4-cash-discount-1-75",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q4-peak-cap-6-5",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q4-baseline-cap-2-0",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q4-exclusivity-9-months",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q4-hurdle-date",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q4-interim-42-cr",
+        "hit": true,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": true
+       },
+       {
+        "fact_id": "a2q4-rebate-2-75",
+        "hit": false,
+        "supplier_specific": true,
+        "category": "commercial",
+        "cited_support": null
+       }
+      ],
+      "fact_recall": {
+       "hits": 6,
+       "total": 7
+      },
+      "fact_recall_supplier_specific": {
+       "hits": 6,
+       "total": 7
+      },
+      "fact_recall_non_specific": {
+       "hits": 0,
+       "total": 0
+      },
+      "fact_recall_statutory": {
+       "hits": 0,
+       "total": 0
+      },
+      "answer_chars": 1671,
+      "citations_requested": true,
+      "citation_count": 9,
+      "zero_citations": false,
+      "expected_chunk_recall": {
+       "hits": 4,
+       "total": 4
+      },
+      "citations_at_expected": {
+       "hits": 7,
+       "total": 9
+      },
+      "citations_at_deccan": {
+       "hits": 9,
+       "total": 9
+      },
+      "citations_at_distractor": {
+       "hits": 0,
+       "total": 9
+      },
+      "cited_support": {
+       "hits": 6,
+       "total": 6
+      },
+      "contamination": {
+       "distractor_values": [],
+       "distractor_chunks_cited": [],
+       "distractor_chunks_sent": [],
+       "contaminated": false
+      },
+      "retrieval": {
+       "recall_after_bm25": {
+        "hits": 4,
+        "total": 4
+       },
+       "recall_after_rerank": {
+        "hits": 4,
+        "total": 4
+       },
+       "selected": 5,
+       "distractors_selected": 0,
+       "backfilled": 0,
+       "invalid_picks": 0
+      }
+     }
+    }
+   }
+  },
+  "break_even": [
+   {
+    "a": "cached_full_corpus_citations",
+    "b": "hybrid_rag_rerank_citations",
+    "premium_a_usd": 0.0514872,
+    "per_question_a_usd": 0.01335455,
+    "premium_b_usd": 0.0,
+    "per_question_b_usd": 0.0243313375,
+    "n_star": 4.6905526776390625,
+    "verdict": "A cheaper from question 5",
+    "questions": 5
+   }
+  ]
+ },
+ "judge": {
+  "records": 0,
+  "ok": 0,
+  "spend_usd": 0
+ },
+ "for_lead_review": {
+  "material_errors": [],
+  "contaminated_answers": []
+ }
+}

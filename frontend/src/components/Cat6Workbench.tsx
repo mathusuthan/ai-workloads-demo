@@ -170,6 +170,17 @@ export function Cat6Workbench({
     return rows
   }, [runResponse, naiveRes, isoRes, hybridRes])
 
+  // Shared scale for the per-rung prompt-load meters: the largest rung in this response
+  const promptMeterMax = useMemo(() => {
+    if (!runResponse) return 1
+    return Math.max(
+      1,
+      ...runResponse.results.map(
+        (r) => r.total_uncached_input_tokens + r.total_cache_creation_tokens + r.total_cache_read_tokens
+      )
+    )
+  }, [runResponse])
+
   // Portfolio CpR vs CpO BarChart data ($ / 1,000 PRs)
   const portfolioBarData = useMemo(() => {
     if (!runResponse?.portfolio_scorecard) return []
@@ -355,7 +366,7 @@ export function Cat6Workbench({
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  Warm Repo Prefix Cache ($0.20/$0.01M)
+                  Warm Repo Prefix Cache ($0.10/$0.01M)
                 </button>
               </div>
             </div>
@@ -484,15 +495,15 @@ export function Cat6Workbench({
                     {/* Native <progress> Band 5 Context Consumption Meter (empty element per progress guide) */}
                     <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-2.5">
                       <div className="mb-1 flex items-center justify-between text-[10px] font-bold text-slate-600">
-                        <span>Band 5 Prompt Context Load</span>
+                        <span>Prompt Tokens / Run (vs. largest rung)</span>
                         <span className="font-mono">
-                          {totPrompt.toLocaleString()} / 150,000 tok
+                          {totPrompt.toLocaleString()} / {promptMeterMax.toLocaleString()} tok
                         </span>
                       </div>
                       <progress
                         className="mwg-progress"
-                        max={150000}
-                        value={Math.min(150000, totPrompt)}
+                        max={promptMeterMax}
+                        value={Math.min(promptMeterMax, totPrompt)}
                         aria-label={`${r.rung_title} prompt token load`}
                         style={
                           {
@@ -623,10 +634,10 @@ export function Cat6Workbench({
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-extrabold text-slate-900">
-                    Vanity CpR vs. True Cost per Verified Outcome (CpO)
+                    Cost per Run (CpR) vs. Cost per Verified Outcome (CpO)
                   </h2>
                   <p className="text-[11px] text-slate-500">
-                    3-PR Portfolio ($ per 1,000 runs vs. $ per 1,000 Sandbox-Verified PR Merges)
+                    3-PR Portfolio ($ per 1,000 runs vs. $ per 1,000 sandbox-verified PRs; equal when every run verifies)
                   </p>
                 </div>
                 <GitBranch className="h-4 w-4 text-violet-700" />
@@ -732,12 +743,16 @@ export function Cat6Workbench({
                             ${cpr.toFixed(2)}
                           </td>
                           <td className="px-4 py-3 text-right font-mono font-extrabold text-violet-900">
-                            {cpo > 0 ? `$${cpo.toFixed(2)}` : 'Unverified (∞)'}
+                            {cpo != null && cpo > 0 ? `$${cpo.toFixed(2)}` : 'Unverified (∞)'}
                           </td>
                           <td className="px-4 py-3 text-right font-mono font-bold text-violet-800">
-                            {row.cpo_savings_vs_naive_cold_pct > 0
-                              ? `-${row.cpo_savings_vs_naive_cold_pct.toFixed(1)}%`
-                              : 'Baseline'}
+                            {row.rung_id === 'unisolated_broadcast_swarm'
+                              ? 'Baseline'
+                              : row.cpo_savings_vs_naive_cold_pct == null
+                                ? 'n/a (no verified baseline)'
+                                : row.cpo_savings_vs_naive_cold_pct >= 0
+                                  ? `-${row.cpo_savings_vs_naive_cold_pct.toFixed(1)}%`
+                                  : `+${(-row.cpo_savings_vs_naive_cold_pct).toFixed(1)}%`}
                           </td>
                         </tr>
                       )
@@ -931,7 +946,7 @@ export function Cat6Workbench({
             })}
           </section>
 
-          {/* Band 5 Per-Developer Daily Token (1.5M-10M+ tok/day) & Org CpO Simulator */}
+          {/* Per-Developer Daily Token & Org Cost Simulator (projected from this incident's measured runs) */}
           {naiveRes && isoRes && hybridRes && (
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -943,8 +958,8 @@ export function Cat6Workbench({
                       Swarm Runs / Dev / Day)
                     </h2>
                     <p className="text-[11px] text-slate-500">
-                      Models per-developer daily token burn (`1.5M–10M+ tok/day`) and monthly
-                      engineering CpO across swarm architectures
+                      Projects per-developer daily tokens and monthly org cost from each rung&apos;s
+                      measured tokens and cost per run on this incident
                     </p>
                   </div>
                 </div>

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from app.models import FinOpsBreakdown, JevReferenceComparison
 
@@ -27,9 +28,9 @@ MODEL_RATES: dict[str, ModelRateSpec] = {
         input_per_1m_usd=2.00,
         output_per_1m_usd=10.00,
         cache_write_per_1m_usd=2.50,
-        cache_read_per_1m_usd=0.20,
+        cache_read_per_1m_usd=0.10,
         output_rate_multiplier="5x output weight",
-        notes="Frontier coding & reasoning tier; 5x output token multiplier.",
+        notes="Frontier coding & reasoning tier; 5x output token multiplier; cache reads $0.10/M (-95%).",
     ),
     "claude-haiku-5-5": ModelRateSpec(
         model_id="claude-haiku-5-5",
@@ -151,6 +152,53 @@ def compute_run_finops(
         io_ratio_label=io_ratio_label,
         output_cost_share_pct=output_share,
         output_rate_multiplier=rate.output_rate_multiplier,
+    )
+
+
+def rollup_multi_call_finops(
+    *,
+    calls: Sequence[FinOpsBreakdown],
+    total_cost_usd: float,
+    model_id: str,
+    model_label: str,
+) -> FinOpsBreakdown:
+    """Roll per-call breakdowns of a multi-step / multi-model run into one consistent FinOpsBreakdown.
+
+    `total_cost_usd` is the run's headline cost (e.g. the cold-cache figure), which may differ from the
+    sum of the per-call billed costs. Output cost is summed per call at each call's own model rate; input
+    cost is the remainder, so input_cost_usd + output_cost_usd == total_cost_usd always holds.
+    """
+    in_tok = sum(c.input_tokens for c in calls)
+    out_tok = sum(c.output_tokens for c in calls)
+    cw_tok = sum(c.cache_creation_tokens for c in calls)
+    cr_tok = sum(c.cache_read_tokens for c in calls)
+    prompt_tok = in_tok + cw_tok + cr_tok
+    output_cost = min(sum(c.output_cost_usd for c in calls), total_cost_usd)
+    input_cost = max(0.0, total_cost_usd - output_cost)
+    if out_tok > 0:
+        io_ratio: float | None = round(prompt_tok / out_tok, 1)
+        io_ratio_label = f"{io_ratio}:1"
+    else:
+        io_ratio, io_ratio_label = None, "∞ (0 out)"
+    return FinOpsBreakdown(
+        model_id=model_id,
+        model_label=model_label,
+        provider="Anthropic",
+        input_tokens=in_tok,
+        output_tokens=out_tok,
+        cache_creation_tokens=cw_tok,
+        cache_read_tokens=cr_tok,
+        total_tokens=prompt_tok + out_tok,
+        input_cost_usd=round(input_cost, 8),
+        output_cost_usd=round(output_cost, 8),
+        total_cost_usd=round(total_cost_usd, 8),
+        cost_per_1k_usd=round(total_cost_usd * 1_000, 4),
+        monthly_cost_at_100k_usd=round(total_cost_usd * 100_000, 2),
+        annual_cost_at_1m_per_mo_usd=round(total_cost_usd * 12_000_000, 2),
+        io_ratio=io_ratio,
+        io_ratio_label=io_ratio_label,
+        output_cost_share_pct=round(output_cost / total_cost_usd * 100, 1) if total_cost_usd > 0 else 0.0,
+        output_rate_multiplier="5x output weight",
     )
 
 

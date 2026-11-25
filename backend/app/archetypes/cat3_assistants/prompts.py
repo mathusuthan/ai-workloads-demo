@@ -14,7 +14,7 @@ RUNG_RETENTION_FOOTERS: dict[str, str] = {
     ),
     "prefix_cached_history": (
         "[SESSION_RETENTION_POLICY: prefix_cached_history | mode=ephemeral_prefix_cache_full_tail | "
-        "Note: Handbook prefix cached via cache_control=ephemeral (90% read discount), while full conversation history stays verbatim.]"
+        "Note: Handbook prefix cached via cache_control=ephemeral (95% read discount), while full conversation history stays verbatim.]"
     ),
     "prefix_cached_summarized": (
         "[SESSION_RETENTION_POLICY: prefix_cached_summarized | mode=ephemeral_prefix_cache_sliding_summary | "
@@ -27,7 +27,7 @@ def build_cat3_system_handbook(
     rung_id: str,
     employee_profile: dict[str, Any],
 ) -> str:
-    """Build deterministic >=5k-token IT & HR Handbook prefix + employee context + rung policy tag."""
+    """Build the deterministic IT & HR Handbook prefix (~9.86k tokens measured) + employee context + rung policy tag."""
     profile_block = json.dumps(employee_profile, indent=2)
     footer = RUNG_RETENTION_FOOTERS.get(rung_id, RUNG_RETENTION_FOOTERS["prefix_cached_summarized"])
     return (
@@ -45,7 +45,11 @@ def build_cat3_system_handbook(
 
 
 def get_memory_summarizer_system_prompt() -> str:
-    """Strict lossless state compressor prompt keeping compacted JSON compact and complete."""
+    """State compressor prompt for the compacted JSON memory.
+
+    Compaction is lossy: the Category 3 quality rerun shows specifics from evicted turns are dropped, so the
+    assistant can no longer recall them (replays/cat3_quality_summary.json).
+    """
     return (
         "You are NovaMart Service Desk's Sliding-Window Memory Compactor.\n"
         "Merge prior session memory with newly evicted turns into a compact, single-line minified JSON state snapshot (no newlines or indentation).\n"
@@ -62,7 +66,7 @@ def get_memory_summarizer_system_prompt() -> str:
 
 CAT3_CODE_SNIPPETS: dict[str, str] = {
     "naive_full_history": """# RUNG 1 ANTI-PATTERN: Uncached Full History (Quadratic O(N^2) Bill on Sonnet 5.5)
-# Re-sends ~9,680-tok IT/HR Handbook + growing verbatim chat history @ $2.00/M every turn
+# Re-sends ~9,860-tok IT/HR Handbook + growing verbatim chat history @ $2.00/M every turn
 resp = await client.messages.create(
     model="claude-sonnet-5-5",
     max_tokens=4096,
@@ -70,8 +74,8 @@ resp = await client.messages.create(
     system=full_handbook_and_profile,  # NO cache_control! Billed $2.00/M every turn
     messages=all_verbatim_turns_1_to_k,  # Grows linearly -> cumulative cost scales O(N^2)
 )""",
-    "prefix_cached_history": """# RUNG 2 LEVER 1: Anthropic Prefix Context Caching (-90% Cache Read Discount)
-# Pays 1.25x ($2.50/M) once on cold Turn 1 (or $0.20/M warm fleet), then $0.20/M on Turns 2..10
+    "prefix_cached_history": """# RUNG 2 LEVER 1: Anthropic Prefix Context Caching (-95% Cache Read Discount)
+# Pays 1.25x ($2.50/M) once on cold Turn 1 (or $0.10/M warm fleet), then $0.10/M on Turns 2..10
 # Note: Raw multi-turn logs in `messages` still grow uncached at $2.00/M!
 resp = await client.messages.create(
     model="claude-sonnet-5-5",
@@ -80,13 +84,14 @@ resp = await client.messages.create(
     system=[{
         "type": "text",
         "text": full_handbook_and_profile,
-        "cache_control": {"type": "ephemeral"},  # >= 4,096 tok cache floor satisfied (~9.7k tok)
+        "cache_control": {"type": "ephemeral"},  # >= 4,096 tok cache floor satisfied (~9.86k tok measured)
     }],
     messages=all_verbatim_turns_1_to_k,
 )""",
     "prefix_cached_summarized": """# RUNG 3 LEVER 1 + LEVER 2: Prefix Caching + Sliding-Window Memory Summarization
 # Compacts older turns when uncompacted window hits 4 turns ([T1..T3] before Turn 5, +[T4..T6] before Turn 8)
 # Keeps active tail flat while preserving cached handbook prefix — net savings INCLUDES 100% summarizer cost!
+# Trade-off: compaction is lossy — specifics dropped from memory can't be recalled in later turns.
 if len(verbatim_turns) >= 4:
     evict, keep = verbatim_turns[:-1], verbatim_turns[-1:]
     memory_summary = await summarize_memory(prior_summary=memory_summary, evicted_turns=evict)

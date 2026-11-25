@@ -39,32 +39,27 @@ def _validate_rung(
     res: Cat6RungResult,
     raw_rung: dict[str, Any],
 ) -> str | None:
+    """Infrastructure checks only — a run is NEVER rejected because of its outcome.
+
+    The earlier version rejected governed runs whose sandbox failed (and shared-bus runs under 100k prompt
+    tokens), then re-ran them until they passed. That outcome-based selection guaranteed the governed rungs'
+    3/3 and biased the recorded comparison; it was one of the reasons the first Category 6 capture was
+    replaced by the fair rerun. A failed sandbox is a result to keep, not a capture error.
+
+    Rejected only when the run itself is broken: an error status, fewer than 5 agent turns, an empty patch
+    on the shared-bus rung, a cached rung whose turn 1 did not carry the cached repo prefix or whose turn 2
+    did not read it, or a tiered rung that did not use >=4 Haiku turns and >=1 Sonnet turn.
+    """
     if res.status != "ok":
         return f"status={res.status} error={res.error_message}"
     turns = raw_rung.get("agent_turns") or []
     if len(turns) < 5:
         return f"Expected >= 5 agent turns, got {len(turns)}"
 
-    tot_prompt = (
-        res.total_uncached_input_tokens
-        + res.total_cache_creation_tokens
-        + res.total_cache_read_tokens
-    )
     if rid == "unisolated_broadcast_swarm":
         if not (res.patched_code or "").strip():
             return "Rung 1 failed to extract non-empty patched_code"
-        if tot_prompt < 100_000:
-            return f"Rung 1 below 100k Band 5 threshold (got {tot_prompt})"
         return None
-
-    sbx = res.sandbox_report
-    if not sbx or not sbx.verified_outcome:
-        fails = [
-            f"{c.check_id}:{c.detail[:120]}"
-            for c in (sbx.checks if sbx else [])
-            if not c.passed
-        ]
-        return f"Sandbox failed ({sbx.passed_checks if sbx else 0}/10): {fails}"
 
     t0 = turns[0]
     if int(t0.get("cache_creation_tokens") or 0) + int(t0.get("cache_read_tokens") or 0) < 4096:
@@ -74,12 +69,8 @@ def _validate_rung(
     if int(t1.get("cache_read_tokens") or 0) < 4096:
         return f"Turn 2 missed prefix cache hit on shared repo (cr={t1.get('cache_read_tokens')})"
 
-    if rid == "tiered_hybrid_cpo_swarm":
-        if res.haiku_turns < 4 or res.sonnet_turns < 1:
-            return f"Expected >=4 Haiku turns and >=1 Sonnet turn, got H={res.haiku_turns}/S={res.sonnet_turns}"
-        last_turn = turns[-1]
-        if int(last_turn.get("cache_read_tokens") or 0) < 4096:
-            return f"Final Haiku merge turn missed prefix cache read (cr={last_turn.get('cache_read_tokens')})"
+    if rid == "tiered_hybrid_cpo_swarm" and (res.haiku_turns < 4 or res.sonnet_turns < 1):
+        return f"Expected >=4 Haiku turns and >=1 Sonnet turn, got H={res.haiku_turns}/S={res.sonnet_turns}"
 
     return None
 

@@ -1,0 +1,2401 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-25T15:29:13.001929+00:00",
+  "arm_ids": [
+    "shared_bus_original",
+    "shared_bus_matched_gate",
+    "isolated_cached_gate",
+    "tiered_gate"
+  ],
+  "preset_ids": [
+    "inc-01",
+    "inc-02",
+    "inc-03"
+  ],
+  "expected_repeats": 5,
+  "record_count": 60,
+  "ok_runs_used": 60,
+  "superseded_ok_records": 0,
+  "error_records": 0,
+  "matrix": {
+    "expected_runs": 60,
+    "complete": true,
+    "balanced": true,
+    "missing_keys": [],
+    "ok_runs_per_cell": {
+      "shared_bus_original|inc-01": 5,
+      "shared_bus_original|inc-02": 5,
+      "shared_bus_original|inc-03": 5,
+      "shared_bus_matched_gate|inc-01": 5,
+      "shared_bus_matched_gate|inc-02": 5,
+      "shared_bus_matched_gate|inc-03": 5,
+      "isolated_cached_gate|inc-01": 5,
+      "isolated_cached_gate|inc-02": 5,
+      "isolated_cached_gate|inc-03": 5,
+      "tiered_gate|inc-01": 5,
+      "tiered_gate|inc-02": 5,
+      "tiered_gate|inc-03": 5
+    }
+  },
+  "errors": [],
+  "error_spend_usd": 0,
+  "model_fallbacks": [],
+  "max_tokens_stopped_turns": [],
+  "arms": {
+    "shared_bus_original": {
+      "runs": 15,
+      "first_attempt_verified": 12,
+      "first_attempt_verified_rate": 0.8,
+      "first_attempt_verified_wilson95": [
+        0.5481455128483065,
+        0.9295245065301844
+      ],
+      "final_verified": 12,
+      "final_verified_rate": 0.8,
+      "final_verified_wilson95": [
+        0.5481455128483065,
+        0.9295245065301844
+      ],
+      "first_attempt_checks_passed": 147,
+      "first_attempt_checks_total": 150,
+      "final_checks_passed": 147,
+      "final_checks_total": 150,
+      "retries_used": 0,
+      "retries_fail_to_pass": 0,
+      "failure_breakdown": {
+        "final_failed_runs": 3,
+        "runs_with_failing_category": {
+          "ci_unit": 0,
+          "adversarial": 0,
+          "ast": 3
+        },
+        "failing_checks_by_category": {
+          "ci_unit": 0,
+          "adversarial": 0,
+          "ast": 3
+        },
+        "patch_author_stopped_on_max_tokens": 0,
+        "no_fenced_patch_extracted": 0
+      },
+      "max_tokens_stops": {
+        "turns": 0,
+        "total_turns": 75,
+        "by_role": {
+          "orchestrator_plan": {
+            "max_tokens": 0,
+            "total": 15
+          },
+          "ci_triager": {
+            "max_tokens": 0,
+            "total": 15
+          },
+          "patch_author": {
+            "max_tokens": 0,
+            "total": 15
+          },
+          "security_critic": {
+            "max_tokens": 0,
+            "total": 15
+          },
+          "orchestrator_merge": {
+            "max_tokens": 0,
+            "total": 15
+          }
+        }
+      },
+      "tokens_per_run": {
+        "uncached_input": {
+          "mean": 246633.2,
+          "min": 228556,
+          "max": 257785
+        },
+        "cache_write": {
+          "mean": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "cache_read": {
+          "mean": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "output": {
+          "mean": 20283.466666666667,
+          "min": 12035,
+          "max": 25663
+        },
+        "thinking": {
+          "mean": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      },
+      "cost_per_run_usd": {
+        "billed": {
+          "mean": 0.6961010666666667,
+          "min": 0.577462,
+          "max": 0.7722
+        },
+        "cold": {
+          "mean": 0.6961010666666667,
+          "min": 0.577462,
+          "max": 0.7722
+        },
+        "warm": {
+          "mean": 0.6961010666666667,
+          "min": 0.577462,
+          "max": 0.7722
+        }
+      },
+      "cost_per_1k_runs_usd": {
+        "billed": 696.1010666666667,
+        "cold": 696.1010666666667,
+        "warm": 696.1010666666667
+      },
+      "total_spend_usd": {
+        "billed": 10.441516,
+        "cold": 10.441516,
+        "warm": 10.441516
+      },
+      "cost_per_verified_outcome_usd": {
+        "billed": 0.8701263333333333,
+        "cold": 0.8701263333333333,
+        "warm": 0.8701263333333333
+      },
+      "cost_per_first_attempt_verified_outcome_usd": {
+        "billed": 0.8701263333333333,
+        "cold": 0.8701263333333333,
+        "warm": 0.8701263333333333
+      },
+      "model_latency_ms_per_run": {
+        "mean": 154679.4,
+        "min": 94363.0,
+        "max": 199790.0
+      },
+      "error_records": 0,
+      "missing_keys": [],
+      "by_preset": {
+        "inc-01": {
+          "runs": 5,
+          "first_attempt_verified": 5,
+          "first_attempt_verified_rate": 1.0,
+          "first_attempt_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "final_verified": 5,
+          "final_verified_rate": 1.0,
+          "final_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "first_attempt_checks_passed": 50,
+          "first_attempt_checks_total": 50,
+          "final_checks_passed": 50,
+          "final_checks_total": 50,
+          "retries_used": 0,
+          "retries_fail_to_pass": 0,
+          "failure_breakdown": {
+            "final_failed_runs": 0,
+            "runs_with_failing_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "failing_checks_by_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "patch_author_stopped_on_max_tokens": 0,
+            "no_fenced_patch_extracted": 0
+          },
+          "max_tokens_stops": {
+            "turns": 0,
+            "total_turns": 25,
+            "by_role": {
+              "orchestrator_plan": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "ci_triager": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "patch_author": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "security_critic": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "orchestrator_merge": {
+                "max_tokens": 0,
+                "total": 5
+              }
+            }
+          },
+          "tokens_per_run": {
+            "uncached_input": {
+              "mean": 249934.0,
+              "min": 245112,
+              "max": 256483
+            },
+            "cache_write": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            },
+            "cache_read": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            },
+            "output": {
+              "mean": 20940.6,
+              "min": 18762,
+              "max": 24763
+            },
+            "thinking": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            }
+          },
+          "cost_per_run_usd": {
+            "billed": {
+              "mean": 0.709274,
+              "min": 0.677844,
+              "max": 0.760596
+            },
+            "cold": {
+              "mean": 0.709274,
+              "min": 0.677844,
+              "max": 0.760596
+            },
+            "warm": {
+              "mean": 0.709274,
+              "min": 0.677844,
+              "max": 0.760596
+            }
+          },
+          "cost_per_1k_runs_usd": {
+            "billed": 709.274,
+            "cold": 709.274,
+            "warm": 709.274
+          },
+          "total_spend_usd": {
+            "billed": 3.54637,
+            "cold": 3.54637,
+            "warm": 3.54637
+          },
+          "cost_per_verified_outcome_usd": {
+            "billed": 0.709274,
+            "cold": 0.709274,
+            "warm": 0.709274
+          },
+          "cost_per_first_attempt_verified_outcome_usd": {
+            "billed": 0.709274,
+            "cold": 0.709274,
+            "warm": 0.709274
+          },
+          "model_latency_ms_per_run": {
+            "mean": 156021.6,
+            "min": 136201.0,
+            "max": 189517.0
+          },
+          "error_records": 0
+        },
+        "inc-02": {
+          "runs": 5,
+          "first_attempt_verified": 2,
+          "first_attempt_verified_rate": 0.4,
+          "first_attempt_verified_wilson95": [
+            0.11762077423264783,
+            0.769275718723987
+          ],
+          "final_verified": 2,
+          "final_verified_rate": 0.4,
+          "final_verified_wilson95": [
+            0.11762077423264783,
+            0.769275718723987
+          ],
+          "first_attempt_checks_passed": 47,
+          "first_attempt_checks_total": 50,
+          "final_checks_passed": 47,
+          "final_checks_total": 50,
+          "retries_used": 0,
+          "retries_fail_to_pass": 0,
+          "failure_breakdown": {
+            "final_failed_runs": 3,
+            "runs_with_failing_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 3
+            },
+            "failing_checks_by_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 3
+            },
+            "patch_author_stopped_on_max_tokens": 0,
+            "no_fenced_patch_extracted": 0
+          },
+          "max_tokens_stops": {
+            "turns": 0,
+            "total_turns": 25,
+            "by_role": {
+              "orchestrator_plan": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "ci_triager": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "patch_author": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "security_critic": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "orchestrator_merge": {
+                "max_tokens": 0,
+                "total": 5
+              }
+            }
+          },
+          "tokens_per_run": {
+            "uncached_input": {
+              "mean": 249481.0,
+              "min": 240717,
+              "max": 257785
+            },
+            "cache_write": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            },
+            "cache_read": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            },
+            "output": {
+              "mean": 22258.2,
+              "min": 18201,
+              "max": 25663
+            },
+            "thinking": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            }
+          },
+          "cost_per_run_usd": {
+            "billed": {
+              "mean": 0.721544,
+              "min": 0.6634439999999999,
+              "max": 0.7722
+            },
+            "cold": {
+              "mean": 0.721544,
+              "min": 0.663444,
+              "max": 0.7722
+            },
+            "warm": {
+              "mean": 0.721544,
+              "min": 0.663444,
+              "max": 0.7722
+            }
+          },
+          "cost_per_1k_runs_usd": {
+            "billed": 721.544,
+            "cold": 721.544,
+            "warm": 721.544
+          },
+          "total_spend_usd": {
+            "billed": 3.60772,
+            "cold": 3.60772,
+            "warm": 3.60772
+          },
+          "cost_per_verified_outcome_usd": {
+            "billed": 1.80386,
+            "cold": 1.80386,
+            "warm": 1.80386
+          },
+          "cost_per_first_attempt_verified_outcome_usd": {
+            "billed": 1.80386,
+            "cold": 1.80386,
+            "warm": 1.80386
+          },
+          "model_latency_ms_per_run": {
+            "mean": 171879.0,
+            "min": 143038.0,
+            "max": 199790.0
+          },
+          "error_records": 0
+        },
+        "inc-03": {
+          "runs": 5,
+          "first_attempt_verified": 5,
+          "first_attempt_verified_rate": 1.0,
+          "first_attempt_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "final_verified": 5,
+          "final_verified_rate": 1.0,
+          "final_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "first_attempt_checks_passed": 50,
+          "first_attempt_checks_total": 50,
+          "final_checks_passed": 50,
+          "final_checks_total": 50,
+          "retries_used": 0,
+          "retries_fail_to_pass": 0,
+          "failure_breakdown": {
+            "final_failed_runs": 0,
+            "runs_with_failing_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "failing_checks_by_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "patch_author_stopped_on_max_tokens": 0,
+            "no_fenced_patch_extracted": 0
+          },
+          "max_tokens_stops": {
+            "turns": 0,
+            "total_turns": 25,
+            "by_role": {
+              "orchestrator_plan": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "ci_triager": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "patch_author": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "security_critic": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "orchestrator_merge": {
+                "max_tokens": 0,
+                "total": 5
+              }
+            }
+          },
+          "tokens_per_run": {
+            "uncached_input": {
+              "mean": 240484.6,
+              "min": 228556,
+              "max": 247119
+            },
+            "cache_write": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            },
+            "cache_read": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            },
+            "output": {
+              "mean": 17651.6,
+              "min": 12035,
+              "max": 21740
+            },
+            "thinking": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            }
+          },
+          "cost_per_run_usd": {
+            "billed": {
+              "mean": 0.6574852,
+              "min": 0.577462,
+              "max": 0.711638
+            },
+            "cold": {
+              "mean": 0.6574852,
+              "min": 0.577462,
+              "max": 0.711638
+            },
+            "warm": {
+              "mean": 0.6574852,
+              "min": 0.577462,
+              "max": 0.711638
+            }
+          },
+          "cost_per_1k_runs_usd": {
+            "billed": 657.4852,
+            "cold": 657.4852,
+            "warm": 657.4852
+          },
+          "total_spend_usd": {
+            "billed": 3.287426,
+            "cold": 3.287426,
+            "warm": 3.287426
+          },
+          "cost_per_verified_outcome_usd": {
+            "billed": 0.6574852,
+            "cold": 0.6574852,
+            "warm": 0.6574852
+          },
+          "cost_per_first_attempt_verified_outcome_usd": {
+            "billed": 0.6574852,
+            "cold": 0.6574852,
+            "warm": 0.6574852
+          },
+          "model_latency_ms_per_run": {
+            "mean": 136137.6,
+            "min": 94363.0,
+            "max": 159013.0
+          },
+          "error_records": 0
+        }
+      }
+    },
+    "shared_bus_matched_gate": {
+      "runs": 15,
+      "first_attempt_verified": 15,
+      "first_attempt_verified_rate": 1.0,
+      "first_attempt_verified_wilson95": [
+        0.7961166989641515,
+        1.0
+      ],
+      "final_verified": 15,
+      "final_verified_rate": 1.0,
+      "final_verified_wilson95": [
+        0.7961166989641515,
+        1.0
+      ],
+      "first_attempt_checks_passed": 150,
+      "first_attempt_checks_total": 150,
+      "final_checks_passed": 150,
+      "final_checks_total": 150,
+      "retries_used": 0,
+      "retries_fail_to_pass": 0,
+      "failure_breakdown": {
+        "final_failed_runs": 0,
+        "runs_with_failing_category": {
+          "ci_unit": 0,
+          "adversarial": 0,
+          "ast": 0
+        },
+        "failing_checks_by_category": {
+          "ci_unit": 0,
+          "adversarial": 0,
+          "ast": 0
+        },
+        "patch_author_stopped_on_max_tokens": 0,
+        "no_fenced_patch_extracted": 0
+      },
+      "max_tokens_stops": {
+        "turns": 0,
+        "total_turns": 75,
+        "by_role": {
+          "orchestrator_plan": {
+            "max_tokens": 0,
+            "total": 15
+          },
+          "ci_triager": {
+            "max_tokens": 0,
+            "total": 15
+          },
+          "patch_author": {
+            "max_tokens": 0,
+            "total": 15
+          },
+          "security_critic": {
+            "max_tokens": 0,
+            "total": 15
+          },
+          "orchestrator_merge": {
+            "max_tokens": 0,
+            "total": 15
+          }
+        }
+      },
+      "tokens_per_run": {
+        "uncached_input": {
+          "mean": 214112.33333333334,
+          "min": 212868,
+          "max": 216003
+        },
+        "cache_write": {
+          "mean": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "cache_read": {
+          "mean": 0.0,
+          "min": 0,
+          "max": 0
+        },
+        "output": {
+          "mean": 4079.0666666666666,
+          "min": 3851,
+          "max": 4392
+        },
+        "thinking": {
+          "mean": 0.0,
+          "min": 0,
+          "max": 0
+        }
+      },
+      "cost_per_run_usd": {
+        "billed": {
+          "mean": 0.46901533333333334,
+          "min": 0.464246,
+          "max": 0.475926
+        },
+        "cold": {
+          "mean": 0.46901533333333334,
+          "min": 0.464246,
+          "max": 0.475926
+        },
+        "warm": {
+          "mean": 0.46901533333333334,
+          "min": 0.464246,
+          "max": 0.475926
+        }
+      },
+      "cost_per_1k_runs_usd": {
+        "billed": 469.01533333333333,
+        "cold": 469.01533333333333,
+        "warm": 469.01533333333333
+      },
+      "total_spend_usd": {
+        "billed": 7.03523,
+        "cold": 7.03523,
+        "warm": 7.03523
+      },
+      "cost_per_verified_outcome_usd": {
+        "billed": 0.46901533333333334,
+        "cold": 0.46901533333333334,
+        "warm": 0.46901533333333334
+      },
+      "cost_per_first_attempt_verified_outcome_usd": {
+        "billed": 0.46901533333333334,
+        "cold": 0.46901533333333334,
+        "warm": 0.46901533333333334
+      },
+      "model_latency_ms_per_run": {
+        "mean": 30758.733333333334,
+        "min": 27733.0,
+        "max": 46527.0
+      },
+      "error_records": 0,
+      "missing_keys": [],
+      "by_preset": {
+        "inc-01": {
+          "runs": 5,
+          "first_attempt_verified": 5,
+          "first_attempt_verified_rate": 1.0,
+          "first_attempt_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "final_verified": 5,
+          "final_verified_rate": 1.0,
+          "final_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "first_attempt_checks_passed": 50,
+          "first_attempt_checks_total": 50,
+          "final_checks_passed": 50,
+          "final_checks_total": 50,
+          "retries_used": 0,
+          "retries_fail_to_pass": 0,
+          "failure_breakdown": {
+            "final_failed_runs": 0,
+            "runs_with_failing_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "failing_checks_by_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "patch_author_stopped_on_max_tokens": 0,
+            "no_fenced_patch_extracted": 0
+          },
+          "max_tokens_stops": {
+            "turns": 0,
+            "total_turns": 25,
+            "by_role": {
+              "orchestrator_plan": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "ci_triager": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "patch_author": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "security_critic": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "orchestrator_merge": {
+                "max_tokens": 0,
+                "total": 5
+              }
+            }
+          },
+          "tokens_per_run": {
+            "uncached_input": {
+              "mean": 215323.2,
+              "min": 214894,
+              "max": 216003
+            },
+            "cache_write": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            },
+            "cache_read": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            },
+            "output": {
+              "mean": 4108.8,
+              "min": 3939,
+              "max": 4392
+            },
+            "thinking": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            }
+          },
+          "cost_per_run_usd": {
+            "billed": {
+              "mean": 0.4717344,
+              "min": 0.469178,
+              "max": 0.475926
+            },
+            "cold": {
+              "mean": 0.4717344,
+              "min": 0.469178,
+              "max": 0.475926
+            },
+            "warm": {
+              "mean": 0.4717344,
+              "min": 0.469178,
+              "max": 0.475926
+            }
+          },
+          "cost_per_1k_runs_usd": {
+            "billed": 471.7344,
+            "cold": 471.7344,
+            "warm": 471.7344
+          },
+          "total_spend_usd": {
+            "billed": 2.358672,
+            "cold": 2.358672,
+            "warm": 2.358672
+          },
+          "cost_per_verified_outcome_usd": {
+            "billed": 0.4717344,
+            "cold": 0.4717344,
+            "warm": 0.4717344
+          },
+          "cost_per_first_attempt_verified_outcome_usd": {
+            "billed": 0.4717344,
+            "cold": 0.4717344,
+            "warm": 0.4717344
+          },
+          "model_latency_ms_per_run": {
+            "mean": 31084.0,
+            "min": 30239.0,
+            "max": 32570.0
+          },
+          "error_records": 0
+        },
+        "inc-02": {
+          "runs": 5,
+          "first_attempt_verified": 5,
+          "first_attempt_verified_rate": 1.0,
+          "first_attempt_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "final_verified": 5,
+          "final_verified_rate": 1.0,
+          "final_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "first_attempt_checks_passed": 50,
+          "first_attempt_checks_total": 50,
+          "final_checks_passed": 50,
+          "final_checks_total": 50,
+          "retries_used": 0,
+          "retries_fail_to_pass": 0,
+          "failure_breakdown": {
+            "final_failed_runs": 0,
+            "runs_with_failing_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "failing_checks_by_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "patch_author_stopped_on_max_tokens": 0,
+            "no_fenced_patch_extracted": 0
+          },
+          "max_tokens_stops": {
+            "turns": 0,
+            "total_turns": 25,
+            "by_role": {
+              "orchestrator_plan": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "ci_triager": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "patch_author": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "security_critic": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "orchestrator_merge": {
+                "max_tokens": 0,
+                "total": 5
+              }
+            }
+          },
+          "tokens_per_run": {
+            "uncached_input": {
+              "mean": 213323.6,
+              "min": 212868,
+              "max": 213661
+            },
+            "cache_write": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            },
+            "cache_read": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            },
+            "output": {
+              "mean": 4028.4,
+              "min": 3851,
+              "max": 4149
+            },
+            "thinking": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            }
+          },
+          "cost_per_run_usd": {
+            "billed": {
+              "mean": 0.4669312,
+              "min": 0.464246,
+              "max": 0.468812
+            },
+            "cold": {
+              "mean": 0.4669312,
+              "min": 0.464246,
+              "max": 0.468812
+            },
+            "warm": {
+              "mean": 0.4669312,
+              "min": 0.464246,
+              "max": 0.468812
+            }
+          },
+          "cost_per_1k_runs_usd": {
+            "billed": 466.9312,
+            "cold": 466.9312,
+            "warm": 466.9312
+          },
+          "total_spend_usd": {
+            "billed": 2.334656,
+            "cold": 2.334656,
+            "warm": 2.334656
+          },
+          "cost_per_verified_outcome_usd": {
+            "billed": 0.4669312,
+            "cold": 0.4669312,
+            "warm": 0.4669312
+          },
+          "cost_per_first_attempt_verified_outcome_usd": {
+            "billed": 0.4669312,
+            "cold": 0.4669312,
+            "warm": 0.4669312
+          },
+          "model_latency_ms_per_run": {
+            "mean": 28585.0,
+            "min": 27733.0,
+            "max": 29648.0
+          },
+          "error_records": 0
+        },
+        "inc-03": {
+          "runs": 5,
+          "first_attempt_verified": 5,
+          "first_attempt_verified_rate": 1.0,
+          "first_attempt_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "final_verified": 5,
+          "final_verified_rate": 1.0,
+          "final_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "first_attempt_checks_passed": 50,
+          "first_attempt_checks_total": 50,
+          "final_checks_passed": 50,
+          "final_checks_total": 50,
+          "retries_used": 0,
+          "retries_fail_to_pass": 0,
+          "failure_breakdown": {
+            "final_failed_runs": 0,
+            "runs_with_failing_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "failing_checks_by_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "patch_author_stopped_on_max_tokens": 0,
+            "no_fenced_patch_extracted": 0
+          },
+          "max_tokens_stops": {
+            "turns": 0,
+            "total_turns": 25,
+            "by_role": {
+              "orchestrator_plan": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "ci_triager": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "patch_author": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "security_critic": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "orchestrator_merge": {
+                "max_tokens": 0,
+                "total": 5
+              }
+            }
+          },
+          "tokens_per_run": {
+            "uncached_input": {
+              "mean": 213690.2,
+              "min": 213457,
+              "max": 214034
+            },
+            "cache_write": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            },
+            "cache_read": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            },
+            "output": {
+              "mean": 4100.0,
+              "min": 3975,
+              "max": 4254
+            },
+            "thinking": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            }
+          },
+          "cost_per_run_usd": {
+            "billed": {
+              "mean": 0.46838040000000003,
+              "min": 0.466664,
+              "max": 0.47060799999999997
+            },
+            "cold": {
+              "mean": 0.46838040000000003,
+              "min": 0.466664,
+              "max": 0.470608
+            },
+            "warm": {
+              "mean": 0.46838040000000003,
+              "min": 0.466664,
+              "max": 0.470608
+            }
+          },
+          "cost_per_1k_runs_usd": {
+            "billed": 468.3804,
+            "cold": 468.3804,
+            "warm": 468.3804
+          },
+          "total_spend_usd": {
+            "billed": 2.341902,
+            "cold": 2.341902,
+            "warm": 2.341902
+          },
+          "cost_per_verified_outcome_usd": {
+            "billed": 0.46838040000000003,
+            "cold": 0.46838040000000003,
+            "warm": 0.46838040000000003
+          },
+          "cost_per_first_attempt_verified_outcome_usd": {
+            "billed": 0.46838040000000003,
+            "cold": 0.46838040000000003,
+            "warm": 0.46838040000000003
+          },
+          "model_latency_ms_per_run": {
+            "mean": 32607.2,
+            "min": 27813.0,
+            "max": 46527.0
+          },
+          "error_records": 0
+        }
+      }
+    },
+    "isolated_cached_gate": {
+      "runs": 15,
+      "first_attempt_verified": 15,
+      "first_attempt_verified_rate": 1.0,
+      "first_attempt_verified_wilson95": [
+        0.7961166989641515,
+        1.0
+      ],
+      "final_verified": 15,
+      "final_verified_rate": 1.0,
+      "final_verified_wilson95": [
+        0.7961166989641515,
+        1.0
+      ],
+      "first_attempt_checks_passed": 150,
+      "first_attempt_checks_total": 150,
+      "final_checks_passed": 150,
+      "final_checks_total": 150,
+      "retries_used": 0,
+      "retries_fail_to_pass": 0,
+      "failure_breakdown": {
+        "final_failed_runs": 0,
+        "runs_with_failing_category": {
+          "ci_unit": 0,
+          "adversarial": 0,
+          "ast": 0
+        },
+        "failing_checks_by_category": {
+          "ci_unit": 0,
+          "adversarial": 0,
+          "ast": 0
+        },
+        "patch_author_stopped_on_max_tokens": 0,
+        "no_fenced_patch_extracted": 0
+      },
+      "max_tokens_stops": {
+        "turns": 0,
+        "total_turns": 75,
+        "by_role": {
+          "orchestrator_plan": {
+            "max_tokens": 0,
+            "total": 15
+          },
+          "ci_triager": {
+            "max_tokens": 0,
+            "total": 15
+          },
+          "patch_author": {
+            "max_tokens": 0,
+            "total": 15
+          },
+          "security_critic": {
+            "max_tokens": 0,
+            "total": 15
+          },
+          "orchestrator_merge": {
+            "max_tokens": 0,
+            "total": 15
+          }
+        }
+      },
+      "tokens_per_run": {
+        "uncached_input": {
+          "mean": 9791.666666666666,
+          "min": 9203,
+          "max": 10477
+        },
+        "cache_write": {
+          "mean": 9337.4,
+          "min": 9335,
+          "max": 9340
+        },
+        "cache_read": {
+          "mean": 37349.6,
+          "min": 37340,
+          "max": 37360
+        },
+        "output": {
+          "mean": 5325.066666666667,
+          "min": 4725,
+          "max": 5958
+        },
+        "thinking": {
+          "mean": 460.8,
+          "min": 0,
+          "max": 1072
+        }
+      },
+      "cost_per_run_usd": {
+        "billed": {
+          "mean": 0.09991246000000001,
+          "min": 0.0930433,
+          "max": 0.10595840000000001
+        },
+        "cold": {
+          "mean": 0.09991246000000001,
+          "min": 0.0930433,
+          "max": 0.1059584
+        },
+        "warm": {
+          "mean": 0.0775027,
+          "min": 0.0706345,
+          "max": 0.083552
+        }
+      },
+      "cost_per_1k_runs_usd": {
+        "billed": 99.91246000000001,
+        "cold": 99.91246000000001,
+        "warm": 77.50269999999999
+      },
+      "total_spend_usd": {
+        "billed": 1.4986869,
+        "cold": 1.4986869,
+        "warm": 1.1625405
+      },
+      "cost_per_verified_outcome_usd": {
+        "billed": 0.09991246000000001,
+        "cold": 0.09991246000000001,
+        "warm": 0.0775027
+      },
+      "cost_per_first_attempt_verified_outcome_usd": {
+        "billed": 0.09991246000000001,
+        "cold": 0.09991246000000001,
+        "warm": 0.0775027
+      },
+      "model_latency_ms_per_run": {
+        "mean": 38845.13333333333,
+        "min": 33111.0,
+        "max": 55442.0
+      },
+      "error_records": 0,
+      "missing_keys": [],
+      "by_preset": {
+        "inc-01": {
+          "runs": 5,
+          "first_attempt_verified": 5,
+          "first_attempt_verified_rate": 1.0,
+          "first_attempt_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "final_verified": 5,
+          "final_verified_rate": 1.0,
+          "final_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "first_attempt_checks_passed": 50,
+          "first_attempt_checks_total": 50,
+          "final_checks_passed": 50,
+          "final_checks_total": 50,
+          "retries_used": 0,
+          "retries_fail_to_pass": 0,
+          "failure_breakdown": {
+            "final_failed_runs": 0,
+            "runs_with_failing_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "failing_checks_by_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "patch_author_stopped_on_max_tokens": 0,
+            "no_fenced_patch_extracted": 0
+          },
+          "max_tokens_stops": {
+            "turns": 0,
+            "total_turns": 25,
+            "by_role": {
+              "orchestrator_plan": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "ci_triager": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "patch_author": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "security_critic": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "orchestrator_merge": {
+                "max_tokens": 0,
+                "total": 5
+              }
+            }
+          },
+          "tokens_per_run": {
+            "uncached_input": {
+              "mean": 10335.6,
+              "min": 10085,
+              "max": 10477
+            },
+            "cache_write": {
+              "mean": 9337.6,
+              "min": 9337,
+              "max": 9338
+            },
+            "cache_read": {
+              "mean": 37350.4,
+              "min": 37348,
+              "max": 37352
+            },
+            "output": {
+              "mean": 5188.0,
+              "min": 4985,
+              "max": 5735
+            },
+            "thinking": {
+              "mean": 275.0,
+              "min": 0,
+              "max": 871
+            }
+          },
+          "cost_per_run_usd": {
+            "billed": {
+              "mean": 0.09963024000000001,
+              "min": 0.0977442,
+              "max": 0.1049622
+            },
+            "cold": {
+              "mean": 0.09963024000000001,
+              "min": 0.0977442,
+              "max": 0.1049622
+            },
+            "warm": {
+              "mean": 0.07722,
+              "min": 0.075333,
+              "max": 0.082551
+            }
+          },
+          "cost_per_1k_runs_usd": {
+            "billed": 99.63024000000001,
+            "cold": 99.63024000000001,
+            "warm": 77.22
+          },
+          "total_spend_usd": {
+            "billed": 0.4981512,
+            "cold": 0.4981512,
+            "warm": 0.3861
+          },
+          "cost_per_verified_outcome_usd": {
+            "billed": 0.09963024000000001,
+            "cold": 0.09963024000000001,
+            "warm": 0.07722
+          },
+          "cost_per_first_attempt_verified_outcome_usd": {
+            "billed": 0.09963024000000001,
+            "cold": 0.09963024000000001,
+            "warm": 0.07722
+          },
+          "model_latency_ms_per_run": {
+            "mean": 35639.6,
+            "min": 33111.0,
+            "max": 39004.0
+          },
+          "error_records": 0
+        },
+        "inc-02": {
+          "runs": 5,
+          "first_attempt_verified": 5,
+          "first_attempt_verified_rate": 1.0,
+          "first_attempt_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "final_verified": 5,
+          "final_verified_rate": 1.0,
+          "final_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "first_attempt_checks_passed": 50,
+          "first_attempt_checks_total": 50,
+          "final_checks_passed": 50,
+          "final_checks_total": 50,
+          "retries_used": 0,
+          "retries_fail_to_pass": 0,
+          "failure_breakdown": {
+            "final_failed_runs": 0,
+            "runs_with_failing_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "failing_checks_by_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "patch_author_stopped_on_max_tokens": 0,
+            "no_fenced_patch_extracted": 0
+          },
+          "max_tokens_stops": {
+            "turns": 0,
+            "total_turns": 25,
+            "by_role": {
+              "orchestrator_plan": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "ci_triager": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "patch_author": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "security_critic": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "orchestrator_merge": {
+                "max_tokens": 0,
+                "total": 5
+              }
+            }
+          },
+          "tokens_per_run": {
+            "uncached_input": {
+              "mean": 9600.2,
+              "min": 9358,
+              "max": 9736
+            },
+            "cache_write": {
+              "mean": 9336.6,
+              "min": 9335,
+              "max": 9339
+            },
+            "cache_read": {
+              "mean": 37346.4,
+              "min": 37340,
+              "max": 37356
+            },
+            "output": {
+              "mean": 5340.2,
+              "min": 4725,
+              "max": 5922
+            },
+            "thinking": {
+              "mean": 336.0,
+              "min": 0,
+              "max": 1072
+            }
+          },
+          "cost_per_run_usd": {
+            "billed": {
+              "mean": 0.09967854,
+              "min": 0.0930433,
+              "max": 0.1052075
+            },
+            "cold": {
+              "mean": 0.09967854,
+              "min": 0.0930433,
+              "max": 0.1052075
+            },
+            "warm": {
+              "mean": 0.0772707,
+              "min": 0.0706345,
+              "max": 0.0828035
+            }
+          },
+          "cost_per_1k_runs_usd": {
+            "billed": 99.67854,
+            "cold": 99.67854,
+            "warm": 77.27069999999999
+          },
+          "total_spend_usd": {
+            "billed": 0.49839269999999997,
+            "cold": 0.49839269999999997,
+            "warm": 0.3863535
+          },
+          "cost_per_verified_outcome_usd": {
+            "billed": 0.09967854,
+            "cold": 0.09967854,
+            "warm": 0.0772707
+          },
+          "cost_per_first_attempt_verified_outcome_usd": {
+            "billed": 0.09967854,
+            "cold": 0.09967854,
+            "warm": 0.0772707
+          },
+          "model_latency_ms_per_run": {
+            "mean": 38335.0,
+            "min": 34726.0,
+            "max": 43959.0
+          },
+          "error_records": 0
+        },
+        "inc-03": {
+          "runs": 5,
+          "first_attempt_verified": 5,
+          "first_attempt_verified_rate": 1.0,
+          "first_attempt_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "final_verified": 5,
+          "final_verified_rate": 1.0,
+          "final_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "first_attempt_checks_passed": 50,
+          "first_attempt_checks_total": 50,
+          "final_checks_passed": 50,
+          "final_checks_total": 50,
+          "retries_used": 0,
+          "retries_fail_to_pass": 0,
+          "failure_breakdown": {
+            "final_failed_runs": 0,
+            "runs_with_failing_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "failing_checks_by_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "patch_author_stopped_on_max_tokens": 0,
+            "no_fenced_patch_extracted": 0
+          },
+          "max_tokens_stops": {
+            "turns": 0,
+            "total_turns": 25,
+            "by_role": {
+              "orchestrator_plan": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "ci_triager": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "patch_author": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "security_critic": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "orchestrator_merge": {
+                "max_tokens": 0,
+                "total": 5
+              }
+            }
+          },
+          "tokens_per_run": {
+            "uncached_input": {
+              "mean": 9439.2,
+              "min": 9203,
+              "max": 9652
+            },
+            "cache_write": {
+              "mean": 9338.0,
+              "min": 9336,
+              "max": 9340
+            },
+            "cache_read": {
+              "mean": 37352.0,
+              "min": 37344,
+              "max": 37360
+            },
+            "output": {
+              "mean": 5447.0,
+              "min": 5142,
+              "max": 5958
+            },
+            "thinking": {
+              "mean": 771.4,
+              "min": 567,
+              "max": 1065
+            }
+          },
+          "cost_per_run_usd": {
+            "billed": {
+              "mean": 0.1004286,
+              "min": 0.0969091,
+              "max": 0.10595840000000001
+            },
+            "cold": {
+              "mean": 0.1004286,
+              "min": 0.0969091,
+              "max": 0.1059584
+            },
+            "warm": {
+              "mean": 0.0780174,
+              "min": 0.0744955,
+              "max": 0.083552
+            }
+          },
+          "cost_per_1k_runs_usd": {
+            "billed": 100.4286,
+            "cold": 100.4286,
+            "warm": 78.0174
+          },
+          "total_spend_usd": {
+            "billed": 0.502143,
+            "cold": 0.502143,
+            "warm": 0.390087
+          },
+          "cost_per_verified_outcome_usd": {
+            "billed": 0.1004286,
+            "cold": 0.1004286,
+            "warm": 0.0780174
+          },
+          "cost_per_first_attempt_verified_outcome_usd": {
+            "billed": 0.1004286,
+            "cold": 0.1004286,
+            "warm": 0.0780174
+          },
+          "model_latency_ms_per_run": {
+            "mean": 42560.8,
+            "min": 36045.0,
+            "max": 55442.0
+          },
+          "error_records": 0
+        }
+      }
+    },
+    "tiered_gate": {
+      "runs": 15,
+      "first_attempt_verified": 15,
+      "first_attempt_verified_rate": 1.0,
+      "first_attempt_verified_wilson95": [
+        0.7961166989641515,
+        1.0
+      ],
+      "final_verified": 15,
+      "final_verified_rate": 1.0,
+      "final_verified_wilson95": [
+        0.7961166989641515,
+        1.0
+      ],
+      "first_attempt_checks_passed": 150,
+      "first_attempt_checks_total": 150,
+      "final_checks_passed": 150,
+      "final_checks_total": 150,
+      "retries_used": 0,
+      "retries_fail_to_pass": 0,
+      "failure_breakdown": {
+        "final_failed_runs": 0,
+        "runs_with_failing_category": {
+          "ci_unit": 0,
+          "adversarial": 0,
+          "ast": 0
+        },
+        "failing_checks_by_category": {
+          "ci_unit": 0,
+          "adversarial": 0,
+          "ast": 0
+        },
+        "patch_author_stopped_on_max_tokens": 0,
+        "no_fenced_patch_extracted": 0
+      },
+      "max_tokens_stops": {
+        "turns": 0,
+        "total_turns": 75,
+        "by_role": {
+          "orchestrator_plan": {
+            "max_tokens": 0,
+            "total": 15
+          },
+          "ci_triager": {
+            "max_tokens": 0,
+            "total": 15
+          },
+          "patch_author": {
+            "max_tokens": 0,
+            "total": 15
+          },
+          "security_critic": {
+            "max_tokens": 0,
+            "total": 15
+          },
+          "orchestrator_merge": {
+            "max_tokens": 0,
+            "total": 15
+          }
+        }
+      },
+      "tokens_per_run": {
+        "uncached_input": {
+          "mean": 10095.133333333333,
+          "min": 9186,
+          "max": 11009
+        },
+        "cache_write": {
+          "mean": 18675.466666666667,
+          "min": 18668,
+          "max": 18682
+        },
+        "cache_read": {
+          "mean": 28013.2,
+          "min": 28002,
+          "max": 28023
+        },
+        "output": {
+          "mean": 5407.8,
+          "min": 4345,
+          "max": 6563
+        },
+        "thinking": {
+          "mean": 262.73333333333335,
+          "min": 0,
+          "max": 1205
+        }
+      },
+      "cost_per_run_usd": {
+        "billed": {
+          "mean": 0.05619822866666667,
+          "min": 0.050214579999999995,
+          "max": 0.06712483
+        },
+        "cold": {
+          "mean": 0.05619822866666667,
+          "min": 0.05021458,
+          "max": 0.06712483
+        },
+        "warm": {
+          "mean": 0.03271382933333333,
+          "min": 0.02673454,
+          "max": 0.0436473
+        }
+      },
+      "cost_per_1k_runs_usd": {
+        "billed": 56.19822866666667,
+        "cold": 56.19822866666667,
+        "warm": 32.71382933333334
+      },
+      "total_spend_usd": {
+        "billed": 0.84297343,
+        "cold": 0.84297343,
+        "warm": 0.49070744
+      },
+      "cost_per_verified_outcome_usd": {
+        "billed": 0.05619822866666667,
+        "cold": 0.05619822866666667,
+        "warm": 0.03271382933333333
+      },
+      "cost_per_first_attempt_verified_outcome_usd": {
+        "billed": 0.05619822866666667,
+        "cold": 0.05619822866666667,
+        "warm": 0.03271382933333333
+      },
+      "model_latency_ms_per_run": {
+        "mean": 28434.066666666666,
+        "min": 22708.0,
+        "max": 36251.0
+      },
+      "error_records": 0,
+      "missing_keys": [],
+      "by_preset": {
+        "inc-01": {
+          "runs": 5,
+          "first_attempt_verified": 5,
+          "first_attempt_verified_rate": 1.0,
+          "first_attempt_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "final_verified": 5,
+          "final_verified_rate": 1.0,
+          "final_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "first_attempt_checks_passed": 50,
+          "first_attempt_checks_total": 50,
+          "final_checks_passed": 50,
+          "final_checks_total": 50,
+          "retries_used": 0,
+          "retries_fail_to_pass": 0,
+          "failure_breakdown": {
+            "final_failed_runs": 0,
+            "runs_with_failing_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "failing_checks_by_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "patch_author_stopped_on_max_tokens": 0,
+            "no_fenced_patch_extracted": 0
+          },
+          "max_tokens_stops": {
+            "turns": 0,
+            "total_turns": 25,
+            "by_role": {
+              "orchestrator_plan": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "ci_triager": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "patch_author": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "security_critic": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "orchestrator_merge": {
+                "max_tokens": 0,
+                "total": 5
+              }
+            }
+          },
+          "tokens_per_run": {
+            "uncached_input": {
+              "mean": 10764.6,
+              "min": 10419,
+              "max": 11009
+            },
+            "cache_write": {
+              "mean": 18678.0,
+              "min": 18672,
+              "max": 18682
+            },
+            "cache_read": {
+              "mean": 28017.0,
+              "min": 28008,
+              "max": 28023
+            },
+            "output": {
+              "mean": 5330.0,
+              "min": 5011,
+              "max": 5564
+            },
+            "thinking": {
+              "mean": 0.0,
+              "min": 0,
+              "max": 0
+            }
+          },
+          "cost_per_run_usd": {
+            "billed": {
+              "mean": 0.053630942,
+              "min": 0.05144035,
+              "max": 0.05527629
+            },
+            "cold": {
+              "mean": 0.053630942,
+              "min": 0.05144035,
+              "max": 0.05527629
+            },
+            "warm": {
+              "mean": 0.030143359999999998,
+              "min": 0.02794774,
+              "max": 0.03179122
+            }
+          },
+          "cost_per_1k_runs_usd": {
+            "billed": 53.630942,
+            "cold": 53.630942,
+            "warm": 30.143359999999998
+          },
+          "total_spend_usd": {
+            "billed": 0.26815471,
+            "cold": 0.26815471,
+            "warm": 0.15071679999999998
+          },
+          "cost_per_verified_outcome_usd": {
+            "billed": 0.053630942,
+            "cold": 0.053630942,
+            "warm": 0.030143359999999998
+          },
+          "cost_per_first_attempt_verified_outcome_usd": {
+            "billed": 0.053630942,
+            "cold": 0.053630942,
+            "warm": 0.030143359999999998
+          },
+          "model_latency_ms_per_run": {
+            "mean": 26656.4,
+            "min": 25196.0,
+            "max": 28261.0
+          },
+          "error_records": 0
+        },
+        "inc-02": {
+          "runs": 5,
+          "first_attempt_verified": 5,
+          "first_attempt_verified_rate": 1.0,
+          "first_attempt_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "final_verified": 5,
+          "final_verified_rate": 1.0,
+          "final_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "first_attempt_checks_passed": 50,
+          "first_attempt_checks_total": 50,
+          "final_checks_passed": 50,
+          "final_checks_total": 50,
+          "retries_used": 0,
+          "retries_fail_to_pass": 0,
+          "failure_breakdown": {
+            "final_failed_runs": 0,
+            "runs_with_failing_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "failing_checks_by_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "patch_author_stopped_on_max_tokens": 0,
+            "no_fenced_patch_extracted": 0
+          },
+          "max_tokens_stops": {
+            "turns": 0,
+            "total_turns": 25,
+            "by_role": {
+              "orchestrator_plan": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "ci_triager": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "patch_author": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "security_critic": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "orchestrator_merge": {
+                "max_tokens": 0,
+                "total": 5
+              }
+            }
+          },
+          "tokens_per_run": {
+            "uncached_input": {
+              "mean": 9866.0,
+              "min": 9438,
+              "max": 10199
+            },
+            "cache_write": {
+              "mean": 18674.8,
+              "min": 18668,
+              "max": 18678
+            },
+            "cache_read": {
+              "mean": 28012.2,
+              "min": 28002,
+              "max": 28017
+            },
+            "output": {
+              "mean": 5437.2,
+              "min": 4827,
+              "max": 6563
+            },
+            "thinking": {
+              "mean": 195.2,
+              "min": 0,
+              "max": 976
+            }
+          },
+          "cost_per_run_usd": {
+            "billed": {
+              "mean": 0.055565298,
+              "min": 0.05223873,
+              "max": 0.06372015
+            },
+            "cold": {
+              "mean": 0.055565298000000006,
+              "min": 0.05223873,
+              "max": 0.06372015
+            },
+            "warm": {
+              "mean": 0.032081736,
+              "min": 0.02875618,
+              "max": 0.04023256
+            }
+          },
+          "cost_per_1k_runs_usd": {
+            "billed": 55.565298,
+            "cold": 55.565298000000006,
+            "warm": 32.081736
+          },
+          "total_spend_usd": {
+            "billed": 0.27782649,
+            "cold": 0.27782649000000004,
+            "warm": 0.16040868
+          },
+          "cost_per_verified_outcome_usd": {
+            "billed": 0.055565298,
+            "cold": 0.055565298000000006,
+            "warm": 0.032081736
+          },
+          "cost_per_first_attempt_verified_outcome_usd": {
+            "billed": 0.055565298,
+            "cold": 0.055565298000000006,
+            "warm": 0.032081736
+          },
+          "model_latency_ms_per_run": {
+            "mean": 28562.2,
+            "min": 25361.0,
+            "max": 35499.0
+          },
+          "error_records": 0
+        },
+        "inc-03": {
+          "runs": 5,
+          "first_attempt_verified": 5,
+          "first_attempt_verified_rate": 1.0,
+          "first_attempt_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "final_verified": 5,
+          "final_verified_rate": 1.0,
+          "final_verified_wilson95": [
+            0.5655175352168251,
+            1.0
+          ],
+          "first_attempt_checks_passed": 50,
+          "first_attempt_checks_total": 50,
+          "final_checks_passed": 50,
+          "final_checks_total": 50,
+          "retries_used": 0,
+          "retries_fail_to_pass": 0,
+          "failure_breakdown": {
+            "final_failed_runs": 0,
+            "runs_with_failing_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "failing_checks_by_category": {
+              "ci_unit": 0,
+              "adversarial": 0,
+              "ast": 0
+            },
+            "patch_author_stopped_on_max_tokens": 0,
+            "no_fenced_patch_extracted": 0
+          },
+          "max_tokens_stops": {
+            "turns": 0,
+            "total_turns": 25,
+            "by_role": {
+              "orchestrator_plan": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "ci_triager": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "patch_author": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "security_critic": {
+                "max_tokens": 0,
+                "total": 5
+              },
+              "orchestrator_merge": {
+                "max_tokens": 0,
+                "total": 5
+              }
+            }
+          },
+          "tokens_per_run": {
+            "uncached_input": {
+              "mean": 9654.8,
+              "min": 9186,
+              "max": 10068
+            },
+            "cache_write": {
+              "mean": 18673.6,
+              "min": 18670,
+              "max": 18676
+            },
+            "cache_read": {
+              "mean": 28010.4,
+              "min": 28005,
+              "max": 28014
+            },
+            "output": {
+              "mean": 5456.2,
+              "min": 4345,
+              "max": 6349
+            },
+            "thinking": {
+              "mean": 593.0,
+              "min": 0,
+              "max": 1205
+            }
+          },
+          "cost_per_run_usd": {
+            "billed": {
+              "mean": 0.059398445999999994,
+              "min": 0.050214579999999995,
+              "max": 0.06712483
+            },
+            "cold": {
+              "mean": 0.059398445999999994,
+              "min": 0.05021458,
+              "max": 0.06712483
+            },
+            "warm": {
+              "mean": 0.035916392,
+              "min": 0.02673454,
+              "max": 0.0436473
+            }
+          },
+          "cost_per_1k_runs_usd": {
+            "billed": 59.39844599999999,
+            "cold": 59.39844599999999,
+            "warm": 35.916392
+          },
+          "total_spend_usd": {
+            "billed": 0.29699222999999997,
+            "cold": 0.29699222999999997,
+            "warm": 0.17958195999999998
+          },
+          "cost_per_verified_outcome_usd": {
+            "billed": 0.059398445999999994,
+            "cold": 0.059398445999999994,
+            "warm": 0.035916392
+          },
+          "cost_per_first_attempt_verified_outcome_usd": {
+            "billed": 0.059398445999999994,
+            "cold": 0.059398445999999994,
+            "warm": 0.035916392
+          },
+          "model_latency_ms_per_run": {
+            "mean": 30083.6,
+            "min": 22708.0,
+            "max": 36251.0
+          },
+          "error_records": 0
+        }
+      }
+    }
+  },
+  "rescored": {
+    "note": "Sandbox verdicts re-computed offline on each used record's recorded patched_code_first / patched_code_final. Turns, tokens, spend and retry decisions are as recorded.",
+    "arms": {
+      "shared_bus_original": {
+        "runs": 15,
+        "first_attempt_verified_recorded": 12,
+        "first_attempt_verified_rescored": 15,
+        "final_verified_recorded": 12,
+        "final_verified_rescored": 15,
+        "first_attempt_verified_rate_rescored": 1.0,
+        "final_verified_rate_rescored": 1.0,
+        "final_verified_wilson95_rescored": [
+          0.7961166989641515,
+          1.0
+        ],
+        "first_attempt_checks_passed_rescored": 150,
+        "final_checks_passed_rescored": 150,
+        "final_checks_total": 150,
+        "cost_per_verified_outcome_usd_rescored": {
+          "billed": 0.6961010666666667,
+          "cold": 0.6961010666666667,
+          "warm": 0.6961010666666667
+        },
+        "cost_per_first_attempt_verified_outcome_usd_rescored": {
+          "billed": 0.6961010666666667,
+          "cold": 0.6961010666666667,
+          "warm": 0.6961010666666667
+        }
+      },
+      "shared_bus_matched_gate": {
+        "runs": 15,
+        "first_attempt_verified_recorded": 15,
+        "first_attempt_verified_rescored": 15,
+        "final_verified_recorded": 15,
+        "final_verified_rescored": 15,
+        "first_attempt_verified_rate_rescored": 1.0,
+        "final_verified_rate_rescored": 1.0,
+        "final_verified_wilson95_rescored": [
+          0.7961166989641515,
+          1.0
+        ],
+        "first_attempt_checks_passed_rescored": 150,
+        "final_checks_passed_rescored": 150,
+        "final_checks_total": 150,
+        "cost_per_verified_outcome_usd_rescored": {
+          "billed": 0.46901533333333334,
+          "cold": 0.46901533333333334,
+          "warm": 0.46901533333333334
+        },
+        "cost_per_first_attempt_verified_outcome_usd_rescored": {
+          "billed": 0.46901533333333334,
+          "cold": 0.46901533333333334,
+          "warm": 0.46901533333333334
+        }
+      },
+      "isolated_cached_gate": {
+        "runs": 15,
+        "first_attempt_verified_recorded": 15,
+        "first_attempt_verified_rescored": 15,
+        "final_verified_recorded": 15,
+        "final_verified_rescored": 15,
+        "first_attempt_verified_rate_rescored": 1.0,
+        "final_verified_rate_rescored": 1.0,
+        "final_verified_wilson95_rescored": [
+          0.7961166989641515,
+          1.0
+        ],
+        "first_attempt_checks_passed_rescored": 150,
+        "final_checks_passed_rescored": 150,
+        "final_checks_total": 150,
+        "cost_per_verified_outcome_usd_rescored": {
+          "billed": 0.09991246000000001,
+          "cold": 0.09991246000000001,
+          "warm": 0.0775027
+        },
+        "cost_per_first_attempt_verified_outcome_usd_rescored": {
+          "billed": 0.09991246000000001,
+          "cold": 0.09991246000000001,
+          "warm": 0.0775027
+        }
+      },
+      "tiered_gate": {
+        "runs": 15,
+        "first_attempt_verified_recorded": 15,
+        "first_attempt_verified_rescored": 15,
+        "final_verified_recorded": 15,
+        "final_verified_rescored": 15,
+        "first_attempt_verified_rate_rescored": 1.0,
+        "final_verified_rate_rescored": 1.0,
+        "final_verified_wilson95_rescored": [
+          0.7961166989641515,
+          1.0
+        ],
+        "first_attempt_checks_passed_rescored": 150,
+        "final_checks_passed_rescored": 150,
+        "final_checks_total": 150,
+        "cost_per_verified_outcome_usd_rescored": {
+          "billed": 0.05619822866666667,
+          "cold": 0.05619822866666667,
+          "warm": 0.03271382933333333
+        },
+        "cost_per_first_attempt_verified_outcome_usd_rescored": {
+          "billed": 0.05619822866666667,
+          "cold": 0.05619822866666667,
+          "warm": 0.03271382933333333
+        }
+      }
+    },
+    "changes": [
+      {
+        "run_id": "b71445e4-e272-4e9c-b90c-90ff0d0e5dc9",
+        "arm_id": "shared_bus_original",
+        "preset_id": "inc-02",
+        "repeat_index": 0,
+        "attempt": "first_attempt",
+        "recorded_passed_checks": 9,
+        "recorded_total_checks": 10,
+        "recorded_verified": false,
+        "rescored_passed_checks": 10,
+        "rescored_total_checks": 10,
+        "rescored_verified": true,
+        "flipped_checks": [
+          {
+            "check_id": "AST-SEC-01",
+            "recorded_passed": false,
+            "rescored_passed": true
+          }
+        ]
+      },
+      {
+        "run_id": "b71445e4-e272-4e9c-b90c-90ff0d0e5dc9",
+        "arm_id": "shared_bus_original",
+        "preset_id": "inc-02",
+        "repeat_index": 0,
+        "attempt": "final",
+        "recorded_passed_checks": 9,
+        "recorded_total_checks": 10,
+        "recorded_verified": false,
+        "rescored_passed_checks": 10,
+        "rescored_total_checks": 10,
+        "rescored_verified": true,
+        "flipped_checks": [
+          {
+            "check_id": "AST-SEC-01",
+            "recorded_passed": false,
+            "rescored_passed": true
+          }
+        ]
+      },
+      {
+        "run_id": "cde3c8cd-0607-4b40-ba44-24835f9c6ea5",
+        "arm_id": "shared_bus_original",
+        "preset_id": "inc-02",
+        "repeat_index": 2,
+        "attempt": "first_attempt",
+        "recorded_passed_checks": 9,
+        "recorded_total_checks": 10,
+        "recorded_verified": false,
+        "rescored_passed_checks": 10,
+        "rescored_total_checks": 10,
+        "rescored_verified": true,
+        "flipped_checks": [
+          {
+            "check_id": "AST-SEC-01",
+            "recorded_passed": false,
+            "rescored_passed": true
+          }
+        ]
+      },
+      {
+        "run_id": "cde3c8cd-0607-4b40-ba44-24835f9c6ea5",
+        "arm_id": "shared_bus_original",
+        "preset_id": "inc-02",
+        "repeat_index": 2,
+        "attempt": "final",
+        "recorded_passed_checks": 9,
+        "recorded_total_checks": 10,
+        "recorded_verified": false,
+        "rescored_passed_checks": 10,
+        "rescored_total_checks": 10,
+        "rescored_verified": true,
+        "flipped_checks": [
+          {
+            "check_id": "AST-SEC-01",
+            "recorded_passed": false,
+            "rescored_passed": true
+          }
+        ]
+      },
+      {
+        "run_id": "276fb2c7-09f7-44ed-8569-37f4de74df68",
+        "arm_id": "shared_bus_original",
+        "preset_id": "inc-02",
+        "repeat_index": 4,
+        "attempt": "first_attempt",
+        "recorded_passed_checks": 9,
+        "recorded_total_checks": 10,
+        "recorded_verified": false,
+        "rescored_passed_checks": 10,
+        "rescored_total_checks": 10,
+        "rescored_verified": true,
+        "flipped_checks": [
+          {
+            "check_id": "AST-SEC-01",
+            "recorded_passed": false,
+            "rescored_passed": true
+          }
+        ]
+      },
+      {
+        "run_id": "276fb2c7-09f7-44ed-8569-37f4de74df68",
+        "arm_id": "shared_bus_original",
+        "preset_id": "inc-02",
+        "repeat_index": 4,
+        "attempt": "final",
+        "recorded_passed_checks": 9,
+        "recorded_total_checks": 10,
+        "recorded_verified": false,
+        "rescored_passed_checks": 10,
+        "rescored_total_checks": 10,
+        "rescored_verified": true,
+        "flipped_checks": [
+          {
+            "check_id": "AST-SEC-01",
+            "recorded_passed": false,
+            "rescored_passed": true
+          }
+        ]
+      }
+    ]
+  }
+}

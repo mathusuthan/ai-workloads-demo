@@ -71,7 +71,9 @@ resp = await client.messages.create(
     messages=[{"role": "user", "content": source_bundle}],
 )""",
     "sonnet_templated": """# RUNG 2 (CALIBRATED LEVER): Strict Section Template + Length Bounds (Sonnet 5.5)
-# Caps array lengths & word budgets (~1,200–1,600 out tokens -> ~35%–50% cost cut!)
+# Caps array lengths & word budgets (prompt asks for ~1,200–1,600 out tokens). On the 4 graded documents it was cheaper
+# but scored lower on accuracy and coverage than Rung 1, and its required owner/target_window fields were often
+# filled with owners or deadlines the source does not give
 resp = await client.messages.create(
     model="claude-sonnet-5-5",
     max_tokens=3000,
@@ -80,8 +82,9 @@ resp = await client.messages.create(
     output_config={"format": {"type": "json_schema", "schema": STRUCTURED_DRAFT_JSON_SCHEMA}},
     messages=[{"role": "user", "content": source_bundle}],
 )""",
-    "haiku_templated": """# RUNG 3 HYBRID ROUTING: Haiku 5.5 First-Draft Template (-97% Cost)
-# Drafts all 4 sections cleanly on Haiku 5.5 ($0.50/M out); human escalates only critical sections
+    "haiku_templated": """# RUNG 3 HYBRID ROUTING: Haiku 5.5 First-Draft Template
+# Same section template on Haiku 5.5 ($0.50/M out): lowest cost, and the lowest accuracy grade on the 4 graded
+# documents; a reviewer can regenerate any single section on Sonnet 5.5
 resp = await client.messages.create(
     model="claude-haiku-5-5",
     max_tokens=3000,

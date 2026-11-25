@@ -1,0 +1,497 @@
+{
+  "schema_version": 1,
+  "source": "cat3 quality rerun",
+  "source_file": "experiments/cat3_quality/runs.jsonl",
+  "keys_version": "2026-11-25.2",
+  "runs": 18,
+  "error_records": 0,
+  "repeats": 3,
+  "sessions": [
+    "desk-01",
+    "desk-02"
+  ],
+  "probes_per_session": {
+    "desk-01": 6,
+    "desk-02": 6
+  },
+  "matrix_complete": true,
+  "rungs": [
+    {
+      "rung_id": "naive_full_history",
+      "runs": 6,
+      "turn_recall": {
+        "hits": 205,
+        "total": 207,
+        "rate": 0.9903381642512077,
+        "ci_low": 0.9654623784086972,
+        "ci_high": 0.9973463648785384
+      },
+      "ledger_recall": {
+        "hits": 106,
+        "total": 147,
+        "rate": 0.7210884353741497,
+        "ci_low": 0.6436694638749382,
+        "ci_high": 0.7872465489254007
+      },
+      "ledger_by_origin": {
+        "1-3": {
+          "hits": 37,
+          "total": 51,
+          "rate": 0.7254901960784313,
+          "ci_low": 0.5905334923922092,
+          "ci_high": 0.8288572476535512
+        },
+        "4-6": {
+          "hits": 40,
+          "total": 51,
+          "rate": 0.7843137254901961,
+          "ci_low": 0.6537364041400255,
+          "ci_high": 0.8750606159176724
+        },
+        "7-9": {
+          "hits": 29,
+          "total": 45,
+          "rate": 0.6444444444444445,
+          "ci_low": 0.4983581419637687,
+          "ci_high": 0.7678091739578413
+        }
+      },
+      "probe_accuracy": {
+        "hits": 36,
+        "total": 36,
+        "rate": 1.0,
+        "ci_low": 0.9035813714055363,
+        "ci_high": 1.0
+      },
+      "session_billed_usd_mean": 0.39868433333333336,
+      "session_warm_usd_mean": 0.39868433333333336,
+      "session_billed_per_1k_usd": 398.68433333333337,
+      "session_warm_per_1k_usd": 398.68433333333337,
+      "probe_phase_billed_usd_mean": 0.27410866666666667,
+      "by_preset": {
+        "desk-01": {
+          "runs": 3,
+          "turn_recall": {
+            "hits": 105,
+            "total": 105,
+            "rate": 1.0,
+            "ci_low": 0.9647059230708901,
+            "ci_high": 1.0
+          },
+          "ledger_recall": {
+            "hits": 63,
+            "total": 75,
+            "rate": 0.84,
+            "ci_low": 0.7408329231474533,
+            "ci_high": 0.9060348639642386
+          },
+          "ledger_by_origin": {
+            "1-3": {
+              "hits": 24,
+              "total": 27,
+              "rate": 0.8888888888888888,
+              "ci_low": 0.7194219918172018,
+              "ci_high": 0.9614796517169015
+            },
+            "4-6": {
+              "hits": 19,
+              "total": 24,
+              "rate": 0.7916666666666666,
+              "ci_low": 0.5952954674681133,
+              "ci_high": 0.9075517464714814
+            },
+            "7-9": {
+              "hits": 20,
+              "total": 24,
+              "rate": 0.8333333333333334,
+              "ci_low": 0.6414692935030095,
+              "ci_high": 0.9332132367136705
+            }
+          },
+          "probe_accuracy": {
+            "hits": 18,
+            "total": 18,
+            "rate": 1.0,
+            "ci_low": 0.8241207763533425,
+            "ci_high": 1.0
+          },
+          "session_billed_usd_mean": 0.41586066666666666,
+          "session_warm_usd_mean": 0.41586066666666666,
+          "session_billed_per_1k_usd": 415.86066666666665,
+          "session_warm_per_1k_usd": 415.86066666666665,
+          "probe_phase_billed_usd_mean": 0.27921266666666666
+        },
+        "desk-02": {
+          "runs": 3,
+          "turn_recall": {
+            "hits": 100,
+            "total": 102,
+            "rate": 0.9803921568627451,
+            "ci_low": 0.931306915989651,
+            "ci_high": 0.9946062478304136
+          },
+          "ledger_recall": {
+            "hits": 43,
+            "total": 72,
+            "rate": 0.5972222222222222,
+            "ci_low": 0.48180671684951565,
+            "ci_high": 0.7027888884789509
+          },
+          "ledger_by_origin": {
+            "1-3": {
+              "hits": 13,
+              "total": 24,
+              "rate": 0.5416666666666666,
+              "ci_low": 0.3507486535891948,
+              "ci_high": 0.72108666268789
+            },
+            "4-6": {
+              "hits": 21,
+              "total": 27,
+              "rate": 0.7777777777777778,
+              "ci_low": 0.5924307113336742,
+              "ci_high": 0.8939276054763996
+            },
+            "7-9": {
+              "hits": 9,
+              "total": 21,
+              "rate": 0.42857142857142855,
+              "ci_low": 0.24469968925375957,
+              "ci_high": 0.6345344563069328
+            }
+          },
+          "probe_accuracy": {
+            "hits": 18,
+            "total": 18,
+            "rate": 1.0,
+            "ci_low": 0.8241207763533425,
+            "ci_high": 1.0
+          },
+          "session_billed_usd_mean": 0.381508,
+          "session_warm_usd_mean": 0.381508,
+          "session_billed_per_1k_usd": 381.50800000000004,
+          "session_warm_per_1k_usd": 381.50800000000004,
+          "probe_phase_billed_usd_mean": 0.26900466666666667
+        }
+      }
+    },
+    {
+      "rung_id": "prefix_cached_history",
+      "runs": 6,
+      "turn_recall": {
+        "hits": 203,
+        "total": 207,
+        "rate": 0.9806763285024155,
+        "ci_low": 0.9513767684768528,
+        "ci_high": 0.9924603739574325
+      },
+      "ledger_recall": {
+        "hits": 110,
+        "total": 147,
+        "rate": 0.7482993197278912,
+        "ci_low": 0.6724302164752695,
+        "ci_high": 0.8115216132851112
+      },
+      "ledger_by_origin": {
+        "1-3": {
+          "hits": 39,
+          "total": 51,
+          "rate": 0.7647058823529411,
+          "ci_low": 0.632377748398347,
+          "ci_high": 0.8599505116553716
+        },
+        "4-6": {
+          "hits": 41,
+          "total": 51,
+          "rate": 0.803921568627451,
+          "ci_low": 0.6754192051863439,
+          "ci_high": 0.889846574875333
+        },
+        "7-9": {
+          "hits": 30,
+          "total": 45,
+          "rate": 0.6666666666666666,
+          "ci_low": 0.5207048830990042,
+          "ci_high": 0.7864112506566996
+        }
+      },
+      "probe_accuracy": {
+        "hits": 36,
+        "total": 36,
+        "rate": 1.0,
+        "ci_low": 0.9035813714055363,
+        "ci_high": 1.0
+      },
+      "session_billed_usd_mean": 0.23965650000000002,
+      "session_warm_usd_mean": 0.21599849999999998,
+      "session_billed_per_1k_usd": 239.65650000000002,
+      "session_warm_per_1k_usd": 215.99849999999998,
+      "probe_phase_billed_usd_mean": 0.1573055,
+      "by_preset": {
+        "desk-01": {
+          "runs": 3,
+          "turn_recall": {
+            "hits": 101,
+            "total": 105,
+            "rate": 0.9619047619047619,
+            "ci_low": 0.9061169787394538,
+            "ci_high": 0.9850875406688924
+          },
+          "ledger_recall": {
+            "hits": 67,
+            "total": 75,
+            "rate": 0.8933333333333333,
+            "ci_low": 0.8033863715352693,
+            "ci_high": 0.9449508723782568
+          },
+          "ledger_by_origin": {
+            "1-3": {
+              "hits": 25,
+              "total": 27,
+              "rate": 0.9259259259259259,
+              "ci_low": 0.7663040731697686,
+              "ci_high": 0.9794453459390113
+            },
+            "4-6": {
+              "hits": 21,
+              "total": 24,
+              "rate": 0.875,
+              "ci_low": 0.6899611872949993,
+              "ci_high": 0.9565566591987655
+            },
+            "7-9": {
+              "hits": 21,
+              "total": 24,
+              "rate": 0.875,
+              "ci_low": 0.6899611872949993,
+              "ci_high": 0.9565566591987655
+            }
+          },
+          "probe_accuracy": {
+            "hits": 18,
+            "total": 18,
+            "rate": 1.0,
+            "ci_low": 0.8241207763533425,
+            "ci_high": 1.0
+          },
+          "session_billed_usd_mean": 0.2658950666666667,
+          "session_warm_usd_mean": 0.24223266666666668,
+          "session_billed_per_1k_usd": 265.8950666666667,
+          "session_warm_per_1k_usd": 242.2326666666667,
+          "probe_phase_billed_usd_mean": 0.15994493333333334
+        },
+        "desk-02": {
+          "runs": 3,
+          "turn_recall": {
+            "hits": 102,
+            "total": 102,
+            "rate": 1.0,
+            "ci_low": 0.9637055378535367,
+            "ci_high": 0.9999999999999999
+          },
+          "ledger_recall": {
+            "hits": 43,
+            "total": 72,
+            "rate": 0.5972222222222222,
+            "ci_low": 0.48180671684951565,
+            "ci_high": 0.7027888884789509
+          },
+          "ledger_by_origin": {
+            "1-3": {
+              "hits": 14,
+              "total": 24,
+              "rate": 0.5833333333333334,
+              "ci_low": 0.3883466586522876,
+              "ci_high": 0.7553239739018824
+            },
+            "4-6": {
+              "hits": 20,
+              "total": 27,
+              "rate": 0.7407407407407407,
+              "ci_low": 0.5532142868544692,
+              "ci_high": 0.8682962543809281
+            },
+            "7-9": {
+              "hits": 9,
+              "total": 21,
+              "rate": 0.42857142857142855,
+              "ci_low": 0.24469968925375957,
+              "ci_high": 0.6345344563069328
+            }
+          },
+          "probe_accuracy": {
+            "hits": 18,
+            "total": 18,
+            "rate": 1.0,
+            "ci_low": 0.8241207763533425,
+            "ci_high": 1.0
+          },
+          "session_billed_usd_mean": 0.21341793333333334,
+          "session_warm_usd_mean": 0.1897643333333333,
+          "session_billed_per_1k_usd": 213.41793333333334,
+          "session_warm_per_1k_usd": 189.76433333333333,
+          "probe_phase_billed_usd_mean": 0.15466606666666669
+        }
+      }
+    },
+    {
+      "rung_id": "prefix_cached_summarized",
+      "runs": 6,
+      "turn_recall": {
+        "hits": 205,
+        "total": 207,
+        "rate": 0.9903381642512077,
+        "ci_low": 0.9654623784086972,
+        "ci_high": 0.9973463648785384
+      },
+      "ledger_recall": {
+        "hits": 91,
+        "total": 147,
+        "rate": 0.6190476190476191,
+        "ci_low": 0.5384595311498068,
+        "ci_high": 0.6935721680503757
+      },
+      "ledger_by_origin": {
+        "1-3": {
+          "hits": 24,
+          "total": 51,
+          "rate": 0.47058823529411764,
+          "ci_low": 0.3405299020949959,
+          "ci_high": 0.6047669578990353
+        },
+        "4-6": {
+          "hits": 37,
+          "total": 51,
+          "rate": 0.7254901960784313,
+          "ci_low": 0.5905334923922092,
+          "ci_high": 0.8288572476535512
+        },
+        "7-9": {
+          "hits": 30,
+          "total": 45,
+          "rate": 0.6666666666666666,
+          "ci_low": 0.5207048830990042,
+          "ci_high": 0.7864112506566996
+        }
+      },
+      "probe_accuracy": {
+        "hits": 2,
+        "total": 36,
+        "rate": 0.05555555555555555,
+        "ci_low": 0.015369986664161853,
+        "ci_high": 0.18144657208647252
+      },
+      "session_billed_usd_mean": 0.21245483333333334,
+      "session_warm_usd_mean": 0.18878083333333331,
+      "session_billed_per_1k_usd": 212.45483333333334,
+      "session_warm_per_1k_usd": 188.7808333333333,
+      "probe_phase_billed_usd_mean": 0.07627716666666666,
+      "by_preset": {
+        "desk-01": {
+          "runs": 3,
+          "turn_recall": {
+            "hits": 105,
+            "total": 105,
+            "rate": 1.0,
+            "ci_low": 0.9647059230708901,
+            "ci_high": 1.0
+          },
+          "ledger_recall": {
+            "hits": 59,
+            "total": 75,
+            "rate": 0.7866666666666666,
+            "ci_low": 0.6812003421070318,
+            "ci_high": 0.8641979882028261
+          },
+          "ledger_by_origin": {
+            "1-3": {
+              "hits": 17,
+              "total": 27,
+              "rate": 0.6296296296296297,
+              "ci_low": 0.4422923441210239,
+              "ci_high": 0.784674870390344
+            },
+            "4-6": {
+              "hits": 21,
+              "total": 24,
+              "rate": 0.875,
+              "ci_low": 0.6899611872949993,
+              "ci_high": 0.9565566591987655
+            },
+            "7-9": {
+              "hits": 21,
+              "total": 24,
+              "rate": 0.875,
+              "ci_low": 0.6899611872949993,
+              "ci_high": 0.9565566591987655
+            }
+          },
+          "probe_accuracy": {
+            "hits": 2,
+            "total": 18,
+            "rate": 0.1111111111111111,
+            "ci_low": 0.03101952264561239,
+            "ci_high": 0.32799765130178804
+          },
+          "session_billed_usd_mean": 0.21558146666666667,
+          "session_warm_usd_mean": 0.1919046666666667,
+          "session_billed_per_1k_usd": 215.58146666666667,
+          "session_warm_per_1k_usd": 191.90466666666669,
+          "probe_phase_billed_usd_mean": 0.06996986666666667
+        },
+        "desk-02": {
+          "runs": 3,
+          "turn_recall": {
+            "hits": 100,
+            "total": 102,
+            "rate": 0.9803921568627451,
+            "ci_low": 0.931306915989651,
+            "ci_high": 0.9946062478304136
+          },
+          "ledger_recall": {
+            "hits": 32,
+            "total": 72,
+            "rate": 0.4444444444444444,
+            "ci_low": 0.33539070561321394,
+            "ci_high": 0.559126091341948
+          },
+          "ledger_by_origin": {
+            "1-3": {
+              "hits": 7,
+              "total": 24,
+              "rate": 0.2916666666666667,
+              "ci_low": 0.14914648196960875,
+              "ci_high": 0.49167693664496637
+            },
+            "4-6": {
+              "hits": 16,
+              "total": 27,
+              "rate": 0.5925925925925926,
+              "ci_low": 0.4072670096806468,
+              "ci_high": 0.7548524292560443
+            },
+            "7-9": {
+              "hits": 9,
+              "total": 21,
+              "rate": 0.42857142857142855,
+              "ci_low": 0.24469968925375957,
+              "ci_high": 0.6345344563069328
+            }
+          },
+          "probe_accuracy": {
+            "hits": 0,
+            "total": 18,
+            "rate": 0.0,
+            "ci_low": 1.3877787807814457e-17,
+            "ci_high": 0.17587922364665765
+          },
+          "session_billed_usd_mean": 0.2093282,
+          "session_warm_usd_mean": 0.185657,
+          "session_billed_per_1k_usd": 209.32819999999998,
+          "session_warm_per_1k_usd": 185.65699999999998,
+          "probe_phase_billed_usd_mean": 0.08258446666666668
+        }
+      }
+    }
+  ]
+}

@@ -68,7 +68,7 @@ for step in range(max_steps=10):
     if resp.stop_reason != "tool_use":
         break""",
     "bounded_sonnet_cached_gate": """# RUNG 2 LEVER 1: Projected JOINs + Cached SOP Manual + Deterministic AP Gate (max_steps=4)
-# Consolidates reads into fetch_3way_match_bundle, caches ~5.5k-tok manual (-90% read),
+# Consolidates reads into fetch_3way_match_bundle, caches ~5.5k-tok manual (-95% read),
 # and forces commit_reconciliation_voucher to pass run_policy_tolerance_gate first!
 system_cached = [{
     "type": "text",

@@ -193,6 +193,129 @@ Cat2SectionKey = Literal[
 Cat2ModelTier = Literal["claude-sonnet-5-5", "claude-haiku-5-5"]
 
 
+class Cat2Count(BaseModel):
+    hits: int
+    total: int
+
+
+class Cat2MissedFact(BaseModel):
+    description: str
+    tier: Literal["core", "detail"]
+
+
+class Cat2NumberItem(BaseModel):
+    text: str
+    context: str
+    # Judge's majority verdict (derived_correct / derived_incorrect / not_in_source_unverifiable / not_a_claim /
+    # no_majority); None when not graded (live mode).
+    verdict: str | None = None
+
+
+class Cat2Numbers(BaseModel):
+    numeric_tokens: int
+    not_in_source: int
+    verdicts: dict[str, int] | None = None
+    items: list[Cat2NumberItem] = Field(default_factory=list)
+
+
+class Cat2DimensionScore(BaseModel):
+    mean: float
+    scores: list[int] = Field(default_factory=list)
+
+
+class Cat2DraftError(BaseModel):
+    claim_quote: str
+    problem: str
+    source_quote: str | None = None  # None = the judge found nothing in the source supporting the claim
+    severity: Literal["material", "minor"]
+    passes_reporting: int
+
+
+class Cat2ActionItemCheck(BaseModel):
+    """Templated action items whose owner or time window the judge reported as an error."""
+
+    total: int
+    flagged: int
+    flagged_serious: int
+
+
+class Cat2HeadToHeadOrder(BaseModel):
+    shown_first: Cat2RungId
+    winner: str | None = None  # a rung id, "tie", or None when the call is missing
+
+
+class Cat2HeadToHead(BaseModel):
+    opponent: Cat2RungId
+    results: list[Cat2HeadToHeadOrder] = Field(default_factory=list)
+
+
+class Cat2RungQuality(BaseModel):
+    source: Literal["replay_judged", "live_deterministic"]
+    preset_id: str | None = None
+    keys_version: str | None = None
+    core_facts: Cat2Count | None = None
+    detail_facts: Cat2Count | None = None
+    missed_facts: list[Cat2MissedFact] = Field(default_factory=list)
+    numbers: Cat2Numbers | None = None
+    rubric: dict[str, Cat2DimensionScore] | None = None
+    serious_errors: int | None = None
+    minor_errors: int | None = None
+    errors: list[Cat2DraftError] | None = None
+    action_items: Cat2ActionItemCheck | None = None
+    head_to_head: list[Cat2HeadToHead] | None = None
+    judge_model: str | None = None
+    passes: int | None = None
+    judge_unavailable_reason: str | None = None
+
+
+class Cat2PooledDimension(BaseModel):
+    mean: float | None = None
+    min: float | None = None
+    max: float | None = None
+    n: int = 0
+
+
+class Cat2WinRecord(BaseModel):
+    wins: int
+    losses: int
+    ties: int
+
+
+class Cat2PortfolioRung(BaseModel):
+    rung_id: Cat2RungId
+    drafts: int
+    core_facts: Cat2Count
+    detail_facts: Cat2Count
+    rubric: dict[str, Cat2PooledDimension]
+    serious_errors: int
+    minor_errors: int
+    numbers: Cat2Numbers
+    action_items: Cat2ActionItemCheck | None = None
+    cost_per_1k_docs_usd: float | None = None
+    output_tokens_mean: float | None = None
+    head_to_head: dict[str, Cat2WinRecord] = Field(default_factory=dict)
+
+
+class Cat2PairwiseBlock(BaseModel):
+    wins: dict[str, dict[str, int]]
+    ties: dict[str, int]
+    position_consistency: dict[str, int]
+
+
+class Cat2QualityPortfolio(BaseModel):
+    schema_version: int
+    source: str
+    keys_version: str | None = None
+    judge_model: str
+    passes_per_draft: int
+    drafts_per_cell: int
+    documents: list[str]
+    calls: dict[str, int]
+    dimensions: list[str]
+    rungs: list[Cat2PortfolioRung]
+    pairwise: dict[str, Cat2PairwiseBlock]
+
+
 class Cat2RungResult(BaseModel):
     rung_id: Cat2RungId
     rung_title: str
@@ -208,6 +331,8 @@ class Cat2RungResult(BaseModel):
     finops: FinOpsBreakdown
     savings_vs_unbounded_pct: float = 0.0
     architectural_notes: list[str] = Field(default_factory=list)
+    stop_reason: str | None = None  # live: the API's value; replay: the stored value
+    quality: Cat2RungQuality | None = None
 
 
 class Cat2RunRequest(BaseModel):
@@ -229,6 +354,7 @@ class Cat2RunResponse(BaseModel):
     results: list[Cat2RungResult]
     haiku_batch_comparator: FinOpsBreakdown | None = None
     output_tax_callout: str
+    quality_portfolio: Cat2QualityPortfolio | None = None
 
 
 class Cat2SectionRegenRequest(BaseModel):
@@ -284,6 +410,72 @@ class Cat3TurnResult(BaseModel):
     estimated_active_context_tokens: int = 0
 
 
+class Cat3Measure(BaseModel):
+    """hits/total with an optional rate and Wilson 95% interval (None when total == 0 or not computed)."""
+
+    hits: int
+    total: int
+    rate: float | None = None
+    ci_low: float | None = None
+    ci_high: float | None = None
+
+
+class Cat3ProbeResult(BaseModel):
+    probe_id: str
+    origin_turn: int
+    question: str
+    expected: str
+    answer: str
+    hit: bool
+    outcome: Literal["correct", "declined", "wrong"]
+
+
+class Cat3RungQuality(BaseModel):
+    """Deterministic answer-key scores for one session on one rung (app/data/cat3_quality_keys.json)."""
+
+    keys_version: str | None = None
+    turn_recall: Cat3Measure
+    ledger_recall: Cat3Measure
+    ledger_by_origin: dict[str, Cat3Measure] = Field(default_factory=dict)
+    probe_accuracy: Cat3Measure | None = None
+    probes: list[Cat3ProbeResult] | None = None
+    probes_unavailable_reason: str | None = None
+
+
+class Cat3PortfolioCell(BaseModel):
+    runs: int
+    turn_recall: Cat3Measure
+    ledger_recall: Cat3Measure
+    ledger_by_origin: dict[str, Cat3Measure] = Field(default_factory=dict)
+    probe_accuracy: Cat3Measure
+    session_billed_usd_mean: float | None = None
+    session_warm_usd_mean: float | None = None
+    session_billed_per_1k_usd: float | None = None
+    session_warm_per_1k_usd: float | None = None
+    probe_phase_billed_usd_mean: float | None = None
+
+
+class Cat3PortfolioRung(Cat3PortfolioCell):
+    rung_id: Cat3RungId
+    by_preset: dict[str, Cat3PortfolioCell] = Field(default_factory=dict)
+
+
+class Cat3QualityPortfolio(BaseModel):
+    """Pooled quality-rerun picture (replays/cat3_quality_summary.json)."""
+
+    schema_version: int = 1
+    source: str
+    source_file: str | None = None
+    keys_version: str | None = None
+    runs: int
+    error_records: int = 0
+    repeats: int
+    sessions: list[str] = Field(default_factory=list)
+    probes_per_session: dict[str, int] = Field(default_factory=dict)
+    matrix_complete: bool = True
+    rungs: list[Cat3PortfolioRung] = Field(default_factory=list)
+
+
 class Cat3RungSummary(BaseModel):
     rung_id: Cat3RungId
     rung_title: str
@@ -312,6 +504,7 @@ class Cat3RungSummary(BaseModel):
     warm_savings_vs_cached_history_pct: float = 0.0
     total_latency_ms: int = 0
     architectural_notes: list[str] = Field(default_factory=list)
+    quality: Cat3RungQuality | None = None
 
 
 class Cat3RunRequest(BaseModel):
@@ -337,6 +530,7 @@ class Cat3RunResponse(BaseModel):
     approx_handbook_tokens: int
     results: list[Cat3RungSummary]
     session_callout: str
+    quality_portfolio: Cat3QualityPortfolio | None = None
 
 
 class Cat3ChatTurnEntry(BaseModel):
@@ -715,8 +909,9 @@ class Cat6RungResult(BaseModel):
     warm_run_cost_usd: float = 0.0
     cost_per_1k_runs_cold_usd: float = 0.0
     cost_per_1k_runs_warm_usd: float = 0.0
-    cpo_cold_per_1k_usd: float = 0.0
-    cpo_warm_per_1k_usd: float = 0.0
+    # Cost per Verified Outcome; None when the run produced no verified outcome (CpO is undefined, not $0).
+    cpo_cold_per_1k_usd: float | None = None
+    cpo_warm_per_1k_usd: float | None = None
     savings_vs_naive_cold_pct: float = 0.0
     savings_vs_naive_warm_pct: float = 0.0
     total_latency_ms: int = 0
@@ -740,9 +935,10 @@ class Cat6PortfolioRungRollup(BaseModel):
     daily_tokens_per_dev_at_25_runs: int
     avg_cpr_cold_per_1k_usd: float
     avg_cpr_warm_per_1k_usd: float
-    portfolio_cpo_cold_per_1k_usd: float
-    portfolio_cpo_warm_per_1k_usd: float
-    cpo_savings_vs_naive_cold_pct: float
+    # None when the rung has zero verified outcomes (CpO undefined) or, for savings, when either side is undefined.
+    portfolio_cpo_cold_per_1k_usd: float | None
+    portfolio_cpo_warm_per_1k_usd: float | None
+    cpo_savings_vs_naive_cold_pct: float | None
 
 
 class Cat6RunRequest(BaseModel):

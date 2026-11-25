@@ -49,6 +49,7 @@ import type {
   StructuredDraftFinding,
   StructuredDraftRiskRow,
 } from '../types'
+import { Cat2QualityPanel } from './Cat2QualityPanel'
 import { NativeModal } from './NativeModal'
 
 interface Cat2WorkbenchProps {
@@ -77,7 +78,7 @@ const SECTION_META: Array<{ key: Cat2SectionKey; title: string; subtitle: string
   {
     key: 'key_findings',
     title: '2. Quantified Key Findings',
-    subtitle: 'High-signal findings anchored to exact timestamps and telemetry tables',
+    subtitle: 'Three quantified findings, each with a source anchor',
   },
   {
     key: 'risk_and_compliance_matrix',
@@ -87,7 +88,7 @@ const SECTION_META: Array<{ key: Cat2SectionKey; title: string; subtitle: string
   {
     key: 'action_plan',
     title: '4. Owned Action Plan',
-    subtitle: 'Time-bound execution gates with owning team & verification metric',
+    subtitle: 'Time-bound execution gates with owning team & verification metric (check owners and deadlines against the source)',
   },
 ]
 
@@ -512,9 +513,11 @@ export function Cat2Workbench({
             </h1>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-600 sm:text-sm">
               Because Anthropic output tokens cost <strong>5x input tokens</strong> ($10.00/M vs $2.00/M on{' '}
-              <strong>Sonnet 5.5</strong>), unbounded synthesis lets output drive &gt;80% of the bill. Enforce{' '}
-              <strong>Section-Templated Bounds</strong>, route first drafts to <strong>Haiku 5.5</strong>, and use{' '}
-              <strong>Surgical HITL Section Regen</strong> instead of re-prompting entire documents.
+              <strong>Sonnet 5.5</strong>), unbounded synthesis lets output drive &gt;80% of the bill.{' '}
+              <strong>Section-Templated Bounds</strong> and <strong>Haiku 5.5</strong> first drafts cut that cost
+              sharply, but on the graded documents the shorter drafts scored lower on accuracy and coverage and had
+              more serious errors, so they need a reviewer; <strong>Surgical HITL Section Regen</strong> fixes one
+              section instead of re-prompting the entire document.
             </p>
           </div>
 
@@ -911,6 +914,9 @@ export function Cat2Workbench({
                 })}
               </div>
 
+              {/* Draft quality vs cost (blind-judge summary in replay mode; free checks only in live mode) */}
+              <Cat2QualityPanel results={runResponse.results} portfolio={runResponse.quality_portfolio} />
+
               {/* Category 2 FinOps HUD: Input vs 5x Output Weight */}
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
@@ -956,7 +962,7 @@ export function Cat2Workbench({
                     {annualTemplateSaved > 0 && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 font-mono text-xs font-bold text-emerald-900">
                         <TrendingDown className="h-3.5 w-3.5" />
-                        Annualized Savings (Same Sonnet 5.5 + Templates): $
+                        Annualized Savings (Sonnet 5.5 + Templates, cost only): $
                         {annualTemplateSaved.toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr
                       </span>
                     )}
@@ -1482,8 +1488,8 @@ export function Cat2Workbench({
                             }
                             className="self-start rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-xs font-semibold text-slate-800 disabled:bg-slate-100"
                           >
-                            <option value="claude-sonnet-5-5">Sonnet 5.5 (Frontier Polish)</option>
-                            <option value="claude-haiku-5-5">Haiku 5.5 (Fast Tighten)</option>
+                            <option value="claude-sonnet-5-5">Sonnet 5.5 (higher cost)</option>
+                            <option value="claude-haiku-5-5">Haiku 5.5 (lower cost)</option>
                           </select>
 
                           <button

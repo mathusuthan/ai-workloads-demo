@@ -1,0 +1,1056 @@
+{
+  "meta": {
+    "schema_version": 1,
+    "keys_version": "2026-11-25.3",
+    "description": "Category 2 fact checklist: for each of the 4 source bundles (CAT2_PRESETS in app/data/cat2_fixtures.py), the facts a faithful draft for the stated target deliverable should carry. Derived ONLY from each preset's `payload` (incl. its target-deliverable / audience lines); written before any draft was read.",
+    "matching": "A fact is covered when ANY any_of alternative occurs in the rendered draft after both sides are normalised by app.archetypes.cat3_assistants.quality_rerun.normalise_text(), with that module's boundary guard (an alternative starting with a letter/digit must not be preceded by a letter/digit; one ending in a digit must not be followed by a digit).",
+    "tier_rule": "core = a decision-maker cannot act without it (headline metric, size of the exposure, the decision/ask, the hard deadline, the accountable owner where the source names one), judged from the source's own emphasis and its stated target deliverable; detail = supporting figures, components of a total, secondary names, mechanisms.",
+    "categories": [
+      "metric",
+      "money",
+      "deadline",
+      "owner",
+      "decision",
+      "cause"
+    ],
+    "alternative_rule": "Every any_of alternative written at key time is a literal that occurs in its own payload after normalisation (tested). Alternatives added by the one dry pass over the drafts are format variants of the same value only; each is listed in format_variants_added_detail with the payload-literal alternative it is equivalent to (tested).",
+    "format_variants_added_from_dry_pass": 5,
+    "format_variants_added_detail": [
+      {
+        "fact_id": "b2-std-commission-11-5",
+        "added": "11.50",
+        "equivalent_to": "11.5",
+        "reason": "two-decimal form of the same percentage ('11.50%'); alternative '11.5' fails the digit boundary guard there",
+        "seen_in": "brief-02 sonnet_templated"
+      },
+      {
+        "fact_id": "r1-zero-injuries",
+        "added": "zero injuries",
+        "equivalent_to": "zero human injuries",
+        "reason": "same statement without 'human'",
+        "seen_in": "reg-01 sonnet_templated, reg-01 haiku_templated"
+      },
+      {
+        "fact_id": "r1-delisted-15-skus",
+        "added": "15 delisted",
+        "equivalent_to": "15 skus",
+        "reason": "WORDING variant (approved by lead 2026-11-25, see lead_rulings): same count with 'SKUs' elided ('334 compliant, 63 suspended and 15 delisted')",
+        "seen_in": "reg-01 sonnet_templated"
+      },
+      {
+        "fact_id": "r2-sla-contract-48h",
+        "added": "48-hour",
+        "equivalent_to": "48h",
+        "reason": "hyphenated form of the same 48h cap ('48-hour cap')",
+        "seen_in": "reg-02 sonnet_templated, reg-02 haiku_templated"
+      },
+      {
+        "fact_id": "r2-cause-iban-19",
+        "added": "19 third-party iban",
+        "equivalent_to": "19 accounts",
+        "reason": "WORDING variant (approved by lead 2026-11-25, see lead_rulings): same count of the same accounts ('19 third-party IBAN routings')",
+        "seen_in": "reg-02 sonnet_templated"
+      }
+    ],
+    "dry_pass_note": "One pass over the 12 rendered drafts, looking only at facts a draft missed: draft numbers whose value equals the fact's value, date/time tokens for deadline facts, and the fact's distinctive words. No fact was added, dropped or re-tiered. Candidates rejected: '37Wh' label mentions for r1-air-block-37wh (different fact); '48 hours' (not needed, same value already matched by '48-hour').",
+    "lead_rulings": [
+      {
+        "fact_id": "r1-delisted-15-skus",
+        "alternative": "15 delisted",
+        "ruling": "Approved: wording variant of the same count, judged against the source quote 'Permanently Delisted … 15 SKUs'.",
+        "date": "2026-11-25"
+      },
+      {
+        "fact_id": "r2-cause-iban-19",
+        "alternative": "19 third-party iban",
+        "ruling": "Approved: wording variant of the same count, judged against the source quote '19 accounts routed payouts to third-party aggregator IBANs'.",
+        "date": "2026-11-25"
+      }
+    ]
+  },
+  "facts": [
+    {
+      "id": "b1-sla-bhiwandi-86-2",
+      "preset_id": "brief-01",
+      "tier": "core",
+      "category": "metric",
+      "description": "Bhiwandi (FC-WEST-01) 24-hour Assured dispatch SLA attainment is 86.2% (vs the 96.5% contractual guarantee).",
+      "any_of": [
+        "86.2"
+      ],
+      "evidence": {
+        "quote": "putting our 24-hour Assured dispatch SLA at 86.2% versus the 96.5% contractual guarantee"
+      }
+    },
+    {
+      "id": "b1-backlog-41800",
+      "preset_id": "brief-01",
+      "tier": "core",
+      "category": "metric",
+      "description": "Bhiwandi backlog of 41,800 staged cages awaiting linehaul dispatch (as of 15:00Z).",
+      "any_of": [
+        "41800"
+      ],
+      "evidence": {
+        "quote": "As of 15:00Z, backlog stands at 41,800 staged cages awaiting linehaul dispatch"
+      }
+    },
+    {
+      "id": "b1-exposure-313330",
+      "preset_id": "brief-01",
+      "tier": "core",
+      "category": "money",
+      "description": "Total unmitigated carrier/rebate/voucher exposure of $313,330.",
+      "any_of": [
+        "313330"
+      ],
+      "evidence": {
+        "quote": "Reconcile total unmitigated exposure ($313,330 carrier/rebate/voucher + $61,250 un-reversed UPI holds)"
+      }
+    },
+    {
+      "id": "b1-upi-holds-61250",
+      "preset_id": "brief-01",
+      "tier": "core",
+      "category": "money",
+      "description": "430 high-value duplicate UPI holds totalling $61,250 still need manual settlement reconciliation.",
+      "any_of": [
+        "61250"
+      ],
+      "evidence": {
+        "quote": "430 high-value duplicate holds ($61,250 total) still require manual settlement file reconciliation before tomorrow's T+1 banking cutoff"
+      }
+    },
+    {
+      "id": "b1-containment-24200",
+      "preset_id": "brief-01",
+      "tier": "core",
+      "category": "money",
+      "description": "Immediate containment spend of $24,200 (BlueDart standby fleet + night-shift loader overtime) is the ask.",
+      "any_of": [
+        "24200"
+      ],
+      "evidence": {
+        "quote": "cleanly against $24,200 immediate containment spend (12.9x gross exposure mitigation ratio)"
+      }
+    },
+    {
+      "id": "b1-deadline-2359z",
+      "preset_id": "brief-01",
+      "tier": "core",
+      "category": "deadline",
+      "description": "The cage backlog must be cleared before 23:59Z tonight to avoid the carrier surcharges.",
+      "any_of": [
+        "23:59"
+      ],
+      "evidence": {
+        "quote": "if we do not clear the 41,800 cage backlog before 23:59Z tonight"
+      }
+    },
+    {
+      "id": "b1-deadline-upi-t1",
+      "preset_id": "brief-01",
+      "tier": "core",
+      "category": "deadline",
+      "description": "Remaining duplicate UPI holds must be cleared before the 04:00Z T+1 bank settlement batch.",
+      "any_of": [
+        "04:00",
+        "t+1"
+      ],
+      "evidence": {
+        "quote": "Clear remaining 430 manual duplicate UPI holds ($61,250) prior to 04:00Z T+1 bank settlement batch"
+      }
+    },
+    {
+      "id": "b1-decision-ldp-312-only",
+      "preset_id": "brief-01",
+      "tier": "core",
+      "category": "decision",
+      "description": "Late Dispatch Penalty waivers only for the 312 Gate-3-verified sellers (no blanket waiver).",
+      "any_of": [
+        "312"
+      ],
+      "evidence": {
+        "quote": "enforce dock-timestamp LDP waivers ONLY for the 312 Gate-3-verified sellers while auditing the 47 phantom-manifest accounts"
+      }
+    },
+    {
+      "id": "b1-gmv-38-4m",
+      "preset_id": "brief-01",
+      "tier": "detail",
+      "category": "metric",
+      "description": "Diwali Sale Day 3 closed at $38.4M daily GMV.",
+      "any_of": [
+        "38.4",
+        "38400000"
+      ],
+      "evidence": {
+        "quote": "we closed Diwali Sale Day 3 at $38.4M daily GMV across 612,000 orders, up 34% YoY"
+      }
+    },
+    {
+      "id": "b1-cause-sorter-lane-4",
+      "preset_id": "brief-01",
+      "tier": "detail",
+      "category": "cause",
+      "description": "Cross-belt diverter jams on Sorter Lane 4 (oversized appliances) dropped sorter availability to 81.4%.",
+      "any_of": [
+        "lane 4",
+        "81.4"
+      ],
+      "evidence": {
+        "quote": "Three cross-belt diverter jams on Sorter Lane 4 caused by oversized multi-SKU appliances"
+      }
+    },
+    {
+      "id": "b1-cause-upi-timeout",
+      "preset_id": "brief-01",
+      "tier": "detail",
+      "category": "cause",
+      "description": "A 3-second client timeout against 4.8-second PSP callbacks (p99 420ms -> 4,850ms) caused the pending/duplicate holds.",
+      "any_of": [
+        "3-second",
+        "4.8 seconds",
+        "4850"
+      ],
+      "evidence": {
+        "quote": "retried synchronous status polling with a 3-second client timeout while upstream PSP callbacks arrived at 4.8 seconds"
+      }
+    },
+    {
+      "id": "b1-carrier-surcharge-77330",
+      "preset_id": "brief-01",
+      "tier": "detail",
+      "category": "money",
+      "description": "$77,330 in direct carrier surcharges if the backlog is not cleared.",
+      "any_of": [
+        "77330"
+      ],
+      "evidence": {
+        "quote": "That exposes $77,330 in direct carrier surcharges"
+      }
+    },
+    {
+      "id": "b1-rebate-142000",
+      "preset_id": "brief-01",
+      "tier": "detail",
+      "category": "money",
+      "description": "$142,000 Week-46 rebate forfeiture risk if Western Zone on-time-tender falls below 92.0%.",
+      "any_of": [
+        "142000"
+      ],
+      "evidence": {
+        "quote": "plus an estimated $142,000 rebate forfeiture risk for Week 46 if Western Zone on-time-tender falls below 92.0%"
+      }
+    },
+    {
+      "id": "b1-voucher-94000",
+      "preset_id": "brief-01",
+      "tier": "detail",
+      "category": "money",
+      "description": "$94,000 potential Assured late-delivery buyer credits if backlog age crosses 16 hours.",
+      "any_of": [
+        "94000"
+      ],
+      "evidence": {
+        "quote": "Also factor in potential $94,000 Assured late-delivery buyer credits if backlog age crosses 16 hours."
+      }
+    },
+    {
+      "id": "b1-bluedart-14400",
+      "preset_id": "brief-01",
+      "tier": "detail",
+      "category": "decision",
+      "description": "Approve the $14,400 BlueDart standby fleet (18 trailers at Gate 7).",
+      "any_of": [
+        "14400"
+      ],
+      "evidence": {
+        "quote": "approve the $14,400 BlueDart standby fleet immediately"
+      }
+    },
+    {
+      "id": "b1-phantom-47-audit",
+      "preset_id": "brief-01",
+      "tier": "detail",
+      "category": "decision",
+      "description": "Audit the 47 phantom-manifest (zero-inventory) sellers instead of waiving their penalty.",
+      "any_of": [
+        "47 phantom",
+        "47 sellers",
+        "47 zero-inventory"
+      ],
+      "evidence": {
+        "quote": "placing 47 zero-inventory phantom-manifest sellers on mandatory 7-day inventory audit"
+      }
+    },
+    {
+      "id": "b1-ratio-12-9x",
+      "preset_id": "brief-01",
+      "tier": "detail",
+      "category": "metric",
+      "description": "Gross exposure mitigation ratio of 12.9x for the containment spend.",
+      "any_of": [
+        "12.9"
+      ],
+      "evidence": {
+        "quote": "(12.9x gross exposure mitigation ratio)"
+      }
+    },
+    {
+      "id": "b1-owner-ananya",
+      "preset_id": "brief-01",
+      "tier": "detail",
+      "category": "owner",
+      "description": "Ananya Deshmukh (VP Fulfillment) proposes and owns the containment decisions.",
+      "any_of": [
+        "ananya",
+        "deshmukh",
+        "vp fulfillment"
+      ],
+      "evidence": {
+        "quote": "Ananya Deshmukh (VP Fulfillment & Linehaul Operations)"
+      }
+    },
+    {
+      "id": "b2-allocation-18m",
+      "preset_id": "brief-02",
+      "tier": "core",
+      "category": "money",
+      "description": "AetherSonic commits an $18.0M Year-1 inventory allocation (projected Year-1 GMV $18M).",
+      "any_of": [
+        "18.0m",
+        "18m",
+        "18000000"
+      ],
+      "evidence": {
+        "quote": "AetherSonic commits $18.0M Year-1 annualized inventory allocation including 45-day early launch exclusivity"
+      }
+    },
+    {
+      "id": "b2-commission-9-75",
+      "preset_id": "brief-02",
+      "tier": "core",
+      "category": "decision",
+      "description": "Referral commission reduced from 11.5% to 9.75% on verified MAP-compliant brand-direct orders.",
+      "any_of": [
+        "9.75"
+      ],
+      "evidence": {
+        "quote": "Reduce core Audio referral commission from 11.5% to 9.75% on verified MAP-compliant brand-direct orders"
+      }
+    },
+    {
+      "id": "b2-fbo-3-65",
+      "preset_id": "brief-02",
+      "tier": "core",
+      "category": "decision",
+      "description": "FBO-Assured 1-Day Prime fee locked at a flat $3.65/unit for items <=1.2kg.",
+      "any_of": [
+        "3.65"
+      ],
+      "evidence": {
+        "quote": "Lock FBO-Assured 1-Day Prime fulfillment fee at flat $3.65/unit for items <=1.2kg (below standard $4.40 FBO schedule)"
+      }
+    },
+    {
+      "id": "b2-coop-480k",
+      "preset_id": "brief-02",
+      "tier": "core",
+      "category": "money",
+      "description": "AetherSonic commits a $480,000/yr minimum Co-Op (Sponsored Search & Homepage Hero) budget.",
+      "any_of": [
+        "480000",
+        "480k"
+      ],
+      "evidence": {
+        "quote": "AetherSonic commits $480,000/yr minimum Sponsored Search & Homepage Hero Co-Op budget"
+      }
+    },
+    {
+      "id": "b2-concession-315k",
+      "preset_id": "brief-02",
+      "tier": "core",
+      "category": "money",
+      "description": "The commission concession is worth ~$315k/yr to AetherSonic at $18M GMV.",
+      "any_of": [
+        "315000",
+        "315k"
+      ],
+      "evidence": {
+        "quote": "(saving AetherSonic ~$315k/yr at $18M GMV)"
+      }
+    },
+    {
+      "id": "b2-golive-feb-15",
+      "preset_id": "brief-02",
+      "tier": "core",
+      "category": "deadline",
+      "description": "Go-live on February 15 (Q1 FY2027) across the Top 18 Metro Regions.",
+      "any_of": [
+        "february 15"
+      ],
+      "evidence": {
+        "quote": "target_launch_window: Q1 FY2027 (February 15 Go-Live across Top 18 Metro Regions)"
+      }
+    },
+    {
+      "id": "b2-map-unwind",
+      "preset_id": "brief-02",
+      "tier": "core",
+      "category": "decision",
+      "description": "Termination trigger: >2% grey-market MAP leakage over a 14-day window gives AetherSonic a 30-day exclusivity unwind right.",
+      "any_of": [
+        "unwind",
+        ">2%",
+        "2.0% leakage"
+      ],
+      "evidence": {
+        "quote": "If NovaMart buy-box MAP enforcement suffers >2% unauthorized grey-market leakage over any 14-day audit window, AetherSonic holds a 30-day exclusivity unwind right."
+      }
+    },
+    {
+      "id": "b2-settlement-t3",
+      "preset_id": "brief-02",
+      "tier": "core",
+      "category": "decision",
+      "description": "AetherSonic requests T+3 settlement (vs standard T+7), which needs Director approval and zero KYC/TIN mismatches.",
+      "any_of": [
+        "t+3"
+      ],
+      "evidence": {
+        "quote": "AetherSonic requests T+3 net settlement release (versus standard T+7 seller escrow)"
+      }
+    },
+    {
+      "id": "b2-std-commission-11-5",
+      "preset_id": "brief-02",
+      "tier": "detail",
+      "category": "metric",
+      "description": "Standard Consumer Electronics referral commission is 11.5%.",
+      "any_of": [
+        "11.5",
+        "11.50"
+      ],
+      "evidence": {
+        "quote": "Standard NovaMart Consumer Electronics marketplace referral commission is 11.5%"
+      }
+    },
+    {
+      "id": "b2-fbo-standard-4-40",
+      "preset_id": "brief-02",
+      "tier": "detail",
+      "category": "money",
+      "description": "The $3.65 FBO tier is below the standard $4.40 schedule (a $0.75/unit subsidy).",
+      "any_of": [
+        "4.40",
+        "0.75"
+      ],
+      "evidence": {
+        "quote": "$0.75/unit FBO subsidy"
+      }
+    },
+    {
+      "id": "b2-roas-floor-4-8x",
+      "preset_id": "brief-02",
+      "tier": "detail",
+      "category": "metric",
+      "description": "Guaranteed 4.8x ROAS floor on the Co-Op spend.",
+      "any_of": [
+        "4.8x"
+      ],
+      "evidence": {
+        "quote": "with a guaranteed NovaMart 4.8x ROAS floor"
+      }
+    },
+    {
+      "id": "b2-hub-split-65",
+      "preset_id": "brief-02",
+      "tier": "detail",
+      "category": "decision",
+      "description": "The FBO rate requires AetherSonic to pre-position 65% of safety stock across the 4 regional hubs.",
+      "any_of": [
+        "65%",
+        "65.0"
+      ],
+      "evidence": {
+        "quote": "provided AetherSonic pre-positions 65% of safety stock across our 4 regional hubs"
+      }
+    },
+    {
+      "id": "b2-exclusivity-45-day",
+      "preset_id": "brief-02",
+      "tier": "detail",
+      "category": "decision",
+      "description": "45-day early launch exclusivity on the StudioPulse X2 flagship.",
+      "any_of": [
+        "45-day"
+      ],
+      "evidence": {
+        "quote": "45-day early launch exclusivity on their upcoming flagship \"StudioPulse X2\""
+      }
+    },
+    {
+      "id": "b2-return-savings-954k",
+      "preset_id": "brief-02",
+      "tier": "detail",
+      "category": "money",
+      "description": "Overbox damage shield worth ~$954,000 annualized GMV retention (crush returns 7.4% -> 2.1%).",
+      "any_of": [
+        "954000"
+      ],
+      "evidence": {
+        "quote": "-530bps margin recovery worth ~$954,000 annualized GMV retention"
+      }
+    },
+    {
+      "id": "b2-un38-26-of-28",
+      "preset_id": "brief-02",
+      "tier": "detail",
+      "category": "metric",
+      "description": "UN38.3 certifications: 26 of 28 SKUs uploaded, 2 pending lab sign-off.",
+      "any_of": [
+        "26 of 28",
+        "2 pending"
+      ],
+      "evidence": {
+        "quote": "26 of 28 SKUs uploaded; 2 pending lab signoff"
+      }
+    },
+    {
+      "id": "b2-registry-lock-jan-10",
+      "preset_id": "brief-02",
+      "tier": "detail",
+      "category": "deadline",
+      "description": "All 28 UPCs/EANs enrolled into Brand Registry Lock by January 10, 2027.",
+      "any_of": [
+        "january 10"
+      ],
+      "evidence": {
+        "quote": "enroll all 28 AetherSonic UPCs/EANs into Brand Registry Lock by January 10, 2027"
+      }
+    },
+    {
+      "id": "b2-reserve-250k",
+      "preset_id": "brief-02",
+      "tier": "detail",
+      "category": "money",
+      "description": "T+3 settlement backed by a $250,000 rolling return reserve for 90 days post-launch.",
+      "any_of": [
+        "250000"
+      ],
+      "evidence": {
+        "quote": "backed by a $250,000 rolling return reserve for 90 days post-launch"
+      }
+    },
+    {
+      "id": "b2-owner-siddharth",
+      "preset_id": "brief-02",
+      "tier": "detail",
+      "category": "owner",
+      "description": "Siddharth Rao (NovaMart VP Category Partnerships) leads the partnership for NovaMart.",
+      "any_of": [
+        "siddharth",
+        "vp category partnerships"
+      ],
+      "evidence": {
+        "quote": "Siddharth Rao (NovaMart VP Category Partnerships)"
+      }
+    },
+    {
+      "id": "r1-zero-injuries",
+      "preset_id": "reg-01",
+      "tier": "core",
+      "category": "metric",
+      "description": "The thermal event caused zero human injuries / zero personnel exposure.",
+      "any_of": [
+        "zero human injuries",
+        "zero personnel exposure",
+        "zero injuries"
+      ],
+      "evidence": {
+        "quote": "Zero human injuries occurred"
+      }
+    },
+    {
+      "id": "r1-cause-misdeclared-cells",
+      "preset_id": "reg-01",
+      "tier": "core",
+      "category": "cause",
+      "description": "Seller packed undeclared 26,800mAh / 99.16Wh cells inside shells stamped 10,000mAh / 37Wh to evade UN38.3 declarations.",
+      "any_of": [
+        "99.16",
+        "26800"
+      ],
+      "evidence": {
+        "quote": "packed unlabeled 26,800mAh / 99.16Wh high-density lithium-polymer pouch cells inside outer shells stamped \"10,000mAh / 37Wh\""
+      }
+    },
+    {
+      "id": "r1-delisted-15-skus",
+      "preset_id": "reg-01",
+      "tier": "core",
+      "category": "decision",
+      "description": "15 SKUs permanently delisted and 4 seller accounts terminated for falsified safety documents / undeclared >100Wh cells.",
+      "any_of": [
+        "15 skus",
+        "15 falsified",
+        "15 delisted"
+      ],
+      "evidence": {
+        "quote": "Permanently Delisted & Seller Accounts Terminated for Falsified Safety Docs or Undeclared >100Wh Cells: 15 SKUs across 4 sellers"
+      }
+    },
+    {
+      "id": "r1-audit-compliant-334",
+      "preset_id": "reg-01",
+      "tier": "core",
+      "category": "metric",
+      "description": "Fleet audit: 334 of 412 SKUs (81.1%) verified compliant.",
+      "any_of": [
+        "334 of 412",
+        "81.1"
+      ],
+      "evidence": {
+        "quote": "334 of 412 SKUs (81.1%)"
+      }
+    },
+    {
+      "id": "r1-open-recall-548",
+      "preset_id": "reg-01",
+      "tier": "core",
+      "category": "metric",
+      "description": "548 recalled units remain unreturned.",
+      "any_of": [
+        "548"
+      ],
+      "evidence": {
+        "quote": "closing all 548 open customer recall returns via escalated SMS + IVR follow-ups by November 15, 2026"
+      }
+    },
+    {
+      "id": "r1-deadline-recall-nov-15",
+      "preset_id": "reg-01",
+      "tier": "core",
+      "category": "deadline",
+      "description": "Commitment to close all open recall returns by November 15, 2026.",
+      "any_of": [
+        "november 15"
+      ],
+      "evidence": {
+        "quote": "closing all 548 open customer recall returns via escalated SMS + IVR follow-ups by November 15, 2026"
+      }
+    },
+    {
+      "id": "r1-deadline-flir-nov-30",
+      "preset_id": "reg-01",
+      "tier": "core",
+      "category": "deadline",
+      "description": "FLIR handheld imaging on the remaining 10 Tier-2 spokes by November 30, 2026.",
+      "any_of": [
+        "november 30",
+        "nov 30"
+      ],
+      "evidence": {
+        "quote": "deploying FLIR handheld imaging across all remaining 10 Tier-2 regional sortation spokes ($42,000 approved capex) by November 30, 2026"
+      }
+    },
+    {
+      "id": "r1-escrow-184k",
+      "preset_id": "reg-01",
+      "tier": "core",
+      "category": "money",
+      "description": "$184,000 terminated-seller escrow frozen to backstop recall refunds and statutory liability.",
+      "any_of": [
+        "184000"
+      ],
+      "evidence": {
+        "quote": "retaining $184,000 in terminated seller escrow accounts to backstop 100% of buyer recall refunds"
+      }
+    },
+    {
+      "id": "r1-suspended-63",
+      "preset_id": "reg-01",
+      "tier": "detail",
+      "category": "metric",
+      "description": "63 of 412 SKUs (15.3%) suspended pending valid test summary / label match.",
+      "any_of": [
+        "63 of 412",
+        "15.3"
+      ],
+      "evidence": {
+        "quote": "63 of 412 SKUs (15.3%, $412,000/mo trailing GMV quarantined)"
+      }
+    },
+    {
+      "id": "r1-recall-1420",
+      "preset_id": "reg-01",
+      "tier": "detail",
+      "category": "metric",
+      "description": "Recall notices sent to 1,420 customers who bought the falsified SKUs.",
+      "any_of": [
+        "1420"
+      ],
+      "evidence": {
+        "quote": "dispatched to 1,420 customers who purchased any of the 15 falsified SKUs between May and August 2026"
+      }
+    },
+    {
+      "id": "r1-recall-completion-61-4",
+      "preset_id": "reg-01",
+      "tier": "detail",
+      "category": "metric",
+      "description": "Recall response/return completion at 61.4% as of September 30.",
+      "any_of": [
+        "61.4"
+      ],
+      "evidence": {
+        "quote": "61.4% buyer response/return completion as of September 30"
+      }
+    },
+    {
+      "id": "r1-recall-reserve-58220",
+      "preset_id": "reg-01",
+      "tier": "detail",
+      "category": "money",
+      "description": "$58,220 cumulative buyer refund reserve booked.",
+      "any_of": [
+        "58220"
+      ],
+      "evidence": {
+        "quote": "($58,220 cumulative refund reserve booked"
+      }
+    },
+    {
+      "id": "r1-cause-forged-bis",
+      "preset_id": "reg-01",
+      "tier": "detail",
+      "category": "cause",
+      "description": "The seller uploaded a forged BIS IS 16046 certificate at onboarding.",
+      "any_of": [
+        "forged bis",
+        "bis-r-41009912"
+      ],
+      "evidence": {
+        "quote": "Seller uploaded a forged BIS IS 16046 safety certificate PDF during April 2026 onboarding"
+      }
+    },
+    {
+      "id": "r1-referral-law-enforcement",
+      "preset_id": "reg-01",
+      "tier": "detail",
+      "category": "decision",
+      "description": "Forged-certificate evidence referred to the Bureau of Market Surveillance and Economic Offences Wing.",
+      "any_of": [
+        "economic offences wing",
+        "bureau of market surveillance"
+      ],
+      "evidence": {
+        "quote": "NovaMart Legal referred forged BIS Certificate #BIS-R-41009912 evidence to the Bureau of Market Surveillance and Economic Offences Wing on September 18, 2026"
+      }
+    },
+    {
+      "id": "r1-flir-capex-42000",
+      "preset_id": "reg-01",
+      "tier": "detail",
+      "category": "money",
+      "description": "$42,000 approved capex for the remaining FLIR rollout.",
+      "any_of": [
+        "42000"
+      ],
+      "evidence": {
+        "quote": "($42,000 approved capex)"
+      }
+    },
+    {
+      "id": "r1-remediation-12400",
+      "preset_id": "reg-01",
+      "tier": "detail",
+      "category": "money",
+      "description": "$12,400 containment remediation cost (absorbed in Q3 Safety OpEx).",
+      "any_of": [
+        "12400"
+      ],
+      "evidence": {
+        "quote": "containment remediation cost: $12,400"
+      }
+    },
+    {
+      "id": "r1-air-block-37wh",
+      "preset_id": "reg-01",
+      "tier": "detail",
+      "category": "decision",
+      "description": "Hard TMS API block keeps >37Wh spare batteries / UN3480 packs off passenger air manifests.",
+      "any_of": [
+        ">37wh",
+        "tms api block"
+      ],
+      "evidence": {
+        "quote": "Hard TMS API block preventing >37Wh spare batteries or UN3480 standalone packs from routing onto passenger/belly air manifests"
+      }
+    },
+    {
+      "id": "r1-cause-nickel-tab",
+      "preset_id": "reg-01",
+      "tier": "detail",
+      "category": "cause",
+      "description": "No UN3480 label or short-circuit separators; transit vibration fractured a nickel tab, initiating thermal runaway.",
+      "any_of": [
+        "nickel tab",
+        "short-circuit foam"
+      ],
+      "evidence": {
+        "quote": "crush vibration along highway transit fractured one internal nickel tab, initiating thermal runaway"
+      }
+    },
+    {
+      "id": "r2-false-positive-68-2",
+      "preset_id": "reg-02",
+      "tier": "core",
+      "category": "metric",
+      "description": "68.2% of ESCROW_HOLD_409 holds (146 of 214) were false-positive name-normalization mismatches.",
+      "any_of": [
+        "68.2"
+      ],
+      "evidence": {
+        "quote": "**68.2% (146 of 214 holds)** were *false-positive string-normalization mismatches*"
+      }
+    },
+    {
+      "id": "r2-true-gaps-1-41m",
+      "preset_id": "reg-02",
+      "tier": "core",
+      "category": "money",
+      "description": "68 genuine compliance-gap holds with $1.41M exposure.",
+      "any_of": [
+        "1.41m",
+        "1410000"
+      ],
+      "evidence": {
+        "quote": "68 holds (31.8% of held accounts, $1.41M exposure) represented genuine material compliance gaps"
+      }
+    },
+    {
+      "id": "r2-sla-observed-83-5",
+      "preset_id": "reg-02",
+      "tier": "core",
+      "category": "metric",
+      "description": "Median manual review time slipped to 83.5 hours.",
+      "any_of": [
+        "83.5"
+      ],
+      "evidence": {
+        "quote": "Median manual review SLA slipped to **83.5 hours** during pre-Diwali onboarding surges (target <=48h)"
+      }
+    },
+    {
+      "id": "r2-sla-contract-48h",
+      "preset_id": "reg-02",
+      "tier": "core",
+      "category": "deadline",
+      "description": "Section 14.3 contractual review SLA of 48 business hours.",
+      "any_of": [
+        "48 business hours",
+        "48h",
+        "48-hour"
+      ],
+      "evidence": {
+        "quote": "within **48 business hours** of placing an automated escrow hold"
+      }
+    },
+    {
+      "id": "r2-pii-194",
+      "preset_id": "reg-02",
+      "tier": "core",
+      "category": "metric",
+      "description": "194 raw sensitive PII artifacts were logged before the regex gate (0 after).",
+      "any_of": [
+        "194"
+      ],
+      "evidence": {
+        "quote": "194 raw sensitive PII artifacts were inadvertently echoed into general support logs"
+      }
+    },
+    {
+      "id": "r2-aml-286k",
+      "preset_id": "reg-02",
+      "tier": "core",
+      "category": "money",
+      "description": "$286,000 attempted synthetic GMV from a 14-account shell ring blocked before settlement.",
+      "any_of": [
+        "286000",
+        "286k"
+      ],
+      "evidence": {
+        "quote": "($286,000 attempted synthetic GMV blocked prior to T+7 settlement)"
+      }
+    },
+    {
+      "id": "r2-escrow-held-4-82m",
+      "preset_id": "reg-02",
+      "tier": "core",
+      "category": "money",
+      "description": "$4.82M of seller funds held under ESCROW_HOLD_409 during the audit period.",
+      "any_of": [
+        "4.82m",
+        "4820000"
+      ],
+      "evidence": {
+        "quote": "triggered automated ESCROW_HOLD_409 holds during the audit period totaling $4.82M in held funds"
+      }
+    },
+    {
+      "id": "r2-dispute-cost",
+      "preset_id": "reg-02",
+      "tier": "core",
+      "category": "money",
+      "description": "Projected Section 14.3 arbitration legal & interest exposure ~$147,500/quarter (range $115,000-$180,000).",
+      "any_of": [
+        "147500",
+        "115000",
+        "180000"
+      ],
+      "evidence": {
+        "quote": "(~$147,500/quarter projected legal & interest exposure)"
+      }
+    },
+    {
+      "id": "r2-audited-1850",
+      "preset_id": "reg-02",
+      "tier": "detail",
+      "category": "metric",
+      "description": "1,850 sellers audited.",
+      "any_of": [
+        "1850"
+      ],
+      "evidence": {
+        "quote": "sample_size: 1,850 active cross-border & domestic Platinum/Gold sellers ($684M annualized GMV cohort)"
+      }
+    },
+    {
+      "id": "r2-holds-214",
+      "preset_id": "reg-02",
+      "tier": "detail",
+      "category": "metric",
+      "description": "214 sellers (11.6%) triggered ESCROW_HOLD_409 holds.",
+      "any_of": [
+        "214"
+      ],
+      "evidence": {
+        "quote": "214 sellers (11.6%) triggered automated ESCROW_HOLD_409 holds"
+      }
+    },
+    {
+      "id": "r2-fp-146",
+      "preset_id": "reg-02",
+      "tier": "detail",
+      "category": "metric",
+      "description": "146 false-positive hold accounts.",
+      "any_of": [
+        "146"
+      ],
+      "evidence": {
+        "quote": "(146 false-positive accounts)"
+      }
+    },
+    {
+      "id": "r2-arbitration-notices",
+      "preset_id": "reg-02",
+      "tier": "detail",
+      "category": "metric",
+      "description": "Three Tier-1 sellers issued Section 14.3 arbitration pre-notices over wrongful 96-hour holds.",
+      "any_of": [
+        "three tier-1",
+        "pre-notice"
+      ],
+      "evidence": {
+        "quote": "Three Tier-1 sellers (representing $412k trailing 90d GMV each) issued formal Section 14.3 arbitration pre-notices"
+      }
+    },
+    {
+      "id": "r2-cause-name-normalization",
+      "preset_id": "reg-02",
+      "tier": "detail",
+      "category": "cause",
+      "description": "False positives come from legal-suffix / name string-normalization mismatches (e.g. LLC vs Pvt Ltd).",
+      "any_of": [
+        "string-normalization",
+        "name-normalization",
+        "legal-suffix"
+      ],
+      "evidence": {
+        "quote": "false-positive string-normalization mismatches"
+      }
+    },
+    {
+      "id": "r2-cause-iban-19",
+      "preset_id": "reg-02",
+      "tier": "detail",
+      "category": "cause",
+      "description": "19 accounts routed payouts to third-party aggregator IBANs outside their jurisdiction.",
+      "any_of": [
+        "19 accounts",
+        "19 cross-border",
+        "19 third-party iban"
+      ],
+      "evidence": {
+        "quote": "19 accounts routed payouts to third-party aggregator IBANs outside their incorporated jurisdiction"
+      }
+    },
+    {
+      "id": "r2-fix-canonicalizer-65",
+      "preset_id": "reg-02",
+      "tier": "detail",
+      "category": "decision",
+      "description": "Legal-suffix normalizer + micro-deposit name check to cut false-positive 409 holds by 65%.",
+      "any_of": [
+        "65%"
+      ],
+      "evidence": {
+        "quote": "Deploy legal-suffix normalizer (LLC/Pvt Ltd/Inc) + instant micro-deposit name check to cut false-positive 409 holds by 65% before hold activation"
+      }
+    },
+    {
+      "id": "r2-fix-fast-lane-12h",
+      "preset_id": "reg-02",
+      "tier": "detail",
+      "category": "decision",
+      "description": "Dedicated 12-hour SLA fast lane for false-positive holds on clean Platinum sellers.",
+      "any_of": [
+        "12-hour"
+      ],
+      "evidence": {
+        "quote": "Dedicated 12-hour SLA fast-lane for false-positive holds on Platinum sellers"
+      }
+    },
+    {
+      "id": "r2-fix-pii-vault",
+      "preset_id": "reg-02",
+      "tier": "detail",
+      "category": "decision",
+      "description": "Zero-PII ticket vault: regex masking at ingestion + encrypted KMS tax-document vault.",
+      "any_of": [
+        "zero-pii",
+        "ticket vault",
+        "kms vault"
+      ],
+      "evidence": {
+        "quote": "Privacy & Data Protection Remediation (Zero-PII Ticket Vault)"
+      }
+    },
+    {
+      "id": "r2-owner-treasury-infosec",
+      "preset_id": "reg-02",
+      "tier": "detail",
+      "category": "owner",
+      "description": "Names an accountable function from the source: Treasury Operations or Information Security.",
+      "any_of": [
+        "treasury operations",
+        "information security"
+      ],
+      "evidence": {
+        "quote": "Treasury Operations acknowledged that failing to separate benign legal-suffix normalization mismatches"
+      }
+    }
+  ]
+}

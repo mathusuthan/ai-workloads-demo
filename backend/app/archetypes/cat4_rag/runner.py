@@ -27,6 +27,7 @@ from app.core.anthropic_service import (
     run_cat4_rag_synthesis,
 )
 from app.core.credit_shield import credit_shield
+from app.core.measured_claims import fmt_pct, pct_cut, set_note
 from app.core.pricing import compute_run_finops
 from app.core.trace_store import (
     TracePartition,
@@ -82,27 +83,29 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, str | None, list[str]]:
             "Anti-Pattern: Uncached Dump ($2.00/M In)",
             None,
             [
-                "Sends all 7 Deal-Room documents (~16k+ tok) as plain uncached user text on every query ($2.00/M input).",
+                # replaced with the measured prompt size by _apply_measured_claims
+                "Sends all 7 Deal-Room documents as plain uncached user text on every query ($2.00/M input).",
                 "Produces zero verifiable Document Block citations — analysts must manually Cmd+F across 7 agreements to verify claims.",
             ],
         )
     if rung_id == "cached_full_corpus_citations":
         return (
             "2. Cached Full Corpus + Native Citations",
-            "Lever 1: 90% Cache Reads + Citations",
+            "Lever 1: 95% Cache Reads + Citations",
             None,
             [
-                "Attaches cache_control={'type': 'ephemeral'} on the 7th DocumentBlock: Q1 writes prefix ($2.50/M), Q2+ hit $0.20/M cache reads.",
+                "Attaches cache_control={'type': 'ephemeral'} on the 7th DocumentBlock: Q1 writes prefix ($2.50/M), Q2+ hit $0.10/M cache reads.",
                 "Native Anthropic Citations return character-exact doc spans without chunking or missing subtle override clauses.",
             ],
         )
     return (
         "3. Hybrid BM25 + Haiku Rerank + Citations",
-        "Lever 2: ~82% Token Pruning + Citations",
+        "Lever 2: Token Pruning + Citations",  # measured pruning % added by _apply_measured_claims
         "claude-haiku-5-5",
         [
-            "Deterministic BM25 retrieves top-10 of 28 clauses; Haiku 5.5 ($0.10/M) reranks to top-5 decisive chunks (~3.1k tok) for Sonnet synthesis.",
-            "100% of Haiku reranker spend is included here — cuts single cold-query cost >75% vs Rung 1 & scales linearly as deal rooms hit 100k+ tokens.",
+            "Deterministic BM25 retrieves top-10 of 28 clauses; Haiku 5.5 ($0.10/M) reranks to top-5 decisive chunks for Sonnet synthesis.",
+            # replaced with the measured single-query saving by _apply_measured_claims
+            "100% of Haiku reranker spend is included here, so its cost comparison with Rung 1 is like-for-like.",
         ],
     )
 
@@ -347,6 +350,40 @@ def finalize_cat4_rung_summary(
         total_latency_ms=tot_lat,
         architectural_notes=notes,
     )
+
+
+def _apply_measured_claims(results: list[Cat4RungSummary]) -> None:
+    """Rewrite result-dependent rung badges/notes with numbers measured on this audit."""
+    ok = {r.rung_id: r for r in results if r.status == "ok" and r.queries}
+    naive, hybrid = ok.get("naive_full_corpus"), ok.get("hybrid_rag_rerank_citations")
+    if naive:
+        per_q = round(naive.total_uncached_input_tokens / len(naive.queries))
+        set_note(
+            naive,
+            0,
+            f"Sends all 7 Deal-Room documents ({per_q:,} prompt tok per query) as plain uncached user text "
+            "on every query ($2.00/M input).",
+        )
+    if hybrid:
+        avg_red = sum(q.context_reduction_pct for q in hybrid.queries) / len(hybrid.queries)
+        hybrid.badge_text = f"Lever 2: ~{fmt_pct(avg_red)} Token Pruning + Citations"
+        synth_prompt = round(
+            sum(q.finops.input_tokens + q.finops.cache_creation_tokens + q.finops.cache_read_tokens for q in hybrid.queries)
+            / len(hybrid.queries)
+        )
+        set_note(
+            hybrid,
+            0,
+            "Deterministic BM25 retrieves top-10 of 28 clauses; Haiku 5.5 ($0.10/M) reranks to top-5 decisive "
+            f"chunks for Sonnet synthesis (~{synth_prompt:,}-tok synthesis prompt).",
+        )
+        cut = pct_cut(naive.single_query_cold_per_1k_usd, hybrid.single_query_cold_per_1k_usd) if naive else None
+        if cut is not None:
+            set_note(
+                hybrid,
+                1,
+                f"100% of Haiku reranker spend is included here — cuts single cold-query cost {fmt_pct(cut)} vs Rung 1.",
+            )
 
 
 def _apply_cross_rung_savings(results: list[Cat4RungSummary]) -> None:
@@ -819,6 +856,7 @@ async def execute_cat4_run(
         mode_used = "live"
 
     _apply_cross_rung_savings(results)
+    _apply_measured_claims(results)
 
     for res in results:
         _persist_cat4_rung_traces(
@@ -934,6 +972,7 @@ async def execute_cat4_adhoc_query(
 
     results = list(await asyncio.gather(*(_safe_adhoc(r) for r in req.rungs)))
     _apply_cross_rung_savings(results)
+    _apply_measured_claims(results)
 
     if creds.uses_server_budget:
         total_spend = sum(r.cold_audit_cost_usd for r in results if r.status == "ok")

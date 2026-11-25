@@ -110,8 +110,8 @@ ARCHETYPES_CATALOG = [
             "Field Ops Assistant",
         ],
         "architectural_lever": (
-            "Enable Anthropic prefix context caching (90% read discount) and sliding-window memory "
-            "summarization to eliminate quadratic O(N²) session cost across 10+ turns."
+            "Enable Anthropic prefix context caching (90–95% read discount) and sliding-window memory "
+            "summarization to prevent quadratic O(N²) session cost across 10+ turns."
         ),
         "novamart_story": (
             "Guides 18,000 corporate and fulfillment employees through multi-turn Zero-Trust MDM/VPN "
@@ -226,7 +226,7 @@ FINOPS_RULES = [
             "Route Tier 1 stateless triage (Cat 1: 20:1–50:1 input asymmetry) to Haiku/Decision tiers with strict schemas.",
             "Bound Tier 2 drafting (Cat 2: 800–3k+ output) with section templates to control 5x output token pricing.",
         ],
-        "impact": "Impact: 60–97% lower unit inference cost",
+        "impact": "Impact: lower unit inference cost",  # replaced by the measured range in /api/archetypes
         "accent": "#2563EB",
     },
     {

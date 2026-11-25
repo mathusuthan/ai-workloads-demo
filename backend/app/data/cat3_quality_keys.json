@@ -1,0 +1,2143 @@
+{
+ "meta": {
+  "schema_version": 1,
+  "keys_version": "2026-11-25.2",
+  "description": "Category 3 answer key: per-turn handbook facts (turns 1-9), turn-10 ledger facts, and turn-11 recall probes for desk-01 and desk-02. Derived only from IT_HR_HANDBOOK_MARKDOWN, each preset's employee_profile and the scripted user messages in app/data/cat3_fixtures.py; never from model replies.",
+  "matching": "A fact is hit when ANY any_of alternative occurs in the reply after both sides are normalised by quality_rerun.normalise_text(), with a boundary guard: an alternative that starts with a letter or digit must not be preceded by a letter or digit, and an alternative that ends in a digit must not be followed by a digit (so '4419' does not match inside '44190' and '24h' does not match inside '124h').",
+  "source_rule": "source=handbook when the value can be found in or computed from the handbook and/or employee profile alone; source=session when it appears only in a user message (lost if the conversation history is lost). Turn facts whose value only exists in a user message are tagged session too.",
+  "ledger_exclusion_rule": "No ledger-fact or probe alternative matches the normalised turn-10 user message of its session (checked in tests/test_cat3_quality_rerun.py).",
+  "expected_display_note": "probes[].expected_display is a readable form of the expected value for the app; it is never used for matching (any_of decides hits).",
+  "format_variants_added_from_golden_dry_pass": 1,
+  "format_variants_added_detail": [
+   {
+    "fact_id": "d2-t9-gate-2-blocks",
+    "added": "2 · pam jit",
+    "reason": "gate 2 written as a numbered table-row label ('| 2 · PAM JIT dry-run |') in desk-02 naive_full_history turn 9"
+   }
+  ],
+  "lead_rulings": [
+   {
+    "fact_id": "d2-t8-on-or-before-15th",
+    "ruling": "Accept either branch of the same handbook sentence (on or before the 15th / between the 16th and 31st). The employee joined on the 16th, so the second branch is the one that applies. Decided from the handbook text; the scripted user message says '16th-30th window', which none of the added alternatives match.",
+    "date": "2026-11-25"
+   }
+  ]
+ },
+ "facts": [
+  {
+   "id": "d1-t1-no-wipe-cs-contained",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 1,
+   "source": "handbook",
+   "description": "Posture error never triggers a wipe unless the CrowdStrike quarantine flag CS_CONTAINED=true is held.",
+   "any_of": [
+    "cs_contained"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "NEVER requires laptop re-imaging or disk wipe unless Security Incident Response holds a CrowdStrike quarantine flag (`CS_CONTAINED=true`)."
+   }
+  },
+  {
+   "id": "d1-t1-falconctl-heartbeat",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 1,
+   "source": "handbook",
+   "description": "Diagnostic: CrowdStrike Falcon heartbeat check via falconctl stats agent_info.",
+   "any_of": [
+    "falconctl stats agent_info",
+    "falconctl stats"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`sudo /Applications/Falcon.app/Contents/Resources/falconctl stats agent_info`"
+   }
+  },
+  {
+   "id": "d1-t1-queue-it-iam-fastpass",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 1,
+   "source": "handbook",
+   "description": "Queue for ERR_DEVICE_POSTURE_STALE_90D is IT-IAM-FASTPASS.",
+   "any_of": [
+    "it-iam-fastpass"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `IT-IAM-FASTPASS` (Tier-1 automated posture refresh 10 min; manual SCEP bind SLA 30 min P2)."
+   }
+  },
+  {
+   "id": "d1-t1-sla-fastpass",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 1,
+   "source": "handbook",
+   "description": "SLA: 30 min P2 manual SCEP bind (10 min Tier-1 automated refresh also accepted).",
+   "any_of": [
+    "30 min",
+    "30-min",
+    "30 minute",
+    "10 min",
+    "10-min",
+    "10 minute"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `IT-IAM-FASTPASS` (Tier-1 automated posture refresh 10 min; manual SCEP bind SLA 30 min P2)."
+   }
+  },
+  {
+   "id": "d1-t2-profiles-renew",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 2,
+   "source": "handbook",
+   "description": "Non-destructive MDM re-enrollment command: sudo profiles renew -type enrollment.",
+   "any_of": [
+    "profiles renew -type enrollment"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`sudo profiles renew -type enrollment`"
+   }
+  },
+  {
+   "id": "d1-t2-jamf-reenroll-posture",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 2,
+   "source": "handbook",
+   "description": "Re-apply compliance policies: jamf policy -event reenroll-posture.",
+   "any_of": [
+    "reenroll-posture"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`sudo jamf policy -event reenroll-posture && sudo jamf policy -event sase-root-ca`"
+   }
+  },
+  {
+   "id": "d1-t2-queue-it-mdm-leave-unlock",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 2,
+   "source": "handbook",
+   "description": "Queue for MDM_CERT_REVOKED_INACTIVE_LEAVE unlock is IT-MDM-LEAVE-UNLOCK.",
+   "any_of": [
+    "it-mdm-leave-unlock"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "formal **P2 Unlock SLA: 30 minutes** from ticket creation (`IT-MDM-LEAVE-UNLOCK`)."
+   }
+  },
+  {
+   "id": "d1-t2-sla-30-min",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 2,
+   "source": "handbook",
+   "description": "Formal P2 unlock SLA is 30 minutes.",
+   "any_of": [
+    "30 min",
+    "30-min",
+    "30 minute"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "formal **P2 Unlock SLA: 30 minutes** from ticket creation (`IT-MDM-LEAVE-UNLOCK`)."
+   }
+  },
+  {
+   "id": "d1-t3-root-ca-v4-fingerprint",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 3,
+   "source": "handbook",
+   "description": "Trusted Root CA v4 SHA256 fingerprint 9F:4B:22:C8:11:04:E7:8A.",
+   "any_of": [
+    "9f:4b:22:c8:11:04:e7:8a"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`SHA256 Fingerprint: 9F:4B:22:C8:11:04:E7:8A`"
+   }
+  },
+  {
+   "id": "d1-t3-split-tunnel-workday-sso",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 3,
+   "source": "handbook",
+   "description": "Split-tunnel domain list includes workday-sso.novamart.internal (not named by the user).",
+   "any_of": [
+    "workday-sso.novamart.internal",
+    "workday-sso"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`workday-sso.novamart.internal` (HR & Absence Management Bridge)"
+   }
+  },
+  {
+   "id": "d1-t3-cert-refresh-sase-v4",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 3,
+   "source": "handbook",
+   "description": "Fix command: nm-cli cert refresh --profile sase-v4.",
+   "any_of": [
+    "cert refresh --profile sase-v4"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`nm-cli cert refresh --profile sase-v4 && sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder`"
+   }
+  },
+  {
+   "id": "d1-t3-disable-ipv6-bypass",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 3,
+   "source": "handbook",
+   "description": "Reconnect GlobalProtect with --disable-ipv6-bypass.",
+   "any_of": [
+    "disable-ipv6-bypass"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`globalprotect disconnect && globalprotect connect --portal sase-in.novamart.com --disable-ipv6-bypass`"
+   }
+  },
+  {
+   "id": "d1-t4-hr-bon-412c",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 4,
+   "source": "handbook",
+   "description": "Bonus protection clause HR-BON-412C: paid parental leave counts 100% as eligible service.",
+   "any_of": [
+    "hr-bon-412c"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Bonus Protection Clause (`HR-BON-412C`): Paid statutory parental leave counts **100% as active eligible service days**"
+   }
+  },
+  {
+   "id": "d1-t4-bonus-factor-1-00",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 4,
+   "source": "handbook",
+   "description": "BonusEligibilityFactor = 1.00 (zero pro-rata reduction).",
+   "any_of": [
+    "1.00"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "(`BonusEligibilityFactor = 1.00`, zero pro-rata reduction)"
+   }
+  },
+  {
+   "id": "d1-t4-secondary-leave-12-weeks",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 4,
+   "source": "handbook",
+   "description": "Secondary caregiver paid leave: 12 weeks (84 calendar days) at 100% base.",
+   "any_of": [
+    "12 weeks",
+    "12-week",
+    "12 wk",
+    "84 calendar days",
+    "84 days",
+    "84-day"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Secondary / Paternity Paid Leave: **12 weeks (84 calendar days) at 100% base salary**"
+   }
+  },
+  {
+   "id": "d1-t4-queue-hr-pay-retro",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 4,
+   "source": "handbook",
+   "description": "Audit the shortfall through queue HR-PAY-RETRO.",
+   "any_of": [
+    "hr-pay-retro"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `HR-PAY-RETRO` (P1 Payroll Audit 4 business hours;"
+   }
+  },
+  {
+   "id": "d1-t5-cutoff-18-00-ist",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 5,
+   "source": "handbook",
+   "description": "Payroll batch freezes on the 18th at 18:00 IST.",
+   "any_of": [
+    "18:00"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "SAP/ADP Monthly Payroll batch freezes on the **18th calendar day of each month at 18:00 IST**."
+   }
+  },
+  {
+   "id": "d1-t5-stale-unpaid-loa-hold",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 5,
+   "source": "handbook",
+   "description": "SAP inherits the stale UNPAID_LOA_HOLD status until the next cycle.",
+   "any_of": [
+    "unpaid_loa_hold",
+    "unpaid loa hold"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "SAP temporarily inherits stale `UNPAID_LOA_HOLD` or `PRORATA_DEFERRED` status until the next cycle."
+   }
+  },
+  {
+   "id": "d1-t5-hr-bon-412c",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 5,
+   "source": "handbook",
+   "description": "The Diwali bonus is owed back under HR-BON-412C.",
+   "any_of": [
+    "hr-bon-412c"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Bonus Protection Clause (`HR-BON-412C`): Paid statutory parental leave counts **100% as active eligible service days**"
+   }
+  },
+  {
+   "id": "d1-t5-total-owed-64200",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 5,
+   "source": "session",
+   "description": "Total owed back: 42,200 + 22,000 = 64,200 INR.",
+   "any_of": [
+    "64200"
+   ],
+   "evidence": {
+    "source": "user_turn:5",
+    "quote": "(Total `₹64,200` / `$770.40`)"
+   }
+  },
+  {
+   "id": "d1-t6-threshold-25000",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 6,
+   "source": "handbook",
+   "description": "Bridge wire threshold: shortfall exceeds 25,000 INR ($300).",
+   "any_of": [
+    "25000"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "If verified net salary + bonus shortfall **exceeds ₹25,000 INR (or $300 USD)**"
+   }
+  },
+  {
+   "id": "d1-t6-48-business-hours",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 6,
+   "source": "handbook",
+   "description": "Off-cycle bridge wire released within 48 business hours (the bare policy-ID substring '48h' is deliberately not accepted).",
+   "any_of": [
+    "48 business hour",
+    "48-business-hour",
+    "48 business-hour",
+    "48 hours",
+    "48-hour",
+    "48 hrs",
+    "48-hr",
+    "within 48h",
+    "48h sla",
+    "48h bridge",
+    "48h wire",
+    "48h off-cycle",
+    "48h neft"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "release an **Off-Cycle NEFT/IMPS Payroll Bridge Wire within 48 business hours**"
+   }
+  },
+  {
+   "id": "d1-t6-queue-hr-pay-retro",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 6,
+   "source": "handbook",
+   "description": "Queue executing the bridge wire: HR-PAY-RETRO.",
+   "any_of": [
+    "hr-pay-retro"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `HR-PAY-RETRO` (P1 Payroll Audit 4 business hours; **48h Bridge Wire** for variance `> ₹25,000 / $300`)."
+   }
+  },
+  {
+   "id": "d1-t6-tds-following-month",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 6,
+   "source": "handbook",
+   "description": "TDS reconciles automatically in the following month's finalized payslip.",
+   "any_of": [
+    "following month",
+    "next month's finalized payslip",
+    "next month's payslip",
+    "next month's finalised payslip",
+    "following payslip",
+    "next payslip",
+    "next finalized payslip",
+    "next finalised payslip"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Tax withholding reconciliation (TDS Section 192 / Form 16 YTD) adjusts automatically in the following month's finalized payslip"
+   }
+  },
+  {
+   "id": "d1-t7-annual-cap-35000",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 7,
+   "source": "handbook",
+   "description": "FY26 ergonomic annual cap 35,000 INR ($420).",
+   "any_of": [
+    "35000"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Annual Cap (FY26 Apr 1 – Mar 31): **₹35,000 INR ($420 USD)**"
+   }
+  },
+  {
+   "id": "d1-t7-single-claim-30000",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 7,
+   "source": "handbook",
+   "description": "Claims <= 30,000 INR need only L5+ direct manager approval.",
+   "any_of": [
+    "30000"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Single-item or bundled claim `<= ₹30,000` inside remaining cap requires standard **L5+ Direct Manager approval**"
+   }
+  },
+  {
+   "id": "d1-t7-direct-manager-approval",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 7,
+   "source": "handbook",
+   "description": "A 28,500 claim normally routes to the L5+ Direct Manager.",
+   "any_of": [
+    "direct manager",
+    "l5+"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Single-item or bundled claim `<= ₹30,000` inside remaining cap requires standard **L5+ Direct Manager approval**"
+   }
+  },
+  {
+   "id": "d1-t8-wd-del-09",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 8,
+   "source": "handbook",
+   "description": "Delegation policy for manager PTO > 3 business days: WD-DEL-09.",
+   "any_of": [
+    "wd-del-09"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Service Desk triggers `WD-DEL-09` **24h Automatic Skip-Level Director Delegation** in Workday so reimbursement SLA stays within **5 business days**."
+   }
+  },
+  {
+   "id": "d1-t8-24h-auto-delegation",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 8,
+   "source": "handbook",
+   "description": "Delegation is a 24h automatic skip-level delegation.",
+   "any_of": [
+    "24h",
+    "24 h",
+    "24-hour",
+    "24 hour",
+    "24 hrs",
+    "24-hr"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Service Desk triggers `WD-DEL-09` **24h Automatic Skip-Level Director Delegation** in Workday so reimbursement SLA stays within **5 business days**."
+   }
+  },
+  {
+   "id": "d1-t8-reimbursement-5-business-days",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 8,
+   "source": "handbook",
+   "description": "Reimbursement SLA stays within 5 business days.",
+   "any_of": [
+    "5 business days",
+    "5 business day",
+    "5-business-day",
+    "five business days"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Service Desk triggers `WD-DEL-09` **24h Automatic Skip-Level Director Delegation** in Workday so reimbursement SLA stays within **5 business days**."
+   }
+  },
+  {
+   "id": "d1-t8-queue-hr-ben-escalations",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 8,
+   "source": "handbook",
+   "description": "Queue for WD-DEL-09 / ergonomic benefits: HR-BEN-ESCALATIONS.",
+   "any_of": [
+    "hr-ben-escalations"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "| `HR-BEN-ESCALATIONS` | `HR-BEN-ERGO-26` / `WD-DEL-09` / Relocation / Parents | 24h P2 | Total Rewards & HR Ops |"
+   }
+  },
+  {
+   "id": "d1-t9-wd-access-recert",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 9,
+   "source": "handbook",
+   "description": "High-sensitivity RBAC groups need manager confirmation via WD-ACCESS-RECERT.",
+   "any_of": [
+    "wd-access-recert"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "which require explicit manager confirmation via Workday task `WD-ACCESS-RECERT`."
+   }
+  },
+  {
+   "id": "d1-t9-queue-it-iam-groups",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 9,
+   "source": "handbook",
+   "description": "Queue IT-IAM-GROUPS.",
+   "any_of": [
+    "it-iam-groups"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `IT-IAM-GROUPS` (P2 60 min auto-sync verify after Workday `ACTIVE` timestamp commits)."
+   }
+  },
+  {
+   "id": "d1-t9-sla-60-min",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 9,
+   "source": "handbook",
+   "description": "IT-IAM-GROUPS SLA P2 60 min.",
+   "any_of": [
+    "60 min",
+    "60-min",
+    "60 minute"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `IT-IAM-GROUPS` (P2 60 min auto-sync verify after Workday `ACTIVE` timestamp commits)."
+   }
+  },
+  {
+   "id": "d1-t9-restore-via-wd-del-09",
+   "preset_id": "desk-01",
+   "kind": "turn",
+   "turn": 9,
+   "source": "handbook",
+   "description": "Restore today while the manager is on PTO via the WD-DEL-09 skip-level delegate.",
+   "any_of": [
+    "wd-del-09"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "**Manager Out-of-Office Rule (`WD-DEL-09`)**: If Direct Manager is on active Workday PTO **> 3 consecutive business days**"
+   }
+  },
+  {
+   "id": "d2-t1-ykman-fido-info",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 1,
+   "source": "handbook",
+   "description": "AAGUID check: ykman info && ykman fido info.",
+   "any_of": [
+    "ykman fido info"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`ykman info && ykman fido info`"
+   }
+  },
+  {
+   "id": "d2-t1-dual-verification-manager-id",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 1,
+   "source": "handbook",
+   "description": "MFA-BYPASS-24H dual verification includes the Manager Workday ID (plus Employee ID and green FastPass posture).",
+   "any_of": [
+    "manager workday id",
+    "manager's workday id",
+    "manager wd id",
+    "manager workday employee id",
+    "manager id"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "(a) Workday Employee ID + Manager Workday ID + active corporate laptop Okta FastPass green posture (`Posture=TRUSTED`)."
+   }
+  },
+  {
+   "id": "d2-t1-queue-it-iam-fido2",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 1,
+   "source": "handbook",
+   "description": "Queue IT-IAM-FIDO2.",
+   "any_of": [
+    "it-iam-fido2"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `IT-IAM-FIDO2` (P1 15 min for SRE/On-Call with active swap; P2 2h standard replacement)."
+   }
+  },
+  {
+   "id": "d2-t1-it-genius-locker",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 1,
+   "source": "handbook",
+   "description": "Spare key via 24h in-person IT Genius locker pickup at the HYD-HITEC hub.",
+   "any_of": [
+    "it genius",
+    "locker"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Hardware Replacement SLA: 24h in-person IT Genius locker pickup (BLR-RMZ, HYD-HITEC, MUM-BKC hubs) or 48h insured BlueDart courier dispatch."
+   }
+  },
+  {
+   "id": "d2-t2-auth-okta-fido2",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 2,
+   "source": "handbook",
+   "description": "Corrected login: tsh login ... --auth=okta-fido2.",
+   "any_of": [
+    "auth=okta-fido2",
+    "auth okta-fido2"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`tsh logout && tsh login --proxy=pam.novamart.internal --auth=okta-fido2`"
+   }
+  },
+  {
+   "id": "d2-t2-request-ttl-4h",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 2,
+   "source": "handbook",
+   "description": "Corrected request: --request-ttl=4h.",
+   "any_of": [
+    "request-ttl=4h",
+    "request-ttl 4h"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`tsh request create --roles=prod-k8s-sre-ro --reason=\"CHG-2026-8841\" --request-ttl=4h`"
+   }
+  },
+  {
+   "id": "d2-t2-lease-cap-240",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 2,
+   "source": "handbook",
+   "description": "Max JIT lease strictly <= 240 minutes.",
+   "any_of": [
+    "240"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Max JIT Lease Cap: **Strictly <= 4 hours (240 minutes)** per request (`ttl_minutes <= 240`)."
+   }
+  },
+  {
+   "id": "d2-t2-cosign-l7",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 2,
+   "source": "handbook",
+   "description": "Co-signer must be L7+ (or on-duty IC); L6 peer rejected.",
+   "any_of": [
+    "l7"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Must include approval from one active **L7 Principal Engineer / Staff SRE / IC Co-Signer** in the same org unit (`cosign_level >= L7` OR on-duty Incident Commander)."
+   }
+  },
+  {
+   "id": "d2-t3-mtls-90-days",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 3,
+   "source": "handbook",
+   "description": "Developer mTLS client certificates are valid 90 days.",
+   "any_of": [
+    "90 day",
+    "90-day",
+    "90d"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Policy (`IT-NET-MTLS-14`): Developer mTLS client certificates for `artifacts.novamart.internal` auto-issue for **90 days**"
+   }
+  },
+  {
+   "id": "d2-t3-install-ca-v4",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 3,
+   "source": "handbook",
+   "description": "Fix: nm-cli registry login ... --mtls --install-ca-v4 (bundles Root CA v4).",
+   "any_of": [
+    "install-ca-v4"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`nm-cli registry login --host artifacts.novamart.internal --mtls --install-ca-v4`"
+   }
+  },
+  {
+   "id": "d2-t3-queue-it-net-registry",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 3,
+   "source": "handbook",
+   "description": "Queue IT-NET-REGISTRY.",
+   "any_of": [
+    "it-net-registry"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `IT-NET-REGISTRY` (P2 20 min automated renewal once FIDO2/Okta posture is valid)."
+   }
+  },
+  {
+   "id": "d2-t3-sla-20-min",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 3,
+   "source": "handbook",
+   "description": "IT-NET-REGISTRY SLA P2 20 min.",
+   "any_of": [
+    "20 min",
+    "20-min",
+    "20 minute"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `IT-NET-REGISTRY` (P2 20 min automated renewal once FIDO2/Okta posture is valid)."
+   }
+  },
+  {
+   "id": "d2-t4-lift-ceiling-2500",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 4,
+   "source": "handbook",
+   "description": "Temporary lodging ceiling lift up to $2,500 (2,08,000 INR).",
+   "any_of": [
+    "2500",
+    "208000"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "raises the temporary MCC Lodging ceiling **up to $2,500 USD (₹2,08,000 INR equivalent)** for **14 calendar days**"
+   }
+  },
+  {
+   "id": "d2-t4-lift-15-30-min",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 4,
+   "source": "handbook",
+   "description": "Lift takes effect in 15-30 minutes.",
+   "any_of": [
+    "15-30",
+    "15 to 30",
+    "15 - 30"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "taking effect in **15–30 minutes** via `HR-CONCUR-RISK`."
+   }
+  },
+  {
+   "id": "d2-t4-lift-14-days",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 4,
+   "source": "handbook",
+   "description": "Lift lasts 14 calendar days.",
+   "any_of": [
+    "14 calendar days",
+    "14 days",
+    "14-day",
+    "14 calendar-day"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "raises the temporary MCC Lodging ceiling **up to $2,500 USD (₹2,08,000 INR equivalent)** for **14 calendar days**"
+   }
+  },
+  {
+   "id": "d2-t4-gstin",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 4,
+   "source": "handbook",
+   "description": "Folio > 10,000 INR must show employee name + corporate (hub) GSTIN.",
+   "any_of": [
+    "gstin"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Receipts > ₹10,000 MUST show employee name + corporate GSTIN (`29AAACN4192P1Z5` / hub GSTIN) for tax compliance."
+   }
+  },
+  {
+   "id": "d2-t5-gross-363372",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 5,
+   "source": "handbook",
+   "description": "Net-protected gross = 2,50,000 / 0.688 = 3,63,372 INR.",
+   "any_of": [
+    "363372"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`₹2,50,000 / 0.688` = `₹3,63,372` gross -> `₹1,13,372` tax paid to treasury so net credited = `₹2,50,000`"
+   }
+  },
+  {
+   "id": "d2-t5-tax-113372",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 5,
+   "source": "handbook",
+   "description": "Tax paid to treasury 1,13,372 INR.",
+   "any_of": [
+    "113372"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`₹2,50,000 / 0.688` = `₹3,63,372` gross -> `₹1,13,372` tax paid to treasury so net credited = `₹2,50,000`"
+   }
+  },
+  {
+   "id": "d2-t5-clawback-9-months-90843",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 5,
+   "source": "session",
+   "description": "Clawback after 9 completed months = 3,63,372 x (12-9)/12 = 90,843 INR (handbook formula on the user's 9-month scenario).",
+   "any_of": [
+    "90843"
+   ],
+   "evidence": {
+    "source": "user_turn:5",
+    "quote": "show exact repayment if someone exited voluntarily after **9 completed full months**?"
+   }
+  },
+  {
+   "id": "d2-t6-cofund-70-pct",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 6,
+   "source": "handbook",
+   "description": "Parental top-up is 70% employer co-funded.",
+   "any_of": [
+    "70%",
+    "70 %",
+    "70 percent"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Optional **₹5,00,000 INR** parental top-up (`70%` employer co-funded on base tier)"
+   }
+  },
+  {
+   "id": "d2-t6-cutoff-dec-16",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 6,
+   "source": "session",
+   "description": "Enrollment cutoff = join date Nov 16 + 30 calendar days = Dec 16 (an inclusive-count Dec 15 reading is NOT accepted).",
+   "any_of": [
+    "dec 16",
+    "december 16",
+    "16 dec",
+    "16 december",
+    "2026-12-16",
+    "16-dec",
+    "dec. 16",
+    "16th dec",
+    "dec 16th",
+    "december 16th",
+    "16th december"
+   ],
+   "evidence": {
+    "source": "user_turn:6",
+    "quote": "what exact cutoff date applies since I joined **Nov 16, 2026**?"
+   }
+  },
+  {
+   "id": "d2-t6-masked-last-4",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 6,
+   "source": "handbook",
+   "description": "Upload masked Aadhaar showing last 4 digits only (XXXX-XXXX-NNNN).",
+   "any_of": [
+    "xxxx-xxxx-nnnn",
+    "last 4",
+    "last-4",
+    "last four"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "**masked Aadhaar / last-4 digits only (`XXXX-XXXX-NNNN`)** inside the secure Workday KMS vault"
+   }
+  },
+  {
+   "id": "d2-t6-workday-kms-vault",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 6,
+   "source": "handbook",
+   "description": "Upload inside the secure Workday KMS vault (never in chat).",
+   "any_of": [
+    "kms"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "**masked Aadhaar / last-4 digits only (`XXXX-XXXX-NNNN`)** inside the secure Workday KMS vault"
+   }
+  },
+  {
+   "id": "d2-t7-remaining-5200",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 7,
+   "source": "session",
+   "description": "Remaining FY26 allowance = 35,000 - 29,800 = 5,200 INR.",
+   "any_of": [
+    "5200"
+   ],
+   "evidence": {
+    "source": "user_turn:7",
+    "quote": "for **₹29,800 INR total** under `HR-BEN-ERGO-26`. Since my prior FY26 claims = `₹0`"
+   }
+  },
+  {
+   "id": "d2-t7-single-claim-30000",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 7,
+   "source": "handbook",
+   "description": "Single claim <= 30,000 INR needs only L5+ direct manager approval.",
+   "any_of": [
+    "30000"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Single-item or bundled claim `<= ₹30,000` inside remaining cap requires standard **L5+ Direct Manager approval**"
+   }
+  },
+  {
+   "id": "d2-t7-annual-cap-35000",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 7,
+   "source": "handbook",
+   "description": "FY26 ergonomic annual cap 35,000 INR.",
+   "any_of": [
+    "35000"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Annual Cap (FY26 Apr 1 – Mar 31): **₹35,000 INR ($420 USD)**"
+   }
+  },
+  {
+   "id": "d2-t8-hr-pay-nh-18",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 8,
+   "source": "handbook",
+   "description": "Governing rule HR-PAY-NH-18.",
+   "any_of": [
+    "hr-pay-nh-18"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "First-Month New Hire Cutoff Rule (`HR-PAY-NH-18`): New employees starting **on or before the 15th** run in that month's regular payroll"
+   }
+  },
+  {
+   "id": "d2-t8-on-or-before-15th",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 8,
+   "source": "handbook",
+   "description": "Applies the HR-PAY-NH-18 cutoff: joiners on or before the 15th run in that month's payroll; 16th-31st joiners roll into the next month's run.",
+   "any_of": [
+    "15th",
+    "16th and 31st",
+    "16th-31st",
+    "16th to 31st",
+    "16th through 31st",
+    "after the 15th"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "First-Month New Hire Cutoff Rule (`HR-PAY-NH-18`): New employees starting **on or before the 15th** run in that month's regular payroll"
+   }
+  },
+  {
+   "id": "d2-t8-combined-dec-31",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 8,
+   "source": "session",
+   "description": "Nov 16-30 days are combined into the next month's (Dec 31) payroll run.",
+   "any_of": [
+    "dec 31",
+    "december 31",
+    "31 dec",
+    "31 december",
+    "2026-12-31",
+    "december payroll",
+    "dec payroll",
+    "december run",
+    "dec run"
+   ],
+   "evidence": {
+    "source": "user_turn:8",
+    "quote": "or does `HR-PAY-NH-18` combine Nov 16–30 into **Dec 31** payroll"
+   }
+  },
+  {
+   "id": "d2-t8-hr-pay-adv-14",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 8,
+   "source": "handbook",
+   "description": "Advance option: 14-day Onboarding Advance HR-PAY-ADV-14.",
+   "any_of": [
+    "hr-pay-adv-14"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "UNLESS they opt into a 14-day Onboarding Advance against relocation/salary (`HR-PAY-ADV-14`)."
+   }
+  },
+  {
+   "id": "d2-t9-gate-2-blocks",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 9,
+   "source": "handbook",
+   "description": "The blocking gate is gate 2 (PAM JIT dry-run with L7 co-sign).",
+   "any_of": [
+    "gate 2",
+    "gate-2",
+    "gate_2",
+    "gate #2",
+    "gate two",
+    "2 · pam jit"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "2. Successful `tsh request create --roles=prod-k8s-sre-ro --request-ttl=4h` with L7 co-sign dry-run verified."
+   }
+  },
+  {
+   "id": "d2-t9-tsh-request-create",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 9,
+   "source": "handbook",
+   "description": "Final command: tsh request create --roles=prod-k8s-sre-ro ...",
+   "any_of": [
+    "tsh request create"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "2. Successful `tsh request create --roles=prod-k8s-sre-ro --request-ttl=4h` with L7 co-sign dry-run verified."
+   }
+  },
+  {
+   "id": "d2-t9-request-ttl-4h",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 9,
+   "source": "handbook",
+   "description": "Final command uses --request-ttl=4h.",
+   "any_of": [
+    "request-ttl=4h",
+    "request-ttl 4h"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "2. Successful `tsh request create --roles=prod-k8s-sre-ro --request-ttl=4h` with L7 co-sign dry-run verified."
+   }
+  },
+  {
+   "id": "d2-t9-cosigner-siddharth",
+   "preset_id": "desk-02",
+   "kind": "turn",
+   "turn": 9,
+   "source": "handbook",
+   "description": "The L7 co-signer who unblocks it is manager Siddharth Nair (EMP-IN-11088).",
+   "any_of": [
+    "siddharth",
+    "emp-in-11088"
+   ],
+   "evidence": {
+    "source": "profile",
+    "quote": "Siddharth Nair (L7 VP Core Infrastructure · EMP-IN-11088)"
+   }
+  },
+  {
+   "id": "d1-l1-queue-it-iam-fastpass",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 1,
+   "source": "handbook",
+   "description": "Turn-1 workstream queue IT-IAM-FASTPASS.",
+   "any_of": [
+    "it-iam-fastpass"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `IT-IAM-FASTPASS` (Tier-1 automated posture refresh 10 min; manual SCEP bind SLA 30 min P2)."
+   }
+  },
+  {
+   "id": "d1-l1-err-device-posture",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 1,
+   "source": "handbook",
+   "description": "Turn-1 error code ERR_DEVICE_POSTURE_STALE_90D.",
+   "any_of": [
+    "err_device_posture_stale_90d",
+    "device_posture_stale"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "throw `ERR_DEVICE_POSTURE_STALE_90D` inside Okta Verify / Okta FastPass."
+   }
+  },
+  {
+   "id": "d1-l1-days-offline-101",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 1,
+   "source": "session",
+   "description": "Device was 101 days offline.",
+   "any_of": [
+    "101 days",
+    "101-day",
+    "101d",
+    "101 day"
+   ],
+   "evidence": {
+    "source": "user_turn:1",
+    "quote": "\"days_offline\": 101,"
+   }
+  },
+  {
+   "id": "d1-l2-queue-it-mdm-leave-unlock",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 2,
+   "source": "handbook",
+   "description": "Turn-2 queue IT-MDM-LEAVE-UNLOCK.",
+   "any_of": [
+    "it-mdm-leave-unlock"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "formal **P2 Unlock SLA: 30 minutes** from ticket creation (`IT-MDM-LEAVE-UNLOCK`)."
+   }
+  },
+  {
+   "id": "d1-l2-profiles-renew",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 2,
+   "source": "handbook",
+   "description": "Turn-2 action: sudo profiles renew -type enrollment.",
+   "any_of": [
+    "profiles renew"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`sudo profiles renew -type enrollment`"
+   }
+  },
+  {
+   "id": "d1-l2-prk-slot",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 2,
+   "source": "session",
+   "description": "FileVault PRK escrow slot PRK-BLR-8841-992.",
+   "any_of": [
+    "prk-blr-8841-992"
+   ],
+   "evidence": {
+    "source": "user_turn:2",
+    "quote": "SlotID: PRK-BLR-8841-992"
+   }
+  },
+  {
+   "id": "d1-l3-root-ca-v4-fingerprint",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 3,
+   "source": "handbook",
+   "description": "Root CA v4 fingerprint 9F:4B:22:C8:11:04:E7:8A.",
+   "any_of": [
+    "9f:4b:22:c8:11:04:e7:8a",
+    "9f:4b:22:c8"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`SHA256 Fingerprint: 9F:4B:22:C8:11:04:E7:8A`"
+   }
+  },
+  {
+   "id": "d1-l3-queue-it-net-sase",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 3,
+   "source": "handbook",
+   "description": "Turn-3 queue IT-NET-SASE.",
+   "any_of": [
+    "it-net-sase"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `IT-NET-SASE` (P2 30 min; Root CA v4 profile push via Jamf)."
+   }
+  },
+  {
+   "id": "d1-l3-disable-ipv6-bypass",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 3,
+   "source": "handbook",
+   "description": "Turn-3 action: --disable-ipv6-bypass.",
+   "any_of": [
+    "disable-ipv6-bypass"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`globalprotect disconnect && globalprotect connect --portal sase-in.novamart.com --disable-ipv6-bypass`"
+   }
+  },
+  {
+   "id": "d1-l4-deduction-42200",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 4,
+   "source": "session",
+   "description": "Salary deduction 42,200 INR.",
+   "any_of": [
+    "42200"
+   ],
+   "evidence": {
+    "source": "user_turn:4",
+    "quote": "showing a **₹42,200 salary deduction (`UNPAID_LOA_HOLD`)**"
+   }
+  },
+  {
+   "id": "d1-l4-bonus-22000",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 4,
+   "source": "session",
+   "description": "Diwali bonus 22,000 INR.",
+   "any_of": [
+    "22000"
+   ],
+   "evidence": {
+    "source": "user_turn:4",
+    "quote": "my **₹22,000 Q3/Diwali Performance Bonus was marked `PRO_RATA_INELIGIBLE`**"
+   }
+  },
+  {
+   "id": "d1-l4-hr-bon-412c",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 4,
+   "source": "handbook",
+   "description": "Bonus protection policy HR-BON-412C.",
+   "any_of": [
+    "hr-bon-412c"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Bonus Protection Clause (`HR-BON-412C`): Paid statutory parental leave counts **100% as active eligible service days**"
+   }
+  },
+  {
+   "id": "d1-l5-sync-lag-404",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 5,
+   "source": "handbook",
+   "description": "Root cause defect LEAVE_RETURN_SYNC_LAG_404.",
+   "any_of": [
+    "leave_return_sync_lag_404",
+    "sync_lag_404"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Known Defect `LEAVE_RETURN_SYNC_LAG_404`:"
+   }
+  },
+  {
+   "id": "d1-l5-approval-oct-20",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 5,
+   "source": "session",
+   "description": "Manager approval landed Oct 20 (after the Oct 18 cutoff).",
+   "any_of": [
+    "oct 20",
+    "october 20",
+    "20 oct",
+    "20 october",
+    "2026-10-20",
+    "20-oct",
+    "oct 20th",
+    "20th oct",
+    "oct. 20"
+   ],
+   "evidence": {
+    "source": "user_turn:5",
+    "quote": "Manager Kavita Krishnan approved my `Return-From-Leave` business process on October 20, two days AFTER the October 18 payroll cutoff."
+   }
+  },
+  {
+   "id": "d1-l6-queue-hr-pay-retro",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 6,
+   "source": "handbook",
+   "description": "Bridge wire queue HR-PAY-RETRO.",
+   "any_of": [
+    "hr-pay-retro"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `HR-PAY-RETRO` (P1 Payroll Audit 4 business hours; **48h Bridge Wire** for variance `> ₹25,000 / $300`)."
+   }
+  },
+  {
+   "id": "d1-l6-hr-pay-bridge-48h",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 6,
+   "source": "handbook",
+   "description": "Bridge wire policy HR-PAY-BRIDGE-48H.",
+   "any_of": [
+    "hr-pay-bridge-48h"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Off-Cycle Bridge Wire Policy (`HR-PAY-BRIDGE-48H`):"
+   }
+  },
+  {
+   "id": "d1-l6-usd-770",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 6,
+   "source": "session",
+   "description": "USD equivalent of the shortfall ~$770.40.",
+   "any_of": [
+    "770"
+   ],
+   "evidence": {
+    "source": "user_turn:6",
+    "quote": "\"usd_equivalent\": 770.40,"
+   }
+  },
+  {
+   "id": "d1-l7-prior-claim-6500",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 7,
+   "source": "session",
+   "description": "Prior FY26 ergonomic claim 6,500 INR.",
+   "any_of": [
+    "6500"
+   ],
+   "evidence": {
+    "source": "user_turn:7",
+    "quote": "I reimbursed `₹6,500` for an ergonomic vertical mouse + aluminum riser."
+   }
+  },
+  {
+   "id": "d1-l7-annual-cap-35000",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 7,
+   "source": "handbook",
+   "description": "Annual cap 35,000 INR.",
+   "any_of": [
+    "35000"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Annual Cap (FY26 Apr 1 – Mar 31): **₹35,000 INR ($420 USD)**"
+   }
+  },
+  {
+   "id": "d1-l7-hr-ben-ergo-26",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 7,
+   "source": "handbook",
+   "description": "Ergonomic policy HR-BEN-ERGO-26.",
+   "any_of": [
+    "hr-ben-ergo-26"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "5.1 HYBRID WFH ERGONOMIC & HOME OFFICE STIPEND (`HR-BEN-ERGO-26`)"
+   }
+  },
+  {
+   "id": "d1-l8-reimbursement-5-business-days",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 8,
+   "source": "handbook",
+   "description": "Reimbursement SLA 5 business days.",
+   "any_of": [
+    "5 business days",
+    "5 business day",
+    "5-business-day",
+    "five business days",
+    "5 bd"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Service Desk triggers `WD-DEL-09` **24h Automatic Skip-Level Director Delegation** in Workday so reimbursement SLA stays within **5 business days**."
+   }
+  },
+  {
+   "id": "d1-l8-24h-auto-delegation",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 8,
+   "source": "handbook",
+   "description": "24h automatic skip-level delegation.",
+   "any_of": [
+    "24h",
+    "24 h",
+    "24-hour",
+    "24 hour",
+    "24 hrs",
+    "24-hr"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Service Desk triggers `WD-DEL-09` **24h Automatic Skip-Level Director Delegation** in Workday so reimbursement SLA stays within **5 business days**."
+   }
+  },
+  {
+   "id": "d1-l8-manager-pto-7-business-days",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 8,
+   "source": "session",
+   "description": "Manager PTO spans 7 consecutive business days (> 3 trigger).",
+   "any_of": [
+    "7 consecutive business days",
+    "7 business days",
+    "7 business day",
+    "7-business-day",
+    "seven business days",
+    "7 consecutive"
+   ],
+   "evidence": {
+    "source": "user_turn:8",
+    "quote": "she is out on approved vacation from **October 28 through November 6 (7 consecutive business days)**"
+   }
+  },
+  {
+   "id": "d1-l9-queue-it-iam-groups",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 9,
+   "source": "handbook",
+   "description": "RBAC restore queue IT-IAM-GROUPS.",
+   "any_of": [
+    "it-iam-groups"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `IT-IAM-GROUPS` (P2 60 min auto-sync verify after Workday `ACTIVE` timestamp commits)."
+   }
+  },
+  {
+   "id": "d1-l9-sla-60-min",
+   "preset_id": "desk-01",
+   "kind": "ledger",
+   "origin_turn": 9,
+   "source": "handbook",
+   "description": "IT-IAM-GROUPS SLA 60 min.",
+   "any_of": [
+    "60 min",
+    "60-min",
+    "60 minute",
+    "60m"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `IT-IAM-GROUPS` (P2 60 min auto-sync verify after Workday `ACTIVE` timestamp commits)."
+   }
+  },
+  {
+   "id": "d2-l1-queue-it-iam-fido2",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 1,
+   "source": "handbook",
+   "description": "Turn-1 queue IT-IAM-FIDO2.",
+   "any_of": [
+    "it-iam-fido2"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `IT-IAM-FIDO2` (P1 15 min for SRE/On-Call with active swap; P2 2h standard replacement)."
+   }
+  },
+  {
+   "id": "d2-l1-mfa-bypass-24h",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 1,
+   "source": "handbook",
+   "description": "Temporary bypass policy MFA-BYPASS-24H.",
+   "any_of": [
+    "mfa-bypass-24h"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Temporary 24-Hour FIDO2 Bypass Policy (`MFA-BYPASS-24H`):"
+   }
+  },
+  {
+   "id": "d2-l2-it-sec-pam-09",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 2,
+   "source": "handbook",
+   "description": "PAM policy IT-SEC-PAM-09.",
+   "any_of": [
+    "it-sec-pam-09"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Policy Rule (`IT-SEC-PAM-09`): Zero standing privileged access exists"
+   }
+  },
+  {
+   "id": "d2-l2-change-ticket",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 2,
+   "source": "handbook",
+   "description": "Change ticket CHG-2026-8841 for the JIT request.",
+   "any_of": [
+    "chg-2026-8841"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`tsh request create --roles=prod-k8s-sre-ro --reason=\"CHG-2026-8841\" --request-ttl=4h`"
+   }
+  },
+  {
+   "id": "d2-l2-locker-b4",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 2,
+   "source": "session",
+   "description": "Backup YubiKey picked up from IT Genius Locker #B4.",
+   "any_of": [
+    "b4"
+   ],
+   "evidence": {
+    "source": "user_turn:2",
+    "quote": "queued a backup YubiKey 5C NFC at Hyderabad IT Genius Locker #B4 for pickup at 1 PM!"
+   }
+  },
+  {
+   "id": "d2-l3-it-net-mtls-14",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 3,
+   "source": "handbook",
+   "description": "mTLS policy IT-NET-MTLS-14.",
+   "any_of": [
+    "it-net-mtls-14"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Policy (`IT-NET-MTLS-14`): Developer mTLS client certificates for `artifacts.novamart.internal` auto-issue for **90 days**"
+   }
+  },
+  {
+   "id": "d2-l3-queue-it-net-registry",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 3,
+   "source": "handbook",
+   "description": "Registry queue IT-NET-REGISTRY.",
+   "any_of": [
+    "it-net-registry"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `IT-NET-REGISTRY` (P2 20 min automated renewal once FIDO2/Okta posture is valid)."
+   }
+  },
+  {
+   "id": "d2-l3-install-ca-v4",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 3,
+   "source": "handbook",
+   "description": "Registry fix action --install-ca-v4.",
+   "any_of": [
+    "install-ca-v4",
+    "registry login"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`nm-cli registry login --host artifacts.novamart.internal --mtls --install-ca-v4`"
+   }
+  },
+  {
+   "id": "d2-l4-lift-ceiling-2500",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 4,
+   "source": "handbook",
+   "description": "Lodging ceiling lifted to $2,500 (2,08,000 INR).",
+   "any_of": [
+    "2500",
+    "208000"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "raises the temporary MCC Lodging ceiling **up to $2,500 USD (₹2,08,000 INR equivalent)** for **14 calendar days**"
+   }
+  },
+  {
+   "id": "d2-l4-hr-concur-risk",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 4,
+   "source": "handbook",
+   "description": "Lift queue HR-CONCUR-RISK.",
+   "any_of": [
+    "hr-concur-risk"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "taking effect in **15–30 minutes** via `HR-CONCUR-RISK`."
+   }
+  },
+  {
+   "id": "d2-l4-preauth-usd-1775",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 4,
+   "source": "session",
+   "description": "Declined pre-authorization ~$1,775.",
+   "any_of": [
+    "1775"
+   ],
+   "evidence": {
+    "source": "user_turn:4",
+    "quote": "on the `₹1,48,000 (~$1,775 USD)` pre-authorization!"
+   }
+  },
+  {
+   "id": "d2-l5-tax-113372",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 5,
+   "source": "handbook",
+   "description": "Gross-up tax 1,13,372 INR.",
+   "any_of": [
+    "113372"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "`₹2,50,000 / 0.688` = `₹3,63,372` gross -> `₹1,13,372` tax paid to treasury so net credited = `₹2,50,000`"
+   }
+  },
+  {
+   "id": "d2-l5-hr-rel-518c",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 5,
+   "source": "handbook",
+   "description": "Relocation policy HR-REL-518C (or HR-REL-518C-STD).",
+   "any_of": [
+    "hr-rel-518c"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "RELOCATION LUMP-SUM, 31.2% TAX GROSS-UP & CLAWBACK (`HR-REL-518C`)"
+   }
+  },
+  {
+   "id": "d2-l5-clawback-90843",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 5,
+   "source": "session",
+   "description": "Clawback at 9 completed months = 90,843 INR.",
+   "any_of": [
+    "90843"
+   ],
+   "evidence": {
+    "source": "user_turn:5",
+    "quote": "show exact repayment if someone exited voluntarily after **9 completed full months**?"
+   }
+  },
+  {
+   "id": "d2-l6-cofund-70-pct",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 6,
+   "source": "handbook",
+   "description": "Parental cover 70% employer co-funded.",
+   "any_of": [
+    "70%",
+    "70 %",
+    "70 percent"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Optional **₹5,00,000 INR** parental top-up (`70%` employer co-funded on base tier)"
+   }
+  },
+  {
+   "id": "d2-l6-wd-ben-30d",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 6,
+   "source": "handbook",
+   "description": "Enrollment window WD-BEN-30D.",
+   "any_of": [
+    "wd-ben-30d"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "during **30-calendar-day** New-Hire Onboarding or Qualifying Life Event window (`WD-BEN-30D`)."
+   }
+  },
+  {
+   "id": "d2-l6-cover-500000",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 6,
+   "source": "handbook",
+   "description": "Parental top-up cover 5,00,000 INR.",
+   "any_of": [
+    "500000",
+    "5 lakh"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Optional **₹5,00,000 INR** parental top-up (`70%` employer co-funded on base tier)"
+   }
+  },
+  {
+   "id": "d2-l7-chair-18900",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 7,
+   "source": "session",
+   "description": "Ergonomic chair 18,900 INR.",
+   "any_of": [
+    "18900"
+   ],
+   "evidence": {
+    "source": "user_turn:7",
+    "quote": "a high-back ergonomic chair (`₹18,900`)"
+   }
+  },
+  {
+   "id": "d2-l7-dock-10900",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 7,
+   "source": "session",
+   "description": "CalDigit TS4 dock 10,900 INR.",
+   "any_of": [
+    "10900"
+   ],
+   "evidence": {
+    "source": "user_turn:7",
+    "quote": "a CalDigit TS4 dock (`₹10,900`)"
+   }
+  },
+  {
+   "id": "d2-l7-annual-cap-35000",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 7,
+   "source": "handbook",
+   "description": "Annual cap 35,000 INR.",
+   "any_of": [
+    "35000"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "Annual Cap (FY26 Apr 1 – Mar 31): **₹35,000 INR ($420 USD)**"
+   }
+  },
+  {
+   "id": "d2-l8-hr-pay-adv-14",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 8,
+   "source": "handbook",
+   "description": "Advance option HR-PAY-ADV-14.",
+   "any_of": [
+    "hr-pay-adv-14"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "UNLESS they opt into a 14-day Onboarding Advance against relocation/salary (`HR-PAY-ADV-14`)."
+   }
+  },
+  {
+   "id": "d2-l8-packet-nov-17",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 8,
+   "source": "session",
+   "description": "Relocation/bank packet submitted Nov 17 (after-cutoff context).",
+   "any_of": [
+    "nov 17",
+    "november 17",
+    "17 nov",
+    "17 november",
+    "2026-11-17",
+    "17-nov",
+    "nov 17th",
+    "17th nov",
+    "nov. 17"
+   ],
+   "evidence": {
+    "source": "user_turn:8",
+    "quote": "AND just submitted my relocation/bank packet Nov 17"
+   }
+  },
+  {
+   "id": "d2-l9-tsh-request-create",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 9,
+   "source": "handbook",
+   "description": "Gate-2 action tsh request create.",
+   "any_of": [
+    "tsh request create"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "2. Successful `tsh request create --roles=prod-k8s-sre-ro --request-ttl=4h` with L7 co-sign dry-run verified."
+   }
+  },
+  {
+   "id": "d2-l9-queue-it-pam-prod",
+   "preset_id": "desk-02",
+   "kind": "ledger",
+   "origin_turn": 9,
+   "source": "handbook",
+   "description": "PAM JIT queue IT-PAM-PROD.",
+   "any_of": [
+    "it-pam-prod"
+   ],
+   "evidence": {
+    "source": "handbook",
+    "quote": "- Queue & SLA: `IT-PAM-PROD` (P1 10 min during on-call onboarding or live incidents)."
+   }
+  }
+ ],
+ "probes": [
+  {
+   "probe_id": "d1-p1-device-serial",
+   "expected_display": "C02ZN418LVDQ",
+   "preset_id": "desk-01",
+   "origin_turn": 1,
+   "question": "Remind me — what was the hardware serial number of my MacBook in this morning's Okta telemetry? Just the value, please.",
+   "any_of": [
+    "c02zn418lvdq"
+   ],
+   "evidence": {
+    "source": "user_turn:1",
+    "quote": "\"device_serial\": \"C02ZN418LVDQ\","
+   }
+  },
+  {
+   "probe_id": "d1-p2-prk-slot",
+   "expected_display": "PRK-BLR-8841-992",
+   "preset_id": "desk-01",
+   "origin_turn": 2,
+   "question": "Remind me — what was the SlotID of my escrowed FileVault recovery key in NovaMart Vault? Just the value, please.",
+   "any_of": [
+    "prk-blr-8841-992"
+   ],
+   "evidence": {
+    "source": "user_turn:2",
+    "quote": "SlotID: PRK-BLR-8841-992"
+   }
+  },
+  {
+   "probe_id": "d1-p3-manager-approval-date",
+   "expected_display": "Oct 20, 2026",
+   "preset_id": "desk-01",
+   "origin_turn": 5,
+   "question": "Remind me — on what date did my manager approve my Return-From-Leave in Workday? Just the date, please.",
+   "any_of": [
+    "oct 20",
+    "october 20",
+    "20 oct",
+    "20 october",
+    "2026-10-20",
+    "20-oct",
+    "oct 20th",
+    "20th oct",
+    "october 20th",
+    "20th october",
+    "oct. 20"
+   ],
+   "evidence": {
+    "source": "user_turn:5",
+    "quote": "Manager Kavita Krishnan approved my `Return-From-Leave` business process on October 20, two days AFTER the October 18 payroll cutoff."
+   }
+  },
+  {
+   "probe_id": "d1-p4-bank-account-last4",
+   "expected_display": "4419 (HDFC XXXX-4419)",
+   "preset_id": "desk-01",
+   "origin_turn": 6,
+   "question": "Remind me — what are the last four digits of the bank account the off-cycle bridge wire is going to? Just the value, please.",
+   "any_of": [
+    "4419"
+   ],
+   "evidence": {
+    "source": "user_turn:6",
+    "quote": "\"bank_account_status\": \"VERIFIED (HDFC XXXX-4419 Primary Payroll Account)\","
+   }
+  },
+  {
+   "probe_id": "d1-p5-monitor-invoice-number",
+   "expected_display": "DL-BLR-2026-774102",
+   "preset_id": "desk-01",
+   "origin_turn": 7,
+   "question": "Remind me — what was the invoice number on my Dell monitor receipt? Just the value, please.",
+   "any_of": [
+    "dl-blr-2026-774102",
+    "774102"
+   ],
+   "evidence": {
+    "source": "user_turn:7",
+    "quote": "\"invoice_number\": \"DL-BLR-2026-774102\","
+   }
+  },
+  {
+   "probe_id": "d1-p6-restored-jira-group",
+   "expected_display": "jira-planning-ro",
+   "preset_id": "desk-01",
+   "origin_turn": 9,
+   "question": "Remind me — which Jira group did the SCIM sync restore automatically when I went back to ACTIVE? Just the group name, please.",
+   "any_of": [
+    "jira-planning-ro"
+   ],
+   "evidence": {
+    "source": "user_turn:9",
+    "quote": "RESTORED birthright Okta groups: [\"okta-all-in\", \"slack-supply-general\", \"jira-planning-ro\"] (SLA: 15 min)"
+   }
+  },
+  {
+   "probe_id": "d2-p1-yubikey-serial",
+   "expected_display": "28491044",
+   "preset_id": "desk-02",
+   "origin_turn": 1,
+   "question": "Remind me — what was the serial number of my primary YubiKey? Just the value, please.",
+   "any_of": [
+    "28491044"
+   ],
+   "evidence": {
+    "source": "user_turn:1",
+    "quote": "Device type: YubiKey 5C NFC (USB-C) · Serial: 28491044 · Interface: FIDO+CCID"
+   }
+  },
+  {
+   "probe_id": "d2-p2-proposed-cosigner",
+   "expected_display": "Rohan Kulkarni (EMP-IN-48210)",
+   "preset_id": "desk-02",
+   "origin_turn": 2,
+   "question": "Remind me — who was the peer engineer I originally proposed as co-signer on my rejected PAM request? Just the name, please.",
+   "any_of": [
+    "rohan kulkarni",
+    "rohan",
+    "kulkarni",
+    "emp-in-48210"
+   ],
+   "evidence": {
+    "source": "user_turn:2",
+    "quote": "\"proposed_cosigner\": \"EMP-IN-48210 (Rohan Kulkarni · L6 Peer Staff Engineer · Non-IC-Duty)\","
+   }
+  },
+  {
+   "probe_id": "d2-p3-old-cert-expiry",
+   "expected_display": "Nov 12, 2026",
+   "preset_id": "desk-02",
+   "origin_turn": 3,
+   "question": "Remind me — on what date had my old artifact-registry client certificate expired? Just the date, please.",
+   "any_of": [
+    "nov 12",
+    "november 12",
+    "12 nov",
+    "12 november",
+    "2026-11-12",
+    "12-nov",
+    "nov 12th",
+    "12th nov",
+    "november 12th",
+    "12th november",
+    "nov. 12"
+   ],
+   "evidence": {
+    "source": "user_turn:3",
+    "quote": "notAfter=Nov 12 08:00:00 2026 GMT  <-- EXPIRED 5 DAYS AGO"
+   }
+  },
+  {
+   "probe_id": "d2-p4-declined-preauth-usd",
+   "expected_display": "~$1,775",
+   "preset_id": "desk-02",
+   "origin_turn": 4,
+   "question": "Remind me — roughly what was the USD equivalent of the hotel pre-authorization my Amex card declined at check-in? Just the amount, please.",
+   "any_of": [
+    "1775"
+   ],
+   "evidence": {
+    "source": "user_turn:4",
+    "quote": "on the `₹1,48,000 (~$1,775 USD)` pre-authorization!"
+   }
+  },
+  {
+   "probe_id": "d2-p5-chair-price",
+   "expected_display": "₹18,900",
+   "preset_id": "desk-02",
+   "origin_turn": 7,
+   "question": "Remind me — what was the price of the ergonomic chair in my Concur claim? Just the amount, please.",
+   "any_of": [
+    "18900"
+   ],
+   "evidence": {
+    "source": "user_turn:7",
+    "quote": "a high-back ergonomic chair (`₹18,900`)"
+   }
+  },
+  {
+   "probe_id": "d2-p6-packet-submitted-date",
+   "expected_display": "Nov 17, 2026",
+   "preset_id": "desk-02",
+   "origin_turn": 8,
+   "question": "Remind me — on what date did I submit my tax declaration and bank packet? Just the date, please.",
+   "any_of": [
+    "nov 17",
+    "november 17",
+    "17 nov",
+    "17 november",
+    "2026-11-17",
+    "17-nov",
+    "nov 17th",
+    "17th nov",
+    "november 17th",
+    "17th november",
+    "nov. 17"
+   ],
+   "evidence": {
+    "source": "user_turn:8",
+    "quote": "\"tax_declaration_and_bank_status\": \"Submitted 2026-11-17 (Treasury micro-deposit verification queued)\","
+   }
+  }
+ ]
+}

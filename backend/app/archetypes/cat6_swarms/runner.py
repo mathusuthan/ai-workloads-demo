@@ -9,6 +9,11 @@ from typing import Any
 from uuid import uuid4
 from fastapi import HTTPException, Request
 
+from app.archetypes.cat6_swarms.caps import (
+    CALL_TIMEOUT_S,
+    cat6_caps_by_role,
+    cat6_max_tokens,
+)
 from app.archetypes.cat6_swarms.prompts import (
     AGENT_ROLE_LABELS,
     CAT6_CODE_SNIPPETS,
@@ -23,7 +28,8 @@ from app.archetypes.cat6_swarms.sandbox_verifier import (
 from app.config import get_settings
 from app.core.anthropic_service import run_cat6_swarm_agent_call
 from app.core.credit_shield import credit_shield
-from app.core.pricing import compute_run_finops
+from app.core.measured_claims import fmt_pct, set_note
+from app.core.pricing import compute_run_finops, rollup_multi_call_finops
 from app.core.trace_store import (
     TracePartition,
     TraceRecord,
@@ -31,7 +37,7 @@ from app.core.trace_store import (
     TraceResponseEnvelope,
     record_trace,
 )
-from app.data.cat6_fixtures import CAT6_PRESETS, SHARED_REPO_PREFIX_MARKDOWN
+from app.data.cat6_fixtures import CAT6_PRESETS, SHARED_REPO_PREFIX_MARKDOWN, UNFILTERED_REPO_AND_TELEMETRY_NOISE
 from app.models import (
     Cat6AgentTurnTrace,
     Cat6PortfolioRungRollup,
@@ -70,8 +76,10 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
             "1. Unisolated Shared-Bus Swarm (Sonnet 5.5)",
             "Anti-Pattern: Broadcast Context Bloat",
             [
-                "Streams the entire ~20k-char repo standards + ~51k-char unrelated neighbor services & OTel spans uncached across one growing shared thread (~115k–130k prompt tok/run).",
-                "No PR-SANDBOX-GATE-01 deterministic verify-retry loop before merge, letting subtle Decimal/HMAC/deadlock regressions inflate Cost per Verified Outcome (CpO).",
+                # replaced with measured sizes by _apply_measured_claims
+                "Streams the entire repo standards + unrelated neighbor services & OTel spans uncached across one growing shared thread.",
+                # completed with the measured portfolio verified count by _apply_measured_claims
+                "Signs off the patch with no PR-SANDBOX-GATE-01 check or retry before merge; the sandbox scores it only afterwards.",
             ],
         )
     if rung_id == "isolated_cached_sonnet_swarm":
@@ -79,16 +87,18 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
             "2. Isolated + Cached Prefix + Sandbox (Sonnet 5.5)",
             "Lever 1: Context Isolation + Repo Cache + Gate",
             [
-                "Gives every specialist sub-agent a fresh, narrow thread while sharing a byte-identical ~6.2k-tok cached repo prefix (-90% reads across sub-agents).",
+                # replaced with the measured prefix size by _apply_measured_claims
+                "Gives every specialist sub-agent a fresh, narrow thread while sharing a byte-identical cached repo prefix (-95% reads across sub-agents).",
                 "Runs deterministic PR-SANDBOX-GATE-01 (4 CI unit + 4 adversarial + 2 static AST checks in Python -I) with max-1 bounded self-heal before merge sign-off.",
             ],
         )
     return (
         "3. Tier-Routed Haiku + Sonnet Author Swarm",
-        "Lever 2: CpO Optimized Tier Routing (-65%+ CpO)",
+        "Lever 2: CpO Optimized Tier Routing",  # measured CpO saving added by _apply_measured_claims
         [
             "Routes Orchestrator Plan, CI Triager, Security Critic & Merge Gate to Claude Haiku 5.5 ($0.10/M in · $0.01/M cache read), reserving Sonnet 5.5 strictly for isolated Patch Authoring.",
-            "Delivers 10/10 verified outcomes across CI Triage, Threat Hunting, and Split-Cart Concurrency while slashing Band 5 per-dev token spend & Portfolio CpO.",
+            # replaced with the measured portfolio outcome by _apply_measured_claims
+            "Targets verified outcomes across CI Triage, Threat Hunting, and Split-Cart Concurrency while slashing Band 5 per-dev token spend & Portfolio CpO.",
         ],
     )
 
@@ -149,7 +159,8 @@ def persist_cat6_trace(
         system_instruction=system_instruction,
         parameters=request_params
         or {
-            "max_tokens": 3200,
+            "max_tokens_by_role": cat6_caps_by_role(shared_bus=pattern == "unisolated_shared_bus_swarm"),
+            "timeout_s": CALL_TIMEOUT_S,
             "endpoint": "messages.create",
             "thinking": {"type": "between_tools"} if "sonnet" in model_id else {"type": "disabled"},
         },
@@ -248,14 +259,72 @@ def finalize_cat6_rung_result(
         warm_run_cost_usd=warm_run,
         cost_per_1k_runs_cold_usd=cpr_cold,
         cost_per_1k_runs_warm_usd=cpr_warm,
-        cpo_cold_per_1k_usd=cpr_cold if verified else 0.0,
-        cpo_warm_per_1k_usd=cpr_warm if verified else 0.0,
+        # A run with no verified outcome has no finite CpO; None (not 0.0) so it never reads as "free".
+        cpo_cold_per_1k_usd=cpr_cold if verified else None,
+        cpo_warm_per_1k_usd=cpr_warm if verified else None,
         total_latency_ms=tot_lat,
         patched_code=patched_code,
         final_signoff_memo=final_signoff_memo,
         sandbox_report=sandbox_report,
         architectural_notes=notes,
     )
+
+
+def _apply_measured_claims(
+    results: list[Cat6RungResult],
+    scorecard: list[Cat6PortfolioRungRollup],
+) -> None:
+    """Rewrite result-dependent rung badges/notes with numbers measured on this run and portfolio."""
+    ok = {r.rung_id: r for r in results if r.status == "ok" and r.agent_turns}
+    rows = {row.rung_id: row for row in scorecard}
+    naive = ok.get("unisolated_broadcast_swarm")
+    iso = ok.get("isolated_cached_sonnet_swarm")
+    hybrid = ok.get("tiered_hybrid_cpo_swarm")
+    if naive:
+        prompt = naive.total_uncached_input_tokens + naive.total_cache_creation_tokens + naive.total_cache_read_tokens
+        set_note(
+            naive,
+            0,
+            f"Streams the entire ~{len(SHARED_REPO_PREFIX_MARKDOWN) / 1000:.0f}k-char repo standards + "
+            f"~{len(UNFILTERED_REPO_AND_TELEMETRY_NOISE) / 1000:.0f}k-char unrelated neighbor services & OTel spans "
+            f"uncached across one growing shared thread ({prompt:,} prompt tok this run).",
+        )
+    if iso:
+        prefix = max(t.finops.cache_creation_tokens + t.finops.cache_read_tokens for t in iso.agent_turns)
+        set_note(
+            iso,
+            0,
+            "Gives every specialist sub-agent a fresh, narrow thread while sharing a byte-identical "
+            f"~{prefix / 1000:.1f}k-tok cached repo prefix (-95% reads across sub-agents).",
+        )
+    if naive:
+        row = rows.get("unisolated_broadcast_swarm")
+        if row is not None:
+            set_note(
+                naive,
+                1,
+                "Signs off the patch with no PR-SANDBOX-GATE-01 check or retry before merge; scored afterwards, "
+                f"{row.verified_outcomes_count}/{row.prs_evaluated} of its {row.prs_evaluated}-incident portfolio "
+                f"patches verified ({row.checks_passed_total}/{row.checks_total} sandbox checks).",
+            )
+    if hybrid:
+        row = rows.get("tiered_hybrid_cpo_swarm")
+        if row is not None and row.cpo_savings_vs_naive_cold_pct is not None:
+            hybrid.badge_text = (
+                f"Lever 2: CpO Optimized Tier Routing (-{fmt_pct(row.cpo_savings_vs_naive_cold_pct)} Portfolio CpO)"
+            )
+        elif naive:
+            hybrid.badge_text = (
+                f"Lever 2: CpO Optimized Tier Routing (-{fmt_pct(hybrid.savings_vs_naive_cold_pct)} Cost/Run)"
+            )
+        if row is not None:
+            set_note(
+                hybrid,
+                1,
+                f"Delivers {row.verified_outcomes_count}/{row.prs_evaluated} verified outcomes across the "
+                f"{row.prs_evaluated}-incident portfolio ({row.checks_passed_total}/{row.checks_total} sandbox checks) "
+                "while slashing Band 5 per-dev token spend & Portfolio CpO.",
+            )
 
 
 def _apply_cross_rung_savings(results: list[Cat6RungResult]) -> None:
@@ -322,7 +391,8 @@ async def _run_live_cat6_for_rung(
                 messages=bus_messages,
                 use_prefix_cache=False,
                 api_key=api_key,
-                max_tokens=3200,
+                max_tokens=cat6_max_tokens(shared_bus=True, role_key=role_key),
+                timeout_s=CALL_TIMEOUT_S,
             )
             bus_messages.append({"role": "assistant", "content": raw.raw_text})
 
@@ -368,6 +438,8 @@ async def _run_live_cat6_for_rung(
                     "model_id": raw.model_id,
                     "context_mode": "shared_omnibus_bus",
                     "attempt": 1,
+                    "max_tokens": cat6_max_tokens(shared_bus=True, role_key=role_key),
+                    "stop_reason": raw.stop_reason,
                     "latency_ms": raw.latency_ms,
                     "input_tokens": raw.input_tokens,
                     "output_tokens": raw.output_tokens,
@@ -388,11 +460,11 @@ async def _run_live_cat6_for_rung(
             role_key: str,
             payload: str,
             attempt: int = 1,
-            max_tokens: int = 1200,
         ) -> str:
             nonlocal step_counter, cum_cold, cum_warm
             step_counter += 1
             model_tier = _role_model(rung_id, role_key)
+            max_tokens = cat6_max_tokens(shared_bus=False, role_key=role_key)
             raw = await run_cat6_swarm_agent_call(
                 model_tier=model_tier,
                 shared_repo_prefix=SHARED_REPO_PREFIX_MARKDOWN,
@@ -401,6 +473,7 @@ async def _run_live_cat6_for_rung(
                 use_prefix_cache=True,
                 api_key=api_key,
                 max_tokens=max_tokens,
+                timeout_s=CALL_TIMEOUT_S,
             )
             fin = compute_run_finops(
                 model_id=raw.model_id,
@@ -439,6 +512,8 @@ async def _run_live_cat6_for_rung(
                     "model_id": raw.model_id,
                     "context_mode": "isolated_prefix_cached",
                     "attempt": attempt,
+                    "max_tokens": max_tokens,
+                    "stop_reason": raw.stop_reason,
                     "latency_ms": raw.latency_ms,
                     "input_tokens": raw.input_tokens,
                     "output_tokens": raw.output_tokens,
@@ -453,7 +528,6 @@ async def _run_live_cat6_for_rung(
         orchestrator_brief = await _call_isolated(
             "orchestrator_plan",
             build_cat6_isolated_payload(preset=preset, role_key="orchestrator_plan"),
-            max_tokens=900,
         )
         triage_brief = await _call_isolated(
             "ci_triager",
@@ -462,7 +536,6 @@ async def _run_live_cat6_for_rung(
                 role_key="ci_triager",
                 orchestrator_brief=orchestrator_brief,
             ),
-            max_tokens=1100,
         )
         author_raw = await _call_isolated(
             "patch_author",
@@ -472,7 +545,6 @@ async def _run_live_cat6_for_rung(
                 triage_brief=triage_brief,
             ),
             attempt=1,
-            max_tokens=3200,
         )
         patched_code = extract_python_code(author_raw)
         sandbox_dict = evaluate_patch_in_sandbox(preset["id"], patched_code)
@@ -493,7 +565,6 @@ async def _run_live_cat6_for_rung(
                     retry_feedback=failing_lines,
                 ),
                 attempt=2,
-                max_tokens=3200,
             )
             patched_code = extract_python_code(retry_raw)
             sandbox_dict = evaluate_patch_in_sandbox(preset["id"], patched_code)
@@ -506,7 +577,6 @@ async def _run_live_cat6_for_rung(
                 patched_code=patched_code,
                 sandbox_report=sandbox_dict,
             ),
-            max_tokens=1000,
         )
         final_memo = await _call_isolated(
             "orchestrator_merge",
@@ -516,7 +586,6 @@ async def _run_live_cat6_for_rung(
                 sandbox_report=sandbox_dict,
                 critic_verdict=critic_verdict,
             ),
-            max_tokens=900,
         )
         primary_model_id = (
             "claude-haiku-5-5 + claude-sonnet-5-5"
@@ -637,7 +706,7 @@ def _build_portfolio_scorecard(
                 )
 
     rollups: list[Cat6PortfolioRungRollup] = []
-    naive_ref_cpo = 0.0
+    naive_ref_cpo: float | None = None
 
     for rid in (
         "unisolated_broadcast_swarm",
@@ -666,10 +735,16 @@ def _build_portfolio_scorecard(
         avg_cpr_cold = round(total_cold_1k / n, 2)
         avg_cpr_warm = round(total_warm_1k / n, 2)
 
-        cpo_cold = round(total_cold_1k / verified_cnt, 2) if verified_cnt > 0 else 0.0
-        cpo_warm = round(total_warm_1k / verified_cnt, 2) if verified_cnt > 0 else 0.0
+        # CpO = all spend (failed runs included) / verified outcomes; undefined (None) with zero outcomes.
+        cpo_cold = round(total_cold_1k / verified_cnt, 2) if verified_cnt > 0 else None
+        cpo_warm = round(total_warm_1k / verified_cnt, 2) if verified_cnt > 0 else None
         if rid == "unisolated_broadcast_swarm":
-            naive_ref_cpo = cpo_cold if cpo_cold > 0 else round(total_cold_1k, 2)
+            naive_ref_cpo = cpo_cold
+        cpo_savings = (
+            round(((naive_ref_cpo - cpo_cold) / naive_ref_cpo) * 100, 1)
+            if naive_ref_cpo is not None and naive_ref_cpo > 0 and cpo_cold is not None
+            else None
+        )
 
         label, _, _ = _rung_metadata(rid)
         routing_desc = (
@@ -698,11 +773,7 @@ def _build_portfolio_scorecard(
                 avg_cpr_warm_per_1k_usd=avg_cpr_warm,
                 portfolio_cpo_cold_per_1k_usd=cpo_cold,
                 portfolio_cpo_warm_per_1k_usd=cpo_warm,
-                cpo_savings_vs_naive_cold_pct=round(
-                    ((naive_ref_cpo - cpo_cold) / naive_ref_cpo) * 100, 1
-                )
-                if naive_ref_cpo > 0 and cpo_cold > 0
-                else 0.0,
+                cpo_savings_vs_naive_cold_pct=cpo_savings,
             )
         )
     return rollups
@@ -778,35 +849,16 @@ async def execute_cat6_run(
     for res in results:
         if res.status != "ok":
             continue
-        tot_prompt = (
-            res.total_uncached_input_tokens
-            + res.total_cache_creation_tokens
-            + res.total_cache_read_tokens
-        )
         fin_model = (
             "claude-haiku-5-5"
             if res.rung_id == "tiered_hybrid_cpo_swarm" and res.haiku_turns >= res.sonnet_turns
             else "claude-sonnet-5-5"
         )
-        rollup_fin = FinOpsBreakdown(
+        rollup_fin = rollup_multi_call_finops(
+            calls=[t.finops for t in res.agent_turns],
+            total_cost_usd=res.cold_run_cost_usd,
             model_id=fin_model,
             model_label=res.primary_model_id,
-            provider="Anthropic",
-            input_tokens=res.total_uncached_input_tokens,
-            output_tokens=res.total_output_tokens,
-            cache_creation_tokens=res.total_cache_creation_tokens,
-            cache_read_tokens=res.total_cache_read_tokens,
-            total_tokens=tot_prompt + res.total_output_tokens,
-            input_cost_usd=round(max(0.0, res.cold_run_cost_usd - (res.total_output_tokens / 1e6) * 10.0), 8),
-            output_cost_usd=round((res.total_output_tokens / 1e6) * 10.0, 8),
-            total_cost_usd=res.cold_run_cost_usd,
-            cost_per_1k_usd=res.cost_per_1k_runs_cold_usd,
-            monthly_cost_at_100k_usd=round(res.cold_run_cost_usd * 100_000, 2),
-            annual_cost_at_1m_per_mo_usd=round(res.cold_run_cost_usd * 12_000_000, 2),
-            io_ratio=round(tot_prompt / max(1, res.total_output_tokens), 1),
-            io_ratio_label=f"{round(tot_prompt / max(1, res.total_output_tokens), 1)}:1",
-            output_cost_share_pct=0.0,
-            output_rate_multiplier="5x output weight",
         )
         persist_cat6_trace(
             source_mode=mode_used,
@@ -830,6 +882,8 @@ async def execute_cat6_run(
             request_params={
                 "endpoint": "messages.create",
                 "prefix_cache_enabled": res.rung_id != "unisolated_broadcast_swarm",
+                "max_tokens_by_role": cat6_caps_by_role(shared_bus=res.rung_id == "unisolated_broadcast_swarm"),
+                "timeout_s": CALL_TIMEOUT_S,
                 "code_snippets": list(CAT6_CODE_SNIPPETS.keys()),
             },
             stop_reason="end_turn",
@@ -841,6 +895,7 @@ async def execute_cat6_run(
         active_results=results,
         replays=replays,
     )
+    _apply_measured_claims(results, scorecard)
 
     naive = next((r for r in results if r.rung_id == "unisolated_broadcast_swarm" and r.status == "ok"), None)
     iso = next((r for r in results if r.rung_id == "isolated_cached_sonnet_swarm" and r.status == "ok"), None)

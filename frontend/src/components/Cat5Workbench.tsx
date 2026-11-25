@@ -323,7 +323,7 @@ export function Cat5Workbench({
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Warm AP Worker Queue ($0.20/$0.01M)
+                Warm AP Worker Queue ($0.10/$0.01M)
               </button>
             </div>
 

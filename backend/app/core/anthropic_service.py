@@ -286,7 +286,7 @@ async def run_cat2_structured_draft(
     api_key: str,
     max_tokens: int = 3000,
 ) -> AnthropicRawResult:
-    """Category 2 Templated / Surgical Section synthesis via strict JSON schema & disabled thinking."""
+    """Category 2 Templated / Surgical Section synthesis via strict JSON schema (thinking disabled on Haiku only)."""
     settings = get_settings()
     is_sonnet = "sonnet" in model_tier
     primary_model = settings.anthropic_sonnet_model if is_sonnet else settings.anthropic_haiku_model
@@ -356,10 +356,11 @@ async def run_cat3_service_desk_turn(
     use_prefix_cache: bool,
     api_key: str,
     max_tokens: int = 4096,
+    timeout_s: float = 60.0,
 ) -> AnthropicRawResult:
     """Category 3 multi-turn IT & HR Service Desk call on Sonnet 5.5 with optional prefix cache_control."""
     settings = get_settings()
-    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=60.0)
+    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=timeout_s)
     thinking_cfg: dict[str, str] = {"type": "between_tools"}
 
     system_arg: Any = (
@@ -420,10 +421,11 @@ async def run_cat3_memory_summarizer(
     schema: dict[str, Any],
     api_key: str,
     max_tokens: int = 1600,
+    timeout_s: float = 60.0,
 ) -> AnthropicRawResult:
     """Category 3 sliding-window session state compressor on Sonnet 5.5 via strict JSON schema."""
     settings = get_settings()
-    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=60.0)
+    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=timeout_s)
     thinking_cfg: dict[str, str] = {"type": "between_tools"}
     request_params: dict[str, Any] = {
         "max_tokens": max_tokens,
@@ -484,10 +486,22 @@ async def run_cat4_haiku_reranker(
     schema: dict[str, Any],
     api_key: str,
     max_tokens: int = 800,
+    *,
+    timeout_s: float = 45.0,
+    max_retries: int | None = None,
+    user_content: list[dict[str, Any]] | None = None,
 ) -> AnthropicRawResult:
-    """Category 4 Stage-2 cross-chunk reranker on Haiku 5.5 with strict JSON schema."""
+    """Category 4 Stage-2 cross-chunk reranker on Haiku 5.5 with strict JSON schema.
+
+    Optional keyword arguments (defaults keep the app's behaviour): `timeout_s`, `max_retries` (None = SDK
+    default) and `user_content` — content blocks sent instead of `rerank_payload` (used by the quality rerun's
+    cached full-corpus reranker; blocks may carry `cache_control`).
+    """
     settings = get_settings()
-    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=45.0)
+    client_kwargs: dict[str, Any] = {"api_key": api_key, "timeout": timeout_s}
+    if max_retries is not None:
+        client_kwargs["max_retries"] = max_retries
+    client = anthropic.AsyncAnthropic(**client_kwargs)
     thinking_cfg: dict[str, str] = {"type": "disabled"}
     request_params: dict[str, Any] = {
         "max_tokens": max_tokens,
@@ -510,7 +524,7 @@ async def run_cat4_haiku_reranker(
                 "schema": schema,
             }
         },
-        messages=[{"role": "user", "content": rerank_payload}],
+        messages=[{"role": "user", "content": user_content if user_content is not None else rerank_payload}],
     )
     latency_ms = int((time.perf_counter() - t0) * 1000)
 
@@ -549,10 +563,22 @@ async def run_cat4_rag_synthesis(
     use_prefix_cache: bool,
     api_key: str,
     max_tokens: int = 2048,
+    *,
+    timeout_s: float = 90.0,
+    max_retries: int | None = None,
+    raise_on_max_tokens: bool = True,
 ) -> AnthropicRawResult:
-    """Category 4 Sonnet 5.5 RAG synthesis supporting native DocumentBlocks + citations + cache_control."""
+    """Category 4 Sonnet 5.5 RAG synthesis supporting native DocumentBlocks + citations + cache_control.
+
+    Optional keyword arguments (defaults keep the app's behaviour): `timeout_s`, `max_retries` (None = SDK
+    default) and `raise_on_max_tokens` — False returns a truncated answer with `stop_reason="max_tokens"`
+    instead of raising (used by the quality rerun, which records every answer).
+    """
     settings = get_settings()
-    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=90.0)
+    client_kwargs: dict[str, Any] = {"api_key": api_key, "timeout": timeout_s}
+    if max_retries is not None:
+        client_kwargs["max_retries"] = max_retries
+    client = anthropic.AsyncAnthropic(**client_kwargs)
     thinking_cfg: dict[str, str] = {"type": "between_tools"}
 
     if documents_for_blocks is not None:
@@ -607,7 +633,7 @@ async def run_cat4_rag_synthesis(
     )
     latency_ms = int((time.perf_counter() - t0) * 1000)
 
-    if getattr(resp, "stop_reason", None) == "max_tokens":
+    if raise_on_max_tokens and getattr(resp, "stop_reason", None) == "max_tokens":
         out_cnt = int(getattr(resp.usage, "output_tokens", 0) or 0)
         raise RuntimeError(
             f"Category 4 synthesis hit max_tokens={max_tokens} ({out_cnt} out tokens)"
@@ -818,6 +844,7 @@ async def run_cat6_swarm_agent_call(
     use_prefix_cache: bool,
     api_key: str,
     max_tokens: int = 3200,
+    timeout_s: float = 120.0,
 ) -> AnthropicRawResult:
     """Execute one sub-agent call for Category 6 (isolated prefix-cached vs shared omnibus bus)."""
     settings = get_settings()
@@ -846,7 +873,7 @@ async def run_cat6_swarm_agent_call(
     else:
         system_arg = role_instructions
 
-    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=120.0)
+    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=timeout_s)
     request_params: dict[str, Any] = {
         "max_tokens": max_tokens,
         "endpoint": "messages.create",

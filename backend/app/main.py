@@ -15,6 +15,7 @@ from app.archetypes.cat5_orchestration.router import router as cat5_router
 from app.archetypes.cat6_swarms.router import router as cat6_router
 from app.config import get_settings
 from app.core.credit_shield import credit_shield
+from app.core.measured_claims import rule1_measured_impact
 from app.core.trace_store import summarize_traces
 from app.data.matrix_catalog import (
     ARCHETYPES_CATALOG,
@@ -62,12 +63,16 @@ async def traces_summary() -> dict[str, object]:
 
 @app.get("/api/archetypes")
 async def list_archetypes() -> dict[str, object]:
+    rules = [dict(r) for r in FINOPS_RULES]
+    measured = rule1_measured_impact()
+    if measured:
+        rules[0]["impact"] = measured
     return {
         "enterprise": NOVAMART_PROFILE,
         "autonomy_tiers": AUTONOMY_TIERS,
         "token_bands": TOKEN_BANDS,
         "archetypes": ARCHETYPES_CATALOG,
-        "finops_rules": FINOPS_RULES,
+        "finops_rules": rules,
     }
 
 

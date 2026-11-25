@@ -339,6 +339,96 @@ export interface StructuredDraft {
   action_plan: StructuredDraftActionItem[]
 }
 
+export interface Cat2Count {
+  hits: number
+  total: number
+}
+
+export interface Cat2NumberItem {
+  text: string
+  context: string
+  verdict: string | null
+}
+
+export interface Cat2Numbers {
+  numeric_tokens: number
+  not_in_source: number
+  verdicts?: Record<string, number> | null
+  items: Cat2NumberItem[]
+}
+
+export interface Cat2DraftError {
+  claim_quote: string
+  problem: string
+  source_quote: string | null
+  severity: 'material' | 'minor'
+  passes_reporting: number
+}
+
+export interface Cat2ActionItemCheck {
+  total: number
+  flagged: number
+  flagged_serious: number
+}
+
+export interface Cat2HeadToHead {
+  opponent: Cat2RungId
+  results: { shown_first: Cat2RungId; winner: string | null }[]
+}
+
+export type Cat2Dimension = 'factual_accuracy' | 'coverage' | 'clarity' | 'actionability' | 'concision'
+
+export interface Cat2RungQuality {
+  source: 'replay_judged' | 'live_deterministic'
+  preset_id: string | null
+  keys_version: string | null
+  core_facts: Cat2Count | null
+  detail_facts: Cat2Count | null
+  missed_facts: { description: string; tier: 'core' | 'detail' }[]
+  numbers: Cat2Numbers | null
+  rubric: Partial<Record<Cat2Dimension, { mean: number; scores: number[] }>> | null
+  serious_errors: number | null
+  minor_errors: number | null
+  errors: Cat2DraftError[] | null
+  action_items: Cat2ActionItemCheck | null
+  head_to_head: Cat2HeadToHead[] | null
+  judge_model: string | null
+  passes: number | null
+  judge_unavailable_reason: string | null
+}
+
+export interface Cat2PortfolioRung {
+  rung_id: Cat2RungId
+  drafts: number
+  core_facts: Cat2Count
+  detail_facts: Cat2Count
+  rubric: Partial<Record<Cat2Dimension, { mean: number | null; min: number | null; max: number | null; n: number }>>
+  serious_errors: number
+  minor_errors: number
+  numbers: Cat2Numbers
+  action_items: Cat2ActionItemCheck | null
+  cost_per_1k_docs_usd: number | null
+  output_tokens_mean: number | null
+  head_to_head: Partial<Record<Cat2RungId, { wins: number; losses: number; ties: number }>>
+}
+
+export interface Cat2QualityPortfolio {
+  schema_version: number
+  source: string
+  keys_version: string | null
+  judge_model: string
+  passes_per_draft: number
+  drafts_per_cell: number
+  documents: string[]
+  calls: Record<string, number>
+  dimensions: string[]
+  rungs: Cat2PortfolioRung[]
+  pairwise: Record<
+    string,
+    { wins: Record<string, Record<string, number>>; ties: Record<string, number>; position_consistency: Record<string, number> }
+  >
+}
+
 export interface Cat2RungResult {
   rung_id: Cat2RungId
   rung_title: string
@@ -354,6 +444,8 @@ export interface Cat2RungResult {
   finops: FinOpsBreakdown
   savings_vs_unbounded_pct: number
   architectural_notes: string[]
+  stop_reason?: string | null
+  quality?: Cat2RungQuality | null
 }
 
 export interface Cat2RunResponse {
@@ -365,6 +457,7 @@ export interface Cat2RunResponse {
   results: Cat2RungResult[]
   haiku_batch_comparator: FinOpsBreakdown | null
   output_tax_callout: string
+  quality_portfolio?: Cat2QualityPortfolio | null
 }
 
 export interface HitlCostComparison {
@@ -444,6 +537,68 @@ export interface Cat3TurnResult {
   estimated_active_context_tokens: number
 }
 
+export interface Cat3Measure {
+  hits: number
+  total: number
+  rate: number | null
+  ci_low: number | null
+  ci_high: number | null
+}
+
+export type Cat3LedgerWindow = '1-3' | '4-6' | '7-9'
+
+export interface Cat3ProbeResult {
+  probe_id: string
+  origin_turn: number
+  question: string
+  expected: string
+  answer: string
+  hit: boolean
+  outcome: 'correct' | 'declined' | 'wrong'
+}
+
+export interface Cat3RungQuality {
+  keys_version: string | null
+  turn_recall: Cat3Measure
+  ledger_recall: Cat3Measure
+  ledger_by_origin: Partial<Record<Cat3LedgerWindow, Cat3Measure>>
+  probe_accuracy: Cat3Measure | null
+  probes: Cat3ProbeResult[] | null
+  probes_unavailable_reason: string | null
+}
+
+export interface Cat3PortfolioCell {
+  runs: number
+  turn_recall: Cat3Measure
+  ledger_recall: Cat3Measure
+  ledger_by_origin: Partial<Record<Cat3LedgerWindow, Cat3Measure>>
+  probe_accuracy: Cat3Measure
+  session_billed_usd_mean: number | null
+  session_warm_usd_mean: number | null
+  session_billed_per_1k_usd: number | null
+  session_warm_per_1k_usd: number | null
+  probe_phase_billed_usd_mean: number | null
+}
+
+export interface Cat3PortfolioRung extends Cat3PortfolioCell {
+  rung_id: Cat3RungId
+  by_preset: Record<string, Cat3PortfolioCell>
+}
+
+export interface Cat3QualityPortfolio {
+  schema_version: number
+  source: string
+  source_file: string | null
+  keys_version: string | null
+  runs: number
+  error_records: number
+  repeats: number
+  sessions: string[]
+  probes_per_session: Record<string, number>
+  matrix_complete: boolean
+  rungs: Cat3PortfolioRung[]
+}
+
 export interface Cat3RungSummary {
   rung_id: Cat3RungId
   rung_title: string
@@ -472,6 +627,7 @@ export interface Cat3RungSummary {
   warm_savings_vs_cached_history_pct: number
   total_latency_ms: number
   architectural_notes: string[]
+  quality?: Cat3RungQuality | null
 }
 
 export interface Cat3RunResponse {
@@ -484,6 +640,7 @@ export interface Cat3RunResponse {
   approx_handbook_tokens: number
   results: Cat3RungSummary[]
   session_callout: string
+  quality_portfolio?: Cat3QualityPortfolio | null
 }
 
 export interface Cat3ChatTurnEntry {
@@ -909,8 +1066,9 @@ export interface Cat6RungResult {
   warm_run_cost_usd: number
   cost_per_1k_runs_cold_usd: number
   cost_per_1k_runs_warm_usd: number
-  cpo_cold_per_1k_usd: number
-  cpo_warm_per_1k_usd: number
+  /** null when the run has no verified outcome (CpO undefined) */
+  cpo_cold_per_1k_usd: number | null
+  cpo_warm_per_1k_usd: number | null
   savings_vs_naive_cold_pct: number
   savings_vs_naive_warm_pct: number
   total_latency_ms: number
@@ -934,9 +1092,10 @@ export interface Cat6PortfolioRungRollup {
   daily_tokens_per_dev_at_25_runs: number
   avg_cpr_cold_per_1k_usd: number
   avg_cpr_warm_per_1k_usd: number
-  portfolio_cpo_cold_per_1k_usd: number
-  portfolio_cpo_warm_per_1k_usd: number
-  cpo_savings_vs_naive_cold_pct: number
+  /** null when the rung has zero verified outcomes; savings null when either side is undefined */
+  portfolio_cpo_cold_per_1k_usd: number | null
+  portfolio_cpo_warm_per_1k_usd: number | null
+  cpo_savings_vs_naive_cold_pct: number | null
 }
 
 export interface Cat6RunResponse {

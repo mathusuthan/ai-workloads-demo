@@ -1,7 +1,13 @@
-"""Seed backend/traces/ from the 30 real live-captured traces in cat1_golden_replays.json."""
+"""Seed backend/traces/ from the golden replays.
+
+Default: clears every prior `live_captured_seed` trace (all categories) and re-seeds Categories 1-6.
+`--cat3-only` / `--cat6-only`: appends that category's seeds only, without deleting or rewriting any other
+trace (older seeds of that category stay on disk and are superseded by the new ones).
+"""
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -36,6 +42,12 @@ from app.archetypes.cat3_assistants.runner import (  # noqa: E402
     persist_cat3_trace,
 )
 from app.archetypes.cat3_assistants.schemas import SESSION_MEMORY_JSON_SCHEMA  # noqa: E402
+from app.archetypes.cat3_assistants.scoring import (  # noqa: E402
+    cached_quality_keys,
+    classify_probe_answer,
+    fact_hit,
+    probes_for,
+)
 from app.archetypes.cat4_rag.prompts import (  # noqa: E402
     get_cat4_haiku_reranker_system_prompt,
     get_cat4_synthesis_system_prompt,
@@ -58,6 +70,7 @@ from app.archetypes.cat5_orchestration.runner import (  # noqa: E402
     load_cat5_replays,
     persist_cat5_trace,
 )
+from app.archetypes.cat6_swarms.caps import CALL_TIMEOUT_S, cat6_caps_by_role  # noqa: E402
 from app.archetypes.cat6_swarms.prompts import (  # noqa: E402
     get_cat6_agent_system_prompt,
 )
@@ -68,7 +81,7 @@ from app.archetypes.cat6_swarms.runner import (  # noqa: E402
     persist_cat6_trace,
 )
 from app.config import get_settings  # noqa: E402
-from app.core.pricing import compute_run_finops  # noqa: E402
+from app.core.pricing import compute_run_finops, rollup_multi_call_finops  # noqa: E402
 from app.data.cat1_fixtures import CAT1_EXTRA_BATCH_ITEMS, CAT1_PRESETS  # noqa: E402
 from app.data.cat2_fixtures import CAT2_PRESETS, CAT2_REVIEWER_PRESETS  # noqa: E402
 from app.data.cat3_fixtures import CAT3_PRESETS  # noqa: E402
@@ -367,97 +380,7 @@ def seed_all() -> None:
                 )
                 written += 1
 
-    # Seed Category 3 traces (60 multi-turn assistant turns + 4 sliding-window summarizer calls)
-    cat3_replays = load_cat3_replays()
-    cat3_presets_replays = cat3_replays.get("presets") or {}
-    for preset in CAT3_PRESETS:
-        pid = preset["id"]
-        if pid not in cat3_presets_replays:
-            continue
-        rungs_map = cat3_presets_replays[pid].get("rungs") or {}
-        for rung_id in ("naive_full_history", "prefix_cached_history", "prefix_cached_summarized"):
-            raw_turns = rungs_map.get(rung_id) or []
-            sys_inst = build_cat3_system_handbook(rung_id, preset["employee_profile"])
-            run_group = f"seed-cat3-{pid}-{rung_id}"
-            for rt in raw_turns:
-                t_num = int(rt["turn_number"])
-                model_id = str(rt.get("model_id") or "claude-sonnet-5-5")
-                if rt.get("compaction_triggered_before_turn") and rt.get("compaction_payload"):
-                    comp_fin = compute_run_finops(
-                        model_id=str(rt.get("compaction_model_id") or model_id),
-                        input_tokens=int(rt.get("compaction_input_tokens") or 0),
-                        output_tokens=int(rt.get("compaction_output_tokens") or 0),
-                    )
-                    mem_snap = rt.get("memory_summary_snapshot") or {}
-                    persist_cat3_trace(
-                        source_mode="live_captured_seed",
-                        run_group_id=run_group,
-                        item_id=f"{pid}__t{t_num:02d}_compact",
-                        item_title=f"{preset['title']} · Compaction Before Turn {t_num}",
-                        model_id=str(rt.get("compaction_model_id") or model_id),
-                        pattern=SUMMARIZER_PATTERN,
-                        system_instruction=get_memory_summarizer_system_prompt(),
-                        payload_text=str(rt["compaction_payload"]),
-                        status="ok",
-                        latency_ms=int(rt.get("compaction_latency_ms") or 0),
-                        finops_dict=comp_fin.model_dump(),
-                        raw_text=json.dumps(mem_snap, indent=2),
-                        structured_output=mem_snap,
-                        request_params={
-                            "max_tokens": 1600,
-                            "endpoint": "messages.create",
-                            "thinking": {"type": "between_tools"},
-                            "output_config": {"format": {"type": "json_schema"}},
-                        },
-                        json_schema=SESSION_MEMORY_JSON_SCHEMA,
-                        stop_reason=rt.get("compaction_stop_reason") or "end_turn",
-                        extra_metadata={
-                            "source_endpoint": "capture_cat3_replays.py",
-                            "turn_number": t_num,
-                        },
-                    )
-                    written += 1
-
-                t_fin = compute_run_finops(
-                    model_id=model_id,
-                    input_tokens=int(rt["input_tokens"]),
-                    output_tokens=int(rt["output_tokens"]),
-                    cache_creation_tokens=int(rt.get("cache_creation_tokens") or 0),
-                    cache_read_tokens=int(rt.get("cache_read_tokens") or 0),
-                )
-                persist_cat3_trace(
-                    source_mode="live_captured_seed",
-                    run_group_id=run_group,
-                    item_id=f"{pid}__t{t_num:02d}",
-                    item_title=f"{preset['title']} · Turn {t_num} ({rt['topic_tag']})",
-                    model_id=model_id,
-                    pattern=CAT3_RUNG_TO_PATTERN[rung_id],
-                    system_instruction=sys_inst,
-                    payload_text=str(rt["user_message"]),
-                    status="ok",
-                    latency_ms=int(rt["latency_ms"]),
-                    finops_dict=t_fin.model_dump(),
-                    raw_text=str(rt["assistant_message"]),
-                    structured_output={
-                        "turn_number": t_num,
-                        "topic_tag": rt["topic_tag"],
-                        "active_history_turns": rt["active_history_turns"],
-                        "compacted_turns_count": rt["compacted_turns_count"],
-                    },
-                    request_params={
-                        "max_tokens": 4096,
-                        "endpoint": "messages.create",
-                        "thinking": {"type": "between_tools"},
-                        "prefix_cache_enabled": rung_id != "naive_full_history",
-                    },
-                    stop_reason=rt.get("stop_reason") or "end_turn",
-                    extra_metadata={
-                        "source_endpoint": "capture_cat3_replays.py",
-                        "turn_number": t_num,
-                        "rung_id": rung_id,
-                    },
-                )
-                written += 1
+    written += seed_cat3()
 
     # Seed Category 4 traces (24 synthesis calls across 3 rungs + 8 Haiku reranker calls)
     cat4_replays = load_cat4_replays()
@@ -587,15 +510,12 @@ def seed_all() -> None:
                 if rung_id == "hybrid_haiku_sonnet_governed" and not res.escalated_to_sonnet
                 else "claude-sonnet-5-5"
             )
-            rollup_fin = compute_run_finops(
+            rollup_fin = rollup_multi_call_finops(
+                calls=[s.finops for s in res.steps],
+                total_cost_usd=res.cold_run_cost_usd,
                 model_id=fin_model,
-                input_tokens=res.total_uncached_input_tokens,
-                output_tokens=res.total_output_tokens,
-                cache_creation_tokens=res.total_cache_creation_tokens,
-                cache_read_tokens=res.total_cache_read_tokens,
+                model_label=res.primary_model_id,
             ).model_dump()
-            rollup_fin["total_cost_usd"] = res.cold_run_cost_usd
-            rollup_fin["cost_per_1k_usd"] = res.cost_per_1k_invoices_cold_usd
             persist_cat5_trace(
                 source_mode="live_captured_seed",
                 run_group_id=run_group,
@@ -632,15 +552,243 @@ def seed_all() -> None:
             )
             written += 1
 
-    # Seed Category 6 traces (9 swarm rollups across 3 incidents x 3 rungs)
+    written += seed_cat6()
+
+    print(f"Seeded {written} partitioned trace files into {settings.traces_dir}")
+
+
+def _cat3_compaction_trace(
+    *,
+    preset: dict,
+    run_group: str,
+    item_id: str,
+    item_title: str,
+    comp: dict,
+    memory: dict,
+    extra: dict,
+) -> None:
+    model_id = str(comp.get("model_id") or "claude-sonnet-5-5")
+    fin = compute_run_finops(
+        model_id=model_id,
+        input_tokens=int(comp.get("input_tokens") or 0),
+        output_tokens=int(comp.get("output_tokens") or 0),
+        cache_creation_tokens=int(comp.get("cache_creation_tokens") or 0),
+        cache_read_tokens=int(comp.get("cache_read_tokens") or 0),
+    )
+    persist_cat3_trace(
+        source_mode="live_captured_seed",
+        run_group_id=run_group,
+        item_id=item_id,
+        item_title=item_title,
+        model_id=model_id,
+        pattern=SUMMARIZER_PATTERN,
+        system_instruction=get_memory_summarizer_system_prompt(),
+        payload_text=str(comp["payload"]),
+        status="ok",
+        latency_ms=int(comp.get("latency_ms") or 0),
+        finops_dict=fin.model_dump(),
+        raw_text=json.dumps(memory, indent=2),
+        structured_output=memory,
+        request_params={
+            "max_tokens": 1600,
+            "endpoint": "messages.create",
+            "thinking": {"type": "between_tools"},
+            "output_config": {"format": {"type": "json_schema"}},
+        },
+        json_schema=SESSION_MEMORY_JSON_SCHEMA,
+        stop_reason=comp.get("stop_reason"),
+        extra_metadata={**extra, "thinking_tokens": int(comp.get("thinking_tokens") or 0)},
+    )
+
+
+def seed_cat3() -> int:
+    """Seed Category 3 traces from cat3_golden_replays.json; appends only.
+
+    Per rung and session: 10 turns, the summariser calls before turns 5 and 8 (compacted rung), and — when the
+    golden replays come from the quality rerun (scripts/build_cat3_golden_from_rerun.py) — the probe-phase
+    compaction and the six recall probes, each scored with the answer key. Older Category 3 seeds stay on disk
+    and are superseded by these (newest seed per category/model/pattern/item).
+    """
+    written = 0
+    cat3_replays = load_cat3_replays()
+    file_prov = cat3_replays.get("provenance") or {}
+    from_rerun = bool(file_prov)
+    source_endpoint = "build_cat3_golden_from_rerun.py" if from_rerun else "capture_cat3_replays.py"
+    keys = cached_quality_keys()
+    cat3_presets_replays = cat3_replays.get("presets") or {}
+    for preset in CAT3_PRESETS:
+        pid = preset["id"]
+        if pid not in cat3_presets_replays:
+            continue
+        preset_trace = cat3_presets_replays[pid]
+        rungs_map = preset_trace.get("rungs") or {}
+        for rung_id in ("naive_full_history", "prefix_cached_history", "prefix_cached_summarized"):
+            raw_turns = rungs_map.get(rung_id) or []
+            if not raw_turns:
+                continue
+            sys_inst = build_cat3_system_handbook(rung_id, preset["employee_profile"])
+            run_group = f"seed-cat3-rerun-{pid}-{rung_id}" if from_rerun else f"seed-cat3-{pid}-{rung_id}"
+            prov = (preset_trace.get("provenance") or {}).get(rung_id)
+            base_meta = {
+                "source_endpoint": source_endpoint,
+                "rung_id": rung_id,
+                "provenance": prov,
+                "golden_rebuilt_at": file_prov.get("rebuilt_at"),
+            }
+            for rt in raw_turns:
+                t_num = int(rt["turn_number"])
+                model_id = str(rt.get("model_id") or "claude-sonnet-5-5")
+                if rt.get("compaction_triggered_before_turn") and rt.get("compaction_payload"):
+                    _cat3_compaction_trace(
+                        preset=preset,
+                        run_group=run_group,
+                        item_id=f"{pid}__t{t_num:02d}_compact",
+                        item_title=f"{preset['title']} · Compaction Before Turn {t_num}",
+                        comp={
+                            "model_id": rt.get("compaction_model_id") or model_id,
+                            "payload": rt["compaction_payload"],
+                            "latency_ms": rt.get("compaction_latency_ms"),
+                            "input_tokens": rt.get("compaction_input_tokens"),
+                            "output_tokens": rt.get("compaction_output_tokens"),
+                            "thinking_tokens": rt.get("compaction_thinking_tokens"),
+                            "cache_creation_tokens": rt.get("compaction_cache_creation_tokens"),
+                            "cache_read_tokens": rt.get("compaction_cache_read_tokens"),
+                            "stop_reason": rt.get("compaction_stop_reason"),
+                        },
+                        memory=rt.get("memory_summary_snapshot") or {},
+                        extra={**base_meta, "turn_number": t_num},
+                    )
+                    written += 1
+
+                t_fin = compute_run_finops(
+                    model_id=model_id,
+                    input_tokens=int(rt["input_tokens"]),
+                    output_tokens=int(rt["output_tokens"]),
+                    cache_creation_tokens=int(rt.get("cache_creation_tokens") or 0),
+                    cache_read_tokens=int(rt.get("cache_read_tokens") or 0),
+                )
+                persist_cat3_trace(
+                    source_mode="live_captured_seed",
+                    run_group_id=run_group,
+                    item_id=f"{pid}__t{t_num:02d}",
+                    item_title=f"{preset['title']} · Turn {t_num} ({rt['topic_tag']})",
+                    model_id=model_id,
+                    pattern=CAT3_RUNG_TO_PATTERN[rung_id],
+                    system_instruction=sys_inst,
+                    payload_text=str(rt["user_message"]),
+                    status="ok",
+                    latency_ms=int(rt["latency_ms"]),
+                    finops_dict=t_fin.model_dump(),
+                    raw_text=str(rt["assistant_message"]),
+                    structured_output={
+                        "turn_number": t_num,
+                        "topic_tag": rt["topic_tag"],
+                        "active_history_turns": rt["active_history_turns"],
+                        "compacted_turns_count": rt["compacted_turns_count"],
+                    },
+                    request_params={
+                        "max_tokens": 4096,
+                        "endpoint": "messages.create",
+                        "thinking": {"type": "between_tools"},
+                        "prefix_cache_enabled": rung_id != "naive_full_history",
+                    },
+                    stop_reason=rt.get("stop_reason"),
+                    extra_metadata={
+                        **base_meta,
+                        "turn_number": t_num,
+                        "thinking_tokens": int(rt.get("thinking_tokens") or 0),
+                    },
+                )
+                written += 1
+
+            phase = (preset_trace.get("probe_phase") or {}).get(rung_id)
+            if not phase:
+                continue
+            if phase.get("compaction"):
+                pc = phase["compaction"]
+                _cat3_compaction_trace(
+                    preset=preset,
+                    run_group=run_group,
+                    item_id=f"{pid}__probe_compact",
+                    item_title=f"{preset['title']} · Compaction Before Recall Probes",
+                    comp=pc,
+                    memory=pc.get("memory_after") or {},
+                    extra={
+                        **base_meta,
+                        "phase": "recall_probes",
+                        "evicted_turns": pc.get("evicted_turns"),
+                        "kept_turns": pc.get("kept_turns"),
+                    },
+                )
+                written += 1
+            key_by_id = {k["probe_id"]: k for k in probes_for(keys, pid)}
+            for pr in phase.get("probes") or []:
+                key = key_by_id.get(pr["probe_id"])
+                hit = fact_hit(str(pr.get("answer") or ""), key["any_of"]) if key else None
+                model_id = str(pr.get("model_id") or "claude-sonnet-5-5")
+                p_fin = compute_run_finops(
+                    model_id=model_id,
+                    input_tokens=int(pr.get("input_tokens") or 0),
+                    output_tokens=int(pr.get("output_tokens") or 0),
+                    cache_creation_tokens=int(pr.get("cache_creation_tokens") or 0),
+                    cache_read_tokens=int(pr.get("cache_read_tokens") or 0),
+                )
+                persist_cat3_trace(
+                    source_mode="live_captured_seed",
+                    run_group_id=run_group,
+                    item_id=f"{pid}__probe_t{int(pr['origin_turn']):02d}",
+                    item_title=f"{preset['title']} · Recall Probe (detail from Turn {pr['origin_turn']})",
+                    model_id=model_id,
+                    pattern=CAT3_RUNG_TO_PATTERN[rung_id],
+                    system_instruction=sys_inst,
+                    payload_text=str(pr["question"]),
+                    status="ok",
+                    latency_ms=int(pr.get("latency_ms") or 0),
+                    finops_dict=p_fin.model_dump(),
+                    raw_text=str(pr.get("answer") or ""),
+                    structured_output={
+                        "probe_id": pr["probe_id"],
+                        "origin_turn": int(pr["origin_turn"]),
+                        "expected": (key or {}).get("expected_display"),
+                        "hit": hit,
+                        "outcome": classify_probe_answer(str(pr.get("answer") or ""), bool(hit)) if key else None,
+                        "keys_version": (keys.get("meta") or {}).get("keys_version"),
+                        "active_history_turns": pr.get("active_history_turns"),
+                        "compacted_through_turn": pr.get("compacted_through_turn"),
+                    },
+                    request_params={
+                        "max_tokens": 4096,
+                        "endpoint": "messages.create",
+                        "thinking": {"type": "between_tools"},
+                        "prefix_cache_enabled": rung_id != "naive_full_history",
+                    },
+                    stop_reason=pr.get("stop_reason"),
+                    extra_metadata={
+                        **base_meta,
+                        "phase": "recall_probes",
+                        "thinking_tokens": int(pr.get("thinking_tokens") or 0),
+                    },
+                )
+                written += 1
+    return written
+
+
+def seed_cat6() -> int:
+    """Seed Category 6 traces (9 swarm rollups: 3 incidents x 3 rungs) from cat6_golden_replays.json.
+
+    Appends only; never deletes or rewrites other traces. The golden replays are rebuilt from the fair
+    rerun (scripts/build_cat6_golden_from_rerun.py), so these seeds supersede older Category 6 seeds.
+    """
+    written = 0
     cat6_replays = load_cat6_replays()
+    file_prov = cat6_replays.get("provenance") or {}
     cat6_presets_replays = cat6_replays.get("presets") or {}
     for preset in CAT6_PRESETS:
         pid = preset["id"]
         if pid not in cat6_presets_replays:
             continue
         rungs_map = cat6_presets_replays[pid].get("rungs") or {}
-        run_group = f"seed-cat6-{pid}"
+        run_group = f"seed-cat6-fair-rerun-{pid}" if file_prov else f"seed-cat6-{pid}"
         for rung_id in (
             "unisolated_broadcast_swarm",
             "isolated_cached_sonnet_swarm",
@@ -648,25 +796,24 @@ def seed_all() -> None:
         ):
             if rung_id not in rungs_map:
                 continue
+            raw_rung = rungs_map[rung_id]
             res = _build_cat6_result_from_replay(
                 rung_id=rung_id,
                 preset=preset,
-                raw_rung=rungs_map[rung_id],
+                raw_rung=raw_rung,
             )
             fin_model = (
                 "claude-haiku-5-5"
                 if rung_id == "tiered_hybrid_cpo_swarm" and res.haiku_turns >= res.sonnet_turns
                 else "claude-sonnet-5-5"
             )
-            rollup_fin = compute_run_finops(
+            rollup_fin = rollup_multi_call_finops(
+                calls=[t.finops for t in res.agent_turns],
+                total_cost_usd=res.cold_run_cost_usd,
                 model_id=fin_model,
-                input_tokens=res.total_uncached_input_tokens,
-                output_tokens=res.total_output_tokens,
-                cache_creation_tokens=res.total_cache_creation_tokens,
-                cache_read_tokens=res.total_cache_read_tokens,
+                model_label=res.primary_model_id,
             ).model_dump()
-            rollup_fin["total_cost_usd"] = res.cold_run_cost_usd
-            rollup_fin["cost_per_1k_usd"] = res.cost_per_1k_runs_cold_usd
+            stop_reasons = [t.get("stop_reason") for t in raw_rung.get("agent_turns") or []]
             persist_cat6_trace(
                 source_mode="live_captured_seed",
                 run_group_id=run_group,
@@ -684,6 +831,7 @@ def seed_all() -> None:
                     "haiku_turns": res.haiku_turns,
                     "sonnet_turns": res.sonnet_turns,
                     "retries_used": res.retries_used,
+                    "turn_stop_reasons": stop_reasons,
                     "sandbox_report": res.sandbox_report.model_dump()
                     if res.sandbox_report
                     else None,
@@ -691,17 +839,48 @@ def seed_all() -> None:
                 request_params={
                     "endpoint": "messages.create",
                     "prefix_cache_enabled": rung_id != "unisolated_broadcast_swarm",
+                    "max_tokens_by_role": cat6_caps_by_role(shared_bus=rung_id == "unisolated_broadcast_swarm"),
+                    "timeout_s": CALL_TIMEOUT_S,
                 },
-                stop_reason="end_turn",
+                stop_reason="max_tokens" if "max_tokens" in stop_reasons else "end_turn",
                 extra_metadata={
-                    "source_endpoint": "capture_cat6_replays.py",
+                    "source_endpoint": (
+                        "build_cat6_golden_from_rerun.py" if file_prov else "capture_cat6_replays.py"
+                    ),
                     "rung_id": rung_id,
+                    "provenance": raw_rung.get("provenance"),
+                    "golden_rebuilt_at": file_prov.get("rebuilt_at"),
                 },
             )
             written += 1
+    return written
 
-    print(f"Seeded {written} partitioned trace files into {settings.traces_dir}")
+
+def main(argv: list[str] | None = None) -> None:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "--cat6-only",
+        action="store_true",
+        help="append Category 6 seed traces only; no other trace is deleted or rewritten",
+    )
+    ap.add_argument(
+        "--cat3-only",
+        action="store_true",
+        help="append Category 3 seed traces only; no other trace is deleted or rewritten",
+    )
+    args = ap.parse_args(argv)
+    if args.cat3_only and args.cat6_only:
+        ap.error("--cat3-only and --cat6-only are mutually exclusive")
+    if args.cat3_only:
+        n = seed_cat3()
+        print(f"Seeded {n} Category 3 trace files into {get_settings().traces_dir} (append-only)")
+        return
+    if args.cat6_only:
+        n = seed_cat6()
+        print(f"Seeded {n} Category 6 trace files into {get_settings().traces_dir} (append-only)")
+        return
+    seed_all()
 
 
 if __name__ == "__main__":
-    seed_all()
+    main()

@@ -237,7 +237,7 @@ export function Cat4Workbench({
       .map((r) => {
         const uncachedInCost = (r.total_uncached_input_tokens / 1_000_000) * 2.0 * 1000
         const rawWriteCost = (r.total_cache_creation_tokens / 1_000_000) * 2.5 * 1000
-        const rawReadCost = (r.total_cache_read_tokens / 1_000_000) * 0.2 * 1000
+        const rawReadCost = (r.total_cache_read_tokens / 1_000_000) * 0.1 * 1000
         const totAudit1k =
           cacheMode === 'warm_shared_corpus'
             ? r.cost_per_1k_audits_warm_usd

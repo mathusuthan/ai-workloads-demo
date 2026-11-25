@@ -69,16 +69,10 @@ async def capture_cat2() -> None:
         ]
 
         rungs_dict: dict[str, Any] = dict(existing_rungs)
-        changed_metadata = False
-        for k in ("sonnet_templated", "haiku_templated"):
-            if k in rungs_dict and rungs_dict[k].get("stop_reason") != "end_turn":
-                rungs_dict[k] = {**rungs_dict[k], "stop_reason": "end_turn"}
-                changed_metadata = True
+        # Stored stop_reason values are kept as captured (no rewriting). Note: rungs captured before this script
+        # recorded the API's value hold a constant "end_turn" written by the old version, not an observed one.
 
         if not missing_rungs:
-            if changed_metadata:
-                captured["presets"][pid] = {"sub_task": preset["sub_task"], "rungs": rungs_dict}
-                out_path.write_text(json.dumps(captured, indent=2), encoding="utf-8")
             print(f"[Part 1] Reusing existing captured rungs for {pid}...")
             continue
 
@@ -94,7 +88,7 @@ async def capture_cat2() -> None:
         for r in resp.results:
             if r.status != "ok":
                 raise RuntimeError(f"Live capture failed on {pid}/{r.rung_id}: {r.error_message}")
-            if r.rung_id == "sonnet_unbounded" and r.finops.output_tokens >= 8000:
+            if r.stop_reason == "max_tokens" or (r.rung_id == "sonnet_unbounded" and r.finops.output_tokens >= 8000):
                 raise RuntimeError(
                     f"Live capture for {pid}/sonnet_unbounded hit max_tokens ceiling "
                     f"({r.finops.output_tokens} out tokens)"
@@ -106,7 +100,7 @@ async def capture_cat2() -> None:
                 "input_tokens": r.finops.input_tokens,
                 "output_tokens": r.finops.output_tokens,
                 "thinking_tokens": r.thinking_tokens,
-                "stop_reason": "end_turn",
+                "stop_reason": r.stop_reason,  # the API's value, recorded by execute_cat2_run
                 "structured_draft": r.structured_draft,
                 "raw_markdown": r.raw_markdown,
             }

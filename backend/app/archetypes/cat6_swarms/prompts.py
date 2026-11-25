@@ -178,7 +178,7 @@ CAT6_CODE_SNIPPETS: dict[str, str] = {
     "isolated_swarm_orchestrator": '''# Tier-Routed Context-Isolated Swarm (Haiku Orchestration + Sonnet Patch + Shared Cached Prefix)
 shared_repo_block = {
     "type": "text",
-    "text": SHARED_REPO_PREFIX_MARKDOWN,  # ~6.2k tok, byte-identical across sub-agents
+    "text": SHARED_REPO_PREFIX_MARKDOWN,  # shared repo standards, byte-identical across sub-agents
     "cache_control": {"type": "ephemeral"},
 }
 
@@ -199,16 +199,15 @@ if not sandbox_report["verified_outcome"]:
 critic = await run_swarm_agent("claude-haiku-5-5", shared_repo_block, CRITIC_PROMPT, patch + sandbox_report)
 merge = await run_swarm_agent("claude-haiku-5-5", shared_repo_block, MERGE_PROMPT, sandbox_report + critic)
 ''',
-    "sandbox_cpo_gate": '''# Cost per Verified Outcome (CpO) vs Vanity Cost per Run (CpR)
-def compute_cpo(runs: list[SwarmRun]) -> dict[str, float]:
+    "sandbox_cpo_gate": '''# Cost per Verified Outcome (CpO) vs Cost per Run (CpR)
+def compute_cpo(runs: list[SwarmRun]) -> dict[str, float | None]:
     total_spend_1k = sum(r.cost_per_1k_runs_usd for r in runs)
-    verified_rate = sum(1 for r in runs if r.sandbox_report.verified_outcome) / len(runs)
-    # Anti-pattern traps look cheap per run, but non-verified patches blow up CpO!
-    cpo_per_1k_usd = total_spend_1k / max(0.01, verified_rate * len(runs))
+    verified = sum(1 for r in runs if r.sandbox_report.verified_outcome)
+    # CpO charges all spend (failed runs included) to the verified outcomes; it equals CpR when every run verifies.
     return {
         "cpr_per_1k": round(total_spend_1k / len(runs), 2),
-        "verified_outcome_rate_pct": round(verified_rate * 100, 1),
-        "cpo_per_1k": round(cpo_per_1k_usd, 2),
+        "verified_outcome_rate_pct": round(verified / len(runs) * 100, 1),
+        "cpo_per_1k": round(total_spend_1k / verified, 2) if verified else None,  # undefined, never "free"
     }
 ''',
 }

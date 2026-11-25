@@ -260,7 +260,7 @@ def main() -> None:
             k2.metric(
                 "Cache W / R",
                 f"{cw_tok:,} / {cr_tok:,}" if (cw_tok or cr_tok) else "0 / 0",
-                help="Anthropic prefix cache write (1.25x) / cache read (0.1x, -90% discount).",
+                help="Anthropic prefix cache write (1.25x) / cache read (Sonnet 5.5 0.05x / -95%, Haiku 5.5 0.1x / -90%).",
             )
             k3.metric("Output Tokens", f"{int(fin.get('output_tokens') or 0):,}")
             k4.metric("Latency", f"{int(resp.get('latency_ms') or 0):,} ms")

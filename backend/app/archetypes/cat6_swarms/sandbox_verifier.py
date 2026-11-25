@@ -76,6 +76,67 @@ def _contains_sig_identifier(node: ast.AST) -> bool:
     return False
 
 
+def _module_literal_constant_names(tree: ast.Module) -> set[str]:
+    """Names bound exactly once, at module top level, to a literal str/bytes/int, and never rebound.
+
+    Used by AST-SEC-01 so a comparison against e.g. `_SIG_PREFIX = "sha256="` counts as a comparison
+    against a constant. Any other binding of the name anywhere (assignment, augmented assignment, loop/with
+    target, walrus, import alias, def/class name, parameter, except/match capture, `global`/`nonlocal`
+    declaration) disqualifies it.
+    """
+    candidates: set[str] = set()
+    for stmt in tree.body:
+        target: ast.expr | None = None
+        value: ast.expr | None = None
+        if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
+            target, value = stmt.targets[0], stmt.value
+        elif isinstance(stmt, ast.AnnAssign) and stmt.simple and stmt.value is not None:
+            target, value = stmt.target, stmt.value
+        if (
+            isinstance(target, ast.Name)
+            and isinstance(value, ast.Constant)
+            and type(value.value) in (str, bytes, int)
+        ):
+            candidates.add(target.id)
+    if not candidates:
+        return set()
+
+    binding_counts: dict[str, int] = {}
+
+    def bump(name: str | None) -> None:
+        if name in candidates:
+            binding_counts[name] = binding_counts.get(name, 0) + 1
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            bump(node.id)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            for name in node.names:
+                bump(name)
+                bump(name)  # a declaration alone disqualifies
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            bump(node.name)
+            bump(node.name)
+        elif isinstance(node, ast.arg):
+            bump(node.arg)
+            bump(node.arg)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                name = alias.asname or alias.name.split(".")[0]
+                bump(name)
+                bump(name)
+        elif isinstance(node, ast.ExceptHandler):
+            bump(node.name)
+            bump(node.name)
+        elif isinstance(node, (ast.MatchAs, ast.MatchStar)):
+            bump(node.name)
+            bump(node.name)
+        elif isinstance(node, ast.MatchMapping):
+            bump(node.rest)
+            bump(node.rest)
+    return {name for name in candidates if binding_counts.get(name, 0) == 1}
+
+
 def verify_ast_policies(code: str, preset_id: str) -> tuple[bool, list[dict[str, Any]]]:
     """Run AST-SAFE-02 and preset-specific static AST policy gates."""
     checks: list[dict[str, Any]] = []
@@ -183,13 +244,17 @@ def verify_ast_policies(code: str, preset_id: str) -> tuple[bool, list[dict[str,
     elif preset_id == "inc-02":
         has_compare_digest = "compare_digest" in attr_calls or "compare_digest" in bare_calls
         non_const_sig_eq = False
+        module_consts = _module_literal_constant_names(tree)
         for node in ast.walk(tree):
             if isinstance(node, ast.Compare):
                 has_eq_op = any(isinstance(op, (ast.Eq, ast.NotEq)) for op in node.ops)
                 if not has_eq_op:
                     continue
                 exprs = [node.left, *node.comparators]
-                has_const = any(isinstance(e, ast.Constant) for e in exprs)
+                has_const = any(
+                    isinstance(e, ast.Constant) or (isinstance(e, ast.Name) and e.id in module_consts)
+                    for e in exprs
+                )
                 if not has_const and any(_contains_sig_identifier(e) for e in exprs):
                     non_const_sig_eq = True
                     break

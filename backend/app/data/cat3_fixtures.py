@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-# ~5,300+ Claude 5.5 tokens (~19,500+ chars of structured policy tables, CLI SOPs & ticket runbooks)
-# Guaranteed well above Anthropic's 4,096-token ephemeral cacheable prefix threshold on Sonnet 5.5.
+# ~18,600 chars of structured policy tables, CLI SOPs & ticket runbooks. The full cached system prefix
+# (handbook + employee header + response contract) measures ~9,860 Sonnet 5.5 tokens in the recorded runs,
+# well above Anthropic's 4,096-token ephemeral cacheable prefix threshold.
 IT_HR_HANDBOOK_MARKDOWN = """=== NOVAMART ENTERPRISE · UNIFIED IT & HR SERVICE DESK OPERATIONS HANDBOOK (REV 2026.11) ===
 DOCUMENT CONTROL: SD-HANDBOOK-v2026.11 · SCOPE: 18,000 CORPORATE, HUB & TECH EMPLOYEES
 RESPONSE GOVERNANCE SLA: Keep Turns 1–9 strictly 110–180 words (max 4 tight bullets, zero preamble) and final summary turns strictly <= 250 words as ONE compact Markdown table with zero extra prose, strictly grounded in Policy IDs and runbook commands below, with exact INR/USD math and target Service Desk queue IDs. NEVER ask employees to paste raw payment cards, full unmasked Aadhaar numbers, or private SSH keys in chat.
@@ -194,7 +195,7 @@ CAT3_PRESETS: list[dict[str, Any]] = [
             "leave_case_id": "WD-LV-2026-9912",
             "manager_name": "Kavita Krishnan (Director Supply Planning · On PTO Oct 28 – Nov 6)",
         },
-        "approx_handbook_tokens": 9750,
+        "approx_handbook_tokens": 9860,
         "suggested_followups": [
             "Please draft the single Workday + ServiceNow bundle message I should paste to my Skip-Level Director so both my ₹28,500 monitor claim (WD-DEL-09) and private Slack/SAP RBAC re-attestation (WD-ACCESS-RECERT) get approved today.",
             "My Finance lead also asked for the exact TDS tax breakdown if the ₹64,200 Off-Cycle Payroll Bridge Wire hits my account this Thursday—will my FY26 Form 16 double-count taxes?",
@@ -415,7 +416,7 @@ $ curl -vI https://corp-erp.novamart.internal/healthz 2>&1 | tail -n 8
             "relocation_case_id": "WD-REL-2026-5508",
             "manager_name": "Siddharth Nair (L7 VP Core Infrastructure · EMP-IN-11088)",
         },
-        "approx_handbook_tokens": 9760,
+        "approx_handbook_tokens": 9860,
         "suggested_followups": [
             "Please check the math if I voluntarily left NovaMart at exact Month 8 after my Hyderabad relocation—how many INR do I owe back under the 12-month pro-rated clawback clause on the ₹3,63,372 tax-protected gross amount?",
             "Can I execute a read-only `kubectl get pods` check during tonight's PagerDuty Shadow shift using the temporary `MFA-BYPASS-24H` token while waiting for my spare YubiKey locker pickup?",
