@@ -1,8 +1,8 @@
 # Category 6 fair rerun — results
 
-Generated: 2026-11-26T05:43:05.558745+00:00
+Generated: 2026-11-26T08:14:56.273130+00:00
 
-Records read: 45 · ok runs used (latest ok per key): 45 · superseded ok records: 0 · error records: 0 · expected matrix: 3 arms × 3 presets × 5 repeats = 45 runs (complete, balanced).
+Records read: 60 · ok runs used (latest ok per key): 60 · superseded ok records: 0 · error records: 0 · expected matrix: 4 arms × 3 presets × 5 repeats = 60 runs (complete, balanced).
 
 Scoring: each patch is run through PR-SANDBOX-GATE-01 (4 CI unit + 4 adversarial + 2 static AST checks, Python `-I` subprocess); a run is verified when its final patch passes 10/10. Every run starts with a cold cache (a per-run nonce in the cached prefix) and every run is kept.
 
@@ -10,9 +10,9 @@ Scoring: each patch is run through PR-SANDBOX-GATE-01 (4 CI unit + 4 adversarial
 
 The deck's lever for this archetype: isolate sub-agent contexts and cache the shared repo prefix, and measure cost per verified outcome (CpO). Each cell: verified runs, CpO cold / warm, mean model time per run.
 
-| | Sonnet on every turn | Haiku agents + Sonnet patch author |
+| | Sonnet 5.5 | Haiku agents + Sonnet patch author |
 |---|---|---|
-| Without: shared bus, same instructions, sandbox check with one retry | `shared_bus_matched_gate`: 15/15 verified · CpO $0.4690 / $0.4690 · 30.8 s | (not run) |
+| Without: shared bus, same instructions, sandbox check with one retry | `shared_bus_matched_gate`: 15/15 verified · CpO $0.4690 / $0.4690 · 30.8 s | `shared_bus_tiered_gate`: 15/15 verified · CpO $0.1246 / $0.1246 · 25.6 s |
 | With: isolated agents + cached repo prefix, sandbox check with one retry | `isolated_cached_gate`: 15/15 verified · CpO $0.0999 / $0.0775 · 38.8 s | `tiered_gate`: 15/15 verified · CpO $0.0562 / $0.0327 · 28.4 s |
 
 ## Arms
@@ -22,6 +22,7 @@ The deck's lever for this archetype: isolate sub-agent contexts and cache the sh
 | `shared_bus_matched_gate` | Shared growing thread, repo manual + noise, uncached | Governed per-role prompts (same as the isolated arms) | Sonnet all turns | yes | patch_author 16000; orchestrator_plan 4000, ci_triager 4000, security_critic 4000, orchestrator_merge 4000 |
 | `isolated_cached_gate` | Isolated narrow thread per agent + per-run cached repo prefix | Governed per-role prompts | Sonnet all turns | yes | patch_author 16000; orchestrator_plan 4000, ci_triager 4000, security_critic 4000, orchestrator_merge 4000 |
 | `tiered_gate` | Isolated narrow thread per agent + per-run cached repo prefix | Governed per-role prompts | Haiku except patch_author (Sonnet) | yes | patch_author 16000; orchestrator_plan 4000, ci_triager 4000, security_critic 4000, orchestrator_merge 4000 |
+| `shared_bus_tiered_gate` | Shared growing thread, repo manual + noise, uncached | Governed per-role prompts (same as the isolated arms) | Haiku except patch_author (Sonnet) | yes | patch_author 16000; orchestrator_plan 4000, ci_triager 4000, security_critic 4000, orchestrator_merge 4000 |
 
 ## Main results (per arm)
 
@@ -30,6 +31,7 @@ The deck's lever for this archetype: isolate sub-agent contexts and cache the sh
 | `shared_bus_matched_gate` | 15 | 0 | 15/15 (100.0%) | 79.6–100.0% | 15/15 (100.0%) | 79.6–100.0% | 150/150 | 150/150 | 0 (0) | $469.02 | $469.02 | $469.02 | $0.4690 | $0.4690 | $0.4690 | 30.8 |
 | `isolated_cached_gate` | 15 | 0 | 15/15 (100.0%) | 79.6–100.0% | 15/15 (100.0%) | 79.6–100.0% | 150/150 | 150/150 | 0 (0) | $99.91 | $99.91 | $77.50 | $0.0999 | $0.0999 | $0.0775 | 38.8 |
 | `tiered_gate` | 15 | 0 | 15/15 (100.0%) | 79.6–100.0% | 15/15 (100.0%) | 79.6–100.0% | 150/150 | 150/150 | 0 (0) | $56.20 | $56.20 | $32.71 | $0.0562 | $0.0562 | $0.0327 | 28.4 |
+| `shared_bus_tiered_gate` | 15 | 0 | 15/15 (100.0%) | 79.6–100.0% | 15/15 (100.0%) | 79.6–100.0% | 150/150 | 150/150 | 0 (0) | $124.61 | $124.61 | $124.61 | $0.1246 | $0.1246 | $0.1246 | 25.6 |
 
 CpO = total spend across all ok runs in the arm ÷ final-verified runs (n/a when zero verified).
 CpO using first-attempt verification instead:
@@ -39,6 +41,7 @@ CpO using first-attempt verification instead:
 | `shared_bus_matched_gate` | $0.4690 | $0.4690 | $0.4690 |
 | `isolated_cached_gate` | $0.0999 | $0.0999 | $0.0775 |
 | `tiered_gate` | $0.0562 | $0.0562 | $0.0327 |
+| `shared_bus_tiered_gate` | $0.1246 | $0.1246 | $0.1246 |
 
 ### Tokens per run (mean, min–max)
 
@@ -47,6 +50,7 @@ CpO using first-attempt verification instead:
 | `shared_bus_matched_gate` | 214,112 (212,868–216,003) | 0 (0–0) | 0 (0–0) | 4,079 (3,851–4,392) | 0 (0–0) |
 | `isolated_cached_gate` | 9,792 (9,203–10,477) | 9,337 (9,335–9,340) | 37,350 (37,340–37,360) | 5,325 (4,725–5,958) | 461 (0–1,072) |
 | `tiered_gate` | 10,095 (9,186–11,009) | 18,675 (18,668–18,682) | 28,013 (28,002–28,023) | 5,408 (4,345–6,563) | 263 (0–1,205) |
+| `shared_bus_tiered_gate` | 214,585 (212,606–216,666) | 0 (0–0) | 0 (0–0) | 4,416 (3,834–5,005) | 0 (0–0) |
 
 ## Per incident
 
@@ -61,6 +65,9 @@ CpO using first-attempt verification instead:
 | `tiered_gate` | inc-01 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $53.63 | $53.63 | $30.14 | $0.0536 |
 | `tiered_gate` | inc-02 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $55.57 | $55.57 | $32.08 | $0.0556 |
 | `tiered_gate` | inc-03 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $59.40 | $59.40 | $35.92 | $0.0594 |
+| `shared_bus_tiered_gate` | inc-01 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $125.44 | $125.44 | $125.44 | $0.1254 |
+| `shared_bus_tiered_gate` | inc-02 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $124.37 | $124.37 | $124.37 | $0.1244 |
+| `shared_bus_tiered_gate` | inc-03 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $124.03 | $124.03 | $124.03 | $0.1240 |
 
 ## Runs whose final patch was not verified
 
@@ -69,6 +76,7 @@ CpO using first-attempt verification instead:
 | `shared_bus_matched_gate` | 0 | 0 | 0 | 0 | 0 / 0 / 0 | 0 | 0 |
 | `isolated_cached_gate` | 0 | 0 | 0 | 0 | 0 / 0 / 0 | 0 | 0 |
 | `tiered_gate` | 0 | 0 | 0 | 0 | 0 / 0 / 0 | 0 | 0 |
+| `shared_bus_tiered_gate` | 0 | 0 | 0 | 0 | 0 / 0 / 0 | 0 | 0 |
 
 ## Data quality
 
@@ -81,9 +89,11 @@ CpO using first-attempt verification instead:
 | `shared_bus_matched_gate` | 0/75 | orchestrator_plan 0/15, ci_triager 0/15, patch_author 0/15, security_critic 0/15, orchestrator_merge 0/15 |
 | `isolated_cached_gate` | 0/75 | orchestrator_plan 0/15, ci_triager 0/15, patch_author 0/15, security_critic 0/15, orchestrator_merge 0/15 |
 | `tiered_gate` | 0/75 | orchestrator_plan 0/15, ci_triager 0/15, patch_author 0/15, security_critic 0/15, orchestrator_merge 0/15 |
+| `shared_bus_tiered_gate` | 0/75 | orchestrator_plan 0/15, ci_triager 0/15, patch_author 0/15, security_critic 0/15, orchestrator_merge 0/15 |
 
 - Individual turns stopped on `max_tokens` (ok runs used + error records): 0.
 
+- Largest Haiku prompt: 46,108 tokens; Haiku calls over 100K prompt tokens (priced at the long-prompt rate): 0.
 - Turns where the returned model differs from the intended model: 0.
 
 ## Limits of this data

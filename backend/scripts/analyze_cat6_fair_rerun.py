@@ -24,6 +24,7 @@ from app.archetypes.cat6_swarms.fair_rerun import (  # noqa: E402
     DESIGN_ROWS,
     GOVERNED_ROLE_MAX_TOKENS,
     PATCH_AUTHOR_MAX_TOKENS,
+    RUN_PENDING,
     summarise,
 )
 
@@ -66,6 +67,7 @@ def _tok(d: dict[str, float | None]) -> str:
 def render_markdown(summary: dict[str, Any]) -> str:
     arms = summary["arms"]
     m = summary["matrix"]
+    pending = summary.get("pending_arm_ids") or []
     lines: list[str] = []
     add = lines.append
 
@@ -102,7 +104,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
             arm_id = DESIGN_CELLS.get((row_key, col_key))
             a = arms.get(arm_id) if arm_id else None
             if a is None:
-                cells.append("(not run)")
+                cells.append(f"`{arm_id}`: {RUN_PENDING}" if arm_id in pending else RUN_PENDING)
                 continue
             cpo = a["cost_per_verified_outcome_usd"]
             lat = a["model_latency_ms_per_run"]["mean"]
@@ -112,6 +114,12 @@ def render_markdown(summary: dict[str, Any]) -> str:
             )
         add(f"| {row_label} | " + " | ".join(cells) + " |")
     add("")
+    for arm_id in pending:
+        add(
+            f"`{arm_id}` ({ARMS[arm_id].context_summary.lower()}; {ARMS[arm_id].models_summary}): {RUN_PENDING}, "
+            "no runs recorded yet; the tables below cover the recorded arms."
+        )
+        add("")
     add("## Arms")
     add("")
     add("| Arm | Context | Role instructions | Models | Sandbox gate + 1 retry | Output caps |")
@@ -245,6 +253,10 @@ def render_markdown(summary: dict[str, Any]) -> str:
             f"`{x['agent_role']}` attempt {x['attempt']}: cap {x['max_tokens']}, output {x['output_tokens']}"
         )
     add("")
+    add(
+        f"- Largest Haiku prompt: {summary.get('max_haiku_prompt_tokens', 0):,} tokens; Haiku calls over 100K prompt tokens "
+        f"(priced at the long-prompt rate): {summary.get('haiku_calls_over_100k_prompt', 0)}."
+    )
     fb = summary["model_fallbacks"]
     add(f"- Turns where the returned model differs from the intended model: {len(fb)}.")
     for x in fb:

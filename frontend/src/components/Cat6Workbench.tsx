@@ -51,7 +51,51 @@ const CAT6_RUNGS: Cat6RungId[] = [
   'unisolated_broadcast_swarm',
   'isolated_cached_sonnet_swarm',
   'tiered_hybrid_cpo_swarm',
+  'unisolated_tiered_swarm',
 ]
+
+const RUNG_SHORT_LABEL: Record<Cat6RungId, string> = {
+  unisolated_broadcast_swarm: '1. Shared-Bus Sonnet',
+  isolated_cached_sonnet_swarm: '2. Isolated Sonnet',
+  tiered_hybrid_cpo_swarm: '3. Haiku + Sonnet Isolated',
+  unisolated_tiered_swarm: '4. Haiku + Sonnet Shared-Bus',
+}
+
+const RUNG_PENDING_TITLE: Record<Cat6RungId, string> = {
+  unisolated_broadcast_swarm: '1. Shared-Bus Swarm + Sandbox Gate (Sonnet 5.5)',
+  isolated_cached_sonnet_swarm: '2. Isolated + Cached Prefix + Sandbox (Sonnet 5.5)',
+  tiered_hybrid_cpo_swarm: '3. Tier-Routed Haiku + Sonnet Author Swarm',
+  unisolated_tiered_swarm: '4. Shared-Bus Swarm + Sandbox Gate (Haiku agents + Sonnet Author)',
+}
+
+const SHARED_BUS_RUNGS: ReadonlySet<Cat6RungId> = new Set<Cat6RungId>([
+  'unisolated_broadcast_swarm',
+  'unisolated_tiered_swarm',
+])
+const TIERED_RUNGS: ReadonlySet<Cat6RungId> = new Set<Cat6RungId>([
+  'tiered_hybrid_cpo_swarm',
+  'unisolated_tiered_swarm',
+])
+
+// The design: the deck's lever (rows) x the model set-up (columns), one app rung per cell.
+const CAT6_DESIGN_COLUMNS = ['Sonnet 5.5', 'Haiku agents + Sonnet patch author'] as const
+const CAT6_DESIGN_ROWS: { label: string; rungs: [Cat6RungId, Cat6RungId] }[] = [
+  {
+    label: 'Without: shared bus, same instructions, sandbox check with one retry',
+    rungs: ['unisolated_broadcast_swarm', 'unisolated_tiered_swarm'],
+  },
+  {
+    label: 'With: isolated agents + cached repo prefix, sandbox check with one retry',
+    rungs: ['isolated_cached_sonnet_swarm', 'tiered_hybrid_cpo_swarm'],
+  },
+]
+
+const RUNG_COLOR: Record<Cat6RungId, string> = {
+  unisolated_broadcast_swarm: '#e11d48',
+  isolated_cached_sonnet_swarm: '#2563eb',
+  tiered_hybrid_cpo_swarm: '#6d28d9',
+  unisolated_tiered_swarm: '#d97706',
+}
 
 const ORG_SIZES = [
   { label: '10 Devs (Pod)', value: 10 },
@@ -131,6 +175,17 @@ export function Cat6Workbench({
     () => runResponse?.results.find((r) => r.rung_id === 'tiered_hybrid_cpo_swarm') ?? null,
     [runResponse]
   )
+  const busTieredRes = useMemo(
+    () => runResponse?.results.find((r) => r.rung_id === 'unisolated_tiered_swarm') ?? null,
+    [runResponse]
+  )
+  // Rungs requested but with no recorded run yet (replay only): shown as "run pending".
+  const pendingRungs = useMemo(() => runResponse?.pending_rungs ?? [], [runResponse])
+  // Rungs with a result, in rung order: the tab list and its keyboard navigation use these.
+  const shownRungs = useMemo(
+    () => CAT6_RUNGS.filter((rid) => runResponse?.results.some((r) => r.rung_id === rid)),
+    [runResponse]
+  )
 
   // Agent-by-Agent Prompt Context Bloat LineChart data
   const turnContextCurveData = useMemo(() => {
@@ -151,7 +206,8 @@ export function Cat6Workbench({
     const maxLen = Math.max(
       naiveRes?.agent_turns.length ?? 0,
       isoRes?.agent_turns.length ?? 0,
-      hybridRes?.agent_turns.length ?? 0
+      hybridRes?.agent_turns.length ?? 0,
+      busTieredRes?.agent_turns.length ?? 0
     )
     const rows = []
     for (let i = 0; i < maxLen; i += 1) {
@@ -165,10 +221,11 @@ export function Cat6Workbench({
         naiveTok: getPromptTok(naiveRes?.agent_turns, i),
         isoTok: getPromptTok(isoRes?.agent_turns, i),
         hybridTok: getPromptTok(hybridRes?.agent_turns, i),
+        busTieredTok: getPromptTok(busTieredRes?.agent_turns, i),
       })
     }
     return rows
-  }, [runResponse, naiveRes, isoRes, hybridRes])
+  }, [runResponse, naiveRes, isoRes, hybridRes, busTieredRes])
 
   // Shared scale for the per-rung prompt-load meters: the largest rung in this response
   const promptMeterMax = useMemo(() => {
@@ -185,12 +242,7 @@ export function Cat6Workbench({
   const portfolioBarData = useMemo(() => {
     if (!runResponse?.portfolio_scorecard) return []
     return runResponse.portfolio_scorecard.map((row) => ({
-      name:
-        row.rung_id === 'unisolated_broadcast_swarm'
-          ? '1. Shared-Bus Swarm'
-          : row.rung_id === 'isolated_cached_sonnet_swarm'
-            ? '2. Isolated + Cached'
-            : '3. Haiku + Sonnet Author',
+      name: RUNG_SHORT_LABEL[row.rung_id],
       CpR:
         cacheMode === 'warm_repo_cache' ? row.avg_cpr_warm_per_1k_usd : row.avg_cpr_cold_per_1k_usd,
       CpO:
@@ -201,24 +253,25 @@ export function Cat6Workbench({
   }, [runResponse, cacheMode])
 
   const handleRungTabKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const idx = CAT6_RUNGS.indexOf(activeRungView)
+    if (shownRungs.length === 0) return
+    const idx = Math.max(0, shownRungs.indexOf(activeRungView))
     if (e.key === 'ArrowRight') {
       e.preventDefault()
-      const next = CAT6_RUNGS[(idx + 1) % CAT6_RUNGS.length]
+      const next = shownRungs[(idx + 1) % shownRungs.length]
       setActiveRungView(next)
       document.getElementById(`cat6-xray-tab-${next}`)?.focus()
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault()
-      const prev = CAT6_RUNGS[(idx - 1 + CAT6_RUNGS.length) % CAT6_RUNGS.length]
+      const prev = shownRungs[(idx - 1 + shownRungs.length) % shownRungs.length]
       setActiveRungView(prev)
       document.getElementById(`cat6-xray-tab-${prev}`)?.focus()
     } else if (e.key === 'Home') {
       e.preventDefault()
-      setActiveRungView(CAT6_RUNGS[0])
-      document.getElementById(`cat6-xray-tab-${CAT6_RUNGS[0]}`)?.focus()
+      setActiveRungView(shownRungs[0])
+      document.getElementById(`cat6-xray-tab-${shownRungs[0]}`)?.focus()
     } else if (e.key === 'End') {
       e.preventDefault()
-      const last = CAT6_RUNGS[CAT6_RUNGS.length - 1]
+      const last = shownRungs[shownRungs.length - 1]
       setActiveRungView(last)
       document.getElementById(`cat6-xray-tab-${last}`)?.focus()
     }
@@ -291,8 +344,8 @@ export function Cat6Workbench({
               <strong className="text-slate-900">
                 Isolated Sub-Agent Contexts + Byte-Identical Repo Prefix Cache
               </strong>
-              : a <strong className="text-slate-900">Shared-Bus Swarm</strong> on Sonnet 5.5 against the
-              isolated swarm on Sonnet 5.5 and on{' '}
+              : a <strong className="text-slate-900">Shared-Bus Swarm</strong> against the isolated
+              swarm, each on Sonnet 5.5 and on{' '}
               <strong className="text-slate-900">Haiku agents + a Sonnet Patch Author</strong>. Every
               rung has the same role instructions and PR-SANDBOX-GATE-01 with one retry, graded by{' '}
               <strong className="text-violet-800">Cost per Verified Outcome (CpO)</strong>.
@@ -417,11 +470,76 @@ export function Cat6Workbench({
             </div>
           </div>
 
-          {/* 3-Rung Swarm Arena Cards */}
-          <section className="grid gap-4 lg:grid-cols-3">
+          {/* Design: with / without the lever x model set-up (portfolio of the 3 incidents) */}
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+            <h2 id="cat6-design-caption" className="text-sm font-extrabold text-slate-900">
+              With and Without the Lever, by Model Set-Up (3-Incident Portfolio)
+            </h2>
+            <p className="text-[11px] text-slate-500">
+              Each cell: app rung, verified PRs, portfolio CpO per 1,000 verified (
+              {cacheMode === 'warm_repo_cache' ? 'warm' : 'cold'} cache).
+            </p>
+            <div
+              tabIndex={0}
+              role="region"
+              aria-labelledby="cat6-design-caption"
+              className="table-wrapper mt-3 rounded-xl border border-slate-200"
+            >
+              <table className="mwg-table text-xs" data-table="cat6-design">
+                <thead className="bg-slate-900 text-left text-[11px] uppercase tracking-wider text-slate-200">
+                  <tr>
+                    <th scope="col" className="px-4 py-2.5">
+                      Design
+                    </th>
+                    {CAT6_DESIGN_COLUMNS.map((c) => (
+                      <th key={c} scope="col" className="px-4 py-2.5">
+                        {c}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {CAT6_DESIGN_ROWS.map((row) => (
+                    <tr key={row.label}>
+                      <th scope="row" className="px-4 py-3 text-left font-bold text-slate-900">
+                        {row.label}
+                      </th>
+                      {row.rungs.map((rid) => {
+                        const sc = runResponse.portfolio_scorecard.find((x) => x.rung_id === rid)
+                        if (!sc || pendingRungs.includes(rid)) {
+                          return (
+                            <td key={rid} className="px-4 py-3 font-mono text-slate-500">
+                              {RUNG_SHORT_LABEL[rid]} · run pending
+                            </td>
+                          )
+                        }
+                        const cpo =
+                          cacheMode === 'warm_repo_cache'
+                            ? sc.portfolio_cpo_warm_per_1k_usd
+                            : sc.portfolio_cpo_cold_per_1k_usd
+                        return (
+                          <td key={rid} className="px-4 py-3 font-mono text-slate-800">
+                            <div className="font-bold">{RUNG_SHORT_LABEL[rid]}</div>
+                            <div>
+                              {sc.verified_outcomes_count}/{sc.prs_evaluated} verified · CpO{' '}
+                              {cpo != null && cpo > 0 ? `$${cpo.toFixed(2)}` : 'Unverified (∞)'} / 1k
+                            </div>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* Swarm Arena Cards (one per rung; pending rungs shown as placeholders) */}
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {runResponse.results.map((r) => {
               const isNaive = r.rung_id === 'unisolated_broadcast_swarm'
               const isHybrid = r.rung_id === 'tiered_hybrid_cpo_swarm'
+              const isBusTiered = r.rung_id === 'unisolated_tiered_swarm'
               const cpr1k =
                 cacheMode === 'warm_repo_cache'
                   ? r.cost_per_1k_runs_warm_usd
@@ -443,9 +561,11 @@ export function Cat6Workbench({
                   className={`flex flex-col justify-between rounded-2xl border bg-white p-5 shadow-xs ${
                     isNaive
                       ? 'border-rose-200 ring-1 ring-rose-100'
-                      : isHybrid
-                        ? 'border-violet-300 ring-2 ring-violet-500/20'
-                        : 'border-blue-200 ring-1 ring-blue-100'
+                      : isBusTiered
+                        ? 'border-amber-200 ring-1 ring-amber-100'
+                        : isHybrid
+                          ? 'border-violet-300 ring-2 ring-violet-500/20'
+                          : 'border-blue-200 ring-1 ring-blue-100'
                   }`}
                 >
                   <div>
@@ -454,9 +574,11 @@ export function Cat6Workbench({
                         className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${
                           isNaive
                             ? 'bg-rose-100 text-rose-800'
-                            : isHybrid
-                              ? 'bg-violet-100 text-violet-900'
-                              : 'bg-blue-100 text-blue-800'
+                            : isBusTiered
+                              ? 'bg-amber-100 text-amber-900'
+                              : isHybrid
+                                ? 'bg-violet-100 text-violet-900'
+                                : 'bg-blue-100 text-blue-800'
                         }`}
                       >
                         {r.badge_text}
@@ -468,7 +590,7 @@ export function Cat6Workbench({
 
                     <h2 className="mt-2.5 text-sm font-extrabold text-slate-900">{r.rung_title}</h2>
                     <div className="mt-0.5 font-mono text-[11px] text-slate-500">
-                      {isHybrid
+                      {TIERED_RUNGS.has(r.rung_id)
                         ? `Haiku calls: ${r.haiku_turns} · Sonnet calls: ${r.sonnet_turns} · Retries: ${r.retries_used}`
                         : `Anthropic · ${r.primary_model_id} · Retries: ${r.retries_used}`}
                     </div>
@@ -506,11 +628,7 @@ export function Cat6Workbench({
                         aria-label={`${r.rung_title} prompt token load`}
                         style={
                           {
-                            '--progress-bar-fill': isNaive
-                              ? '#e11d48'
-                              : isHybrid
-                                ? '#6d28d9'
-                                : '#2563eb',
+                            '--progress-bar-fill': RUNG_COLOR[r.rung_id],
                             '--progress-bar-track': '#e2e8f0',
                           } as CSSProperties
                         }
@@ -574,6 +692,22 @@ export function Cat6Workbench({
                 </article>
               )
             })}
+            {pendingRungs.map((rid) => (
+              <article
+                key={rid}
+                className="flex flex-col rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5"
+              >
+                <span className="w-fit rounded-md bg-slate-200 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-700">
+                  Run pending
+                </span>
+                <h2 className="mt-2.5 text-sm font-extrabold text-slate-900">{RUNG_PENDING_TITLE[rid]}</h2>
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-600">
+                  {SHARED_BUS_RUNGS.has(rid) ? 'Shared growing thread, uncached' : 'Isolated agents, cached repo prefix'}
+                  {TIERED_RUNGS.has(rid) ? '; Haiku agents + Sonnet patch author' : '; Sonnet 5.5'}. No recorded run to
+                  replay yet; a live run executes it.
+                </p>
+              </article>
+            ))}
           </section>
 
           {/* 2-Up Charts: Agent Context Bloat & Portfolio CpR vs CpO */}
@@ -624,6 +758,16 @@ export function Cat6Workbench({
                       stroke="#6d28d9"
                       strokeWidth={2.5}
                     />
+                    {busTieredRes && (
+                      <Line
+                        type="monotone"
+                        dataKey="busTieredTok"
+                        name="4. Haiku+Sonnet Shared-Bus"
+                        stroke={RUNG_COLOR.unisolated_tiered_swarm}
+                        strokeWidth={2}
+                        strokeDasharray="5 3"
+                      />
+                    )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -796,11 +940,7 @@ export function Cat6Workbench({
                         selected ? 'bg-white text-violet-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
-                      {r.rung_id === 'unisolated_broadcast_swarm'
-                        ? '1. Shared-Bus'
-                        : r.rung_id === 'isolated_cached_sonnet_swarm'
-                          ? '2. Isolated Sonnet'
-                          : '3. Haiku + Sonnet'}
+                      {RUNG_SHORT_LABEL[r.rung_id]}
                     </button>
                   )
                 })}
@@ -1004,8 +1144,8 @@ export function Cat6Workbench({
                 </div>
               </div>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                {[naiveRes, isoRes, hybridRes].map((r) => {
+              <div className={`mt-4 grid gap-3 ${busTieredRes ? 'md:grid-cols-2 xl:grid-cols-4' : 'md:grid-cols-3'}`}>
+                {[naiveRes, isoRes, hybridRes, ...(busTieredRes ? [busTieredRes] : [])].map((r) => {
                   const perRun =
                     cacheMode === 'warm_repo_cache' ? r.warm_run_cost_usd : r.cold_run_cost_usd
                   const tokPerRun =
@@ -1031,6 +1171,8 @@ export function Cat6Workbench({
                       <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-900">
                         {r.rung_id === 'unisolated_broadcast_swarm' ? (
                           <Bot className="h-3.5 w-3.5 text-rose-600" />
+                        ) : r.rung_id === 'unisolated_tiered_swarm' ? (
+                          <Bot className="h-3.5 w-3.5 text-amber-600" />
                         ) : r.rung_id === 'isolated_cached_sonnet_swarm' ? (
                           <Cpu className="h-3.5 w-3.5 text-blue-600" />
                         ) : (

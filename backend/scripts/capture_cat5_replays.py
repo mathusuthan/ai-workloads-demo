@@ -27,6 +27,7 @@ RUNGS: list[Cat5RungId] = [
     "unbounded_sonnet_loop",
     "bounded_sonnet_cached_gate",
     "hybrid_haiku_sonnet_governed",
+    "unbounded_haiku_loop",
 ]
 
 

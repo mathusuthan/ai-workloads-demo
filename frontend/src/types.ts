@@ -1119,6 +1119,7 @@ export type Cat5RungId =
   | 'unbounded_sonnet_loop'
   | 'bounded_sonnet_cached_gate'
   | 'hybrid_haiku_sonnet_governed'
+  | 'unbounded_haiku_loop'
 
 export interface Cat5Preset {
   id: string
@@ -1262,6 +1263,8 @@ export interface Cat5RunResponse {
   orchestration_callout: string
   /** Six-version Category 5 ablation (replays/cat5_ablation_summary.json); null when absent */
   ablation_portfolio?: Cat5AblationPortfolio | null
+  /** requested rungs with no recorded run to replay yet ("run pending") */
+  pending_rungs?: Cat5RungId[]
 }
 
 export interface Cat5AblationCell {
@@ -1296,7 +1299,7 @@ export interface Cat5AblationArm extends Cat5AblationCell {
   adds: string
   /** 'without' = the deck's improvement absent; 'with' = present */
   design: 'without' | 'with'
-  model_column: 'sonnet' | 'haiku_first'
+  model_column: 'sonnet' | 'haiku'
   runnable_in_app: boolean
   app_rung_id: Cat5RungId | null
   tool_set: string
@@ -1343,6 +1346,7 @@ export type Cat6RungId =
   | 'unisolated_broadcast_swarm'
   | 'isolated_cached_sonnet_swarm'
   | 'tiered_hybrid_cpo_swarm'
+  | 'unisolated_tiered_swarm'
 
 export interface Cat6Preset {
   id: string
@@ -1469,4 +1473,6 @@ export interface Cat6RunResponse {
   results: Cat6RungResult[]
   portfolio_scorecard: Cat6PortfolioRungRollup[]
   swarm_callout: string
+  // Replay only: requested rungs with no recorded run yet ("run pending"); they have no result.
+  pending_rungs: Cat6RungId[]
 }

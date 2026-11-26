@@ -2,11 +2,11 @@
   "provenance": {
     "source": "cat5 ablation",
     "source_file": "experiments/cat5_ablation/runs.jsonl",
-    "selection_rule": "fixed pre-declared mapping: repeat_index 0 of raw_free_sonnet -> unbounded_sonnet_loop, bundle_gate_sonnet_cached -> bounded_sonnet_cached_gate, bundle_gate_haiku_escalate -> hybrid_haiku_sonnet_governed on inv-01..03 (not selected by outcome)",
-    "rung_1_note": "unbounded_sonnet_loop runs the free-choice protocol: the model chooses among the raw SELECT * tools, several per turn allowed; no cache; no policy tool.",
+    "selection_rule": "fixed pre-declared mapping: repeat_index 0 of raw_free_sonnet -> unbounded_sonnet_loop, raw_free_haiku -> unbounded_haiku_loop, bundle_gate_sonnet_cached -> bounded_sonnet_cached_gate, bundle_gate_haiku_escalate -> hybrid_haiku_sonnet_governed on inv-01..03 (not selected by outcome)",
+    "rung_1_note": "unbounded_sonnet_loop and unbounded_haiku_loop run the free-choice protocol: the model chooses among the raw SELECT * tools, several per turn allowed; no cache; no policy tool (so no escalation path on Haiku).",
     "trace_note": "SQL text, tables touched, optimal-call flags and gate snapshots were rebuilt by replaying the recorded tool calls on a fresh ERP session; every output matched the recorded sha256.",
     "settings_note": "Every turn ran with max_tokens 4096; stop_reason values are as returned by the API.",
-    "rebuilt_at": "2026-11-26T06:29:06Z"
+    "rebuilt_at": "2026-11-26T08:14:55Z"
   },
   "presets": {
     "inv-01": {
@@ -191,6 +191,200 @@
             "debit_note_deduction_inr": 0.0,
             "gate_verified": false,
             "audit_summary": "3-way match clean: all 3 lines billed=ordered=accepted (400/300/300), prices equal PO, DDP freight claim 0, no DOA, no amendments needed. IRN ACTIVE_VERIFIED; GSTR-2B PENDING_FILING_MISMATCH -> Case B: release full principal INR 1,840,000 at T+43 (MSMED/43B(h)), hold 18% GST INR 331,200 in escrow GL 219450. Vendor CLEAN, no freeze, no duplicate."
+          },
+          "tables_touched": [
+            "contract_amendments",
+            "fc_dock_logs",
+            "goods_receipts",
+            "invoice_lines",
+            "po_lines",
+            "purchase_orders",
+            "reconciliation_vouchers",
+            "vendor_invoices",
+            "vendors"
+          ],
+          "total_tool_calls": 6,
+          "optimal_tool_calls": 1
+        },
+        "unbounded_haiku_loop": {
+          "rung_id": "unbounded_haiku_loop",
+          "primary_model_id": "claude-haiku-5-5",
+          "steps": [
+            {
+              "step_number": 1,
+              "model_id": "claude-haiku-5-5",
+              "escalated_from_haiku": false,
+              "stop_reason": "tool_use",
+              "assistant_thought": "I'll start by pulling the invoice, PO, and GRN records in parallel, since they have no dependencies on each other.",
+              "tool_calls": [
+                {
+                  "tool_use_id": "toolu_01JRsNsS2N4MxB6Pk3AtxDrf",
+                  "tool_name": "query_invoice_raw",
+                  "tool_input": {
+                    "invoice_id": "INV-KA-2026-9921"
+                  },
+                  "sql_executed": "SELECT * FROM vendor_invoices WHERE invoice_id = ?;\nSELECT * FROM invoice_lines WHERE invoice_id = ? ORDER BY line_no;",
+                  "tables_touched": [
+                    "vendor_invoices",
+                    "invoice_lines"
+                  ],
+                  "is_optimal_call": false,
+                  "result_preview": "{\n  \"invoice\": [\n    {\n      \"invoice_id\": \"INV-KA-2026-9921\",\n      \"po_id\": \"PO-NM-BLR-7740\",\n      \"vendor_id\": \"VND-BLR-401\",\n      \"invoice_date\": \"2026-10-14\",\n      \"irn_hash\": \"8a91e302f9b11a08e61e2409b4410d20e3aa5518c27248917d110e849921c401\",\n      \"irn_status\": \"ACTIVE_VERIFIED\",\n      \"gstr2b_status\": \"PENDING_FILING_MISMATCH\",\n      \"claimed_freight_inr\": 0.0,\n      \"invoice_total_taxable_inr\": 1840000.0,\n      \"invoice_gst_inr\": 331200.0,\n      \"invoice_grand_total_inr\": 2171200.0,\n      \"remittance_memo\": \"Kaveri Smart Kitchens Diwali Batch #1 into FC-BLR-01. E-Way Bill EWB-291008841221 verified. Supplier GSTR-1 scheduled before Nov 11 filing cutoff; NIC IRP IRN active. Request timely T+43 principal settlement under MSMED Act Sec 15.\"\n    }\n  ],\n  \"lines\": [\n    {\n      \"invoice_id\": \"INV-KA-2026-9921\",\n      \"line_no\": 1,\n      \"sku\": \"NM-IND-2000W\",\n      \"billed_qty\": 400,\n      \"billed_unit_price_inr\": 2200.0,\n      \"billed_line_total_inr\": 880000.0,\n      \"gst_rate\": 0.18\n    },\n    {\n      \"invoice_id\": \"INV-KA-2026-9921\",\n      \"line_no\": 2,\n      \"sku\": \"NM-MIX-750W\",\n      \"billed_qty\": 300,\n      \"billed_unit_price_inr\": 2400.0,\n      \"billed_line_total_inr\": 720000.0,\n      \"gst_rate\": 0.18\n    },\n    {\n      \"invoice_id\": \"INV-KA-2026-9921\",\n      \"line_no\": 3,\n      \"sku\": \"NM-KTL-18L\",\n      \"billed_qty\": 300,\n      \"billed_unit_price_inr\": 800.0,\n      \"billed_line_total_inr\": 240000.0,\n      \"gst_rate\": 0.18\n    }\n  ]\n}",
+                  "gate_snapshot": null
+                },
+                {
+                  "tool_use_id": "toolu_013SKDpAJJxeJNXecZUZcBvh",
+                  "tool_name": "query_po_raw",
+                  "tool_input": {
+                    "po_id": "PO-NM-BLR-7740"
+                  },
+                  "sql_executed": "SELECT * FROM purchase_orders WHERE po_id = ?;\nSELECT * FROM po_lines WHERE po_id = ? ORDER BY line_no;",
+                  "tables_touched": [
+                    "purchase_orders",
+                    "po_lines"
+                  ],
+                  "is_optimal_call": false,
+                  "result_preview": "{\n  \"purchase_order\": [\n    {\n      \"po_id\": \"PO-NM-BLR-7740\",\n      \"vendor_id\": \"VND-BLR-401\",\n      \"fc_hub\": \"FC-BLR-01\",\n      \"incoterms\": \"DDP Inside FC Dock\",\n      \"approved_freight_cap_inr\": 0.0,\n      \"po_total_taxable_inr\": 1840000.0,\n      \"currency\": \"INR\",\n      \"created_date\": \"2026-10-02\"\n    }\n  ],\n  \"po_lines\": [\n    {\n      \"po_id\": \"PO-NM-BLR-7740\",\n      \"line_no\": 1,\n      \"sku\": \"NM-IND-2000W\",\n      \"description\": \"NovaCook 2000W Induction Cooktop\",\n      \"ordered_qty\": 400,\n      \"po_unit_price_inr\": 2200.0,\n      \"gst_rate\": 0.18\n    },\n    {\n      \"po_id\": \"PO-NM-BLR-7740\",\n      \"line_no\": 2,\n      \"sku\": \"NM-MIX-750W\",\n      \"description\": \"NovaGrind 750W Silent Mixer\",\n      \"ordered_qty\": 300,\n      \"po_unit_price_inr\": 2400.0,\n      \"gst_rate\": 0.18\n    },\n    {\n      \"po_id\": \"PO-NM-BLR-7740\",\n      \"line_no\": 3,\n      \"sku\": \"NM-KTL-18L\",\n      \"description\": \"NovaBoil 1.8L SS Kettle\",\n      \"ordered_qty\": 300,\n      \"po_unit_price_inr\": 800.0,\n      \"gst_rate\": 0.18\n    }\n  ]\n}",
+                  "gate_snapshot": null
+                },
+                {
+                  "tool_use_id": "toolu_018YUZdukmo8kJeXzRC42t9L",
+                  "tool_name": "query_grn_wms_telemetry",
+                  "tool_input": {
+                    "po_id": "PO-NM-BLR-7740"
+                  },
+                  "sql_executed": "SELECT * FROM goods_receipts WHERE po_id = ? ORDER BY grn_id;",
+                  "tables_touched": [
+                    "goods_receipts"
+                  ],
+                  "is_optimal_call": false,
+                  "result_preview": "{\n  \"goods_receipts\": [\n    {\n      \"grn_id\": \"GRN-BLR-901\",\n      \"po_id\": \"PO-NM-BLR-7740\",\n      \"sku\": \"NM-IND-2000W\",\n      \"received_qty\": 400,\n      \"accepted_qty\": 400,\n      \"doa_rejected_qty\": 0,\n      \"grn_date\": \"2026-10-14\",\n      \"qc_notes\": \"AQL Level II 1.0 passed zero defects\",\n      \"raw_wms_scan_dump\": \"{\\\"po_id\\\": \\\"PO-NM-BLR-7740\\\", \\\"pallet_scans\\\": [{\\\"sscc_barcode\\\": \\\"8904002177400001\\\", \\\"dock_bay\\\": \\\"FC-BLR-01-DOCK-02\\\", \\\"sku\\\": \\\"NM-MIX-750W\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T02:07:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002177400002\\\", \\\"dock_bay\\\": \\\"FC-BLR-01-DOCK-03\\\", \\\"sku\\\": \\\"NM-KTL-18L\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T03:14:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002177400003\\\", \\\"dock_bay\\\": \\\"FC-BLR-01-DOCK-04\\\", \\\"sku\\\": \\\"NM-IND-2000W\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T04:21:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002177400004\\\", \\\"dock_bay\\\": \\\"FC-BLR-01-DOCK-05\\\", \\\"sku\\\": \\\"NM-MIX-750W\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T05:28:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002177400005\\\", \\\"dock_bay\\\": \\\"FC-BLR-01-DOCK-06\\\", \\\"sku\\\": \\\"NM-KTL-18L\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T06:35:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002177400006\\\", \\\"dock_bay\\\": \\\"FC-BLR-01-DOCK-01\\\", \\\"sku\\\": \\\"NM-IND-2000W\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T07:42:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002177400007\\\", \\\"dock_bay\\\": \\\"FC-BLR-01-DOCK-02\\\", \\\"sku\\\": \\\"NM-MIX-750W\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T08:49:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002177400008\\\", \\\"dock_bay\\\": \\\"FC-BLR-01-DOCK-03\\\", \\\"sku\\\": \\\"NM-KTL-18L\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T01:56:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002177400009\\\", \\\"dock_bay\\\": \\\"FC-BLR-01-DOCK-04\\\", \\\"sku\\\": \\\"NM-IND-2000W\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T02:03:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002177400010\\\", \\\"dock_bay\\",
+                  "gate_snapshot": null
+                }
+              ],
+              "tool_calls_not_executed": [],
+              "latency_ms": 1491,
+              "input_tokens": 8829,
+              "output_tokens": 231,
+              "thinking_tokens": 0,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "max_tokens": 4096
+            },
+            {
+              "step_number": 2,
+              "model_id": "claude-haiku-5-5",
+              "escalated_from_haiku": false,
+              "stop_reason": "tool_use",
+              "assistant_thought": "Initial data looks clean: quantities and unit prices match the PO on all three lines, and GRNs show full acceptance. Next I'll check the vendor's compliance/payment-freeze status and any contract amendments or dock logs.",
+              "tool_calls": [
+                {
+                  "tool_use_id": "toolu_019oTLwo9mk7HRDiPuYLKdFy",
+                  "tool_name": "query_vendor_audit_history",
+                  "tool_input": {
+                    "vendor_id": "VND-BLR-401"
+                  },
+                  "sql_executed": "SELECT * FROM vendors WHERE vendor_id = ?;",
+                  "tables_touched": [
+                    "vendors"
+                  ],
+                  "is_optimal_call": false,
+                  "result_preview": "{\n  \"vendors\": [\n    {\n      \"vendor_id\": \"VND-BLR-401\",\n      \"name\": \"Kaveri Smart Kitchens Pvt. Ltd.\",\n      \"gstin\": \"29AABCK7740M1Z2\",\n      \"udyam_tier\": \"Udyam MSE Tier-2 (Bengaluru Cluster)\",\n      \"msmed_45d_applicable\": 1,\n      \"payment_terms_days\": 43,\n      \"risk_flag\": \"CLEAN\",\n      \"full_audit_trail_json\": \"{\\\"vendor_id\\\": \\\"VND-BLR-401\\\", \\\"history\\\": [{\\\"period\\\": \\\"2024-Q1\\\", \\\"pos_fulfilled\\\": 16, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Kaveri Smart Kitchens Pvt. Ltd. (VND-BLR-401) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2024-Q2\\\", \\\"pos_fulfilled\\\": 16, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Kaveri Smart Kitchens Pvt. Ltd. (VND-BLR-401) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2024-Q3\\\", \\\"pos_fulfilled\\\": 16, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Kaveri Smart Kitchens Pvt. Ltd. (VND-BLR-401) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2024-Q4\\\", \\\"pos_fulfilled\\\": 16, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Kaveri Smart Kitchens Pvt. Ltd. (VND-BLR-401) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2025-Q1\\\", \\\"pos_fulfilled\\\": 14, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Kaveri Smart Kitchens Pvt. Ltd. (VND-BLR-401) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2025-Q2\\\", \\\"pos_fulfilled\\\": 14, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Kaveri Smart Kitchens Pvt. Ltd. (VND-BLR-401) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2025-Q3\\\", \\\"pos_fulfilled\\\": 14, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Kaveri Smart Kitchens Pvt. Ltd. (VND-BLR-401) completed quarterly SAP vendor s",
+                  "gate_snapshot": null
+                },
+                {
+                  "tool_use_id": "toolu_0199VMFc4NmzFYvwhouL8KQB",
+                  "tool_name": "query_contract_amendments_and_dock_logs",
+                  "tool_input": {
+                    "po_id": "PO-NM-BLR-7740"
+                  },
+                  "sql_executed": "SELECT * FROM contract_amendments WHERE po_id = ?;\nSELECT * FROM fc_dock_logs WHERE po_id = ?;",
+                  "tables_touched": [
+                    "contract_amendments",
+                    "fc_dock_logs"
+                  ],
+                  "is_optimal_call": false,
+                  "result_preview": "{\n  \"contract_amendments\": [],\n  \"fc_dock_logs\": [\n    {\n      \"po_id\": \"PO-NM-BLR-7740\",\n      \"hub\": \"FC-BLR-01\",\n      \"log_blob\": \"[FC-BLR-01] Gate-In LR#TN-38-AW-901 for PO-NM-BLR-7740: FASTag verified, security seal intact, weighbridge OK, bay idle 5m.\\n[FC-BLR-01] Gate-In LR#TN-38-AW-902 for PO-NM-BLR-7740: FASTag verified, security seal intact, weighbridge OK, bay idle 6m.\\n[FC-BLR-01] Gate-In LR#TN-38-AW-903 for PO-NM-BLR-7740: FASTag verified, security seal intact, weighbridge OK, bay idle 7m.\\n[FC-BLR-01] Gate-In LR#TN-38-AW-904 for PO-NM-BLR-7740: FASTag verified, security seal intact, weighbridge OK, bay idle 8m.\\n[FC-BLR-01] Gate-In LR#TN-38-AW-905 for PO-NM-BLR-7740: FASTag verified, security seal intact, weighbridge OK, bay idle 9m.\\n[FC-BLR-01] Gate-In LR#TN-38-AW-906 for PO-NM-BLR-7740: FASTag verified, security seal intact, weighbridge OK, bay idle 10m.\\n[FC-BLR-01] Gate-In LR#TN-38-AW-907 for PO-NM-BLR-7740: FASTag verified, security seal intact, weighbridge OK, bay idle 11m.\\n[FC-BLR-01] Gate-In LR#TN-38-AW-908 for PO-NM-BLR-7740: FASTag verified, security seal intact, weighbridge OK, bay idle 12m.\\n[FC-BLR-01] Gate-In LR#TN-38-AW-909 for PO-NM-BLR-7740: FASTag verified, security seal intact, weighbridge OK, bay idle 13m.\\n[FC-BLR-01] Gate-In LR#TN-38-AW-9010 for PO-NM-BLR-7740: FASTag verified, security seal intact, weighbridge OK, bay idle 14m.\\n[FC-BLR-01] Gate-In LR#TN-38-AW-9011 for PO-NM-BLR-7740: FASTag verified, security seal intact, weighbridge OK, bay idle 15m.\\n[FC-BLR-01] Gate-In LR#TN-38-AW-9012 for PO-NM-BLR-7740: FASTag verified, security seal intact, weighbridge OK, bay idle 16m.\\n[FC-BLR-01] Gate-In LR#TN-38-AW-9013 for PO-NM-BLR-7740: FASTag verified, security seal intact, weighbridge OK, bay idle 17m.\\n[FC-BLR-01] Gate-In LR#TN-38-AW-9014 for PO-NM-BLR-7740: FASTag verified, security seal intact, weighbridge OK, bay idle 18m.\\n[FC-BLR-01] Gate-In LR#TN-38-AW-9015 for PO-NM-BLR-7740: FASTag verified, security seal intact, weighbridge OK, bay idle 19m.\"\n    }\n  ]\n}",
+                  "gate_snapshot": null
+                }
+              ],
+              "tool_calls_not_executed": [],
+              "latency_ms": 1711,
+              "input_tokens": 18963,
+              "output_tokens": 210,
+              "thinking_tokens": 0,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "max_tokens": 4096
+            },
+            {
+              "step_number": 3,
+              "model_id": "claude-haiku-5-5",
+              "escalated_from_haiku": false,
+              "stop_reason": "tool_use",
+              "assistant_thought": "The vendor is clean with no payment freeze, there are no contract amendments, and dock logs show sealed, verified arrivals. Now I'll run the arithmetic check against the policy.\n\nLine-level verification:\n- Line 1: 400 billed × ₹2,200 = ₹880,000; PO ₹2,200; accepted 400 → payable 400 → ₹880,000. No variance.\n- Line 2: 300 × ₹2,400 = ₹720,000; PO ₹2,400; accepted 300 → ₹720,000. No variance.\n- Line 3: 300 × ₹800 = ₹240,000; PO ₹800; accepted 300 → ₹240,000. No variance.\n\nTotals:\n- Taxable: ₹1,840,000 (matches PO and invoice header)\n- Freight claimed: ₹0 (cap ₹0)\n- Authorized net principal: ₹1,840,000\n- Debit note deduction: ₹0\n- GST at 18% on authorized principal: ₹331,200\n- Invoice GST: ₹331,200 (matches)\n- Grand total: ₹2,171,200 (matches claim)\n\nNo circuit-breaker triggers fire: the IRN is ACTIVE_VERIFIED (not cancelled), no line has zero accepted quantity, no duplicate or freeze exists. GSTR-2B status is PENDING_FILING_MISMATCH, which is Case B: release 100% of principal now and escrow the GST. That yields `APPROVE_WITH_GST_ESCROW`, with principal ₹1,840,000, GST payout ₹0, and escrow holdback ₹331,200.",
+              "tool_calls": [
+                {
+                  "tool_use_id": "toolu_01NJuvQ3PASpLHZSzUkkF9kL",
+                  "tool_name": "commit_reconciliation_voucher",
+                  "tool_input": {
+                    "invoice_id": "INV-KA-2026-9921",
+                    "po_id": "PO-NM-BLR-7740",
+                    "decision": "APPROVE_WITH_GST_ESCROW",
+                    "authorized_net_principal_inr": 1840000.0,
+                    "authorized_gst_payout_inr": 0.0,
+                    "gst_escrow_holdback_inr": 331200.0,
+                    "debit_note_deduction_inr": 0.0,
+                    "audit_summary": "3-way match clean. PO-NM-BLR-7740 lines 1-3 (400x2200, 300x2400, 300x800) match GRN-BLR-901/902/903 accepted qty with zero DOA and PO unit prices; no amendments. Taxable 1,840,000 matches PO; freight claimed 0 vs cap 0. IRN ACTIVE_VERIFIED, vendor VND-BLR-401 CLEAN, no PAYMENT_FREEZE, no duplicate invoice. GSTR-2B PENDING_FILING_MISMATCH: Case B -> release principal 1,840,000 on T+43 (MSMED Sec 15), hold GST 331,200 in escrow GL 219450 pending GSTR-2B sync. No circuit breaker triggered."
+                  },
+                  "sql_executed": "INSERT OR REPLACE INTO reconciliation_vouchers (voucher_id, invoice_id, po_id, decision, authorized_net_principal_inr, authorized_gst_payout_inr, gst_escrow_holdback_inr, debit_note_deduction_inr, gate_verified, audit_summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                  "tables_touched": [
+                    "reconciliation_vouchers"
+                  ],
+                  "is_optimal_call": true,
+                  "result_preview": "{\n  \"status\": \"COMMITTED\",\n  \"voucher_id\": \"VCH-9921-UNB\",\n  \"invoice_id\": \"INV-KA-2026-9921\",\n  \"decision\": \"APPROVE_WITH_GST_ESCROW\",\n  \"authorized_net_principal_inr\": 1840000.0,\n  \"authorized_gst_payout_inr\": 0.0,\n  \"gst_escrow_holdback_inr\": 331200.0,\n  \"debit_note_deduction_inr\": 0.0,\n  \"gate_verified\": false\n}",
+                  "gate_snapshot": null
+                }
+              ],
+              "tool_calls_not_executed": [],
+              "latency_ms": 4943,
+              "input_tokens": 22379,
+              "output_tokens": 1123,
+              "thinking_tokens": 0,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "max_tokens": 4096
+            },
+            {
+              "step_number": 4,
+              "model_id": "claude-haiku-5-5",
+              "escalated_from_haiku": false,
+              "stop_reason": "end_turn",
+              "assistant_thought": "Committed voucher **VCH-9921-UNB** for INV-KA-2026-9921 with decision **APPROVE_WITH_GST_ESCROW**.\n\n- Authorized net principal: ₹1,840,000.00 (release on T+43, GL 210100)\n- GST payout now: ₹0.00\n- GST escrow holdback: ₹331,200.00 (GL 219450, pending GSTR-2B sync)\n- Debit note deduction: ₹0.00\n\nAll three lines match the PO and GRNs with zero DOA, no amendments, and no freight. The IRN is verified, the vendor is clean, and no circuit breaker fired.\n\nNote: the commit response returned `gate_verified: false`. The SOP says the voucher should be verified by `run_policy_tolerance_gate`, but I have no tool for that gate. I checked the arithmetic by hand, and it reconciles to the claimed grand total of ₹2,171,200.00. You may want to confirm the gate verification separately.",
+              "tool_calls": [],
+              "tool_calls_not_executed": [],
+              "latency_ms": 2242,
+              "input_tokens": 23688,
+              "output_tokens": 332,
+              "thinking_tokens": 0,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "max_tokens": 4096
+            }
+          ],
+          "final_readout": "Committed voucher **VCH-9921-UNB** for INV-KA-2026-9921 with decision **APPROVE_WITH_GST_ESCROW**.\n\n- Authorized net principal: ₹1,840,000.00 (release on T+43, GL 210100)\n- GST payout now: ₹0.00\n- GST escrow holdback: ₹331,200.00 (GL 219450, pending GSTR-2B sync)\n- Debit note deduction: ₹0.00\n\nAll three lines match the PO and GRNs with zero DOA, no amendments, and no freight. The IRN is verified, the vendor is clean, and no circuit breaker fired.\n\nNote: the commit response returned `gate_verified: false`. The SOP says the voucher should be verified by `run_policy_tolerance_gate`, but I have no tool for that gate. I checked the arithmetic by hand, and it reconciles to the claimed grand total of ₹2,171,200.00. You may want to confirm the gate verification separately.",
+          "circuit_breaker_triggered": false,
+          "committed_voucher": {
+            "voucher_id": "VCH-9921-UNB",
+            "invoice_id": "INV-KA-2026-9921",
+            "po_id": "PO-NM-BLR-7740",
+            "decision": "APPROVE_WITH_GST_ESCROW",
+            "authorized_net_principal_inr": 1840000.0,
+            "authorized_gst_payout_inr": 0.0,
+            "gst_escrow_holdback_inr": 331200.0,
+            "debit_note_deduction_inr": 0.0,
+            "gate_verified": false,
+            "audit_summary": "3-way match clean. PO-NM-BLR-7740 lines 1-3 (400x2200, 300x2400, 300x800) match GRN-BLR-901/902/903 accepted qty with zero DOA and PO unit prices; no amendments. Taxable 1,840,000 matches PO; freight claimed 0 vs cap 0. IRN ACTIVE_VERIFIED, vendor VND-BLR-401 CLEAN, no PAYMENT_FREEZE, no duplicate invoice. GSTR-2B PENDING_FILING_MISMATCH: Case B -> release principal 1,840,000 on T+43 (MSMED Sec 15), hold GST 331,200 in escrow GL 219450 pending GSTR-2B sync. No circuit breaker triggered."
           },
           "tables_touched": [
             "contract_amendments",
@@ -768,6 +962,27 @@
           "ended_with_stop_reason": "end_turn",
           "cap_hit": false
         },
+        "unbounded_haiku_loop": {
+          "arm_id": "raw_free_haiku",
+          "run_id": "a5d98355-9e18-4136-834e-0724548322df",
+          "repeat_index": 0,
+          "started_at": "2026-11-26T08:10:23.817097+00:00",
+          "run_nonce": null,
+          "system_text_sha256": "57d1daa19a3283f347e6c84672646356732164a4e16218670ea4b3c4f0c550e0",
+          "settings": {
+            "schema_version": 1,
+            "max_tokens_per_turn": 4096,
+            "turn_cap": 12,
+            "step_budget": 12,
+            "timeout_s": 180.0,
+            "fixture_version": "cat5-ablation-fixtures-2026-11-26.v1",
+            "loop_rule": "v2-execute-tool-use-unless-truncated",
+            "invoice_fingerprint": "7cf8887fd14c32e5",
+            "arm_fingerprint": "c83ae8631cbc673d"
+          },
+          "ended_with_stop_reason": "end_turn",
+          "cap_hit": false
+        },
         "bounded_sonnet_cached_gate": {
           "arm_id": "bundle_gate_sonnet_cached",
           "run_id": "79809437-137d-46ce-b213-b25fd460b1ed",
@@ -994,6 +1209,200 @@
             "debit_note_deduction_inr": 83000.0,
             "gate_verified": false,
             "audit_summary": "IRN ACTIVE_VERIFIED, GSTR-2B MATCHED_VERIFIED, no vendor freeze, so no circuit-breaker. Debit note INR 83,000: (1) 15 DOA units on NM-UPS-1000 @3,200 = 48,000; (2) NM-AVR-500 +5% price hike with no amendment capped to PO 1,000 = 15,000; (3) DDP freight 20,000 disallowed (cap 0). NM-UPS-2200 +5.38% allowed under AMD-BOM-5512-A (SIGNED_ACTIVE). Net principal 3,222,000; GST 18% = 579,960 on the authorized principal; escrow 0."
+          },
+          "tables_touched": [
+            "contract_amendments",
+            "fc_dock_logs",
+            "goods_receipts",
+            "invoice_lines",
+            "po_lines",
+            "purchase_orders",
+            "reconciliation_vouchers",
+            "vendor_invoices",
+            "vendors"
+          ],
+          "total_tool_calls": 6,
+          "optimal_tool_calls": 1
+        },
+        "unbounded_haiku_loop": {
+          "rung_id": "unbounded_haiku_loop",
+          "primary_model_id": "claude-haiku-5-5",
+          "steps": [
+            {
+              "step_number": 1,
+              "model_id": "claude-haiku-5-5",
+              "escalated_from_haiku": false,
+              "stop_reason": "tool_use",
+              "assistant_thought": "I'll start by pulling the invoice, PO, and GRN records in parallel, since they're independent.",
+              "tool_calls": [
+                {
+                  "tool_use_id": "toolu_017aGbu2gbb3mfAdAMoncG2z",
+                  "tool_name": "query_invoice_raw",
+                  "tool_input": {
+                    "invoice_id": "INV-MH-2026-4418"
+                  },
+                  "sql_executed": "SELECT * FROM vendor_invoices WHERE invoice_id = ?;\nSELECT * FROM invoice_lines WHERE invoice_id = ? ORDER BY line_no;",
+                  "tables_touched": [
+                    "vendor_invoices",
+                    "invoice_lines"
+                  ],
+                  "is_optimal_call": false,
+                  "result_preview": "{\n  \"invoice\": [\n    {\n      \"invoice_id\": \"INV-MH-2026-4418\",\n      \"po_id\": \"PO-NM-BOM-5512\",\n      \"vendor_id\": \"VND-BOM-512\",\n      \"invoice_date\": \"2026-10-16\",\n      \"irn_hash\": \"4d19f203c4e22b19a72f3518d3320a19f4bb6627d38359028e221f954418a512\",\n      \"irn_status\": \"ACTIVE_VERIFIED\",\n      \"gstr2b_status\": \"MATCHED_VERIFIED\",\n      \"claimed_freight_inr\": 20000.0,\n      \"invoice_total_taxable_inr\": 3305000.0,\n      \"invoice_gst_inr\": 594900.0,\n      \"invoice_grand_total_inr\": 3899900.0,\n      \"remittance_memo\": \"Sahyadri Powerware inverter & stabilizer dispatch to FC-BOM-02 Bhiwandi. Includes revised copper transformer pricing on NM-UPS-2200 & NM-AVR-500 plus INR 20,000 expedited surface surcharge.\"\n    }\n  ],\n  \"lines\": [\n    {\n      \"invoice_id\": \"INV-MH-2026-4418\",\n      \"line_no\": 1,\n      \"sku\": \"NM-UPS-1000\",\n      \"billed_qty\": 500,\n      \"billed_unit_price_inr\": 3200.0,\n      \"billed_line_total_inr\": 1600000.0,\n      \"gst_rate\": 0.18\n    },\n    {\n      \"invoice_id\": \"INV-MH-2026-4418\",\n      \"line_no\": 2,\n      \"sku\": \"NM-UPS-2200\",\n      \"billed_qty\": 200,\n      \"billed_unit_price_inr\": 6850.0,\n      \"billed_line_total_inr\": 1370000.0,\n      \"gst_rate\": 0.18\n    },\n    {\n      \"invoice_id\": \"INV-MH-2026-4418\",\n      \"line_no\": 3,\n      \"sku\": \"NM-AVR-500\",\n      \"billed_qty\": 300,\n      \"billed_unit_price_inr\": 1050.0,\n      \"billed_line_total_inr\": 315000.0,\n      \"gst_rate\": 0.18\n    }\n  ]\n}",
+                  "gate_snapshot": null
+                },
+                {
+                  "tool_use_id": "toolu_01R8Sg8jpMS4csyPDxp94vFA",
+                  "tool_name": "query_po_raw",
+                  "tool_input": {
+                    "po_id": "PO-NM-BOM-5512"
+                  },
+                  "sql_executed": "SELECT * FROM purchase_orders WHERE po_id = ?;\nSELECT * FROM po_lines WHERE po_id = ? ORDER BY line_no;",
+                  "tables_touched": [
+                    "purchase_orders",
+                    "po_lines"
+                  ],
+                  "is_optimal_call": false,
+                  "result_preview": "{\n  \"purchase_order\": [\n    {\n      \"po_id\": \"PO-NM-BOM-5512\",\n      \"vendor_id\": \"VND-BOM-512\",\n      \"fc_hub\": \"FC-BOM-02\",\n      \"incoterms\": \"DDP Inside FC Dock\",\n      \"approved_freight_cap_inr\": 0.0,\n      \"po_total_taxable_inr\": 3200000.0,\n      \"currency\": \"INR\",\n      \"created_date\": \"2026-10-05\"\n    }\n  ],\n  \"po_lines\": [\n    {\n      \"po_id\": \"PO-NM-BOM-5512\",\n      \"line_no\": 1,\n      \"sku\": \"NM-UPS-1000\",\n      \"description\": \"Sahyadri 1000VA Pure-Sine UPS\",\n      \"ordered_qty\": 500,\n      \"po_unit_price_inr\": 3200.0,\n      \"gst_rate\": 0.18\n    },\n    {\n      \"po_id\": \"PO-NM-BOM-5512\",\n      \"line_no\": 2,\n      \"sku\": \"NM-UPS-2200\",\n      \"description\": \"Sahyadri 2200VA Inverter UPS\",\n      \"ordered_qty\": 200,\n      \"po_unit_price_inr\": 6500.0,\n      \"gst_rate\": 0.18\n    },\n    {\n      \"po_id\": \"PO-NM-BOM-5512\",\n      \"line_no\": 3,\n      \"sku\": \"NM-AVR-500\",\n      \"description\": \"Sahyadri Digital Voltage Guard\",\n      \"ordered_qty\": 300,\n      \"po_unit_price_inr\": 1000.0,\n      \"gst_rate\": 0.18\n    }\n  ]\n}",
+                  "gate_snapshot": null
+                },
+                {
+                  "tool_use_id": "toolu_01HL8d7tK1JQ7eokRKnMZXRa",
+                  "tool_name": "query_grn_wms_telemetry",
+                  "tool_input": {
+                    "po_id": "PO-NM-BOM-5512"
+                  },
+                  "sql_executed": "SELECT * FROM goods_receipts WHERE po_id = ? ORDER BY grn_id;",
+                  "tables_touched": [
+                    "goods_receipts"
+                  ],
+                  "is_optimal_call": false,
+                  "result_preview": "{\n  \"goods_receipts\": [\n    {\n      \"grn_id\": \"GRN-BOM-410\",\n      \"po_id\": \"PO-NM-BOM-5512\",\n      \"sku\": \"NM-UPS-1000\",\n      \"received_qty\": 500,\n      \"accepted_qty\": 485,\n      \"doa_rejected_qty\": 15,\n      \"grn_date\": \"2026-10-16\",\n      \"qc_notes\": \"15 units rejected DOA (cracked battery casing); RTV queued\",\n      \"raw_wms_scan_dump\": \"{\\\"po_id\\\": \\\"PO-NM-BOM-5512\\\", \\\"pallet_scans\\\": [{\\\"sscc_barcode\\\": \\\"8904002155120001\\\", \\\"dock_bay\\\": \\\"FC-BOM-02-DOCK-02\\\", \\\"sku\\\": \\\"NM-UPS-2200\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T02:07:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002155120002\\\", \\\"dock_bay\\\": \\\"FC-BOM-02-DOCK-03\\\", \\\"sku\\\": \\\"NM-AVR-500\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T03:14:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002155120003\\\", \\\"dock_bay\\\": \\\"FC-BOM-02-DOCK-04\\\", \\\"sku\\\": \\\"NM-UPS-1000\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T04:21:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002155120004\\\", \\\"dock_bay\\\": \\\"FC-BOM-02-DOCK-05\\\", \\\"sku\\\": \\\"NM-UPS-2200\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T05:28:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002155120005\\\", \\\"dock_bay\\\": \\\"FC-BOM-02-DOCK-06\\\", \\\"sku\\\": \\\"NM-AVR-500\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T06:35:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002155120006\\\", \\\"dock_bay\\\": \\\"FC-BOM-02-DOCK-01\\\", \\\"sku\\\": \\\"NM-UPS-1000\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T07:42:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002155120007\\\", \\\"dock_bay\\\": \\\"FC-BOM-02-DOCK-02\\\", \\\"sku\\\": \\\"NM-UPS-2200\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T08:49:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002155120008\\\", \\\"dock_bay\\\": \\\"FC-BOM-02-DOCK-03\\\", \\\"sku\\\": \\\"NM-AVR-500\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T01:56:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002155120009\\\", \\\"dock_bay\\\": \\\"FC-BOM-02-DOCK-04\\\", \\\"sku\\\": \\\"NM-UPS-1000\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T02:03:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"890400215512",
+                  "gate_snapshot": null
+                }
+              ],
+              "tool_calls_not_executed": [],
+              "latency_ms": 1515,
+              "input_tokens": 8822,
+              "output_tokens": 225,
+              "thinking_tokens": 0,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "max_tokens": 4096
+            },
+            {
+              "step_number": 2,
+              "model_id": "claude-haiku-5-5",
+              "escalated_from_haiku": false,
+              "stop_reason": "tool_use",
+              "assistant_thought": "Next I'll check the vendor record and contract amendments/dock logs, since the invoice remittance memo references revised pricing and a surcharge.",
+              "tool_calls": [
+                {
+                  "tool_use_id": "toolu_01QNi1ubsk8PX3AxkhNg58C7",
+                  "tool_name": "query_vendor_audit_history",
+                  "tool_input": {
+                    "vendor_id": "VND-BOM-512"
+                  },
+                  "sql_executed": "SELECT * FROM vendors WHERE vendor_id = ?;",
+                  "tables_touched": [
+                    "vendors"
+                  ],
+                  "is_optimal_call": false,
+                  "result_preview": "{\n  \"vendors\": [\n    {\n      \"vendor_id\": \"VND-BOM-512\",\n      \"name\": \"Sahyadri Powerware India Ltd.\",\n      \"gstin\": \"27AADCS5512P1Z8\",\n      \"udyam_tier\": \"Udyam MSE Tier-1 (Pune/Bhiwandi Cluster)\",\n      \"msmed_45d_applicable\": 1,\n      \"payment_terms_days\": 43,\n      \"risk_flag\": \"WATCH_PRICE_CLAIMS\",\n      \"full_audit_trail_json\": \"{\\\"vendor_id\\\": \\\"VND-BOM-512\\\", \\\"history\\\": [{\\\"period\\\": \\\"2024-Q1\\\", \\\"pos_fulfilled\\\": 16, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Sahyadri Powerware India Ltd. (VND-BOM-512) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2024-Q2\\\", \\\"pos_fulfilled\\\": 16, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Sahyadri Powerware India Ltd. (VND-BOM-512) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2024-Q3\\\", \\\"pos_fulfilled\\\": 16, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Sahyadri Powerware India Ltd. (VND-BOM-512) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2024-Q4\\\", \\\"pos_fulfilled\\\": 16, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Sahyadri Powerware India Ltd. (VND-BOM-512) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2025-Q1\\\", \\\"pos_fulfilled\\\": 14, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Sahyadri Powerware India Ltd. (VND-BOM-512) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2025-Q2\\\", \\\"pos_fulfilled\\\": 14, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Sahyadri Powerware India Ltd. (VND-BOM-512) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2025-Q3\\\", \\\"pos_fulfilled\\\": 14, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Sahyadri Powerware India Ltd. (VND-BOM-512) completed quarterly SAP vendor ",
+                  "gate_snapshot": null
+                },
+                {
+                  "tool_use_id": "toolu_01UDFbbfnVWFD6R6S9cmyc9e",
+                  "tool_name": "query_contract_amendments_and_dock_logs",
+                  "tool_input": {
+                    "po_id": "PO-NM-BOM-5512"
+                  },
+                  "sql_executed": "SELECT * FROM contract_amendments WHERE po_id = ?;\nSELECT * FROM fc_dock_logs WHERE po_id = ?;",
+                  "tables_touched": [
+                    "contract_amendments",
+                    "fc_dock_logs"
+                  ],
+                  "is_optimal_call": false,
+                  "result_preview": "{\n  \"contract_amendments\": [\n    {\n      \"amendment_id\": \"AMD-BOM-5512-A\",\n      \"po_id\": \"PO-NM-BOM-5512\",\n      \"sku\": \"NM-UPS-2200\",\n      \"approved_unit_price_inr\": 6850.0,\n      \"approved_freight_waiver_inr\": 0.0,\n      \"status\": \"SIGNED_ACTIVE\",\n      \"approvers\": \"VP Procurement + Finance Controller (Signed 2026-10-12)\",\n      \"notes\": \"Approves +5.38% copper winding surcharge strictly on SKU NM-UPS-2200; does NOT cover NM-AVR-500 or freight.\"\n    }\n  ],\n  \"fc_dock_logs\": [\n    {\n      \"po_id\": \"PO-NM-BOM-5512\",\n      \"hub\": \"FC-BOM-02\",\n      \"log_blob\": \"[FC-BOM-02] Gate-In LR#TN-38-AW-901 for PO-NM-BOM-5512: FASTag verified, security seal intact, weighbridge OK, bay idle 5m.\\n[FC-BOM-02] Gate-In LR#TN-38-AW-902 for PO-NM-BOM-5512: FASTag verified, security seal intact, weighbridge OK, bay idle 6m.\\n[FC-BOM-02] Gate-In LR#TN-38-AW-903 for PO-NM-BOM-5512: FASTag verified, security seal intact, weighbridge OK, bay idle 7m.\\n[FC-BOM-02] Gate-In LR#TN-38-AW-904 for PO-NM-BOM-5512: FASTag verified, security seal intact, weighbridge OK, bay idle 8m.\\n[FC-BOM-02] Gate-In LR#TN-38-AW-905 for PO-NM-BOM-5512: FASTag verified, security seal intact, weighbridge OK, bay idle 9m.\\n[FC-BOM-02] Gate-In LR#TN-38-AW-906 for PO-NM-BOM-5512: FASTag verified, security seal intact, weighbridge OK, bay idle 10m.\\n[FC-BOM-02] Gate-In LR#TN-38-AW-907 for PO-NM-BOM-5512: FASTag verified, security seal intact, weighbridge OK, bay idle 11m.\\n[FC-BOM-02] Gate-In LR#TN-38-AW-908 for PO-NM-BOM-5512: FASTag verified, security seal intact, weighbridge OK, bay idle 12m.\\n[FC-BOM-02] Gate-In LR#TN-38-AW-909 for PO-NM-BOM-5512: FASTag verified, security seal intact, weighbridge OK, bay idle 13m.\\n[FC-BOM-02] Gate-In LR#TN-38-AW-9010 for PO-NM-BOM-5512: FASTag verified, security seal intact, weighbridge OK, bay idle 14m.\\n[FC-BOM-02] Gate-In LR#TN-38-AW-9011 for PO-NM-BOM-5512: FASTag verified, security seal intact, weighbridge OK, bay idle 15m.\\n[FC-BOM-02] Gate-In LR#TN-38-AW-9012 for PO-NM-BOM-5512: FASTag verified, security seal intact, weighbridge OK, bay idle 16m.\\n[FC-BOM-02] Gate-In LR#TN-38-AW-9013 for PO-NM-BOM-5512: FASTag verified, security seal intact, weighbridge OK, bay idle",
+                  "gate_snapshot": null
+                }
+              ],
+              "tool_calls_not_executed": [],
+              "latency_ms": 1430,
+              "input_tokens": 18891,
+              "output_tokens": 182,
+              "thinking_tokens": 0,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "max_tokens": 4096
+            },
+            {
+              "step_number": 3,
+              "model_id": "claude-haiku-5-5",
+              "escalated_from_haiku": false,
+              "stop_reason": "tool_use",
+              "assistant_thought": "I have all the records. Now I'll compute the reconciliation by hand, then check the arithmetic against the policy.\n\n**Line-by-line (PAYABLE_QTY = MIN(ordered, accepted)):**\n\n- **Line 1, NM-UPS-1000:** ordered 500, accepted 485, DOA 15. Payable qty 485. PO rate ₹3,200 = billed rate, so no price variance. Authorized = 485 × 3,200 = **₹1,552,000**. Billed = 500 × 3,200 = ₹1,600,000. DOA deduction = **₹48,000**.\n- **Line 2, NM-UPS-2200:** ordered 200, accepted 200. PO rate ₹6,500, billed ₹6,850 (+5.38%). This exceeds the 1.5% band, but AMD-BOM-5512-A is SIGNED_ACTIVE for exactly this SKU at ₹6,850, so the price is authorized. Authorized = 200 × 6,850 = **₹1,370,000**. Deduction = ₹0.\n- **Line 3, NM-AVR-500:** ordered 300, accepted 300. PO rate ₹1,000, billed ₹1,050 (+5%). No amendment covers this SKU (the amendment explicitly excludes it), so the rate caps at PO. Authorized = 300 × 1,000 = **₹300,000**. Unauthorized overrun = 300 × 50 = **₹15,000**.\n\n**Freight:** Claimed ₹20,000 against a DDP cap of ₹0, with no freight waiver (waiver = 0.0). Disallowed in full: **₹20,000**.\n\n**Totals:**\n- Authorized net principal = 1,552,000 + 1,370,000 + 300,000 + MIN(20,000, 0) = **₹3,222,000**\n- Bil",
+              "tool_calls": [
+                {
+                  "tool_use_id": "toolu_01547ajsktMShLJfijzoLBWT",
+                  "tool_name": "commit_reconciliation_voucher",
+                  "tool_input": {
+                    "invoice_id": "INV-MH-2026-4418",
+                    "po_id": "PO-NM-BOM-5512",
+                    "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
+                    "authorized_net_principal_inr": 3222000.0,
+                    "authorized_gst_payout_inr": 579960.0,
+                    "gst_escrow_holdback_inr": 0.0,
+                    "debit_note_deduction_inr": 83000.0,
+                    "audit_summary": "3-way match PO-NM-BOM-5512 / GRN-BOM-410/411/412 / INV-MH-2026-4418. Line 1 NM-UPS-1000: 15 DOA rejects, payable 485 x 3200 = 1,552,000; deduction 48,000. Line 2 NM-UPS-2200: +5.38% at 6850 covered by SIGNED_ACTIVE AMD-BOM-5512-A; payable 200 x 6850 = 1,370,000; no deduction. Line 3 NM-AVR-500: +5% at 1050 with no amendment; capped at PO 1000; payable 300 x 1000 = 300,000; overrun deduction 15,000. Freight 20,000 claimed vs DDP cap 0 and no waiver; disallowed, deduction 20,000. Total deduction 83,000 = 3,305,000 - 3,222,000. GST 18% on authorized principal = 579,960 released (GSTR-2B MATCHED_VERIFIED, IRN ACTIVE_VERIFIED, no escrow). Authorized gross 3,801,960. No circuit-breaker triggers."
+                  },
+                  "sql_executed": "INSERT OR REPLACE INTO reconciliation_vouchers (voucher_id, invoice_id, po_id, decision, authorized_net_principal_inr, authorized_gst_payout_inr, gst_escrow_holdback_inr, debit_note_deduction_inr, gate_verified, audit_summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                  "tables_touched": [
+                    "reconciliation_vouchers"
+                  ],
+                  "is_optimal_call": true,
+                  "result_preview": "{\n  \"status\": \"COMMITTED\",\n  \"voucher_id\": \"VCH-4418-UNB\",\n  \"invoice_id\": \"INV-MH-2026-4418\",\n  \"decision\": \"APPROVE_PARTIAL_DEBIT_NOTE\",\n  \"authorized_net_principal_inr\": 3222000.0,\n  \"authorized_gst_payout_inr\": 579960.0,\n  \"gst_escrow_holdback_inr\": 0.0,\n  \"debit_note_deduction_inr\": 83000.0,\n  \"gate_verified\": false\n}",
+                  "gate_snapshot": null
+                }
+              ],
+              "tool_calls_not_executed": [],
+              "latency_ms": 6846,
+              "input_tokens": 22427,
+              "output_tokens": 1711,
+              "thinking_tokens": 0,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "max_tokens": 4096
+            },
+            {
+              "step_number": 4,
+              "model_id": "claude-haiku-5-5",
+              "escalated_from_haiku": false,
+              "stop_reason": "end_turn",
+              "assistant_thought": "The voucher is committed as **VCH-4418-UNB** with decision **APPROVE_PARTIAL_DEBIT_NOTE**.\n\nAuthorized net principal is ₹32,22,000 and GST payout is ₹5,79,960 (18%, released in full since GSTR-2B is verified, with no escrow). The debit note deduction is ₹83,000 against the claimed ₹38,99,900, composed of:\n\n- ₹48,000 for 15 DOA units on NM-UPS-1000\n- ₹15,000 for the unamended price overrun on NM-AVR-500 (+₹50/unit)\n- ₹20,000 for disallowed DDP freight (cap ₹0)\n\nThe +5.38% price on NM-UPS-2200 is covered by signed amendment AMD-BOM-5512-A and was accepted. Authorized gross payable is ₹38,01,960.\n\nOne caveat: the commit response returned `gate_verified: false`. The SOP expects `run_policy_tolerance_gate` to verify the arithmetic before commit, but that tool is not in my toolset, so I verified the math manually. The figures reconcile exactly (3,222,000 + 83,000 = 3,305,000), but the voucher's gate flag should be reviewed.",
+              "tool_calls": [],
+              "tool_calls_not_executed": [],
+              "latency_ms": 2743,
+              "input_tokens": 24330,
+              "output_tokens": 421,
+              "thinking_tokens": 0,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "max_tokens": 4096
+            }
+          ],
+          "final_readout": "The voucher is committed as **VCH-4418-UNB** with decision **APPROVE_PARTIAL_DEBIT_NOTE**.\n\nAuthorized net principal is ₹32,22,000 and GST payout is ₹5,79,960 (18%, released in full since GSTR-2B is verified, with no escrow). The debit note deduction is ₹83,000 against the claimed ₹38,99,900, composed of:\n\n- ₹48,000 for 15 DOA units on NM-UPS-1000\n- ₹15,000 for the unamended price overrun on NM-AVR-500 (+₹50/unit)\n- ₹20,000 for disallowed DDP freight (cap ₹0)\n\nThe +5.38% price on NM-UPS-2200 is covered by signed amendment AMD-BOM-5512-A and was accepted. Authorized gross payable is ₹38,01,960.\n\nOne caveat: the commit response returned `gate_verified: false`. The SOP expects `run_policy_tolerance_gate` to verify the arithmetic before commit, but that tool is not in my toolset, so I verified the math manually. The figures reconcile exactly (3,222,000 + 83,000 = 3,305,000), but the voucher's gate flag should be reviewed.",
+          "circuit_breaker_triggered": false,
+          "committed_voucher": {
+            "voucher_id": "VCH-4418-UNB",
+            "invoice_id": "INV-MH-2026-4418",
+            "po_id": "PO-NM-BOM-5512",
+            "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
+            "authorized_net_principal_inr": 3222000.0,
+            "authorized_gst_payout_inr": 579960.0,
+            "gst_escrow_holdback_inr": 0.0,
+            "debit_note_deduction_inr": 83000.0,
+            "gate_verified": false,
+            "audit_summary": "3-way match PO-NM-BOM-5512 / GRN-BOM-410/411/412 / INV-MH-2026-4418. Line 1 NM-UPS-1000: 15 DOA rejects, payable 485 x 3200 = 1,552,000; deduction 48,000. Line 2 NM-UPS-2200: +5.38% at 6850 covered by SIGNED_ACTIVE AMD-BOM-5512-A; payable 200 x 6850 = 1,370,000; no deduction. Line 3 NM-AVR-500: +5% at 1050 with no amendment; capped at PO 1000; payable 300 x 1000 = 300,000; overrun deduction 15,000. Freight 20,000 claimed vs DDP cap 0 and no waiver; disallowed, deduction 20,000. Total deduction 8"
           },
           "tables_touched": [
             "contract_amendments",
@@ -1572,6 +1981,27 @@
           "ended_with_stop_reason": "end_turn",
           "cap_hit": false
         },
+        "unbounded_haiku_loop": {
+          "arm_id": "raw_free_haiku",
+          "run_id": "fd62e5df-4fab-4dae-80c7-beab784f2de6",
+          "repeat_index": 0,
+          "started_at": "2026-11-26T08:10:23.858337+00:00",
+          "run_nonce": null,
+          "system_text_sha256": "57d1daa19a3283f347e6c84672646356732164a4e16218670ea4b3c4f0c550e0",
+          "settings": {
+            "schema_version": 1,
+            "max_tokens_per_turn": 4096,
+            "turn_cap": 12,
+            "step_budget": 12,
+            "timeout_s": 180.0,
+            "fixture_version": "cat5-ablation-fixtures-2026-11-26.v1",
+            "loop_rule": "v2-execute-tool-use-unless-truncated",
+            "invoice_fingerprint": "a2863817d86a8d20",
+            "arm_fingerprint": "c83ae8631cbc673d"
+          },
+          "ended_with_stop_reason": "end_turn",
+          "cap_hit": false
+        },
         "bounded_sonnet_cached_gate": {
           "arm_id": "bundle_gate_sonnet_cached",
           "run_id": "44b0c700-6cdb-484c-87e3-2e9705dfaedc",
@@ -1779,6 +2209,200 @@
             "vendor_invoices"
           ],
           "total_tool_calls": 5,
+          "optimal_tool_calls": 1
+        },
+        "unbounded_haiku_loop": {
+          "rung_id": "unbounded_haiku_loop",
+          "primary_model_id": "claude-haiku-5-5",
+          "steps": [
+            {
+              "step_number": 1,
+              "model_id": "claude-haiku-5-5",
+              "escalated_from_haiku": false,
+              "stop_reason": "tool_use",
+              "assistant_thought": "I'll start by pulling the invoice, PO, and GRN records in parallel, since none depend on each other.",
+              "tool_calls": [
+                {
+                  "tool_use_id": "toolu_01VATgFAk8cToTc4JZhqJtMi",
+                  "tool_name": "query_invoice_raw",
+                  "tool_input": {
+                    "invoice_id": "INV-DL-2026-8803"
+                  },
+                  "sql_executed": "SELECT * FROM vendor_invoices WHERE invoice_id = ?;\nSELECT * FROM invoice_lines WHERE invoice_id = ? ORDER BY line_no;",
+                  "tables_touched": [
+                    "vendor_invoices",
+                    "invoice_lines"
+                  ],
+                  "is_optimal_call": false,
+                  "result_preview": "{\n  \"invoice\": [\n    {\n      \"invoice_id\": \"INV-DL-2026-8803\",\n      \"po_id\": \"PO-NM-DEL-3309\",\n      \"vendor_id\": \"VND-DEL-309\",\n      \"invoice_date\": \"2026-10-18\",\n      \"irn_hash\": \"9c72a114b8d33e20c83a4627e4431b20e5cc7736e49460139f332a068803b309\",\n      \"irn_status\": \"CANCELLED_ON_IRP_WITHIN_24H\",\n      \"gstr2b_status\": \"IRN_CANCELLED_INVALID\",\n      \"claimed_freight_inr\": 0.0,\n      \"invoice_total_taxable_inr\": 2650000.0,\n      \"invoice_gst_inr\": 477000.0,\n      \"invoice_grand_total_inr\": 3127000.0,\n      \"remittance_memo\": \"Aravalli Packaging consolidated consignment for FC-DEL-03 Gurugram. Vendor uploaded PDF to portal without disclosing IRP e-Invoice cancellation timestamp.\"\n    }\n  ],\n  \"lines\": [\n    {\n      \"invoice_id\": \"INV-DL-2026-8803\",\n      \"line_no\": 1,\n      \"sku\": \"NM-PKG-TAPE-48\",\n      \"billed_qty\": 10000,\n      \"billed_unit_price_inr\": 150.0,\n      \"billed_line_total_inr\": 1500000.0,\n      \"gst_rate\": 0.18\n    },\n    {\n      \"invoice_id\": \"INV-DL-2026-8803\",\n      \"line_no\": 2,\n      \"sku\": \"NM-PKG-CORR-XL\",\n      \"billed_qty\": 5000,\n      \"billed_unit_price_inr\": 230.0,\n      \"billed_line_total_inr\": 1150000.0,\n      \"gst_rate\": 0.18\n    }\n  ]\n}",
+                  "gate_snapshot": null
+                },
+                {
+                  "tool_use_id": "toolu_01BgMDBeCKzipAiBNN5RN59B",
+                  "tool_name": "query_po_raw",
+                  "tool_input": {
+                    "po_id": "PO-NM-DEL-3309"
+                  },
+                  "sql_executed": "SELECT * FROM purchase_orders WHERE po_id = ?;\nSELECT * FROM po_lines WHERE po_id = ? ORDER BY line_no;",
+                  "tables_touched": [
+                    "purchase_orders",
+                    "po_lines"
+                  ],
+                  "is_optimal_call": false,
+                  "result_preview": "{\n  \"purchase_order\": [\n    {\n      \"po_id\": \"PO-NM-DEL-3309\",\n      \"vendor_id\": \"VND-DEL-309\",\n      \"fc_hub\": \"FC-DEL-03\",\n      \"incoterms\": \"DDP Inside FC Dock\",\n      \"approved_freight_cap_inr\": 0.0,\n      \"po_total_taxable_inr\": 2650000.0,\n      \"currency\": \"INR\",\n      \"created_date\": \"2026-10-08\"\n    }\n  ],\n  \"po_lines\": [\n    {\n      \"po_id\": \"PO-NM-DEL-3309\",\n      \"line_no\": 1,\n      \"sku\": \"NM-PKG-TAPE-48\",\n      \"description\": \"NovaMart Security Void Tape 48mm\",\n      \"ordered_qty\": 10000,\n      \"po_unit_price_inr\": 150.0,\n      \"gst_rate\": 0.18\n    },\n    {\n      \"po_id\": \"PO-NM-DEL-3309\",\n      \"line_no\": 2,\n      \"sku\": \"NM-PKG-CORR-XL\",\n      \"description\": \"5-Ply Export Master Carton XL\",\n      \"ordered_qty\": 5000,\n      \"po_unit_price_inr\": 230.0,\n      \"gst_rate\": 0.18\n    }\n  ]\n}",
+                  "gate_snapshot": null
+                },
+                {
+                  "tool_use_id": "toolu_01ByPBEvz6kqpNq9V3k6c9cp",
+                  "tool_name": "query_grn_wms_telemetry",
+                  "tool_input": {
+                    "po_id": "PO-NM-DEL-3309"
+                  },
+                  "sql_executed": "SELECT * FROM goods_receipts WHERE po_id = ? ORDER BY grn_id;",
+                  "tables_touched": [
+                    "goods_receipts"
+                  ],
+                  "is_optimal_call": false,
+                  "result_preview": "{\n  \"goods_receipts\": [\n    {\n      \"grn_id\": \"GRN-DEL-201\",\n      \"po_id\": \"PO-NM-DEL-3309\",\n      \"sku\": \"NM-PKG-TAPE-48\",\n      \"received_qty\": 10000,\n      \"accepted_qty\": 10000,\n      \"doa_rejected_qty\": 0,\n      \"grn_date\": \"2026-10-18\",\n      \"qc_notes\": \"10,000 rolls accepted at dock\",\n      \"raw_wms_scan_dump\": \"{\\\"po_id\\\": \\\"PO-NM-DEL-3309\\\", \\\"pallet_scans\\\": [{\\\"sscc_barcode\\\": \\\"8904002133090001\\\", \\\"dock_bay\\\": \\\"FC-DEL-03-DOCK-02\\\", \\\"sku\\\": \\\"NM-PKG-TAPE-48\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T02:07:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002133090002\\\", \\\"dock_bay\\\": \\\"FC-DEL-03-DOCK-03\\\", \\\"sku\\\": \\\"NM-PKG-TAPE-48\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T03:14:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002133090003\\\", \\\"dock_bay\\\": \\\"FC-DEL-03-DOCK-04\\\", \\\"sku\\\": \\\"NM-PKG-TAPE-48\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T04:21:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002133090004\\\", \\\"dock_bay\\\": \\\"FC-DEL-03-DOCK-05\\\", \\\"sku\\\": \\\"NM-PKG-TAPE-48\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T05:28:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002133090005\\\", \\\"dock_bay\\\": \\\"FC-DEL-03-DOCK-06\\\", \\\"sku\\\": \\\"NM-PKG-TAPE-48\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T06:35:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002133090006\\\", \\\"dock_bay\\\": \\\"FC-DEL-03-DOCK-01\\\", \\\"sku\\\": \\\"NM-PKG-TAPE-48\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T07:42:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002133090007\\\", \\\"dock_bay\\\": \\\"FC-DEL-03-DOCK-02\\\", \\\"sku\\\": \\\"NM-PKG-TAPE-48\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T08:49:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002133090008\\\", \\\"dock_bay\\\": \\\"FC-DEL-03-DOCK-03\\\", \\\"sku\\\": \\\"NM-PKG-TAPE-48\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T01:56:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"8904002133090009\\\", \\\"dock_bay\\\": \\\"FC-DEL-03-DOCK-04\\\", \\\"sku\\\": \\\"NM-PKG-TAPE-48\\\", \\\"rfid_gate_ts\\\": \\\"2026-10-14T02:03:19Z\\\", \\\"seal_ok\\\": true, \\\"aql_sample_temp_c\\\": 26.4}, {\\\"sscc_barcode\\\": \\\"89040",
+                  "gate_snapshot": null
+                }
+              ],
+              "tool_calls_not_executed": [],
+              "latency_ms": 1401,
+              "input_tokens": 8823,
+              "output_tokens": 227,
+              "thinking_tokens": 0,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "max_tokens": 4096
+            },
+            {
+              "step_number": 2,
+              "model_id": "claude-haiku-5-5",
+              "escalated_from_haiku": false,
+              "stop_reason": "tool_use",
+              "assistant_thought": "Key findings so far: the IRN is cancelled on the IRP within 24 hours (Trigger 1), and the CORR-XL line has zero accepted quantity on a ₹11.5L line (43% of taxable value, well above the 10% threshold, Trigger 2). I'll run the vendor and amendment checks to confirm the circuit breaker, then commit.",
+              "tool_calls": [
+                {
+                  "tool_use_id": "toolu_01TFKu7wAHoWjoC6e8JZtBzH",
+                  "tool_name": "query_vendor_audit_history",
+                  "tool_input": {
+                    "vendor_id": "VND-DEL-309"
+                  },
+                  "sql_executed": "SELECT * FROM vendors WHERE vendor_id = ?;",
+                  "tables_touched": [
+                    "vendors"
+                  ],
+                  "is_optimal_call": false,
+                  "result_preview": "{\n  \"vendors\": [\n    {\n      \"vendor_id\": \"VND-DEL-309\",\n      \"name\": \"Aravalli Logistics & Packaging Co.\",\n      \"gstin\": \"06AABCA3309K1Z4\",\n      \"udyam_tier\": \"Medium Enterprise (Non-MSE Cap Exempt)\",\n      \"msmed_45d_applicable\": 0,\n      \"payment_terms_days\": 60,\n      \"risk_flag\": \"HIGH_AUDIT_ALERT\",\n      \"full_audit_trail_json\": \"{\\\"vendor_id\\\": \\\"VND-DEL-309\\\", \\\"history\\\": [{\\\"period\\\": \\\"2024-Q1\\\", \\\"pos_fulfilled\\\": 16, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Aravalli Logistics & Packaging Co. (VND-DEL-309) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2024-Q2\\\", \\\"pos_fulfilled\\\": 16, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Aravalli Logistics & Packaging Co. (VND-DEL-309) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2024-Q3\\\", \\\"pos_fulfilled\\\": 16, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Aravalli Logistics & Packaging Co. (VND-DEL-309) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2024-Q4\\\", \\\"pos_fulfilled\\\": 16, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Aravalli Logistics & Packaging Co. (VND-DEL-309) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2025-Q1\\\", \\\"pos_fulfilled\\\": 14, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Aravalli Logistics & Packaging Co. (VND-DEL-309) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2025-Q2\\\", \\\"pos_fulfilled\\\": 14, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Aravalli Logistics & Packaging Co. (VND-DEL-309) completed quarterly SAP vendor scorecard audit with e-Invoice NIC IRP registration active and Peenya/MH compliance verified.\\\"}, {\\\"period\\\": \\\"2025-Q3\\\", \\\"pos_fulfilled\\\": 14, \\\"otif_pct\\\": 97.4, \\\"historical_dispute_note\\\": \\\"Aravalli Logistics & Packaging Co. (VND-DEL-",
+                  "gate_snapshot": null
+                },
+                {
+                  "tool_use_id": "toolu_012YcMCEHa4UGDgRtC2fcVjj",
+                  "tool_name": "query_contract_amendments_and_dock_logs",
+                  "tool_input": {
+                    "po_id": "PO-NM-DEL-3309"
+                  },
+                  "sql_executed": "SELECT * FROM contract_amendments WHERE po_id = ?;\nSELECT * FROM fc_dock_logs WHERE po_id = ?;",
+                  "tables_touched": [
+                    "contract_amendments",
+                    "fc_dock_logs"
+                  ],
+                  "is_optimal_call": false,
+                  "result_preview": "{\n  \"contract_amendments\": [],\n  \"fc_dock_logs\": [\n    {\n      \"po_id\": \"PO-NM-DEL-3309\",\n      \"hub\": \"FC-DEL-03\",\n      \"log_blob\": \"[FC-DEL-03] Gate-In LR#TN-38-AW-901 for PO-NM-DEL-3309: FASTag verified, security seal intact, weighbridge OK, bay idle 5m.\\n[FC-DEL-03] Gate-In LR#TN-38-AW-902 for PO-NM-DEL-3309: FASTag verified, security seal intact, weighbridge OK, bay idle 6m.\\n[FC-DEL-03] Gate-In LR#TN-38-AW-903 for PO-NM-DEL-3309: FASTag verified, security seal intact, weighbridge OK, bay idle 7m.\\n[FC-DEL-03] Gate-In LR#TN-38-AW-904 for PO-NM-DEL-3309: FASTag verified, security seal intact, weighbridge OK, bay idle 8m.\\n[FC-DEL-03] Gate-In LR#TN-38-AW-905 for PO-NM-DEL-3309: FASTag verified, security seal intact, weighbridge OK, bay idle 9m.\\n[FC-DEL-03] Gate-In LR#TN-38-AW-906 for PO-NM-DEL-3309: FASTag verified, security seal intact, weighbridge OK, bay idle 10m.\\n[FC-DEL-03] Gate-In LR#TN-38-AW-907 for PO-NM-DEL-3309: FASTag verified, security seal intact, weighbridge OK, bay idle 11m.\\n[FC-DEL-03] Gate-In LR#TN-38-AW-908 for PO-NM-DEL-3309: FASTag verified, security seal intact, weighbridge OK, bay idle 12m.\\n[FC-DEL-03] Gate-In LR#TN-38-AW-909 for PO-NM-DEL-3309: FASTag verified, security seal intact, weighbridge OK, bay idle 13m.\\n[FC-DEL-03] Gate-In LR#TN-38-AW-9010 for PO-NM-DEL-3309: FASTag verified, security seal intact, weighbridge OK, bay idle 14m.\\n[FC-DEL-03] Gate-In LR#TN-38-AW-9011 for PO-NM-DEL-3309: FASTag verified, security seal intact, weighbridge OK, bay idle 15m.\\n[FC-DEL-03] Gate-In LR#TN-38-AW-9012 for PO-NM-DEL-3309: FASTag verified, security seal intact, weighbridge OK, bay idle 16m.\\n[FC-DEL-03] Gate-In LR#TN-38-AW-9013 for PO-NM-DEL-3309: FASTag verified, security seal intact, weighbridge OK, bay idle 17m.\\n[FC-DEL-03] Gate-In LR#TN-38-AW-9014 for PO-NM-DEL-3309: FASTag verified, security seal intact, weighbridge OK, bay idle 18m.\\n[FC-DEL-03] Gate-In LR#TN-38-AW-9015 for PO-NM-DEL-3309: FASTag verified, security seal intact, weighbridge OK, bay idle 19m.\"\n    }\n  ]\n}",
+                  "gate_snapshot": null
+                }
+              ],
+              "tool_calls_not_executed": [],
+              "latency_ms": 1761,
+              "input_tokens": 16059,
+              "output_tokens": 255,
+              "thinking_tokens": 0,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "max_tokens": 4096
+            },
+            {
+              "step_number": 3,
+              "model_id": "claude-haiku-5-5",
+              "escalated_from_haiku": false,
+              "stop_reason": "tool_use",
+              "assistant_thought": "The vendor history is clean, but it can't override a hard trigger. The circuit breaker is confirmed on two independent grounds, so I'm committing a full exception hold with all payout fields at zero.",
+              "tool_calls": [
+                {
+                  "tool_use_id": "toolu_01J8ZVonJ9m5Q2f9Hd5jQJnv",
+                  "tool_name": "commit_reconciliation_voucher",
+                  "tool_input": {
+                    "invoice_id": "INV-DL-2026-8803",
+                    "po_id": "PO-NM-DEL-3309",
+                    "decision": "BLOCK_EXCEPTION_HOLD",
+                    "authorized_net_principal_inr": 0,
+                    "authorized_gst_payout_inr": 0,
+                    "gst_escrow_holdback_inr": 0,
+                    "debit_note_deduction_inr": 0,
+                    "audit_summary": "BLOCK_EXCEPTION_HOLD under AP-POL-GATE-01. Trigger 1 (CANCELLED_OR_FORGED_IRN): IRN 9c72a114...b309 has irn_status CANCELLED_ON_IRP_WITHIN_24H and gstr2b_status IRN_CANCELLED_INVALID; vendor PDF was uploaded without disclosing cancellation. Trigger 2 (PHANTOM_UNRECEIVED_LINE): line 2 NM-PKG-CORR-XL billed 5,000 @ INR 230 = INR 11,50,000 (43.4% of taxable INR 26,50,000) with grn_accepted_qty 0 (GRN-DEL-202, no dock receipt). Line 1 (NM-PKG-TAPE-48, 10,000 accepted @ INR 150 = INR 15,00,000) is noted but not settled per Module 4 zero-payout rule. No amendments on PO; vendor risk flag HIGH_AUDIT_ALERT. Grand total claimed INR 31,27,000 (taxable 26,50,000 + GST 4,77,000). Escalate to Forensic Tax and Internal Audit, queue AP-FRAUD-IRN-HOLD, SLA P1 4h."
+                  },
+                  "sql_executed": "INSERT OR REPLACE INTO reconciliation_vouchers (voucher_id, invoice_id, po_id, decision, authorized_net_principal_inr, authorized_gst_payout_inr, gst_escrow_holdback_inr, debit_note_deduction_inr, gate_verified, audit_summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+                  "tables_touched": [
+                    "reconciliation_vouchers"
+                  ],
+                  "is_optimal_call": true,
+                  "result_preview": "{\n  \"status\": \"COMMITTED\",\n  \"voucher_id\": \"VCH-8803-UNB\",\n  \"invoice_id\": \"INV-DL-2026-8803\",\n  \"decision\": \"BLOCK_EXCEPTION_HOLD\",\n  \"authorized_net_principal_inr\": 0.0,\n  \"authorized_gst_payout_inr\": 0.0,\n  \"gst_escrow_holdback_inr\": 0.0,\n  \"debit_note_deduction_inr\": 0.0,\n  \"gate_verified\": false\n}",
+                  "gate_snapshot": null
+                }
+              ],
+              "tool_calls_not_executed": [],
+              "latency_ms": 3692,
+              "input_tokens": 19450,
+              "output_tokens": 802,
+              "thinking_tokens": 0,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "max_tokens": 4096
+            },
+            {
+              "step_number": 4,
+              "model_id": "claude-haiku-5-5",
+              "escalated_from_haiku": false,
+              "stop_reason": "end_turn",
+              "assistant_thought": "Voucher **VCH-8803-UNB** is committed as **BLOCK_EXCEPTION_HOLD** for INV-DL-2026-8803 (PO-NM-DEL-3309), with all payout fields at INR 0.00.\n\nTwo circuit-breaker triggers fired:\n1. **Cancelled IRN:** the IRN was cancelled on the IRP within 24 hours and GSTR-2B shows it as invalid. The vendor did not disclose this.\n2. **Phantom line:** CORR-XL (INR 11.5L, 43% of taxable value) has zero accepted quantity, with no dock receipt.\n\nNo contract amendments exist, and the vendor carries a HIGH_AUDIT_ALERT flag. Escalate to AP-FRAUD-IRN-HOLD (P1, 4h SLA).\n\nNote: the commit response shows `gate_verified: false`. I did not run the deterministic policy gate tool, so the zero-payout decision rests on the manual trigger checks above.",
+              "tool_calls": [],
+              "tool_calls_not_executed": [],
+              "latency_ms": 2083,
+              "input_tokens": 20435,
+              "output_tokens": 340,
+              "thinking_tokens": 0,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "max_tokens": 4096
+            }
+          ],
+          "final_readout": "Voucher **VCH-8803-UNB** is committed as **BLOCK_EXCEPTION_HOLD** for INV-DL-2026-8803 (PO-NM-DEL-3309), with all payout fields at INR 0.00.\n\nTwo circuit-breaker triggers fired:\n1. **Cancelled IRN:** the IRN was cancelled on the IRP within 24 hours and GSTR-2B shows it as invalid. The vendor did not disclose this.\n2. **Phantom line:** CORR-XL (INR 11.5L, 43% of taxable value) has zero accepted quantity, with no dock receipt.\n\nNo contract amendments exist, and the vendor carries a HIGH_AUDIT_ALERT flag. Escalate to AP-FRAUD-IRN-HOLD (P1, 4h SLA).\n\nNote: the commit response shows `gate_verified: false`. I did not run the deterministic policy gate tool, so the zero-payout decision rests on the manual trigger checks above.",
+          "circuit_breaker_triggered": false,
+          "committed_voucher": {
+            "voucher_id": "VCH-8803-UNB",
+            "invoice_id": "INV-DL-2026-8803",
+            "po_id": "PO-NM-DEL-3309",
+            "decision": "BLOCK_EXCEPTION_HOLD",
+            "authorized_net_principal_inr": 0.0,
+            "authorized_gst_payout_inr": 0.0,
+            "gst_escrow_holdback_inr": 0.0,
+            "debit_note_deduction_inr": 0.0,
+            "gate_verified": false,
+            "audit_summary": "BLOCK_EXCEPTION_HOLD under AP-POL-GATE-01. Trigger 1 (CANCELLED_OR_FORGED_IRN): IRN 9c72a114...b309 has irn_status CANCELLED_ON_IRP_WITHIN_24H and gstr2b_status IRN_CANCELLED_INVALID; vendor PDF was uploaded without disclosing cancellation. Trigger 2 (PHANTOM_UNRECEIVED_LINE): line 2 NM-PKG-CORR-XL billed 5,000 @ INR 230 = INR 11,50,000 (43.4% of taxable INR 26,50,000) with grn_accepted_qty 0 (GRN-DEL-202, no dock receipt). Line 1 (NM-PKG-TAPE-48, 10,000 accepted @ INR 150 = INR 15,00,000) is no"
+          },
+          "tables_touched": [
+            "contract_amendments",
+            "fc_dock_logs",
+            "goods_receipts",
+            "invoice_lines",
+            "po_lines",
+            "purchase_orders",
+            "reconciliation_vouchers",
+            "vendor_invoices",
+            "vendors"
+          ],
+          "total_tool_calls": 6,
           "optimal_tool_calls": 1
         },
         "bounded_sonnet_cached_gate": {
@@ -2236,6 +2860,27 @@
             "loop_rule": "v2-execute-tool-use-unless-truncated",
             "invoice_fingerprint": "a1eec6da9fd884c2",
             "arm_fingerprint": "fa74bab5f98fe213"
+          },
+          "ended_with_stop_reason": "end_turn",
+          "cap_hit": false
+        },
+        "unbounded_haiku_loop": {
+          "arm_id": "raw_free_haiku",
+          "run_id": "60e57b2c-16d3-4a10-af6e-027fce510084",
+          "repeat_index": 0,
+          "started_at": "2026-11-26T08:10:23.869762+00:00",
+          "run_nonce": null,
+          "system_text_sha256": "57d1daa19a3283f347e6c84672646356732164a4e16218670ea4b3c4f0c550e0",
+          "settings": {
+            "schema_version": 1,
+            "max_tokens_per_turn": 4096,
+            "turn_cap": 12,
+            "step_budget": 12,
+            "timeout_s": 180.0,
+            "fixture_version": "cat5-ablation-fixtures-2026-11-26.v1",
+            "loop_rule": "v2-execute-tool-use-unless-truncated",
+            "invoice_fingerprint": "a1eec6da9fd884c2",
+            "arm_fingerprint": "c83ae8631cbc673d"
           },
           "ended_with_stop_reason": "end_turn",
           "cap_hit": false

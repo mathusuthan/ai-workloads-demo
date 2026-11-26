@@ -67,6 +67,13 @@ MODEL_RATES: dict[str, ModelRateSpec] = {
     ),
 }
 
+# Haiku 5.5's rates above apply to prompts up to 100K tokens. Above that, input / output cost $0.50 / $2.50 per 1M
+# (the rate scripts/validate_deck_claims.py records from Anthropic's model table, cached 2026-11-03). Long-prompt cache
+# write / read rates are not recorded in the repo. `compute_run_finops` does not apply this tier (no recorded Haiku call
+# exceeds 100K prompt tokens); the Category 6 harness prices any such call with it (fair_rerun._price_turn).
+HAIKU_LONG_PROMPT_THRESHOLD_TOKENS = 100_000
+HAIKU_LONG_PROMPT_INPUT_OUTPUT_PER_1M_USD: dict[str, tuple[float, float]] = {"claude-haiku-5-5": (0.50, 2.50)}
+
 # Fallback rates if a live API call ever falls back to an older 4.x model ID
 LEGACY_MODEL_RATES: dict[str, ModelRateSpec] = {
     "claude-sonnet-4-6": ModelRateSpec(

@@ -17,7 +17,7 @@ CAT5_FREE_CHOICE_PROTOCOL = (
 
 def get_cat5_system_prompt(rung_id: str) -> str:
     """SOP policy manual + the rung's execution protocol."""
-    if rung_id == "unbounded_sonnet_loop":
+    if rung_id in ("unbounded_sonnet_loop", "unbounded_haiku_loop"):  # rung 4 = rung 1 on Haiku, same text
         contract = CAT5_FREE_CHOICE_PROTOCOL
     elif rung_id == "bounded_sonnet_cached_gate":
         contract = (
@@ -68,6 +68,22 @@ for turn in range(12):
     if resp.stop_reason == "max_tokens" or not tool_uses:
         break  # a truncated turn or a turn without tool calls ends the run
     loop_history += [assistant(resp.content), user(execute_all(tool_uses))]  # whatever the stop_reason""",
+    "unbounded_haiku_loop": """# RUNG 4: Rung 1 on Haiku 5.5 -- the same free-choice loop over raw SELECT * tools
+# Same tools, prompt, 12-turn safety cap and loop rule as rung 1; no prompt cache and no policy tool, so there is
+# no escalation path to Sonnet. Thinking is disabled for Haiku in the app's call function.
+for turn in range(12):
+    resp = await client.messages.create(
+        model="claude-haiku-5-5",
+        max_tokens=4096,
+        thinking={"type": "disabled"},
+        system=AP_POLICY_MANUAL_TEXT + FREE_CHOICE_PROTOCOL,  # no cache_control
+        tools=RAW_SELECT_STAR_TOOLS + [COMMIT_VOUCHER],
+        messages=loop_history,
+    )
+    tool_uses = [b for b in resp.content if b.type == "tool_use"]
+    if resp.stop_reason == "max_tokens" or not tool_uses:
+        break
+    loop_history += [assistant(resp.content), user(execute_all(tool_uses))]""",
     "bounded_sonnet_cached_gate": """# RUNG 2: Narrow bundle query + cached policy manual + deterministic policy gate (Sonnet 5.5)
 # One projected JOIN replaces the raw table dumps; the manual is sent as a cached prefix; the commit tool
 # refuses until run_policy_tolerance_gate has computed the figures, which the committed voucher carries.

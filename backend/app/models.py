@@ -1017,6 +1017,7 @@ Cat5RungId = Literal[
     "unbounded_sonnet_loop",
     "bounded_sonnet_cached_gate",
     "hybrid_haiku_sonnet_governed",
+    "unbounded_haiku_loop",
 ]
 
 
@@ -1156,7 +1157,7 @@ class Cat5AblationArm(Cat5AblationCell):
     label: str
     adds: str
     design: Literal["without", "with"] = "with"
-    model_column: Literal["sonnet", "haiku_first"] = "sonnet"
+    model_column: Literal["sonnet", "haiku"] = "sonnet"
     runnable_in_app: bool = False
     app_rung_id: Cat5RungId | None = None
     tool_set: str
@@ -1173,7 +1174,7 @@ class Cat5AblationArm(Cat5AblationCell):
 
 
 class Cat5AblationPortfolio(BaseModel):
-    """The deck's improvement without and with (replays/cat5_ablation_summary.json): three cells."""
+    """The deck's improvement without and with, on Sonnet and on Haiku (replays/cat5_ablation_summary.json): four cells."""
 
     schema_version: int = 2
     source: str
@@ -1206,6 +1207,7 @@ class Cat5RunRequest(BaseModel):
             "unbounded_sonnet_loop",
             "bounded_sonnet_cached_gate",
             "hybrid_haiku_sonnet_governed",
+            "unbounded_haiku_loop",
         ]
     )
     mode: ExecutionMode = "replay"
@@ -1227,6 +1229,8 @@ class Cat5RunResponse(BaseModel):
     portfolio_scorecard: list[Cat5PortfolioRungRollup] = Field(default_factory=list)
     orchestration_callout: str
     ablation_portfolio: Cat5AblationPortfolio | None = None
+    # Requested rungs with no recorded run to replay yet ("run pending"); live mode always runs every rung.
+    pending_rungs: list[Cat5RungId] = Field(default_factory=list)
 
 
 # --- Category 6: Multi-Agent Swarms & Auto Eng (Checkout CI Swarm + CpO) ---
@@ -1236,6 +1240,7 @@ Cat6RungId = Literal[
     "unisolated_broadcast_swarm",
     "isolated_cached_sonnet_swarm",
     "tiered_hybrid_cpo_swarm",
+    "unisolated_tiered_swarm",
 ]
 
 
@@ -1334,6 +1339,7 @@ class Cat6RunRequest(BaseModel):
             "unisolated_broadcast_swarm",
             "isolated_cached_sonnet_swarm",
             "tiered_hybrid_cpo_swarm",
+            "unisolated_tiered_swarm",
         ]
     )
     mode: ExecutionMode = "replay"
@@ -1353,3 +1359,5 @@ class Cat6RunResponse(BaseModel):
     results: list[Cat6RungResult]
     portfolio_scorecard: list[Cat6PortfolioRungRollup] = Field(default_factory=list)
     swarm_callout: str
+    # Replay only: requested rungs with no recorded run yet ("run pending"); they have no result.
+    pending_rungs: list[Cat6RungId] = Field(default_factory=list)

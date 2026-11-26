@@ -30,6 +30,7 @@ RUNGS: list[Cat6RungId] = [
     "unisolated_broadcast_swarm",
     "isolated_cached_sonnet_swarm",
     "tiered_hybrid_cpo_swarm",
+    "unisolated_tiered_swarm",
 ]
 
 
@@ -51,9 +52,11 @@ def _validate_rung(
     if len(turns) < 5:
         return f"Expected >= 5 agent turns, got {len(turns)}"
 
-    if rid == "unisolated_broadcast_swarm":
+    if rid in ("unisolated_broadcast_swarm", "unisolated_tiered_swarm"):
         if not (res.patched_code or "").strip():
-            return "Rung 1 failed to extract non-empty patched_code"
+            return f"Shared-bus rung `{rid}` failed to extract non-empty patched_code"
+        if rid == "unisolated_tiered_swarm" and (res.haiku_turns < 4 or res.sonnet_turns < 1):
+            return f"Expected >=4 Haiku turns and >=1 Sonnet turn, got H={res.haiku_turns}/S={res.sonnet_turns}"
         return None
 
     t0 = turns[0]

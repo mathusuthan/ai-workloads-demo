@@ -505,8 +505,9 @@ RECORDED_ON_THE_OLDER_NARROW_QUERY = ("inv-01", "inv-02", "inv-03", "inv-04", "i
 
 
 @pytest.mark.skipif(not HAVE_RECORDS, reason="experiment records not present")
-def test_main_file_holds_only_runs_of_the_three_cells_and_only_known_stale_ones() -> None:
-    """Passes before and after the re-run of the older-narrow-query runs (and after the prune removes them)."""
+def test_main_file_holds_only_runs_of_the_four_cells_and_only_known_stale_ones() -> None:
+    """Passes before and after the re-run of the older-narrow-query runs (and after the prune removes them), and before and
+    after the Haiku "without" cell (raw_free_haiku) is recorded: until then its 36 keys are pending."""
     recs = ab.load_jsonl(RUNS)
     assert {r["arm_id"] for r in recs} <= set(ab.ARM_IDS)
     with_arms = ("bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate")
@@ -515,9 +516,12 @@ def test_main_file_holds_only_runs_of_the_three_cells_and_only_known_stale_ones(
     current = [r for r in recs if ab.record_is_current(r)]
     assert len({ab.record_key(r) for r in current}) == len(current)  # one current record per key
     pending = ab.select_pending(ab.plan_matrix(list(ab.ARM_IDS), list(CAT5_ABLATION_DEFAULT_INVOICE_IDS), 3), recs)
-    assert set(pending) <= {(a, p, i) for a in with_arms for p in RECORDED_ON_THE_OLDER_NARROW_QUERY for i in range(3)}
-    assert set(pending) == {ab.record_key(r) for r in stale} - {ab.record_key(r) for r in current}
+    new_cell = [k for k in pending if k[0] == "raw_free_haiku"]  # the Haiku "without" cell: pending until its live run
+    rest = [k for k in pending if k[0] != "raw_free_haiku"]
+    assert set(rest) <= {(a, p, i) for a in with_arms for p in RECORDED_ON_THE_OLDER_NARROW_QUERY for i in range(3)}
+    assert set(rest) == {ab.record_key(r) for r in stale} - {ab.record_key(r) for r in current}
     assert not [k for k in pending if k[0] == "raw_free_sonnet"]
+    assert len(new_cell) <= 3 * len(CAT5_ABLATION_DEFAULT_INVOICE_IDS)
 
 
 @pytest.mark.skipif(not OTHER_RUNS.is_file(), reason="other-lever records not present")

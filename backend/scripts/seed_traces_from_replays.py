@@ -85,8 +85,11 @@ from app.archetypes.cat6_swarms.prompts import (  # noqa: E402
     get_cat6_agent_system_prompt,
 )
 from app.archetypes.cat6_swarms.runner import (  # noqa: E402
+    CAT6_RUNG_IDS,
     CAT6_RUNG_TO_PATTERN,
+    CAT6_SHARED_BUS_RUNGS,
     _build_cat6_result_from_replay,
+    cat6_trace_model_id,
     load_cat6_replays,
     persist_cat6_trace,
 )
@@ -693,6 +696,7 @@ def seed_cat5() -> int:
             "unbounded_sonnet_loop",
             "bounded_sonnet_cached_gate",
             "hybrid_haiku_sonnet_governed",
+            "unbounded_haiku_loop",  # seeded once its runs are recorded (absent from the golden file until then)
         ):
             if rung_id not in rungs_map:
                 continue
@@ -705,7 +709,8 @@ def seed_cat5() -> int:
             )
             fin_model = (
                 "claude-haiku-5-5"
-                if rung_id == "hybrid_haiku_sonnet_governed" and not res.escalated_to_sonnet
+                if (rung_id == "hybrid_haiku_sonnet_governed" and not res.escalated_to_sonnet)
+                or rung_id == "unbounded_haiku_loop"
                 else "claude-sonnet-5-5"
             )
             rollup_fin = rollup_multi_call_finops(
@@ -719,7 +724,7 @@ def seed_cat5() -> int:
             request_params = {
                 "endpoint": "messages.create",
                 "max_step_budget": CAT5_BUDGETS[rung_id],
-                "prefix_cache_enabled": rung_id != "unbounded_sonnet_loop",
+                "prefix_cache_enabled": rung_id not in ("unbounded_sonnet_loop", "unbounded_haiku_loop"),
             }
             meta = {"source_endpoint": source_endpoint, "rung_id": rung_id}
             if from_ablation:
@@ -762,7 +767,8 @@ def seed_cat5() -> int:
 
 
 def seed_cat6() -> int:
-    """Seed Category 6 traces (9 swarm rollups: 3 incidents x 3 rungs) from cat6_golden_replays.json.
+    """Seed Category 6 traces (one swarm rollup per incident x rung in cat6_golden_replays.json: 12 with all
+    four rungs recorded, 9 while rung 4 is pending).
 
     Appends only; never deletes or rewrites other traces. The golden replays are rebuilt from the fair
     rerun (scripts/build_cat6_golden_from_rerun.py), so these seeds supersede older Category 6 seeds.
@@ -777,11 +783,7 @@ def seed_cat6() -> int:
             continue
         rungs_map = cat6_presets_replays[pid].get("rungs") or {}
         run_group = f"seed-cat6-fair-rerun-{pid}" if file_prov else f"seed-cat6-{pid}"
-        for rung_id in (
-            "unisolated_broadcast_swarm",
-            "isolated_cached_sonnet_swarm",
-            "tiered_hybrid_cpo_swarm",
-        ):
+        for rung_id in CAT6_RUNG_IDS:
             if rung_id not in rungs_map:
                 continue
             raw_rung = rungs_map[rung_id]
@@ -790,11 +792,7 @@ def seed_cat6() -> int:
                 preset=preset,
                 raw_rung=raw_rung,
             )
-            fin_model = (
-                "claude-haiku-5-5"
-                if rung_id == "tiered_hybrid_cpo_swarm" and res.haiku_turns >= res.sonnet_turns
-                else "claude-sonnet-5-5"
-            )
+            fin_model = cat6_trace_model_id(res)
             rollup_fin = rollup_multi_call_finops(
                 calls=[t.finops for t in res.agent_turns],
                 total_cost_usd=res.cold_run_cost_usd,
@@ -826,7 +824,7 @@ def seed_cat6() -> int:
                 },
                 request_params={
                     "endpoint": "messages.create",
-                    "prefix_cache_enabled": rung_id != "unisolated_broadcast_swarm",
+                    "prefix_cache_enabled": rung_id not in CAT6_SHARED_BUS_RUNGS,
                     "max_tokens_by_role": cat6_caps_by_role(),
                     "timeout_s": CALL_TIMEOUT_S,
                 },

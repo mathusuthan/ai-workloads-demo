@@ -360,6 +360,9 @@ ESCALATION_FACTOR_KINDS: tuple[str, ...] = (FACTOR_QUANTITY_DOA, FACTOR_AMENDMEN
 HELD_LABEL_TRIGGER1 = "HELD_BY_IRN_BLOCK"  # Trigger 1 CANCELLED_OR_FORGED_IRN
 HELD_LABEL_TRIGGER2 = "HELD_BY_PHANTOM_LINE_BLOCK"  # Trigger 2 PHANTOM_UNRECEIVED_LINE
 HELD_LABEL_TRIGGER3 = "HELD_BY_DUPLICATE_OR_FREEZE_BLOCK"  # Trigger 3 DUPLICATE_OR_SANCTIONED_VENDOR
+# Rungs without the policy tool: the commit is accepted without a prior run_policy_tolerance_gate (rung 1 on Sonnet,
+# rung 4 the same loop on Haiku). Both derive the voucher-id suffix "UNB" from their rung id.
+UNGOVERNED_RUNG_IDS: frozenset[str] = frozenset({"unbounded_sonnet_loop", "unbounded_haiku_loop"})
 HARD_BLOCK_ROUTE = "route to Forensic Tax & Internal Audit review, queue AP-FRAUD-IRN-HOLD (P1 SLA 4h)"
 
 
@@ -889,7 +892,7 @@ class Cat5ErpSession:
         if name == "commit_reconciliation_voucher":
             inv_id = str(tool_input.get("invoice_id") or "")
             po_id = str(tool_input.get("po_id") or "")
-            governed = self.rung_id != "unbounded_sonnet_loop"
+            governed = self.rung_id not in UNGOVERNED_RUNG_IDS
             if governed and inv_id not in self.gate_by_invoice:
                 err = {
                     "status": "REJECTED_BY_GOVERNANCE_GATE",

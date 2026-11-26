@@ -123,12 +123,17 @@ ARMS: dict[str, ArmSpec] = {
         ArmSpec("bundle_gate_haiku_escalate", "governed", True, HAIKU_MODEL_ID, True, True,
                 "hybrid_haiku_sonnet_governed", "hybrid_haiku_sonnet_governed", GATE_TURN_CAP, GATE_STEP_BUDGET, "gate",
                 "GOVERNED_TOOLS; cached; Haiku -> Sonnet on gate escalation; today's hybrid prompt"),
+        # raw_free_sonnet on Haiku: same tools, neutral protocol, no cache, no policy tool, 12-turn cap. With no policy
+        # tool nothing can flag escalation, so the run stays on Haiku. App rung 4 (unbounded_haiku_loop) runs the same.
+        ArmSpec("raw_free_haiku", "raw", False, HAIKU_MODEL_ID, False, False, "neutral",
+                "unbounded_haiku_loop", NEUTRAL_TURN_CAP, NEUTRAL_TURN_CAP, "model",
+                "5 raw SELECT * tools + commit; no cache; Haiku; neutral protocol"),
     )
 }
-# The deck's improvement, without and with (the cells every display shows): the free-choice raw-table loop on
-# Sonnet; the 4-step budget + deterministic policy tool (with one narrow query and the cached policy manual) on
-# Sonnet, and Haiku-first escalating to Sonnet.
-ARM_IDS: tuple[str, ...] = ("raw_free_sonnet", "bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate")
+# The deck's improvement, without and with, on two model set-ups (the 2x2 every display shows): rows without / with
+# (the free-choice raw-table loop; the 4-step budget + deterministic policy tool, with one narrow query and the cached
+# policy manual), columns Sonnet / Haiku (Haiku alone without the lever; Haiku-first escalating to Sonnet with it).
+ARM_IDS: tuple[str, ...] = ("raw_free_sonnet", "raw_free_haiku", "bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate")
 # Single levers tried on the way (valid runs kept in experiments/cat5_ablation/other_levers/, not displayed).
 OTHER_LEVER_ARM_IDS: tuple[str, ...] = ("raw_free_sonnet_cached", "bundle_sonnet_cached", "bundle_haiku_cached")
 
@@ -1003,13 +1008,14 @@ def fixture_table() -> list[dict[str, Any]]:
 
 
 ANALYSIS_NOTES: tuple[str, ...] = (
-    "Without: the free-choice loop over the five raw SELECT * tools on Sonnet (no step budget beyond a 12-turn safety "
-    "cap, no policy tool, no prompt cache). With: a 4-step budget and the deterministic policy tool "
+    "Without: the free-choice loop over the five raw SELECT * tools (no step budget beyond a 12-turn safety cap, no "
+    "policy tool, no prompt cache), on Sonnet and on Haiku; the Haiku version has no escalation path, since only the "
+    "policy tool can flag one. With: a 4-step budget and the deterministic policy tool "
     "(run_policy_tolerance_gate; the commit is refused until it has run), and the with-design also uses one narrow "
     "query (fetch_3way_match_bundle) in place of the raw tables and sends the policy manual as a cached prefix, so the "
     "difference is not the budget and the tool alone.",
-    "The policy manual (SOP-AP-3WAY-2026.v4) is the system text of every version. The without-version runs the "
-    "free-choice protocol; the with-versions run the app's rung-2 and rung-3 prompts unchanged.",
+    "The policy manual (SOP-AP-3WAY-2026.v4) is the system text of every version. Both without-versions run "
+    "the free-choice protocol; the with-versions run the app's rung-2 and rung-3 prompts unchanged.",
     "Escalation (Haiku-first version): the run switches to Sonnet from the next turn when the policy tool sets "
     "escalation_required, which it does only for a multi-factor commercial dispute (two or more of: partial DOA or "
     "short receipt, signed contract amendment, unauthorized line price rise, disallowed freight; manual 6.2). "
@@ -1021,14 +1027,14 @@ ANALYSIS_NOTES: tuple[str, ...] = (
     "_compute_step_cold_warm rule.",
     "Loop rule: a turn cut off by max_tokens ends the run and its tool_use blocks are recorded but not executed; "
     "tool_use blocks in any other turn are executed and the loop continues, whatever the stop_reason.",
-    "Voucher ids in the without-version end in -UNB: it reuses the app session's unbounded_sonnet_loop rung id, from "
-    "which the app derives the voucher-id suffix.",
+    "Voucher ids in the without-versions end in -UNB: they use the app session's unbounded_sonnet_loop and "
+    "unbounded_haiku_loop rung ids, from which the app derives the voucher-id suffix.",
     "Tool precision (the app's metric) credits only the narrow query, the policy tool and the commit, so a raw "
     "SELECT * call is never counted optimal; it is not comparable between the without- and with-versions.",
     "The Anthropic SDK client retries failed or timed-out calls (default max_retries=2) inside one recorded turn; a "
     "retried call is not visible in the records and may have been billed.",
-    "Limits: 12 invoices x 3 runs per version; every version committed exact vouchers on nearly every run, so the "
-    "data separates the versions on cost and turns, not on accuracy.",
+    "Limits: 12 invoices x 3 runs per version; the invoices test simple arithmetic (quantities x rates, a GST split, "
+    "a debit note).",
 )
 
 
@@ -1257,14 +1263,20 @@ GOLDEN_REPEAT_INDEX = 0
 # Fixed, pre-declared mapping version -> app rung for the golden replays (never chosen by outcome).
 APP_RUNG_FOR_ARM: dict[str, str] = {
     "raw_free_sonnet": "unbounded_sonnet_loop",
+    "raw_free_haiku": "unbounded_haiku_loop",
     "bundle_gate_sonnet_cached": "bounded_sonnet_cached_gate",
     "bundle_gate_haiku_escalate": "hybrid_haiku_sonnet_governed",
 }
 ARM_PLAIN: dict[str, dict[str, str]] = {
     "raw_free_sonnet": {
         "design": "without", "model_column": "sonnet",
-        "label": "Without: free-choice loop over raw tables",
+        "label": "Without: free-choice loop over raw tables (Sonnet)",
         "adds": "Sonnet chooses among raw ERP table queries and does the policy arithmetic itself; no step budget, no policy tool",
+    },
+    "raw_free_haiku": {
+        "design": "without", "model_column": "haiku",
+        "label": "Without: free-choice loop over raw tables (Haiku)",
+        "adds": "The same loop on Haiku; with no policy tool nothing flags escalation, so there is no escalation path to Sonnet",
     },
     "bundle_gate_sonnet_cached": {
         "design": "with", "model_column": "sonnet",
@@ -1272,7 +1284,7 @@ ARM_PLAIN: dict[str, dict[str, str]] = {
         "adds": "4-step budget and the deterministic policy tool, with one narrow query and the policy manual cached",
     },
     "bundle_gate_haiku_escalate": {
-        "design": "with", "model_column": "haiku_first",
+        "design": "with", "model_column": "haiku",
         "label": "With: 4-step budget + policy tool (Haiku-first)",
         "adds": "The same on Haiku; Sonnet takes over when the policy tool flags a multi-factor dispute",
     },

@@ -73,9 +73,11 @@ One row per archetype, design and model.
 | 4 | Questions | With | Haiku picks, Sonnet answers, 21 documents | 24.97 | 24.06 | Answers with no serious error | 22 | 24 |
 | 5 | Invoices | Without | Sonnet 5.5 | 153.41 | 153.41 | Exact vouchers | 36 | 36 |
 | 5 | Invoices | With | Sonnet 5.5 | 51.22 | 30.49 | Exact vouchers | 36 | 36 |
+| 5 | Invoices | Without | Haiku 5.5 | 7.89 | 7.89 | Exact vouchers | 36 | 36 |
 | 5 | Invoices | With | Haiku 5.5 first, Sonnet on escalation | 10.42 | 5.94 | Exact vouchers | 36 | 36 |
 | 6 | Incident runs | Without | Sonnet 5.5 on every turn | 469.02 | 469.02 | Verified fixes | 15 | 15 |
 | 6 | Incident runs | With | Sonnet 5.5 on every turn | 99.91 | 77.50 | Verified fixes | 15 | 15 |
+| 6 | Incident runs | Without | Haiku 5.5 agents, Sonnet patch author | 124.61 | 124.61 | Verified fixes | 15 | 15 |
 | 6 | Incident runs | With | Haiku 5.5 agents, Sonnet patch author | 56.20 | 32.71 | Verified fixes | 15 | 15 |
 
 **Cost change from without to with, same model**
@@ -90,7 +92,9 @@ One row per archetype, design and model.
 | 4 | Document Q&A | 7 documents | −50.0 | −50.6 |
 | 4 | Document Q&A | 21 documents | −78.7 | −79.5 |
 | 5 | Orchestration | Sonnet 5.5 | −66.6 | −80.1 |
+| 5 | Orchestration | Haiku 5.5 (Haiku first with the improvement) | +32.1 | −24.7 |
 | 6 | Swarms | Sonnet 5.5 on every turn | −78.7 | −83.5 |
+| 6 | Swarms | Haiku 5.5 agents, Sonnet patch author | −54.9 | −73.8 |
 
 **Cost change from the larger to the smaller model, on the "with" design**
 
@@ -100,6 +104,15 @@ One row per archetype, design and model.
 | 2 | Drafting | Sonnet 5.5 | Haiku 5.5 | −94.9 | Accuracy 4.17; 0 serious errors in 12 drafts | Accuracy 3.83; 3 serious errors in 12 drafts |
 | 5 | Orchestration | Sonnet 5.5 | Haiku 5.5 first | −79.7 | 36 of 36 vouchers | 36 of 36 vouchers |
 | 6 | Swarms | Sonnet 5.5 on every turn | Haiku 5.5 agents, Sonnet patch author | −43.7 | 15 of 15 fixes | 15 of 15 fixes |
+
+**Cost change from the larger to the smaller model, on the "without" design**
+
+| # | Archetype | From | To | Cost change (%) | Quality on the larger-model configuration | Quality on the smaller-model configuration |
+|---|---|---|---|---:|---|---|
+| 1 | Classification | Sonnet 5.5 | Haiku 5.5 | −95.8 | 69 of 126 fields | 69 of 126 fields |
+| 2 | Drafting | Sonnet 5.5 | Haiku 5.5 | −94.6 | Accuracy 3.92; 5 serious errors in 12 drafts | Accuracy 2.92; 22 serious errors in 12 drafts |
+| 5 | Orchestration | Sonnet 5.5 | Haiku 5.5 | −94.9 | 36 of 36 vouchers | 36 of 36 vouchers |
+| 6 | Swarms | Sonnet 5.5 on every turn | Haiku 5.5 agents, Sonnet patch author | −73.4 | 15 of 15 fixes | 15 of 15 fixes |
 
 ### The scorecard
 
@@ -126,12 +139,13 @@ All six of the deck's improvement rows are supported or partly supported. Each a
 
 ### Findings that cut across archetypes
 
-- **Every "with" design cost less than its "without".** On the same model the change ranged from −47% (Archetype 3) to −87% (Archetype 1).
+- **With one exception, every "with" configuration cost less than "without" on the same model.** The change ranged from −47% (Archetype 3) to −87% (Archetype 1). The exception is Archetype 5 on Haiku from a cold start: $10.42 per 1,000 invoices with the improvement against $7.89 without. With a warm cache it was $5.94.
 - **The deck's "60–80%" rule for Archetypes 1 and 2.** Measured on the same model: −85% and −87% for Archetype 1, −53% and −56% for Archetype 2. With the change of model as well, Archetype 1 reached −99.4%.
 - **Where the task has a checkable right answer, the "with" design scored the same or higher.** Archetype 1: 126 and 120 fields of 126 against 69. Archetype 5: 36 of 36 vouchers in every configuration. Archetype 6: 15 of 15 fixes in every configuration.
 - **In three archetypes a quality measure was lower with the improvement.** Archetype 2: supporting facts 94 of 120 against 120. Archetype 3: recall of earlier details 2 of 36 against 36. Archetype 4: completeness graded 4.54 against 4.83 and 4.75.
 - **In two of those, another measure was higher.** Archetype 2: accuracy grades, and 0 and 3 serious errors against 5 and 22. Archetype 4: correctness 4.75 and 4.54 against 4.50.
-- **A smaller model on the same design** cost 44% to 95% less. Scores were equal in Archetypes 5 and 6, six fields of 126 lower in Archetype 1, and lower on accuracy grade in Archetype 2.
+- **A smaller model on the same design** cost 44% to 96% less. Scores were equal in Archetypes 5 and 6, six fields of 126 lower in Archetype 1 with the schema, and lower on accuracy grade in Archetype 2.
+- **In Archetypes 5 and 6, changing the model without changing the design gave a large part of the saving.** Archetype 5: −95% from the model alone, −67% from the design on Sonnet. Archetype 6: −73% from the model alone, −79% from the design on Sonnet.
 - **Two archetypes hit a ceiling.** In Archetypes 5 and 6 every configuration scored 100%, so these tasks cannot show a quality difference. Harder tasks might.
 - **The deck's token bands describe context size, not the bill.** A ten-turn session peaked at 22,626 tokens of context and billed 163,020 prompt tokens, because every turn re-sends the history.
 - **Output dominates the cost of the cheap archetypes and input the cost of the expensive ones** (table below).
@@ -169,7 +183,7 @@ The deck orders the archetypes 1 < 2 < 3 < 4 < 5 << 6. Measured, 1 < 2 < {3, 4, 
 - Samples are small: three runs per configuration, five for Archetype 6.
 - Archetypes 2 and 4 are graded by one model acting as a blind grader, in one pass, with its serious findings checked against the sources.
 - Each "with" design changes several things at once, so its saving cannot be split between them from these runs.
-- Not every design was run on both models: the "without" designs of Archetypes 5 and 6 and both designs of Archetypes 3 and 4 were run with Sonnet as the main model only.
+- Archetypes 3 and 4 were run with Sonnet as the main model only.
 - All data is synthetic and the corpus sizes are at the low end of the deck's bands.
 
 ---
@@ -822,7 +836,7 @@ Full results: `analysis/cat4_quality_rerun.md`. Records: `backend/experiments/ca
 
 ## Part 5: Autonomous process orchestration
 
-**One-line result:** with a step budget and a deterministic policy tool, reconciling an invoice cost 67% less on Sonnet and 93% less when Haiku ran first and Sonnet took over only on multi-factor disputes. All 108 vouchers were exact in all three configurations.
+**One-line result:** with a step budget and a deterministic policy tool, reconciling an invoice cost 67% less on Sonnet. On Haiku the loop without the improvement already cost 95% less than on Sonnet ($7.89 per 1,000 invoices); with the improvement it cost $10.42 from a cold start and $5.94 with a warm cache. All 144 vouchers were exact in all four configurations.
 
 ### The anti-pattern
 
@@ -866,13 +880,12 @@ Twelve invoices, each with a voucher worked out by hand from the manual:
 | inv-11 | Phantom line that was never received | Hard stop | Block | No |
 | inv-12 | Short receipt, unauthorised price rise, rejected units, freight over cap | Dispute | Approve in part with debit note | Yes |
 
-Three configurations, each run three times on every invoice: 108 runs.
+Four configurations, each run three times on every invoice: 144 runs.
 
 - **Without, on Sonnet 5.5.** Five raw-table lookups available, the model chooses which to call, no cache, no policy tool, a 12-turn safety cap.
+- **Without, on Haiku 5.5.** The same loop on Haiku. With no policy tool, nothing can flag an escalation, so every run stays on Haiku.
 - **With, on Sonnet 5.5.**
 - **With, Haiku 5.5 first.** Sonnet takes over when the policy tool flags a multi-factor dispute.
-
-The "without" design was not run with Haiku first.
 
 ### The runs
 
@@ -882,9 +895,10 @@ The "without" design was not run with Haiku first.
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | Without | Sonnet 5.5 | 36 | 153.41 | 153.41 | 3.86 | 0 | 0 | 68,266 | 0 | 0 | 1,688 |
 | With | Sonnet 5.5 | 36 | 51.22 | 30.49 | 4.00 | 0 | 0 | 7,137 | 8,637 | 25,911 | 1,276 |
+| Without | Haiku 5.5 | 36 | 7.89 | 7.89 | 3.92 | 0 | 0 | 68,862 | 0 | 0 | 2,003 |
 | With | Haiku 5.5 first | 36 | 10.42 | 5.94 | 4.00 | 0 | 6 | 7,307 | 10,142 | 24,630 | 1,352 |
 
-Change from without: −66.6% cold and −80.1% warm on Sonnet; −93.2% cold and −96.1% warm with Haiku first. Token counts are means per invoice.
+Change from without to with on the same model: −66.6% cold and −80.1% warm on Sonnet; +32.1% cold and −24.7% warm on Haiku. From Sonnet to Haiku on the same design: −94.9% without; −79.7% cold and −80.5% warm with. Token counts are means per invoice.
 
 **By invoice type**
 
@@ -892,12 +906,15 @@ Change from without: −66.6% cold and −80.1% warm on Sonnet; −93.2% cold an
 |---|---|---|---:|---:|---:|---:|---:|
 | Without | Sonnet 5.5 | Routine | 15 | 15 | 159.55 | 159.55 | 0 |
 | With | Sonnet 5.5 | Routine | 15 | 15 | 50.33 | 29.61 | 0 |
+| Without | Haiku 5.5 | Routine | 15 | 15 | 8.03 | 8.03 | 0 |
 | With | Haiku 5.5 first | Routine | 15 | 15 | 2.72 | 1.73 | 0 |
 | Without | Sonnet 5.5 | Dispute | 15 | 15 | 161.06 | 161.06 | 0 |
 | With | Sonnet 5.5 | Dispute | 15 | 15 | 52.60 | 31.87 | 0 |
+| Without | Haiku 5.5 | Dispute | 15 | 15 | 8.24 | 8.24 | 0 |
 | With | Haiku 5.5 first | Dispute | 15 | 15 | 21.19 | 11.85 | 6 |
 | Without | Sonnet 5.5 | Hard stop | 6 | 6 | 118.97 | 118.97 | 0 |
 | With | Sonnet 5.5 | Hard stop | 6 | 6 | 50.00 | 29.27 | 0 |
+| Without | Haiku 5.5 | Hard stop | 6 | 6 | 6.64 | 6.64 | 0 |
 | With | Haiku 5.5 first | Hard stop | 6 | 6 | 2.73 | 1.73 | 0 |
 
 **By invoice** (three runs per row)
@@ -928,6 +945,18 @@ Change from without: −66.6% cold and −80.1% warm on Sonnet; −93.2% cold an
 | With | Sonnet 5.5 | inv-10 | 3 | 50.34 | 29.61 | 0 |
 | With | Sonnet 5.5 | inv-11 | 3 | 50.66 | 29.93 | 0 |
 | With | Sonnet 5.5 | inv-12 | 3 | 56.28 | 35.54 | 0 |
+| Without | Haiku 5.5 | inv-01 | 3 | 8.36 | 8.36 | 0 |
+| Without | Haiku 5.5 | inv-02 | 3 | 8.61 | 8.61 | 0 |
+| Without | Haiku 5.5 | inv-03 | 3 | 6.54 | 6.54 | 0 |
+| Without | Haiku 5.5 | inv-04 | 3 | 8.36 | 8.36 | 0 |
+| Without | Haiku 5.5 | inv-05 | 3 | 7.56 | 7.56 | 0 |
+| Without | Haiku 5.5 | inv-06 | 3 | 7.67 | 7.67 | 0 |
+| Without | Haiku 5.5 | inv-07 | 3 | 8.62 | 8.62 | 0 |
+| Without | Haiku 5.5 | inv-08 | 3 | 7.49 | 7.49 | 0 |
+| Without | Haiku 5.5 | inv-09 | 3 | 7.57 | 7.57 | 0 |
+| Without | Haiku 5.5 | inv-10 | 3 | 8.29 | 8.29 | 0 |
+| Without | Haiku 5.5 | inv-11 | 3 | 6.74 | 6.74 | 0 |
+| Without | Haiku 5.5 | inv-12 | 3 | 8.83 | 8.83 | 0 |
 | With | Haiku 5.5 first | inv-01 | 3 | 2.73 | 1.73 | 0 |
 | With | Haiku 5.5 first | inv-02 | 3 | 47.76 | 25.90 | 3 |
 | With | Haiku 5.5 first | inv-03 | 3 | 2.73 | 1.73 | 0 |
@@ -945,19 +974,21 @@ Change from without: −66.6% cold and −80.1% warm on Sonnet; −93.2% cold an
 
 | Claim | Measured | Verdict |
 |---|---|---|
-| Input 25k–150k+ tokens per task | 44k–77k without; 41k–44k with | Supported |
-| Output 1,500–8,000 tokens per task | 1,050–2,071; 32 of 108 runs in range | Partly |
-| Max-step budgets, deterministic guardrails and small-model routing | Step budget: no run reached it. With against without on Sonnet: cost −67%, 36 of 36 exact in both. Haiku first against Sonnet: cost −80%, 36 of 36 exact in both | Partly |
+| Input 25k–150k+ tokens per task | 42k–77k without; 41k–44k with | Supported |
+| Output 1,500–8,000 tokens per task | 1,050–2,709; 67 of 144 runs in range | Partly |
+| Max-step budgets, deterministic guardrails and small-model routing | Step budget: no run reached it. With against without: cost −67% on Sonnet; on Haiku +32% from a cold start and −25% warm. Haiku against Sonnet: cost −95% without and −80% with. 36 of 36 exact in all four configurations | Partly |
 | …without losing accuracy (our addition; the deck does not claim it) | 36 of 36 exact vouchers in every configuration, so a loss could not be detected on these invoices | Partly |
 
 ### Points for the post
 
-- **Cost.** $153.41 per 1,000 invoices without; $51.22 with, on Sonnet; $10.42 with, Haiku first.
+- **Cost.** Per 1,000 invoices: $153.41 without and $51.22 with, on Sonnet; $7.89 without and $10.42 with, on Haiku.
 - **Accuracy.** 36 of 36 exact vouchers in every configuration. These invoices do not separate the configurations on accuracy.
-- **Where the tokens went.** Without the improvement a run sent 68,266 uncached input tokens. With it a run sent about 7,200 uncached and read about 25,000 from cache.
-- **The step budget did not come into play.** The "with" runs took exactly four turns. The "without" runs, with only a 12-turn safety cap, took 3.86 on average.
-- **The policy tool.** In all 72 "with" runs the committed voucher was the tool's figure, and the tool's figure equals the hand-derived answer on all 12 invoices. In the 36 "without" runs the model's own arithmetic also matched.
-- **Routing.** With Haiku first, ten invoices completed on Haiku at about $2.72 per 1,000. The two multi-factor disputes switched to Sonnet and cost $47.76 and $50.01 per 1,000, close to the Sonnet configuration's $54.47 and $56.28.
+- **Model size alone.** Moving the unchanged "without" loop from Sonnet to Haiku cut cost by 95%, with 36 of 36 vouchers exact on both.
+- **On Haiku the improvement paid off only with a warm cache.** From a cold start the "with" design cost $10.42 against $7.89; warm, $5.94. Two things account for the cold figure: each run writes the cached manual, and the two multi-factor disputes switch to Sonnet.
+- **Where the tokens went.** Without the improvement a run sent about 68,500 uncached input tokens. With it a run sent about 7,200 uncached and read about 25,000 from cache.
+- **The step budget did not come into play.** The "with" runs took exactly four turns. The "without" runs, with only a 12-turn safety cap, took 3.86 on average on Sonnet and 3.92 on Haiku.
+- **The policy tool.** In all 72 "with" runs the committed voucher was the tool's figure, and the tool's figure equals the hand-derived answer on all 12 invoices. In the 72 "without" runs the model's own arithmetic also matched.
+- **Routing.** With Haiku first, ten invoices completed on Haiku at about $2.72 per 1,000, against $6.54 to $8.62 for the same invoices without the improvement on Haiku. The two multi-factor disputes switched to Sonnet and cost $47.76 and $50.01 per 1,000, close to the Sonnet configuration's $54.47 and $56.28. Without the improvement, Haiku completed those two invoices at $8.61 and $8.83, with all six vouchers exact.
 - **The mix of invoices sets the Haiku-first cost.** Here 6 of 36 runs escalated. A portfolio with more multi-factor disputes would sit nearer the Sonnet figure.
 - **A fleet sharing the cached manual** would sit between the cold and warm columns: $30.49 and $5.94 per 1,000 when warm.
 - **The "with" design is a bundle.** It changes the query, the caching, the step limit and the tool at once. Runs that add those one at a time are in `analysis/experiments_log.md`.
@@ -967,7 +998,6 @@ Change from without: −66.6% cold and −80.1% warm on Sonnet; −93.2% cold an
 - Twelve invoices, three runs per configuration.
 - Every configuration scored 36 of 36, so a difference in accuracy cannot be detected. Thirty-six of thirty-six leaves a 95% interval of 90–100%.
 - The invoices test quantities, rates, a tax split and a debit note. Harder reconciliations were not run.
-- The "without" design was run on Sonnet only.
 - Sonnet ran with thinking between tool calls; Haiku ran with thinking off, as the app configures them.
 - Every cached run started from an empty cache.
 
@@ -977,7 +1007,7 @@ Full results: `analysis/cat5_ablation.md`. Records: `backend/experiments/cat5_ab
 
 ## Part 6: Multi-agent swarms and automated engineering
 
-**One-line result:** isolating the agents and caching the shared prefix cut the cost of a verified fix from $0.469 to $0.100 with Sonnet on every turn, and to $0.056 with Haiku agents and a Sonnet patch author. Every configuration fixed 15 of 15.
+**One-line result:** isolating the agents and caching the shared prefix cut the cost of a verified fix from $0.469 to $0.100 with Sonnet on every turn, and from $0.125 to $0.056 with Haiku agents and a Sonnet patch author. Every configuration fixed 15 of 15.
 
 **Read this result with one limit in mind: harder tasks might give a different result.** Every configuration solved every task here, and the tasks were small, single-module fixes. On harder work (changes across several files, longer chains of agent turns, larger codebases) the configurations could differ in how often they get the fix right, and the cost ranking could change too. That was not tested.
 
@@ -1012,13 +1042,12 @@ Three incidents, each a single-file fix:
 
 Every patch is judged by a deterministic sandbox: 4 unit checks, 4 adversarial checks and 2 static code checks, 10 per incident. A run is a verified fix only if the patch passes all 10. Every configuration gets one retry if the first patch does not pass.
 
-Three configurations, each run five times on each incident: 45 runs. All three use the same role instructions and the same output limits.
+Four configurations, each run five times on each incident: 60 runs. All four use the same role instructions and the same output limits.
 
 - **Without, Sonnet 5.5 on every turn.** The shared thread, nothing cached.
+- **Without, Haiku 5.5 agents and a Sonnet 5.5 patch author.** The same shared thread, with Haiku on four of the five roles.
 - **With, Sonnet 5.5 on every turn.** Isolated threads and the cached repository guide.
 - **With, Haiku 5.5 agents and a Sonnet 5.5 patch author.** The same, with Haiku on four of the five roles.
-
-The "without" design was not run with Haiku agents.
 
 ### The runs
 
@@ -1028,9 +1057,10 @@ The "without" design was not run with Haiku agents.
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
 | Without | Sonnet 5.5 on every turn | 15 | 150 | 0 | 0.4690 | 0.4690 | 469.02 | 469.02 | 30.8 |
 | With | Sonnet 5.5 on every turn | 15 | 150 | 0 | 0.0999 | 0.0775 | 99.91 | 77.50 | 38.8 |
+| Without | Haiku 5.5 agents, Sonnet 5.5 patch author | 15 | 150 | 0 | 0.1246 | 0.1246 | 124.61 | 124.61 | 25.6 |
 | With | Haiku 5.5 agents, Sonnet 5.5 patch author | 15 | 150 | 0 | 0.0562 | 0.0327 | 56.20 | 32.71 | 28.4 |
 
-Change from without: −78.7% cold and −83.5% warm with Sonnet on every turn; −88.0% cold and −93.0% warm with Haiku agents.
+Change from without to with on the same models: −78.7% cold and −83.5% warm with Sonnet on every turn; −54.9% cold and −73.8% warm with Haiku agents. From Sonnet on every turn to Haiku agents on the same design: −73.4% without; −43.7% cold and −57.8% warm with.
 
 **Tokens per run** (mean)
 
@@ -1038,6 +1068,7 @@ Change from without: −78.7% cold and −83.5% warm with Sonnet on every turn; 
 |---|---|---:|---:|---:|---:|---:|
 | Without | Sonnet 5.5 on every turn | 214,112 | 0 | 0 | 4,079 | 218,191 |
 | With | Sonnet 5.5 on every turn | 9,792 | 9,337 | 37,350 | 5,325 | 61,804 |
+| Without | Haiku 5.5 agents, Sonnet 5.5 patch author | 214,585 | 0 | 0 | 4,416 | 219,001 |
 | With | Haiku 5.5 agents, Sonnet 5.5 patch author | 10,095 | 18,675 | 28,013 | 5,408 | 62,191 |
 
 **By incident** (five runs per row)
@@ -1050,6 +1081,9 @@ Change from without: −78.7% cold and −83.5% warm with Sonnet on every turn; 
 | With | Sonnet 5.5 on every turn | inc-01 | 5 | 99.63 | 77.22 |
 | With | Sonnet 5.5 on every turn | inc-02 | 5 | 99.68 | 77.27 |
 | With | Sonnet 5.5 on every turn | inc-03 | 5 | 100.43 | 78.02 |
+| Without | Haiku 5.5 agents, Sonnet 5.5 patch author | inc-01 | 5 | 125.44 | 125.44 |
+| Without | Haiku 5.5 agents, Sonnet 5.5 patch author | inc-02 | 5 | 124.37 | 124.37 |
+| Without | Haiku 5.5 agents, Sonnet 5.5 patch author | inc-03 | 5 | 124.03 | 124.03 |
 | With | Haiku 5.5 agents, Sonnet 5.5 patch author | inc-01 | 5 | 53.63 | 30.14 |
 | With | Haiku 5.5 agents, Sonnet 5.5 patch author | inc-02 | 5 | 55.57 | 32.08 |
 | With | Haiku 5.5 agents, Sonnet 5.5 patch author | inc-03 | 5 | 59.40 | 35.92 |
@@ -1058,20 +1092,21 @@ Change from without: −78.7% cold and −83.5% warm with Sonnet on every turn; 
 
 | Claim | Measured | Verdict |
 |---|---|---|
-| Input 100k–1M+ tokens per run | 213k–216k without; 56k–58k with | Partly |
-| Output 10k–50k+ tokens per run | 3.9k–6.6k; 0 of 45 runs in range | Not supported |
-| 1.5M–10M+ tokens per developer per day | Not measurable from 45 single runs | Not testable |
-| Isolate sub-agent contexts, cache the shared repository prefix, measure cost per verified outcome | Cost per verified fix $0.469 without; $0.100 and $0.056 with. Every configuration verified 15 of 15, so the outcome side of the measure was not exercised | Partly |
+| Input 100k–1M+ tokens per run | 213k–217k without; 56k–58k with | Partly |
+| Output 10k–50k+ tokens per run | 3.8k–6.6k; 0 of 60 runs in range | Not supported |
+| 1.5M–10M+ tokens per developer per day | Not measurable from 60 single runs | Not testable |
+| Isolate sub-agent contexts, cache the shared repository prefix, measure cost per verified outcome | Cost per verified fix $0.469 and $0.125 without; $0.100 and $0.056 with. Every configuration verified 15 of 15, so the outcome side of the measure was not exercised | Partly |
 | …without losing verified fixes (our addition; the deck does not claim it) | 15 of 15 in every configuration, so a loss could not be detected on these incidents | Partly |
 
 ### Points for the post
 
-- **Cost per verified fix.** $0.469 without; $0.100 with, Sonnet on every turn; $0.056 with Haiku agents. With a warm cache, $0.078 and $0.033.
-- **Correctness.** Every configuration fixed 15 of 15 and passed 150 of 150 sandbox checks on the first patch. On tasks this size the shared thread cost more and produced patches that passed the same checks.
-- **Where the tokens went.** The shared thread sent 214,112 uncached input tokens per run. Isolated agents sent 9,792 uncached and read 37,350 from cache.
+- **Cost per verified fix.** With Sonnet on every turn: $0.469 without, $0.100 with. With Haiku agents and a Sonnet patch author: $0.125 without, $0.056 with. With a warm cache the "with" figures are $0.078 and $0.033.
+- **Design and model each account for part of the saving.** On Sonnet the design cut cost by 79%. On the unchanged shared thread, Haiku agents cut it by 73%. Both together: 88%.
+- **Correctness.** Every configuration fixed 15 of 15 and passed 150 of 150 sandbox checks on the first patch, including the shared thread with Haiku agents. On tasks this size the shared thread cost more and produced patches that passed the same checks.
+- **Where the tokens went.** The shared thread sent about 214,000 uncached input tokens per run. Isolated agents sent about 10,000 uncached and read 28,000 to 37,000 from cache.
 - **Model tiering and the cache.** A run with two models writes the cached prefix once per model (18,675 cache-write tokens against 9,337). Haiku agents cost 44% less than Sonnet on every turn from a cold start, and 58% less when warm.
-- **Time.** Model time per run was 30.8 s without, 38.8 s with Sonnet on every turn, and 28.4 s with Haiku agents.
-- **The retry was never used.** In all 45 runs the first patch passed, so the check-and-retry step added no cost and its benefit was not measured.
+- **Time.** Model time per run with Sonnet on every turn was 30.8 s without and 38.8 s with; with Haiku agents, 25.6 s without and 28.4 s with.
+- **The retry was never used.** In all 60 runs the first patch passed, so the check-and-retry step added no cost and its benefit was not measured.
 - **When everything passes, cost per verified fix equals cost per run.** The measure separates configurations only when their pass rates differ.
 - **The daily-volume claim in context.** One shared-thread run moves about 218k tokens, so the deck's 1.5M–10M tokens per developer per day equals roughly 7–46 such runs. For the isolated configurations it is roughly 24–160 runs.
 
@@ -1079,7 +1114,6 @@ Change from without: −78.7% cold and −83.5% warm with Sonnet on every turn; 
 
 - **Ceiling effect.** Every configuration scored 100%, so these runs cannot show a difference in correctness. Fifteen of fifteen leaves a 95% interval of 80–100%.
 - **The tasks are small, and harder ones might perform differently.** Each is a fix to one small module, made in five turns. Multi-file work over more turns was not run, so the finding that the configurations are equally correct should not be carried over to harder tasks.
-- **The "without" design was run with Sonnet on every turn only.**
 - **Every run started from an empty cache.** A fleet sharing one cached prefix would sit between the cold and warm columns.
 - The per-developer daily volume cannot be checked from single runs.
 

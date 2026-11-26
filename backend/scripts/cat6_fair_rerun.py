@@ -3,6 +3,10 @@
 Usage (from backend/):
     .venv/bin/python scripts/cat6_fair_rerun.py --dry-run
     .venv/bin/python scripts/cat6_fair_rerun.py --repeats 5 --max-usd 40
+    .venv/bin/python scripts/cat6_fair_rerun.py --arms shared_bus_tiered_gate --dry-run
+
+`--max-usd` caps the billed total including the records already in the output file. The dry run prints a
+typical / worst-case cost estimate for the pending runs from recorded tokens.
 
 Append-only and resumable: a (arm, preset, repeat) key that already has an `ok` record is skipped;
 `error` records stay in the file and their key is retried. Sandbox-failed runs are `ok` outcomes and
@@ -33,10 +37,12 @@ from app.archetypes.cat6_swarms.fair_rerun import (  # noqa: E402
     ARM_IDS,
     BudgetGuard,
     RunKey,
+    estimate_matrix,
     execute_run,
     plan_matrix,
     select_pending,
 )
+from app.core.pricing import HAIKU_LONG_PROMPT_THRESHOLD_TOKENS  # noqa: E402
 from app.data.cat6_fixtures import CAT6_PRESETS  # noqa: E402
 
 DEFAULT_OUT = BACKEND_DIR / "experiments" / "cat6_fair_rerun" / "runs.jsonl"
@@ -85,6 +91,43 @@ def _run_line(record: dict[str, Any], cost: float) -> str:
     return line
 
 
+def _print_estimate(pending: list[RunKey], existing: list[dict[str, Any]], guard: BudgetGuard) -> None:
+    try:
+        est = estimate_matrix(pending, existing)
+    except ValueError as exc:
+        print(f"Cost estimate unavailable: {exc}")
+        return
+    print("Cost estimate for the pending runs (from recorded tokens; prices in app/core/pricing.py):")
+    print(
+        f"  {'arm':<24} {'runs':>4} {'calibrated on':<24} {'typical $/run':>13} {'typical total':>13} "
+        f"{'worst $/run':>11} {'worst total':>11}"
+    )
+    for a, s in est["per_arm"].items():
+        print(
+            f"  {a:<24} {s['runs']:>4} {s['reference_arm_id']:<24} {s['typical_usd_per_run']:>13.4f} "
+            f"{s['typical_usd']:>13.2f} {s['worst_case_usd_per_run']:>11.4f} {s['worst_case_usd']:>11.2f}"
+        )
+    for a, s in est["per_arm"].items():
+        ty, wo = s["max_haiku_prompt_typical"], s["max_haiku_prompt_worst"]
+        if ty["role"] or wo["role"]:
+            print(
+                f"  {a}: largest Haiku prompt {ty['prompt_tokens']:,} tok ({ty['role']}) in the calibration runs, "
+                f"{wo['prompt_tokens']:,} tok ({wo['role']}) in the worst case; Haiku calls over "
+                f"{HAIKU_LONG_PROMPT_THRESHOLD_TOKENS:,} prompt tokens (long-prompt rate): "
+                f"{s['haiku_long_prompt_calls_typical']} typical, {s['haiku_long_prompt_calls_worst']} worst case."
+            )
+    print(
+        f"  TOTAL typical ${est['total_typical_usd']:.2f}; worst case ${est['total_worst_case_usd']:.2f}. "
+        f"--max-usd counts the billed spend already in the output file (${guard.spent_usd:.4f}): for a new-spend "
+        f"allowance of $X pass --max-usd {guard.spent_usd:.2f}+X."
+    )
+    print(
+        "Typical = the calibration arm's recorded runs on each incident, re-priced at this arm's model per role "
+        "(output lengths as recorded on the calibration arm). Worst = one gate retry, every output at its cap, "
+        "every prompt at its largest recorded size plus every output that could precede it."
+    )
+
+
 async def run_matrix(args: argparse.Namespace) -> int:
     presets = {p["id"]: p for p in CAT6_PRESETS}
     arm_ids = _csv(args.arms) if args.arms else list(ARM_IDS)
@@ -110,6 +153,8 @@ async def run_matrix(args: argparse.Namespace) -> int:
     if args.dry_run:
         for i, (a, p, r) in enumerate(pending, start=1):
             print(f"  {i:>3}. {a:<24} {p} repeat={r}")
+        if pending:
+            _print_estimate(pending, existing, guard)
         print("Dry run: no API calls made.")
         return 0
 

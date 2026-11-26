@@ -3,8 +3,8 @@
 Step 1 — move: records of designs that are not displayed (`OTHER_DESIGN_ARMS`, the shared bus with the
 "exhaustive commentary" instructions) are appended, line for line, to `experiments/cat6_fair_rerun/other_designs/
 runs.jsonl` (skipping run ids already there) and then removed from the main file. The other-designs file is
-written before the main file, so a record is never in neither. The main file keeps the three displayed cells:
-`shared_bus_matched_gate`, `isolated_cached_gate`, `tiered_gate`.
+written before the main file, so a record is never in neither. The main file keeps the four displayed cells:
+`shared_bus_matched_gate`, `isolated_cached_gate`, `tiered_gate`, `shared_bus_tiered_gate`.
 
 Step 2 — verdicts: for every record in both files, the sandbox report of `first_attempt` and `final` is
 replaced by what the CURRENT `evaluate_patch_in_sandbox` returns on the recorded patch (`patched_code_first` /

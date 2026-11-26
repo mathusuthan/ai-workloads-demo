@@ -613,7 +613,7 @@ def test_cat5_run_replay_reproduces_recorded_runs(
         assert resp.status_code == 200
         data = resp.json()
         assert data["mode_used"] == "replay"
-        assert len(data["portfolio_scorecard"]) == 3
+        assert len(data["portfolio_scorecard"]) == len(golden[pid]["rungs"]) == 4
 
         by_rung = {r["rung_id"]: r for r in data["results"]}
         for rid, rec in golden[pid]["rungs"].items():
@@ -622,10 +622,13 @@ def test_cat5_run_replay_reproduces_recorded_runs(
             assert [s["stop_reason"] for s in res["steps"]] == [s["stop_reason"] for s in rec["steps"]]
             assert res["total_uncached_input_tokens"] == sum(s["input_tokens"] for s in rec["steps"])
             assert res["total_cache_read_tokens"] == sum(s["cache_read_tokens"] for s in rec["steps"])
-            assert res["steps_used"] <= res["max_step_budget"] + (0 if rid == "unbounded_sonnet_loop" else 1)
+            uncached_rungs = ("unbounded_sonnet_loop", "unbounded_haiku_loop")  # the two "without" rungs: raw tables, no cache
+            assert res["steps_used"] <= res["max_step_budget"] + (0 if rid in uncached_rungs else 1)
             assert res["evaluation"] is not None and (res["committed_voucher"] is None) == (rec["committed_voucher"] is None)
-            if rid != "unbounded_sonnet_loop":
+            if rid not in uncached_rungs:
                 assert res["total_cache_creation_tokens"] + res["total_cache_read_tokens"] > 0  # cached prefix engaged
+            else:
+                assert res["total_cache_creation_tokens"] + res["total_cache_read_tokens"] == 0
 
         hybrid = by_rung["hybrid_haiku_sonnet_governed"]
         gate_flagged = any(
@@ -642,7 +645,7 @@ def test_cat5_run_replay_reproduces_recorded_runs(
     )
     assert cat5_dir.is_dir()
     trace_files = list(cat5_dir.rglob("*.json"))
-    assert len(trace_files) == 9
+    assert len(trace_files) == 12  # 3 invoices x 4 rungs
     for tf in trace_files:
         raw = tf.read_text(encoding="utf-8")
         assert "sk-ant-" not in raw
@@ -700,7 +703,10 @@ def test_cat6_run_replay_proves_context_isolation_prefix_caching_and_cpo(
         assert resp.status_code == 200
         data = resp.json()
         assert data["mode_used"] == "replay"
-        assert len(data["portfolio_scorecard"]) == 3
+        # 3 rungs while rung 4 (shared bus, Haiku agents + Sonnet patch author) is pending, 4 once it is recorded
+        recorded_rungs = len(data["results"])
+        assert recorded_rungs + len(data["pending_rungs"]) == 4
+        assert len(data["portfolio_scorecard"]) == recorded_rungs
 
         by_rung = {r["rung_id"]: r for r in data["results"]}
         naive = by_rung["unisolated_broadcast_swarm"]
@@ -731,7 +737,7 @@ def test_cat6_run_replay_proves_context_isolation_prefix_caching_and_cpo(
     )
     assert cat6_dir.is_dir()
     trace_files = list(cat6_dir.rglob("*.json"))
-    assert len(trace_files) == 9
+    assert len(trace_files) == 3 * recorded_rungs
     for tf in trace_files:
         raw = tf.read_text(encoding="utf-8")
         assert "sk-ant-" not in raw

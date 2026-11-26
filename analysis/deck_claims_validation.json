@@ -1854,6 +1854,27 @@
           "output_cost_share_median": 0.10882999445792974,
           "max_call_prompt": 24295
         },
+        "raw_free_haiku": {
+          "n": 36,
+          "cost_per_1k_billed": 7.887419444444444,
+          "cost_per_1k_warm": 7.887419444444444,
+          "cost_per_1k_cold": 7.887419444444444,
+          "cost_per_1k_billed_repo_card": 7.887419444444444,
+          "prompt_tokens_median": 73577.5,
+          "prompt_tokens_range": [
+            42017,
+            75784
+          ],
+          "output_tokens_median": 1951.0,
+          "output_tokens_range": [
+            1481,
+            2709
+          ],
+          "total_tokens_median": 75397.0,
+          "io_ratio_median": 33.694459939539826,
+          "output_cost_share_median": 0.12921822442528452,
+          "max_call_prompt": 24937
+        },
         "bundle_gate_sonnet_cached": {
           "n": 36,
           "cost_per_1k_billed": 51.22195555555555,
@@ -1917,6 +1938,25 @@
           "pending_runs": 0,
           "summary_cost_billed": 153.41288888888892
         },
+        "raw_free_haiku": {
+          "runs": 36,
+          "exact": 36,
+          "decision_correct": 36,
+          "exact_ci": [
+            0.9035781695514236,
+            1.0
+          ],
+          "turns_mean": 3.9166666666666665,
+          "turns_max": 4,
+          "turn_cap": 12,
+          "cap_hits": 0,
+          "escalations": 0,
+          "escalation_expected": 6,
+          "truncated_turns": 0,
+          "expected_runs": 36,
+          "pending_runs": 0,
+          "summary_cost_billed": 7.887419444444444
+        },
         "bundle_gate_sonnet_cached": {
           "runs": 36,
           "exact": 36,
@@ -1958,7 +1998,7 @@
       },
       "source": "ablation",
       "summary_source": "backend/replays/cat5_ablation_summary.json",
-      "records": 108,
+      "records": 144,
       "invoices_pooled": 12,
       "repeats": 3,
       "settings": {
@@ -1980,6 +2020,7 @@
       "non_exact_runs": [],
       "pending_runs": 0,
       "pending_invoices": [],
+      "pending_cells": [],
       "common_invoices": [
         "inv-01",
         "inv-02",
@@ -1994,55 +2035,98 @@
         "inv-11",
         "inv-12"
       ],
-      "with_vs_without": {
-        "from": "raw_free_sonnet",
-        "to": "bundle_gate_sonnet_cached",
-        "exact_from": 36,
-        "exact_to": 36,
-        "runs": 36,
-        "turns_from": 3.861111111111111,
-        "turns_to": 4,
-        "clear_loss": false,
-        "not_lower": true,
-        "billed_from": 153.4128888888889,
-        "billed_to": 51.22195555555555,
-        "billed_change_pct": -66.61170001651317,
-        "warm_from": 153.4128888888889,
-        "warm_to": 30.493088888888888,
-        "warm_change_pct": -80.12351562522633,
-        "cold_from": 153.4128888888889,
-        "cold_to": 51.22195555555555,
-        "cold_change_pct": -66.61170001651317
-      },
-      "haiku_first_vs_sonnet": {
-        "from": "bundle_gate_sonnet_cached",
-        "to": "bundle_gate_haiku_escalate",
-        "exact_from": 36,
-        "exact_to": 36,
-        "runs": 36,
-        "turns_from": 4,
-        "turns_to": 4,
-        "clear_loss": false,
-        "not_lower": true,
-        "billed_from": 51.22195555555555,
-        "billed_to": 10.418964166666665,
-        "billed_change_pct": -79.65918314976044,
-        "warm_from": 30.493088888888888,
-        "warm_to": 5.942462777777778,
-        "warm_change_pct": -80.5120996451655,
-        "cold_from": 51.22195555555555,
-        "cold_to": 10.418964166666665,
-        "cold_change_pct": -79.65918314976044
+      "comparisons": {
+        "with vs without the lever, Sonnet": {
+          "from": "raw_free_sonnet",
+          "to": "bundle_gate_sonnet_cached",
+          "exact_from": 36,
+          "exact_to": 36,
+          "runs": 36,
+          "turns_from": 3.861111111111111,
+          "turns_to": 4,
+          "clear_loss": false,
+          "not_lower": true,
+          "billed_from": 153.4128888888889,
+          "billed_to": 51.22195555555555,
+          "billed_change_pct": -66.61170001651317,
+          "warm_from": 153.4128888888889,
+          "warm_to": 30.493088888888888,
+          "warm_change_pct": -80.12351562522633,
+          "cold_from": 153.4128888888889,
+          "cold_to": 51.22195555555555,
+          "cold_change_pct": -66.61170001651317
+        },
+        "with vs without the lever, Haiku (Haiku-first with it)": {
+          "from": "raw_free_haiku",
+          "to": "bundle_gate_haiku_escalate",
+          "exact_from": 36,
+          "exact_to": 36,
+          "runs": 36,
+          "turns_from": 3.9166666666666665,
+          "turns_to": 4,
+          "clear_loss": false,
+          "not_lower": true,
+          "billed_from": 7.887419444444444,
+          "billed_to": 10.418964166666665,
+          "billed_change_pct": 32.09598196283743,
+          "warm_from": 7.887419444444444,
+          "warm_to": 5.942462777777778,
+          "warm_change_pct": -24.658973449631983,
+          "cold_from": 7.887419444444444,
+          "cold_to": 10.418964166666665,
+          "cold_change_pct": 32.09598196283743
+        },
+        "Haiku vs Sonnet, without the lever": {
+          "from": "raw_free_sonnet",
+          "to": "raw_free_haiku",
+          "exact_from": 36,
+          "exact_to": 36,
+          "runs": 36,
+          "turns_from": 3.861111111111111,
+          "turns_to": 3.9166666666666665,
+          "clear_loss": false,
+          "not_lower": true,
+          "billed_from": 153.4128888888889,
+          "billed_to": 7.887419444444444,
+          "billed_change_pct": -94.85869831304917,
+          "warm_from": 153.4128888888889,
+          "warm_to": 7.887419444444444,
+          "warm_change_pct": -94.85869831304917,
+          "cold_from": 153.4128888888889,
+          "cold_to": 7.887419444444444,
+          "cold_change_pct": -94.85869831304917
+        },
+        "Haiku-first vs Sonnet, with the lever": {
+          "from": "bundle_gate_sonnet_cached",
+          "to": "bundle_gate_haiku_escalate",
+          "exact_from": 36,
+          "exact_to": 36,
+          "runs": 36,
+          "turns_from": 4,
+          "turns_to": 4,
+          "clear_loss": false,
+          "not_lower": true,
+          "billed_from": 51.22195555555555,
+          "billed_to": 10.418964166666665,
+          "billed_change_pct": -79.65918314976044,
+          "warm_from": 30.493088888888888,
+          "warm_to": 5.942462777777778,
+          "warm_change_pct": -80.5120996451655,
+          "cold_from": 51.22195555555555,
+          "cold_to": 10.418964166666665,
+          "cold_change_pct": -79.65918314976044
+        }
       },
       "max_cost_diff_vs_summary_per_1k": 8.333333330057258e-07,
       "app_rungs": {
         "unbounded_sonnet_loop": "raw_free_sonnet",
         "bounded_sonnet_cached_gate": "bundle_gate_sonnet_cached",
-        "hybrid_haiku_sonnet_governed": "bundle_gate_haiku_escalate"
+        "hybrid_haiku_sonnet_governed": "bundle_gate_haiku_escalate",
+        "unbounded_haiku_loop": "raw_free_haiku"
       },
       "lever_parts": {
         "max_step_budgets": "NOT SHOWN",
-        "deterministic_guardrails": "SUPPORTED",
+        "deterministic_guardrails": "PARTLY SUPPORTED",
         "small_model_routing": "SUPPORTED"
       }
     },
@@ -2068,6 +2152,27 @@
           "io_ratio_median": 52.51000488042948,
           "output_cost_share_median": 0.08694139411734755,
           "max_call_prompt": 45875
+        },
+        "shared_bus_tiered_gate": {
+          "n": 15,
+          "cost_per_1k_billed": 124.61258666666666,
+          "cost_per_1k_warm": 124.61258666666666,
+          "cost_per_1k_cold": 124.61258666666666,
+          "cost_per_1k_billed_repo_card": 124.61258666666666,
+          "prompt_tokens_median": 214303,
+          "prompt_tokens_range": [
+            212606,
+            216666
+          ],
+          "output_tokens_median": 4517,
+          "output_tokens_range": [
+            3834,
+            5005
+          ],
+          "total_tokens_median": 218831,
+          "io_ratio_median": 47.92052247066637,
+          "output_cost_share_median": 0.18408332327984878,
+          "max_call_prompt": 46108
         },
         "isolated_cached_gate": {
           "n": 15,
@@ -2131,6 +2236,24 @@
           "model_s_mean": 30.758733333333332,
           "mean_total_tokens": 218191.4
         },
+        "shared_bus_tiered_gate": {
+          "verified": 15,
+          "first_attempt_verified": 15,
+          "runs": 15,
+          "checks_passed": 150,
+          "checks_total": 150,
+          "cost_per_run": 0.12461258666666666,
+          "cpo": 0.12461258666666666,
+          "cpo_warm": 0.12461258666666666,
+          "cpo_cold": 0.12461258666666666,
+          "turns_at_max_tokens": 0,
+          "turns_total": 75,
+          "retries_triggered": 0,
+          "cost_per_run_warm": 0.12461258666666666,
+          "cost_per_run_cold": 0.12461258666666666,
+          "model_s_mean": 25.592866666666666,
+          "mean_total_tokens": 219001.66666666666
+        },
         "isolated_cached_gate": {
           "verified": 15,
           "first_attempt_verified": 15,
@@ -2169,8 +2292,9 @@
         }
       },
       "source": "fair rerun",
-      "records": 45,
-      "repo_prefix_tokens": 9337
+      "records": 60,
+      "repo_prefix_tokens": 9337,
+      "pending": []
     }
   },
   "claims": [
@@ -2331,65 +2455,65 @@
     {
       "category": "Cat 5",
       "claim": "Input 25k\u2013150k+ tokens per task",
-      "measured": "n=36/36/36 runs: Without the lever, Sonnet (app rung 1) 44k\u201377k; With the lever, Sonnet (app rung 2) 41k\u201344k; With the lever, Haiku-first (app rung 3) 41k\u201344k",
+      "measured": "n=36/36/36/36 runs: Without the lever, Sonnet (app rung 1) 44k\u201377k; Without the lever, Haiku (app rung 4) 42k\u201376k; With the lever, Sonnet (app rung 2) 41k\u201344k; With the lever, Haiku-first (app rung 3) 41k\u201344k",
       "verdict": "SUPPORTED",
-      "note": "Every cell is in the band. With the lever, most of it is cache reads of the policy manual resent each turn: uncached input per invoice (median) is Without the lever, Sonnet 74.5k; With the lever, Sonnet 7.1k; With the lever, Haiku-first 7.3k."
+      "note": "Every cell is in the band. With the lever, most of it is cache reads of the policy manual resent each turn: uncached input per invoice (median) is Without the lever, Sonnet 74.5k; Without the lever, Haiku 73.6k; With the lever, Sonnet 7.1k; With the lever, Haiku-first 7.3k."
     },
     {
       "category": "Cat 5",
       "claim": "Output 1,500\u20138,000 tokens per task",
-      "measured": "Without the lever, Sonnet (app rung 1) 1,356\u20132,071; With the lever, Sonnet (app rung 2) 1,050\u20131,532; With the lever, Haiku-first (app rung 3) 1,182\u20131,583; 32/108 runs in band",
+      "measured": "Without the lever, Sonnet (app rung 1) 1,356\u20132,071; Without the lever, Haiku (app rung 4) 1,481\u20132,709; With the lever, Sonnet (app rung 2) 1,050\u20131,532; With the lever, Haiku-first (app rung 3) 1,182\u20131,583; 67/144 runs in band",
       "verdict": "PARTLY SUPPORTED",
-      "note": "Median 1,388 output tokens per invoice; output includes extended thinking (Sonnet only). These are short 3\u20134-turn loops."
+      "note": "Median 1,472 output tokens per invoice; output includes extended thinking (Sonnet only). These are short 3\u20134-turn loops."
     },
     {
       "category": "Cat 5",
       "claim": "Max-step budgets + deterministic guardrails + small-model routing for routine tool calls",
-      "measured": "max-step budgets: 0 of 108 runs hit a cap; without the lever (12-turn safety cap) runs finished in at most 4 turns, with it in 4 of 5; with vs without the lever (Sonnet): cost -67% billed ($153 \u2192 $51.22/1k; warm $153 \u2192 $30.49), turns 3.9 \u2192 4.0, exact vouchers 36/36 \u2192 36/36; Haiku-first vs Sonnet (with the lever): cost -80% billed ($51.22 \u2192 $10.42/1k; warm $30.49 \u2192 $5.94), exact vouchers 36/36 \u2192 36/36, switched to Sonnet in 6 of 36 runs",
+      "measured": "max-step budgets: 0 of 144 runs hit a cap; without the lever (12-turn safety cap) runs finished in at most 4 turns, with it in 4 of 5; with vs without the lever, Sonnet: cost -67% billed ($153 \u2192 $51.22/1k; warm $153 \u2192 $30.49), turns 3.9 \u2192 4.0, exact vouchers 36/36 \u2192 36/36; with vs without the lever, Haiku (Haiku-first with it): cost +32% billed ($7.89 \u2192 $10.42/1k; warm $7.89 \u2192 $5.94), turns 3.9 \u2192 4.0, exact vouchers 36/36 \u2192 36/36; Haiku vs Sonnet, without the lever: cost -95% billed ($153 \u2192 $7.89/1k; warm $153 \u2192 $7.89), turns 3.9 \u2192 3.9, exact vouchers 36/36 \u2192 36/36; Haiku-first vs Sonnet, with the lever: cost -80% billed ($51.22 \u2192 $10.42/1k; warm $30.49 \u2192 $5.94), turns 4.0 \u2192 4.0, exact vouchers 36/36 \u2192 36/36",
       "verdict": "PARTLY SUPPORTED",
-      "note": "Judged as a whole, without \u2192 with, in three parts. (1) Step budgets: not shown \u2014 no loop ran long on these invoices, so a budget saved nothing here; whether it prevents runaway cost is untested. (2) Deterministic guardrails (the with-design): supported \u2014 with the lever, cost changed -67% and exact vouchers 36 \u2192 36 of 36. The with-design also replaces the raw tables with one narrow query and sends the policy manual as a cached prefix, so the saving belongs to the design as a whole and these cells cannot split it between the guardrail and those changes. (3) Small-model routing: supported \u2014 starting on Haiku changed cost -80% against Sonnet on the same design, with exact vouchers 36 \u2192 36 of 36; it switched to Sonnet in 6 of 36 runs, the runs where the policy tool flags a multi-factor dispute (manual 6.2). As a whole: 2 of 3 parts supported, 0 contradicted, 1 never came into play."
+      "note": "Judged as a whole in three parts. (1) Step budgets: not shown \u2014 no loop ran long on these invoices, so a budget saved nothing here; whether it prevents runaway cost is untested. (2) Deterministic guardrails (with vs without the lever on the same model set-up): partly supported \u2014 with vs without the lever, Sonnet, cost -67% and exact vouchers 36 \u2192 36 of 36; with vs without the lever, Haiku (Haiku-first with it), cost +32% and exact vouchers 36 \u2192 36 of 36. The with-design also replaces the raw tables with one narrow query and sends the policy manual as a cached prefix, so the saving belongs to the design as a whole and these cells cannot split it between the guardrail and those changes. (3) Small-model routing (Haiku vs Sonnet on the same design): supported \u2014 Haiku vs Sonnet, without the lever, cost -95% and exact vouchers 36 \u2192 36 of 36; Haiku-first vs Sonnet, with the lever, cost -80% and exact vouchers 36 \u2192 36 of 36; with the lever the Haiku-first version switched to Sonnet in 6 of 36 runs, the runs where the policy tool flags a multi-factor dispute (manual 6.2); without it there is no policy tool and so no escalation path. As a whole: 1 of 3 parts supported, 1 partly, 0 contradicted, 1 never came into play."
     },
     {
       "category": "Cat 5",
       "claim": "\u2026without losing accuracy (implicit)",
-      "measured": "exact vouchers: with vs without the lever (Sonnet) 36/36 vs 36/36; Haiku-first vs Sonnet (with the lever) 36/36 vs 36/36",
+      "measured": "exact vouchers: with vs without the lever, Sonnet 36/36 vs 36/36; with vs without the lever, Haiku (Haiku-first with it) 36/36 vs 36/36; Haiku vs Sonnet, without the lever 36/36 vs 36/36; Haiku-first vs Sonnet, with the lever 36/36 vs 36/36",
       "verdict": "PARTLY SUPPORTED",
-      "note": "Compared under the written rule: the lever against the same task without it, and Haiku-first against Sonnet on the row with the lever. Every compared run committed the exact voucher, so a loss could not be detected (ceiling); the invoices test simple arithmetic (quantities \u00d7 rates, a GST split, a debit note). All recorded runs: Without the lever, Sonnet 36/36; With the lever, Sonnet 36/36; With the lever, Haiku-first 36/36."
+      "note": "Compared under the written rule: the lever against the same task without it on each model set-up, and Haiku against Sonnet with and without the lever. Every compared run committed the exact voucher, so a loss could not be detected (ceiling); the invoices test simple arithmetic (quantities \u00d7 rates, a GST split, a debit note). All recorded runs: Without the lever, Sonnet 36/36; Without the lever, Haiku 36/36; With the lever, Sonnet 36/36; With the lever, Haiku-first 36/36."
     },
     {
       "category": "Cat 6",
       "claim": "Input 100k\u20131M+ tokens per run",
-      "measured": "n=15 runs per cell: without the lever (shared bus, Sonnet) 213k\u2013216k; with the lever, Sonnet 56k\u201357k; with the lever, Haiku agents + Sonnet patch author 56k\u201358k",
+      "measured": "n=15 runs per cell: without the lever (shared bus), Sonnet 213k\u2013216k; without the lever (shared bus), Haiku agents + Sonnet patch author 213k\u2013217k; with the lever, Sonnet 56k\u201357k; with the lever, Haiku agents + Sonnet patch author 56k\u201358k",
       "verdict": "PARTLY SUPPORTED",
       "note": "Without the lever every run is in the band, all of it uncached. With it, each run sends ~56k, mostly cache reads of a ~9.3k-token repo prefix, below the band."
     },
     {
       "category": "Cat 6",
       "claim": "Output 10k\u201350k+ tokens per run",
-      "measured": "without the lever 3.9k\u20134.4k; with the lever, Sonnet 4.7k\u20136.0k; with the lever, Haiku agents + Sonnet patch author 4.3k\u20136.6k; 0/45 runs in band",
+      "measured": "without the lever (shared bus), Sonnet 3.9k\u20134.4k; without the lever (shared bus), Haiku agents + Sonnet patch author 3.8k\u20135.0k; with the lever, Sonnet 4.7k\u20136.0k; with the lever, Haiku agents + Sonnet patch author 4.3k\u20136.6k; 0/60 runs in band",
       "verdict": "NOT SUPPORTED",
-      "note": "Every cell writes ~4\u20137k per run, below the band; the role prompts' word limits, the same in every cell, set the length. 0 of 225 turns stopped on max_tokens. All runs are 5 turns on a single-file fix."
+      "note": "Every cell writes ~4\u20137k per run, below the band; the role prompts' word limits, the same in every cell, set the length. 0 of 300 turns stopped on max_tokens. All runs are 5 turns on a single-file fix."
     },
     {
       "category": "Cat 6",
       "claim": "1.5M\u201310M+ tokens per developer per day",
-      "measured": "not measurable: 45 single runs, no per-developer daily traffic",
+      "measured": "not measurable: 60 single runs, no per-developer daily traffic",
       "verdict": "NOT TESTABLE",
-      "note": "Would take ~7\u201346 runs/dev/day without the lever (mean 218k tokens/run), or ~24\u2013161 with it on Haiku agents + Sonnet patch author (mean 62k)."
+      "note": "Would take ~7\u201346 runs/dev/day (mean 218k tokens/run) without the lever on Sonnet, ~7\u201346 runs/dev/day (mean 219k tokens/run) without it on Haiku agents + Sonnet patch author, or ~24\u2013161 runs/dev/day (mean 62k tokens/run) with it on Haiku agents + Sonnet patch author."
     },
     {
       "category": "Cat 6",
       "claim": "Isolate sub-agent contexts, cache the shared repo prefix, measure cost per verified outcome (CpO)",
-      "measured": "CpO per verified fix (billed): Without the lever: shared bus, Sonnet $0.469 (15/15 verified); With the lever: isolated + cached, Sonnet $0.100 (15/15 verified); With the lever: isolated + cached, Haiku agents + Sonnet patch author $0.056 (15/15 verified)",
+      "measured": "CpO per verified fix (billed): Without the lever: shared bus, Sonnet $0.469 (15/15 verified); Without the lever: shared bus, Haiku agents + Sonnet patch author $0.125 (15/15 verified); With the lever: isolated + cached, Sonnet $0.100 (15/15 verified); With the lever: isolated + cached, Haiku agents + Sonnet patch author $0.056 (15/15 verified)",
       "verdict": "PARTLY SUPPORTED",
-      "note": "On Sonnet, the lever cuts cost per verified fix ~4.7\u00d7 ($0.469 \u2192 $0.100; warm $0.469 \u2192 $0.078); with Haiku agents + a Sonnet patch author it is $0.056 (~8.3\u00d7 below the shared bus). The verified rate is the same in every cell, so every saving is cost per run and CpO adds nothing over it here (ceiling): the outcome side of the claim is untested."
+      "note": "With vs without the lever, cost per verified fix: Sonnet $0.469 \u2192 $0.100, ~4.7\u00d7 lower (warm $0.469 \u2192 $0.078, ~6.1\u00d7 lower); Haiku agents + Sonnet patch author $0.125 \u2192 $0.056, ~2.2\u00d7 lower (warm $0.125 \u2192 $0.033, ~3.8\u00d7 lower). Haiku agents + Sonnet patch author against Sonnet: without the lever $0.469 \u2192 $0.125, ~3.8\u00d7 lower; with the lever $0.100 \u2192 $0.056, ~1.8\u00d7 lower. The verified rate is the same in every cell, so every saving is cost per run and CpO adds nothing over it here (ceiling): the outcome side of the claim is untested."
     },
     {
       "category": "Cat 6",
       "claim": "\u2026without losing verified fixes (implicit)",
-      "measured": "with vs without the lever (Sonnet): 15/15 vs 15/15; Haiku agents + Sonnet patch author vs Sonnet (with the lever): 15/15 vs 15/15 verified final patches",
+      "measured": "with vs without the lever: Sonnet 15/15 vs 15/15; Haiku agents + Sonnet patch author 15/15 vs 15/15; Haiku agents + Sonnet patch author vs Sonnet: without the lever 15/15 vs 15/15; with the lever 15/15 vs 15/15 verified final patches",
       "verdict": "PARTLY SUPPORTED",
-      "note": "Every cell verified every run, so a loss could not be detected (ceiling) on these single-file incidents. Compared under the written rule: the lever against the same swarm without it, and the cheaper models against Sonnet on the row with the lever."
+      "note": "Every cell verified every run, so a loss could not be detected (ceiling) on these single-file incidents. Compared under the written rule: the lever against the same swarm without it on each model set-up, and Haiku agents + a Sonnet patch author against Sonnet with and without the lever."
     },
     {
       "category": "Matrix",

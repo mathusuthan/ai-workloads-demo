@@ -88,7 +88,8 @@ These apply to more than one archetype.
 | 26 Nov (`8fd79ea`) | 30 | 11 | 16 | 2 | 1 | Archetype 4 rerun and quality row |
 | 26 Nov (`a660739`) | 31 | 10 | 18 | 2 | 1 | Archetype 5 ablation: lever row moved to partly; accuracy row added |
 | 26 Nov (`7807557`) | 31 | 9 | 19 | 2 | 1 | Archetype 1 ablation: lever and accuracy rows moved to partly; Archetype 4 paired-retrieval row moved to supported |
-| 26 Nov (one design per archetype) | 32 | 9 | 19 | 3 | 1 | Rows re-judged on without versus with only. Archetype 1 lever row moved to supported; Archetype 2 input-to-output ratio row moved to partly (unbounded drafts on both models now measured: 0.74:1 and 0.67:1); Archetype 6 output band moved to not supported (0 of 45 runs in band); Archetype 6 quality row added as partly |
+| 26 Nov (one design per archetype, commit `0a141f0`) | 32 | 9 | 19 | 3 | 1 | Rows re-judged on without versus with only. Archetype 1 lever row moved to supported; Archetype 2 input-to-output ratio row moved to partly (unbounded drafts on both models now measured: 0.74:1 and 0.67:1); Archetype 6 output band moved to not supported (0 of 45 runs in band); Archetype 6 quality row added as partly |
+| 26 Nov (Archetypes 5 and 6 on both model set-ups) | 32 | 9 | 19 | 3 | 1 | No verdict changed. Archetype 5's guardrail part is now partly supported: on Haiku the "with" design cost 32% more than "without" from a cold start |
 
 ---
 
@@ -427,13 +428,15 @@ Deck improvement: step budgets, deterministic guardrails and small-model routing
 | Design | Version id | Model | Runs | Exact vouchers | $ per 1,000 invoices, cold | Warm | Model turns | Escalations |
 |---|---|---|---:|---:|---:|---:|---:|---:|
 | Without: free-choice loop over raw tables | `raw_free_sonnet` | Sonnet 5.5 | 36 | 36 | 153.41 | 153.41 | 3.86 | 0 |
+| Without: free-choice loop over raw tables | `raw_free_haiku` | Haiku 5.5 | 36 | 36 | 7.89 | 7.89 | 3.92 | 0 |
 | With: 4-step budget + policy tool | `bundle_gate_sonnet_cached` | Sonnet 5.5 | 36 | 36 | 51.22 | 30.49 | 4.00 | 0 |
 | With: 4-step budget + policy tool | `bundle_gate_haiku_escalate` | Haiku 5.5 first, Sonnet on escalation | 36 | 36 | 10.42 | 5.94 | 4.00 | 6 |
 
 - 12 invoices, 3 runs each. The "with" design also uses one narrow query in place of the raw tables and sends the policy manual as a cached prefix.
 - The six escalations are the three runs each of inv-02 and inv-12, the two invoices that mix two or more dispute factors.
 - No run hit the step budget or was cut off.
-- Records: `backend/experiments/cat5_ablation/runs.jsonl` (108 records) and `tool_results.jsonl`.
+- The Haiku "without" cell was added on 26 Nov 2026 (36 runs, $0.28) so that model and design can be separated. With no policy tool it has no escalation path.
+- Records: `backend/experiments/cat5_ablation/runs.jsonl` (144 records) and `tool_results.jsonl`.
 
 ### Other levers we tried
 
@@ -525,12 +528,14 @@ Deck improvement: isolate sub-agent contexts and cache the shared repository pre
 | Design | Version id | Models | Runs | Verified fixes | $ per 1,000 runs, cold | Warm | Uncached input tokens | Output tokens | Model time |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|
 | Without: shared bus | `shared_bus_matched_gate` | Sonnet 5.5 on every turn | 15 | 15 | 469.02 | 469.02 | 214,112 | 4,079 | 30.8 s |
+| Without: shared bus | `shared_bus_tiered_gate` | Haiku 5.5 agents, Sonnet patch author | 15 | 15 | 124.61 | 124.61 | 214,585 | 4,416 | 25.6 s |
 | With: isolated agents + cached prefix | `isolated_cached_gate` | Sonnet 5.5 on every turn | 15 | 15 | 99.91 | 77.50 | 9,792 | 5,325 | 38.8 s |
 | With: isolated agents + cached prefix | `tiered_gate` | Haiku 5.5 agents, Sonnet patch author | 15 | 15 | 56.20 | 32.71 | 10,095 | 5,408 | 28.4 s |
 
 - 3 incidents, 5 runs each. Every version has the same role instructions, the same output caps, the same ten-check sandbox and one retry. No turn was cut off and no retry was used.
 - Every version verified 15 of 15, so cost per verified fix equals cost per run.
-- Records: `backend/experiments/cat6_fair_rerun/runs.jsonl` (45 records).
+- The shared bus with Haiku agents was added on 26 Nov 2026 (15 runs, $1.87) so that model and design can be separated. Its largest single Haiku prompt was under 100,000 tokens, so the standard Haiku rate applies.
+- Records: `backend/experiments/cat6_fair_rerun/runs.jsonl` (60 records).
 
 ### Other levers we tried
 

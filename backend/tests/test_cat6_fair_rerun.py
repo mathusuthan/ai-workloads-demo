@@ -161,6 +161,7 @@ GOV_CAPS = [4000, 4000, 16000, 4000, 4000]
         ("shared_bus_matched_gate", [S] * 5, GOV_CAPS, False),
         ("isolated_cached_gate", [S] * 5, GOV_CAPS, True),
         ("tiered_gate", [H, H, S, H, H], GOV_CAPS, True),
+        ("shared_bus_tiered_gate", [H, H, S, H, H], GOV_CAPS, False),
     ],
 )
 def test_arm_call_sequence(arm_id: str, models: list[str], caps: list[int], cached: bool) -> None:
@@ -229,10 +230,38 @@ def test_matched_bus_later_turns_reuse_isolated_asks_and_sandbox_blocks() -> Non
     assert author.endswith(iso_author.rsplit("\n\n", 1)[1])
 
 
+@pytest.mark.parametrize("verdicts", [[True], [False, True], [False, False]])
+def test_shared_bus_tiered_sends_exactly_what_matched_bus_sends_except_model(verdicts: list[bool]) -> None:
+    """`shared_bus_tiered_gate` = `shared_bus_matched_gate` with tiered_gate's models: byte-identical text, caps and flags."""
+    matched, tiered = FakeAgent(), FakeAgent()
+    rec_m = run("shared_bus_matched_gate", matched, FakeSandbox(list(verdicts)))
+    rec_t = run("shared_bus_tiered_gate", tiered, FakeSandbox(list(verdicts)))
+    assert len(matched.calls) == len(tiered.calls) == (5 if verdicts == [True] else 6)
+    for cm, ct in zip(matched.calls, tiered.calls, strict=True):
+        assert set(cm) == set(ct)
+        for key in cm:
+            if key == "model_tier":
+                continue
+            assert cm[key] == ct[key], key
+        assert cm["role_instructions"].encode() == ct["role_instructions"].encode()
+        assert [m["content"].encode() for m in cm["messages"]] == [m["content"].encode() for m in ct["messages"]]
+    roles = [t["agent_role"] for t in rec_t["turns"]]
+    assert [c["model_tier"] for c in matched.calls] == [S] * len(roles)
+    assert [c["model_tier"] for c in tiered.calls] == [S if r == "patch_author" else H for r in roles]
+    assert [t["intended_model_id"] for t in rec_t["turns"]] == [S if r == "patch_author" else H for r in roles]
+    for tm, tt in zip(rec_m["turns"], rec_t["turns"], strict=True):
+        assert tm["system_prompt"].encode() == tt["system_prompt"].encode()
+        assert tm["user_message"].encode() == tt["user_message"].encode()
+    assert rec_t["run_nonce"] is None and all(c["use_prefix_cache"] is False for c in tiered.calls)
+    spec = fr.ARMS["shared_bus_tiered_gate"]
+    assert spec.context == fr.ARMS["shared_bus_matched_gate"].context and spec.tiered and spec.gate_enabled
+    assert fr.DESIGN_CELLS[("without", "tiered")] == "shared_bus_tiered_gate"
+
+
 def test_every_rung_and_arm_uses_the_same_role_instructions() -> None:
     for role in fr.ROLE_SEQUENCE:
         prompts = {get_cat6_agent_system_prompt(r, role) for r in
-                   ("unisolated_broadcast_swarm", "isolated_cached_sonnet_swarm", "tiered_hybrid_cpo_swarm")}
+                   ("unisolated_broadcast_swarm", "isolated_cached_sonnet_swarm", "tiered_hybrid_cpo_swarm", "unisolated_tiered_swarm")}
         prompts |= {fr.system_prompt_for(a, role) for a in fr.ARM_IDS}
         assert len(prompts) == 1
         assert "exhaustive" not in next(iter(prompts))
@@ -243,7 +272,7 @@ def test_every_rung_and_arm_uses_the_same_role_instructions() -> None:
 # --------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("arm_id", ["shared_bus_matched_gate"])
+@pytest.mark.parametrize("arm_id", ["shared_bus_matched_gate", "shared_bus_tiered_gate"])
 def test_shared_bus_sends_growing_thread(arm_id: str) -> None:
     agent = FakeAgent()
     rec = run(arm_id, agent)
@@ -270,7 +299,7 @@ def test_isolated_arms_send_single_user_message(arm_id: str) -> None:
 # --------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("arm_id", ["shared_bus_matched_gate", "isolated_cached_gate", "tiered_gate"])
+@pytest.mark.parametrize("arm_id", ["shared_bus_matched_gate", "isolated_cached_gate", "tiered_gate", "shared_bus_tiered_gate"])
 def test_gate_fail_then_pass(arm_id: str) -> None:
     agent = FakeAgent()
     rec = run(arm_id, agent, FakeSandbox([False, True]))
@@ -366,7 +395,7 @@ def test_cached_arms_use_per_run_nonce_prefix(arm_id: str) -> None:
     assert prefix1 == f"<!-- run:{r1['run_nonce']} -->\n" + SHARED_REPO_PREFIX_MARKDOWN
 
 
-@pytest.mark.parametrize("arm_id", ["shared_bus_matched_gate"])
+@pytest.mark.parametrize("arm_id", ["shared_bus_matched_gate", "shared_bus_tiered_gate"])
 def test_shared_bus_arms_pass_empty_prefix(arm_id: str) -> None:
     agent = FakeAgent()
     rec = run(arm_id, agent)
@@ -640,7 +669,8 @@ def test_analysis_markdown_renders() -> None:
     assert "`shared_bus_matched_gate`" in md
     assert "Individual turns stopped on `max_tokens` (ok runs used + error records): 1." in md
     assert "`shared_bus_matched_gate` inc-01 r0 (ok) step None `patch_author` attempt 1: cap None" in md
-    assert "## Design: with and without the deck's lever" in md and "(not run)" in md
+    assert "## Design: with and without the deck's lever" in md and "`shared_bus_tiered_gate`: run pending" in md
+    assert "(not run)" not in md
     assert "shared_bus_original" not in md
 
 
@@ -673,6 +703,102 @@ def test_runner_dry_run_makes_no_calls(tmp_path: Path) -> None:
         env={"PATH": "/usr/bin:/bin", "NOVAMART_TRACES_DIR": str(tmp_path / "traces")},
     )
     assert proc.returncode == 0, proc.stderr
-    assert "18 runs; 1 already ok, 17 pending" in proc.stdout
+    assert "24 runs; 1 already ok, 23 pending" in proc.stdout
     assert "Dry run: no API calls made." in proc.stdout
     assert out.read_text(encoding="utf-8").count("\n") == 1
+
+
+# --------------------------------------------------------------------------------------------------
+# 11. Run-pending arms, Haiku long-prompt pricing, dry-run cost estimate
+# --------------------------------------------------------------------------------------------------
+
+RECORDS_PATH = BACKEND_DIR / "experiments" / "cat6_fair_rerun" / "runs.jsonl"
+
+
+def _recorded() -> list[dict[str, Any]]:
+    return [json.loads(x) for x in RECORDS_PATH.read_text(encoding="utf-8").splitlines() if x.strip()]
+
+
+def test_summary_reports_arm_without_records_as_run_pending() -> None:
+    records = [_full(a, p, 0, True, True, [_turn("patch_author")]) for a in ("shared_bus_matched_gate", "isolated_cached_gate", "tiered_gate")
+               for p in ("inc-01", "inc-02", "inc-03")]
+    s = fr.summarise(records)
+    assert s["pending_arm_ids"] == ["shared_bus_tiered_gate"]
+    assert "shared_bus_tiered_gate" not in s["arm_ids"] and "shared_bus_tiered_gate" not in s["arms"]
+    assert s["matrix"]["complete"] is True and s["matrix"]["expected_runs"] == 9  # pending arm not counted as missing
+    assert s["design"]["cell_status"]["without|tiered"] == fr.RUN_PENDING == "run pending"
+    assert s["design"]["cells"]["without|tiered"] == "shared_bus_tiered_gate"
+    # one recorded run makes it a normal (incomplete) arm
+    s2 = fr.summarise([*records, _full("shared_bus_tiered_gate", "inc-01", 0, True, True, [_turn("patch_author")])])
+    assert s2["pending_arm_ids"] == [] and s2["arms"]["shared_bus_tiered_gate"]["runs"] == 1
+    assert s2["matrix"]["complete"] is False and ["shared_bus_tiered_gate", "inc-02", 0] in s2["matrix"]["missing_keys"]
+
+
+def test_haiku_long_prompt_rate_applies_only_above_100k() -> None:
+    from app.core.pricing import HAIKU_LONG_PROMPT_INPUT_OUTPUT_PER_1M_USD, HAIKU_LONG_PROMPT_THRESHOLD_TOKENS
+
+    assert HAIKU_LONG_PROMPT_THRESHOLD_TOKENS == 100_000
+    assert HAIKU_LONG_PROMPT_INPUT_OUTPUT_PER_1M_USD == {H: (0.50, 2.50)}
+    at = fr.price_call_usd(H, uncached=100_000, cache_write=0, cache_read=0, output=1000)
+    assert at == pytest.approx(compute_run_finops(H, 100_000, 1000).total_cost_usd)  # <=100K: standard card
+    over = fr.price_call_usd(H, uncached=100_001, cache_write=0, cache_read=0, output=1000)
+    assert over == pytest.approx((100_001 * 0.50 + 1000 * 2.50) / 1e6)
+    son = fr.price_call_usd(S, uncached=150_000, cache_write=0, cache_read=0, output=1000)
+    assert son == pytest.approx(compute_run_finops(S, 150_000, 1000).total_cost_usd)  # Sonnet unchanged
+    turn = _turn("security_critic", H, inp=120_000, out=500)
+    assert fr.turn_billed_cost_usd(turn) == pytest.approx((120_000 * 0.50 + 500 * 2.50) / 1e6)
+
+
+def test_estimate_reprices_reference_runs_at_the_new_arms_models() -> None:
+    ref = [_full("shared_bus_matched_gate", "inc-01", r, True, True, [
+        _turn("orchestrator_plan", inp=40_000, out=500), _turn("ci_triager", inp=41_000, out=600),
+        _turn("patch_author", inp=42_000, out=2000), _turn("security_critic", inp=45_000, out=500),
+        _turn("orchestrator_merge", inp=46_000, out=400)]) for r in range(2)]
+    est = fr.estimate_run("shared_bus_tiered_gate", "inc-01", ref)
+    assert est["reference_arm_id"] == "shared_bus_matched_gate" and est["reference_runs"] == 2
+    exp = sum(compute_run_finops(m, i, o).total_cost_usd for m, i, o in (
+        (H, 40_000, 500), (H, 41_000, 600), (S, 42_000, 2000), (H, 45_000, 500), (H, 46_000, 400)))
+    assert est["typical_usd"] == pytest.approx(exp)
+    assert est["max_haiku_prompt_typical"] == {"prompt_tokens": 46_000, "role": "orchestrator_merge"}
+    # worst: merge prompt = 46k + caps of the 5 earlier calls (4k+4k+16k+16k+4k) + the retry message allowance
+    assert est["max_haiku_prompt_worst"] == {"prompt_tokens": 46_000 + 44_000 + fr.RETRY_MESSAGE_TOKEN_ALLOWANCE, "role": "orchestrator_merge"}
+    assert est["haiku_long_prompt_calls_worst"] == 0 and est["worst_case_usd"] > est["typical_usd"]
+    # a bigger recorded thread pushes the worst-case merge prompt over 100K: priced at the long-prompt rate
+    big = [{**r, "turns": [{**t, "input_tokens": t["input_tokens"] + 20_000} for t in r["turns"]]} for r in ref]
+    est_big = fr.estimate_run("shared_bus_tiered_gate", "inc-01", big)
+    assert est_big["haiku_long_prompt_calls_worst"] >= 1
+    m = fr.estimate_matrix([("shared_bus_tiered_gate", "inc-01", 0), ("shared_bus_tiered_gate", "inc-01", 1)], ref)
+    assert m["per_arm"]["shared_bus_tiered_gate"]["runs"] == 2 and m["total_typical_usd"] == pytest.approx(2 * exp)
+    with pytest.raises(ValueError, match="No ok records"):
+        fr.estimate_run("shared_bus_tiered_gate", "inc-01", [])
+
+
+@pytest.mark.skipif(not RECORDS_PATH.is_file(), reason="records not present")
+def test_largest_haiku_prompt_of_the_new_arm_stays_under_the_long_prompt_tier() -> None:
+    """On the recorded shared-bus runs, no Haiku-position call of the new arm reaches 100K prompt tokens, even in the worst case."""
+    recs = _recorded()
+    keys = fr.plan_matrix(["shared_bus_tiered_gate"], [p["id"] for p in CAT6_PRESETS], 5)
+    m = fr.estimate_matrix(keys, recs)
+    slot = m["per_arm"]["shared_bus_tiered_gate"]
+    assert slot["haiku_long_prompt_calls_typical"] == 0 and slot["haiku_long_prompt_calls_worst"] == 0
+    assert slot["max_haiku_prompt_worst"]["prompt_tokens"] < 100_000
+    assert 0 < m["total_typical_usd"] < m["total_worst_case_usd"]
+
+
+def test_dry_run_prints_cost_estimate_for_new_arm(tmp_path: Path) -> None:
+    out = tmp_path / "runs.jsonl"
+    ref = [_full("shared_bus_matched_gate", p, 0, True, True, [_turn(r, inp=40_000) for r in fr.ROLE_SEQUENCE])
+           for p in ("inc-01", "inc-02", "inc-03")]
+    out.write_text("".join(json.dumps(r) + "\n" for r in ref), encoding="utf-8")
+    proc = subprocess.run(
+        [sys.executable, str(BACKEND_DIR / "scripts" / "cat6_fair_rerun.py"), "--dry-run", "--arms", "shared_bus_tiered_gate",
+         "--repeats", "5", "--out", str(out)],
+        capture_output=True, text=True, timeout=60,
+        env={"PATH": "/usr/bin:/bin", "NOVAMART_TRACES_DIR": str(tmp_path / "traces")},
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "15 runs; 0 already ok, 15 pending" in proc.stdout
+    assert "shared_bus_tiered_gate     15 shared_bus_matched_gate" in proc.stdout
+    assert "Haiku calls over 100,000 prompt tokens (long-prompt rate): 0 typical, 0 worst case." in proc.stdout
+    assert "TOTAL typical $" in proc.stdout and "Dry run: no API calls made." in proc.stdout
+    assert out.read_text(encoding="utf-8").count("\n") == 3

@@ -46,7 +46,7 @@ def _load_script(name: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
 def test_fair_rerun_and_runner_share_one_cap_definition() -> None:
     assert fair_rerun.PATCH_AUTHOR_MAX_TOKENS is PATCH_AUTHOR_MAX_TOKENS
     assert fair_rerun.GOVERNED_ROLE_MAX_TOKENS is GOVERNED_ROLE_MAX_TOKENS
-    assert fair_rerun.ARM_IDS == ("shared_bus_matched_gate", "isolated_cached_gate", "tiered_gate")
+    assert fair_rerun.ARM_IDS == ("shared_bus_matched_gate", "isolated_cached_gate", "tiered_gate", "shared_bus_tiered_gate")
     assert set(GOVERNED_ROLE_MAX_TOKENS.values()) == {4000}
     assert CALL_TIMEOUT_S == 600
 
@@ -58,6 +58,7 @@ def test_fair_rerun_and_runner_share_one_cap_definition() -> None:
         ("unisolated_broadcast_swarm", [4000, 4000, 16000, 16000, 4000, 4000]),
         ("isolated_cached_sonnet_swarm", [4000, 4000, 16000, 16000, 4000, 4000]),
         ("tiered_hybrid_cpo_swarm", [4000, 4000, 16000, 16000, 4000, 4000]),
+        ("unisolated_tiered_swarm", [4000, 4000, 16000, 16000, 4000, 4000]),
     ],
 )
 def test_live_path_uses_fair_rerun_caps_and_records_stop_reason(
@@ -101,8 +102,12 @@ def _fake_raw(kw: dict[str, Any], n: int) -> AnthropicRawResult:
     )
 
 
-def test_app_rung1_sends_exactly_what_the_matched_shared_bus_arm_sends(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Rung 1 of the app is the `shared_bus_matched_gate` design: same messages, system prompts, caps, gate and retry."""
+@pytest.mark.parametrize(
+    ("rung_id", "arm_id"),
+    [("unisolated_broadcast_swarm", "shared_bus_matched_gate"), ("unisolated_tiered_swarm", "shared_bus_tiered_gate")],
+)
+def test_app_shared_bus_rung_sends_exactly_what_its_arm_sends(monkeypatch: pytest.MonkeyPatch, rung_id: str, arm_id: str) -> None:
+    """Rungs 1 and 4 of the app are the shared-bus arms: same models, messages, system prompts, caps, gate and retry."""
     app_calls: list[dict[str, Any]] = []
     arm_calls: list[dict[str, Any]] = []
 
@@ -123,16 +128,18 @@ def test_app_rung1_sends_exactly_what_the_matched_shared_bus_arm_sends(monkeypat
 
     monkeypatch.setattr(runner, "run_cat6_swarm_agent_call", app_fake)
     monkeypatch.setattr(runner, "evaluate_patch_in_sandbox", frozen_sandbox)
-    _, raw = asyncio.run(runner._run_live_cat6_for_rung(preset=PRESET, rung_id="unisolated_broadcast_swarm", api_key="k"))
+    _, raw = asyncio.run(runner._run_live_cat6_for_rung(preset=PRESET, rung_id=rung_id, api_key="k"))
     rec = asyncio.run(
-        fair_rerun.execute_run(
-            arm_id="shared_bus_matched_gate", preset=PRESET, repeat_index=0, api_key="k", agent_call=arm_fake, sandbox=frozen_sandbox
-        )
+        fair_rerun.execute_run(arm_id=arm_id, preset=PRESET, repeat_index=0, api_key="k", agent_call=arm_fake, sandbox=frozen_sandbox)
     )
     assert rec["status"] == "ok" and rec["retries_used"] == raw["retries_used"] == 1
     keys = ("model_tier", "shared_repo_prefix", "role_instructions", "messages", "use_prefix_cache", "max_tokens", "timeout_s")
     assert [{k: c[k] for k in keys} for c in app_calls] == [{k: c[k] for k in keys} for c in arm_calls]
     assert [t["attempt"] for t in raw["agent_turns"]] == [1, 1, 1, 2, 1, 1]
+    assert [c["model_tier"] for c in app_calls] == [
+        fair_rerun.intended_model_id(arm_id, t["agent_role"]) for t in raw["agent_turns"]
+    ]
+    assert raw["primary_model_id"] == runner.cat6_primary_model_id(rung_id)
 
 
 @pytest.mark.skipif(not (BACKEND_DIR / "experiments" / "cat6_fair_rerun" / "runs.jsonl").is_file(), reason="records not present")
@@ -199,8 +206,8 @@ def _synthetic_record(arm_id: str, repeat_index: int, *, recorded_verified: bool
                 "input_tokens": 1000,
                 "output_tokens": 200,
                 "thinking_tokens": 0,
-                "cache_creation_tokens": 9000 if i == 1 and arm_id != "shared_bus_matched_gate" else 0,
-                "cache_read_tokens": 9000 if i > 1 and arm_id != "shared_bus_matched_gate" else 0,
+                "cache_creation_tokens": 9000 if i == 1 and fair_rerun.ARMS[arm_id].cached else 0,
+                "cache_read_tokens": 9000 if i > 1 and fair_rerun.ARMS[arm_id].cached else 0,
                 "system_prompt": "sys",
                 "user_message": "U" * 1000,
                 "raw_text": "R" * 5000,
@@ -231,7 +238,7 @@ def test_golden_converter_on_synthetic_records(monkeypatch: pytest.MonkeyPatch, 
         return copy.deepcopy(good)
 
     records = []
-    for arm in ("shared_bus_matched_gate", "isolated_cached_gate", "tiered_gate"):
+    for arm in ("shared_bus_matched_gate", "isolated_cached_gate", "tiered_gate", "shared_bus_tiered_gate"):
         # repeat 0 recorded as failed, repeat 1 as passed: the fixed mapping must still take repeat 0
         records += [_synthetic_record(arm, 0, recorded_verified=False), _synthetic_record(arm, 1, recorded_verified=True)]
     doc = mod.build_golden(records, source_file="x.jsonl", preset_ids=["inc-01"], sandbox=fake_sandbox)
@@ -246,13 +253,16 @@ def test_golden_converter_on_synthetic_records(monkeypatch: pytest.MonkeyPatch, 
         t = r["agent_turns"][0]
         assert len(t["prompt_preview"]) == 450 and len(t["output_preview"]) == 2000
         assert t["stop_reason"] == "end_turn"
-        assert t["context_mode"] == ("shared_omnibus_bus" if rung_id == "unisolated_broadcast_swarm" else "isolated_prefix_cached")
+        assert t["context_mode"] == ("shared_omnibus_bus" if rung_id in runner.CAT6_SHARED_BUS_RUNGS else "isolated_prefix_cached")
         # loadable by the app's replay path
         res = runner._build_cat6_result_from_replay(rung_id=rung_id, preset=PRESET, raw_rung=r)
         assert len(res.agent_turns) == 5
     assert sorted(judged) == sorted(("inc-01", f"CODE_{arm}_0") for arm in mod.GOLDEN_MAPPING.values())  # repeat 0 only
     assert doc["provenance"]["mapping"]["unisolated_broadcast_swarm"] == {"arm_id": "shared_bus_matched_gate", "repeat_index": 0}
     assert doc["provenance"]["mapping"]["tiered_hybrid_cpo_swarm"] == {"arm_id": "tiered_gate", "repeat_index": 0}
+    assert doc["provenance"]["mapping"]["unisolated_tiered_swarm"] == {"arm_id": "shared_bus_tiered_gate", "repeat_index": 0}
+    assert "pending_rungs" not in doc["provenance"]
+    assert rungs["unisolated_tiered_swarm"]["primary_model_id"] == "claude-haiku-5-5 + claude-sonnet-5-5"
 
     out = tmp_path / "golden.json"
     assert mod.write_golden(doc, out) is True
@@ -296,3 +306,132 @@ def test_capture_still_rejects_infrastructure_failures(monkeypatch: pytest.Monke
     short["agent_turns"] = short["agent_turns"][:3]
     res = runner._build_cat6_result_from_replay(rung_id="unisolated_broadcast_swarm", preset=PRESET, raw_rung=short)
     assert "Expected >= 5 agent turns" in (mod._validate_rung(PRESET, "unisolated_broadcast_swarm", res, short) or "")
+
+
+# ------------------------------------------------------------- 4. rung 4 (shared bus, tiered models)
+
+RECORDS = BACKEND_DIR / "experiments" / "cat6_fair_rerun" / "runs.jsonl"
+
+
+def _records() -> list[dict[str, Any]]:
+    return [json.loads(x) for x in RECORDS.read_text(encoding="utf-8").splitlines() if x.strip()] if RECORDS.is_file() else []
+
+
+def _new_arm_recorded() -> bool:
+    return any(r.get("arm_id") == "shared_bus_tiered_gate" and r.get("status") == "ok" for r in _records())
+
+
+def test_golden_builder_leaves_out_the_pending_rung_until_its_arm_is_recorded(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    mod = _load_script("build_cat6_golden_from_rerun", monkeypatch, tmp_path)
+    good = evaluate_patch_in_sandbox("inc-01", "")
+    records = [_synthetic_record(a, 0, recorded_verified=True) for a in ("shared_bus_matched_gate", "isolated_cached_gate", "tiered_gate")]
+    doc = mod.build_golden(records, source_file="x", preset_ids=["inc-01"], sandbox=lambda p, c: copy.deepcopy(good))
+    assert set(doc["presets"]["inc-01"]["rungs"]) == {"unisolated_broadcast_swarm", "isolated_cached_sonnet_swarm", "tiered_hybrid_cpo_swarm"}
+    assert doc["provenance"]["pending_rungs"] == {"unisolated_tiered_swarm": {"arm_id": "shared_bus_tiered_gate", "status": "run pending"}}
+    assert "unisolated_tiered_swarm" not in doc["provenance"]["mapping"]
+    # once any run of the arm is recorded, a missing repeat 0 raises like every other arm
+    with pytest.raises(ValueError, match="shared_bus_tiered_gate / inc-01 / repeat 0"):
+        mod.build_golden([*records, _synthetic_record("shared_bus_tiered_gate", 1, recorded_verified=True)],
+                         source_file="x", preset_ids=["inc-01"], sandbox=lambda p, c: copy.deepcopy(good))
+
+
+def _client() -> Any:
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    return TestClient(app)
+
+
+def test_replay_reports_rung4_as_pending_without_breaking_the_other_rungs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("NOVAMART_TRACES_DIR", str(tmp_path / "traces"))
+    golden = copy.deepcopy(runner.load_cat6_replays())
+    for p in golden["presets"].values():
+        p["rungs"].pop("unisolated_tiered_swarm", None)
+    monkeypatch.setattr(runner, "load_cat6_replays", lambda: golden)
+    client = _client()
+    resp = client.post("/api/cat6/run", json={"preset_id": "inc-02", "mode": "replay"})
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert [r["rung_id"] for r in data["results"]] == ["unisolated_broadcast_swarm", "isolated_cached_sonnet_swarm", "tiered_hybrid_cpo_swarm"]
+    assert data["pending_rungs"] == ["unisolated_tiered_swarm"]
+    assert {r["rung_id"] for r in data["portfolio_scorecard"]} == {"unisolated_broadcast_swarm", "isolated_cached_sonnet_swarm", "tiered_hybrid_cpo_swarm"}
+    assert data["swarm_callout"].endswith("Rung 4 (shared bus, Haiku agents + Sonnet patch author): run pending.")
+    only = client.post("/api/cat6/run", json={"preset_id": "inc-02", "mode": "replay", "rungs": ["unisolated_tiered_swarm"]})
+    assert only.status_code == 404 and "run pending" in only.json()["detail"]
+    # any other rung missing from the replays is still a 404
+    golden2 = copy.deepcopy(golden)
+    golden2["presets"]["inc-02"]["rungs"].pop("isolated_cached_sonnet_swarm")
+    monkeypatch.setattr(runner, "load_cat6_replays", lambda: golden2)
+    assert client.post("/api/cat6/run", json={"preset_id": "inc-02", "mode": "replay"}).status_code == 404
+
+
+def _with_synthetic_rung4(golden: dict[str, Any]) -> dict[str, Any]:
+    """Rung 4 replays built from rung 1's (same thread), with Haiku on every non-author turn (prices only, no text change)."""
+    out = copy.deepcopy(golden)
+    for p in out["presets"].values():
+        r4 = copy.deepcopy(p["rungs"]["unisolated_broadcast_swarm"])
+        r4["rung_id"] = "unisolated_tiered_swarm"
+        r4["primary_model_id"] = "claude-haiku-5-5 + claude-sonnet-5-5"
+        for t in r4["agent_turns"]:
+            if t["agent_role"] != "patch_author":
+                t["model_id"] = "claude-haiku-5-5"
+        p["rungs"]["unisolated_tiered_swarm"] = r4
+    return out
+
+
+def test_replay_serves_rung4_once_recorded(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("NOVAMART_TRACES_DIR", str(tmp_path / "traces"))
+    golden = _with_synthetic_rung4(runner.load_cat6_replays())
+    monkeypatch.setattr(runner, "load_cat6_replays", lambda: golden)
+    data = _client().post("/api/cat6/run", json={"preset_id": "inc-01", "mode": "replay"}).json()
+    by = {r["rung_id"]: r for r in data["results"]}
+    assert list(by) == list(runner.CAT6_RUNG_IDS) and data["pending_rungs"] == []
+    r4, r1 = by["unisolated_tiered_swarm"], by["unisolated_broadcast_swarm"]
+    assert r4["haiku_turns"] >= 4 and r4["sonnet_turns"] >= 1
+    assert all(t["context_mode"] == "shared_omnibus_bus" for t in r4["agent_turns"])
+    assert r4["cold_run_cost_usd"] == pytest.approx(r4["warm_run_cost_usd"])  # uncached: cold = warm = billed
+    assert r4["cold_run_cost_usd"] < r1["cold_run_cost_usd"]
+    assert r4["rung_title"].startswith("4. ") and r4["badge_text"] == "Without the lever, Haiku agents + Sonnet patch author"
+    row = next(x for x in data["portfolio_scorecard"] if x["rung_id"] == "unisolated_tiered_swarm")
+    notes = " ".join(r4["architectural_notes"])
+    assert f"{row['verified_outcomes_count']}/{row['prs_evaluated']} of its" in notes and "Haiku 5.5" in notes
+    assert "prompt tok this run" in notes
+    assert len(data["portfolio_scorecard"]) == 4
+    assert "The shared bus with Haiku agents + a Sonnet patch author:" in data["swarm_callout"]
+
+
+@pytest.mark.skipif(not _new_arm_recorded(), reason="shared_bus_tiered_gate runs not recorded yet (run pending)")
+def test_recorded_shared_bus_tiered_runs_match_todays_builders_and_models() -> None:
+    from app.archetypes.cat6_swarms.prompts import (
+        build_cat6_shared_bus_retry_message,
+        build_cat6_shared_bus_turn_message,
+        format_cat6_failing_checks,
+        get_cat6_agent_system_prompt,
+    )
+
+    presets = {p["id"]: p for p in CAT6_PRESETS}
+    recs = [r for r in _records() if r["arm_id"] == "shared_bus_tiered_gate" and r["status"] == "ok"]
+    assert len({(r["preset_id"], r["repeat_index"]) for r in recs}) == 15
+    for r in recs:
+        assert r["run_nonce"] is None
+        for t in r["turns"]:
+            want = fair_rerun.intended_model_id("shared_bus_tiered_gate", t["agent_role"])
+            assert t["intended_model_id"] == t["model_id"] == want
+            assert t["use_prefix_cache"] is False and t["cache_creation_tokens"] == t["cache_read_tokens"] == 0
+            assert t["system_prompt"] == get_cat6_agent_system_prompt("unisolated_tiered_swarm", t["agent_role"])
+            if t["attempt"] == 2:
+                fb = format_cat6_failing_checks(r["first_attempt"]["sandbox"])
+                assert t["user_message"] == build_cat6_shared_bus_retry_message(presets[r["preset_id"]], fb)
+            else:
+                msg = build_cat6_shared_bus_turn_message(presets[r["preset_id"]], t["agent_role"], sandbox_report=r["final"]["sandbox"])
+                assert t["user_message"] == msg
+
+
+@pytest.mark.skipif(not _new_arm_recorded(), reason="shared_bus_tiered_gate runs not recorded yet (run pending)")
+def test_golden_rung4_is_repeat0_of_the_new_arm() -> None:
+    golden = runner.load_cat6_replays()
+    assert golden["provenance"]["mapping"]["unisolated_tiered_swarm"] == {"arm_id": "shared_bus_tiered_gate", "repeat_index": 0}
+    for pid in ("inc-01", "inc-02", "inc-03"):
+        prov = golden["presets"][pid]["rungs"]["unisolated_tiered_swarm"]["provenance"]
+        assert prov["arm_id"] == "shared_bus_tiered_gate" and prov["repeat_index"] == 0

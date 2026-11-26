@@ -52,7 +52,22 @@ const CAT5_RUNGS: Cat5RungId[] = [
   'unbounded_sonnet_loop',
   'bounded_sonnet_cached_gate',
   'hybrid_haiku_sonnet_governed',
+  'unbounded_haiku_loop',
 ]
+
+const CAT5_RUNG_TAB: Record<Cat5RungId, string> = {
+  unbounded_sonnet_loop: 'Rung 1: Raw Tables',
+  bounded_sonnet_cached_gate: 'Rung 2: Narrow + Gate',
+  hybrid_haiku_sonnet_governed: 'Rung 3: Haiku + Gate',
+  unbounded_haiku_loop: 'Rung 4: Raw Tables (Haiku)',
+}
+
+const CAT5_PENDING_TITLE: Record<Cat5RungId, string> = {
+  unbounded_sonnet_loop: '1. Free-Choice Raw-Table Loop (Sonnet 5.5)',
+  bounded_sonnet_cached_gate: '2. Narrow Query + Cached Policy + Policy Gate',
+  hybrid_haiku_sonnet_governed: '3. Haiku + Policy Gate + Sonnet Escalation',
+  unbounded_haiku_loop: '4. Free-Choice Raw-Table Loop (Haiku 5.5)',
+}
 
 const VOLUME_STEPS = [
   { label: '1k / mo (Pilot Queue)', value: 1_000 },
@@ -142,6 +157,14 @@ export function Cat5Workbench({
     () => runResponse?.results.find((r) => r.rung_id === 'hybrid_haiku_sonnet_governed') ?? null,
     [runResponse]
   )
+  const naiveHaikuRes = useMemo(
+    () => runResponse?.results.find((r) => r.rung_id === 'unbounded_haiku_loop') ?? null,
+    [runResponse]
+  )
+  const availableRungs = useMemo(
+    () => CAT5_RUNGS.filter((rid) => runResponse?.results.some((r) => r.rung_id === rid)),
+    [runResponse]
+  )
 
   // Step-by-step cumulative cost curve ($ / 1k invoices)
   const stepCurveData = useMemo(() => {
@@ -167,10 +190,11 @@ export function Cat5Workbench({
         naive1k: getStepCum(naiveRes, s),
         bounded1k: getStepCum(boundedRes, s),
         hybrid1k: getStepCum(hybridRes, s),
+        naiveHaiku1k: getStepCum(naiveHaikuRes, s),
       })
     }
     return rows
-  }, [runResponse, naiveRes, boundedRes, hybridRes, cacheMode])
+  }, [runResponse, naiveRes, boundedRes, hybridRes, naiveHaikuRes, cacheMode])
 
   // Token consumption bar chart across rungs
   const tokenBarData = useMemo(() => {
@@ -183,7 +207,9 @@ export function Cat5Workbench({
             ? '1. Raw tables'
             : r.rung_id === 'bounded_sonnet_cached_gate'
               ? '2. Narrow + gate'
-              : '3. Haiku + gate',
+              : r.rung_id === 'hybrid_haiku_sonnet_governed'
+                ? '3. Haiku + gate'
+                : '4. Raw tables (Haiku)',
         'Uncached Input': r.total_uncached_input_tokens,
         'Cache W + R': r.total_cache_creation_tokens + r.total_cache_read_tokens,
         'Tool/Plan Out': r.total_output_tokens,
@@ -365,28 +391,35 @@ export function Cat5Workbench({
             {runResponse.orchestration_callout}
           </div>
 
-          {/* 3-Rung Arena Cards with Native <progress> Step-Budget Bars */}
-          <section className="grid gap-4 lg:grid-cols-3">
+          {/* Rung cards (rungs 1-4) with native <progress> step-budget bars */}
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {runResponse.results.map((res) => {
-              const isNaive = res.rung_id === 'unbounded_sonnet_loop'
+              const isHaikuRaw = res.rung_id === 'unbounded_haiku_loop'
+              const isNaive = res.rung_id === 'unbounded_sonnet_loop' || isHaikuRaw
               const isBounded = res.rung_id === 'bounded_sonnet_cached_gate'
               const isHybrid = res.rung_id === 'hybrid_haiku_sonnet_governed'
 
-              const borderTheme = isNaive
-                ? 'border-rose-300'
-                : isBounded
-                  ? 'border-blue-300'
-                  : 'border-teal-400 ring-1 ring-teal-200'
-              const headerBg = isNaive
-                ? 'bg-rose-50'
-                : isBounded
-                  ? 'bg-blue-50/80'
-                  : 'bg-teal-50/90'
-              const badgeBg = isNaive
-                ? 'bg-rose-600 text-white'
-                : isBounded
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-teal-700 text-white'
+              const borderTheme = isHaikuRaw
+                ? 'border-amber-300'
+                : isNaive
+                  ? 'border-rose-300'
+                  : isBounded
+                    ? 'border-blue-300'
+                    : 'border-teal-400 ring-1 ring-teal-200'
+              const headerBg = isHaikuRaw
+                ? 'bg-amber-50'
+                : isNaive
+                  ? 'bg-rose-50'
+                  : isBounded
+                    ? 'bg-blue-50/80'
+                    : 'bg-teal-50/90'
+              const badgeBg = isHaikuRaw
+                ? 'bg-amber-600 text-white'
+                : isNaive
+                  ? 'bg-rose-600 text-white'
+                  : isBounded
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-teal-700 text-white'
 
               const cost1k =
                 cacheMode === 'warm_shared_sop'
@@ -401,7 +434,7 @@ export function Cat5Workbench({
                 res.total_uncached_input_tokens +
                 res.total_cache_creation_tokens +
                 res.total_cache_read_tokens
-              const fillColor = isNaive ? '#e11d48' : isBounded ? '#2563eb' : '#0f766e'
+              const fillColor = isHaikuRaw ? '#d97706' : isNaive ? '#e11d48' : isBounded ? '#2563eb' : '#0f766e'
               const ev = res.evaluation
 
               return (
@@ -440,7 +473,7 @@ export function Cat5Workbench({
                             ${cost1k.toFixed(2)}
                           </div>
                         </div>
-                        {!isNaive && savingsPct > 0 && (
+                        {res.rung_id !== 'unbounded_sonnet_loop' && savingsPct > 0 && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 font-mono text-xs font-extrabold text-emerald-800">
                             <TrendingDown className="h-3.5 w-3.5" />-{savingsPct.toFixed(1)}%
                           </span>
@@ -545,6 +578,21 @@ export function Cat5Workbench({
                 </div>
               )
             })}
+            {(runResponse.pending_rungs ?? []).map((rid) => (
+              <div
+                key={rid}
+                className="flex flex-col justify-center rounded-2xl border border-dashed border-amber-300 bg-amber-50/40 p-5 text-xs text-slate-600 shadow-sm"
+              >
+                <span className="w-fit rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold uppercase text-amber-800">
+                  Run pending
+                </span>
+                <h2 className="mt-2 text-sm font-extrabold text-slate-900">{CAT5_PENDING_TITLE[rid]}</h2>
+                <p className="mt-1 leading-relaxed">
+                  No recorded run to replay yet. The first rung's raw-table loop on Haiku 5.5: no cache and no policy
+                  tool, so there is no escalation path to Sonnet. Run it live to see this invoice.
+                </p>
+              </div>
+            ))}
           </section>
 
           {/* Charts: Step-by-Step Cumulative Spend + Token Breakdown */}
@@ -588,6 +636,17 @@ export function Cat5Workbench({
                       strokeWidth={2.5}
                       dot={{ r: 4 }}
                     />
+                    {naiveHaikuRes && (
+                      <Line
+                        type="monotone"
+                        dataKey="naiveHaiku1k"
+                        name="4. Raw tables on Haiku, no cache"
+                        stroke="#d97706"
+                        strokeWidth={2}
+                        strokeDasharray="5 3"
+                        dot={{ r: 3 }}
+                      />
+                    )}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -716,7 +775,7 @@ export function Cat5Workbench({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {CAT5_RUNGS.map((rid) => (
+                  {availableRungs.map((rid) => (
                     <button
                       key={rid}
                       type="button"
@@ -727,11 +786,7 @@ export function Cat5Workbench({
                           : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                       }`}
                     >
-                      {rid === 'unbounded_sonnet_loop'
-                        ? 'Rung 1: Raw Tables'
-                        : rid === 'bounded_sonnet_cached_gate'
-                          ? 'Rung 2: Narrow + Gate'
-                          : 'Rung 3: Haiku + Gate'}
+                      {CAT5_RUNG_TAB[rid]}
                     </button>
                   ))}
                 </div>
@@ -1025,8 +1080,8 @@ export function Cat5Workbench({
                 />
               </div>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                {[naiveRes, boundedRes, hybridRes].map((r) => {
+              <div className={`mt-4 grid gap-3 ${naiveHaikuRes ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+                {[naiveRes, boundedRes, hybridRes, ...(naiveHaikuRes ? [naiveHaikuRes] : [])].map((r) => {
                   const perInv =
                     cacheMode === 'warm_shared_sop'
                       ? r.warm_run_cost_usd
@@ -1036,7 +1091,9 @@ export function Cat5Workbench({
                   return (
                     <div key={r.rung_id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
                       <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-900">
-                        {r.rung_id === 'unbounded_sonnet_loop' ? (
+                        {r.rung_id === 'unbounded_haiku_loop' ? (
+                          <Database className="h-3.5 w-3.5 text-amber-600" />
+                        ) : r.rung_id === 'unbounded_sonnet_loop' ? (
                           <Database className="h-3.5 w-3.5 text-rose-600" />
                         ) : r.rung_id === 'bounded_sonnet_cached_gate' ? (
                           <Cpu className="h-3.5 w-3.5 text-blue-600" />

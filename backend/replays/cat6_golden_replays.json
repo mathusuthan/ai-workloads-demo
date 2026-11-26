@@ -14,11 +14,15 @@
       "tiered_hybrid_cpo_swarm": {
         "arm_id": "tiered_gate",
         "repeat_index": 0
+      },
+      "unisolated_tiered_swarm": {
+        "arm_id": "shared_bus_tiered_gate",
+        "repeat_index": 0
       }
     },
     "selection_rule": "fixed pre-declared mapping, repeat_index 0 for every preset (not selected by outcome)",
     "sandbox_report": "current sandbox on each record's patched_code_final",
-    "rebuilt_at": "2026-11-26T05:42:36Z"
+    "rebuilt_at": "2026-11-26T08:14:57Z"
   },
   "presets": {
     "inc-01": {
@@ -570,6 +574,189 @@
             "repeat_index": 0,
             "run_id": "f2eb15a9-d6dd-46f9-832a-bf57bdc84406",
             "started_at": "2026-11-25T15:06:59.738667+00:00",
+            "sandbox_report": "current sandbox on patched_code_final"
+          }
+        },
+        "unisolated_tiered_swarm": {
+          "rung_id": "unisolated_tiered_swarm",
+          "primary_model_id": "claude-haiku-5-5 + claude-sonnet-5-5",
+          "retries_used": 0,
+          "agent_turns": [
+            {
+              "step_number": 1,
+              "agent_role": "orchestrator_plan",
+              "agent_label": "1. Lead Orchestrator (Plan & Triage Dispatch)",
+              "model_id": "claude-haiku-5-5",
+              "context_mode": "shared_omnibus_bus",
+              "attempt": 1,
+              "max_tokens": 4000,
+              "stop_reason": "end_turn",
+              "latency_ms": 3020,
+              "input_tokens": 40893,
+              "output_tokens": 484,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "prompt_preview": "### INCIDENT / PR TICKET: PR-4812 (CI/CD Failure Triage)\n- Service: `checkout-pricing-svc`\n- Target File: `services/checkout-pricing-svc/src/gst_cart_tax.py`\n- Severity: `P0 \u00b7 Tax Compliance Break` \u00b7 Standard: `ENG-STD-04`\n- Summary: Incident 1: Checkout GST Sec 15(3), Coupon Cap & Float Paise Drift \u2014 Nightly razorpay reconciliation flagged INR 1,420 GST under-remittance when customers applied NovaPay prepaid wallet + stacked Diwali coupons (`FLO",
+              "output_preview": "- **Standard & Root Cause:** Applies `ENG-STD-04` (checkout GST Sec 15(3) & paise precision). Failures stem from float arithmetic/`round()`, deducting the prepaid wallet before GST, coupon filtering/caps ignored (inactive codes applied, no per-coupon or 50% stack cap), and missing qty/price validation.\n- **CI Triager Task:** Map the four failing tests to the broken lines: wallet deduction before tax (`test_wallet_applied_post_gst_sec15_3`), cap/inactive-coupon logic (`test_inactive_and_50pct_coupon_stack_cap`), odd-paise split and float drift (`test_decimal_half_up_odd_paise_conservation`), and absent `ValueError` guards (`test_negative_qty_and_price_rejected`).\n- **Patch Author Task:** Rewrite `gst_cart_tax.py` purely with `Decimal`/`ROUND_HALF_UP` (no `round()`), validate inputs, filter inactive coupons, apply per-coupon and 50% stack caps, compute GST on taxable value before wallet tender, and set `sgst = total_gst - cgst`.\n- **Gate Requirement:** Preserve all public signatures and dataclass fields verbatim, keep stdlib-only imports, and pass `PR-SANDBOX-GATE-01` (10/10) before sign-off."
+            },
+            {
+              "step_number": 2,
+              "agent_role": "ci_triager",
+              "agent_label": "2. Swarm Agent: CI / Runtime Triager",
+              "model_id": "claude-haiku-5-5",
+              "context_mode": "shared_omnibus_bus",
+              "attempt": 1,
+              "max_tokens": 4000,
+              "stop_reason": "end_turn",
+              "latency_ms": 5565,
+              "input_tokens": 41409,
+              "output_tokens": 1026,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "prompt_preview": "[TURN 2 \u2014 CI/CD & RUNTIME TRIAGER]: Pinpoint the exact broken lines and mandatory contracts for the Patch Author.",
+              "output_preview": "**Broken lines \u2192 failing assertions (`gst_cart_tax.py`):**\n\n- **L27\u201328 `gross = sum(float(...) * qty)`, `float` gross:** drives `test_decimal_half_up_odd_paise_conservation` (19.99\u00d73 float drift). No per-line `ROUND_HALF_UP` quantize.\n- **L31\u201333 coupon loop:** `discount += gross * pct/100` with no `c.active` filter, no `max_discount_inr` clamp, no 50% stack ceiling \u2192 `test_inactive_and_50pct_coupon_stack_cap` (1850 > 1500, INACTIVE_CODE included).\n- **L36\u201337 `wallet_used = min(gross - discount, wallet)` then `taxable = gross - discount - wallet_used`:** wallet deducted pre-GST \u2192 `test_wallet_applied_post_gst_sec15_3` (1900 vs 2400).\n- **L40 `round(taxable * rate/100, 2)`:** banned built-in `round()` (AST-DEC-01), banker's rounding, float.\n- **L44\u201345 `cgst = round(total_gst/2)`, `sgst = round(total_gst/2)`:** odd-paise leak \u2192 `test_decimal_half_up_odd_paise_conservation` (1.50+1.50\u22603.01).\n- **L20\u201322 no `qty<=0`, `unit_price<0`, `gst_rate<0`, or `wallet<0` guard:** \u2192 `test_negative_qty_and_price_rejected` (no ValueError).\n- **L15 `avg_rate = lines[0].gst_rate_pct`:** ignores mixed-slab per-line GST.\n\n**Mandatory contracts for the Patch Author:**\n\n1. Helper `_d(v)` converts via `Decimal(str(v))`; never `float()`, never built-in `round()`; quantize all money to `Decimal(\"0.01\")` with `ROUND_HALF_UP`.\n2. Raise `ValueError` for empty `lines`, `qty<=0`, negative `unit_price_inr`/`gst_rate_pct`/`discount_pct`/`max_discount_inr`/`wallet_credit_inr`.\n3. Skip coupons with `active=False`; clamp each by `max_discount_inr`; clamp summed discount to `gross \u00d7 0.50`.\n4. `taxable = max(0, gross \u2212 discount)`; wallet is NOT subtracted before GST (Sec 15(3)).\n5. GST per line on proportional taxable share when slabs are mixed; single-slab uses one multiplication.\n6. `cgst = (total/2).quantize(...)`, `sgst = total \u2212 cgst`, `igst = 0` for intra-state; `igst = total`, `cgst = sgst = 0` for inter-state.\n7. Wallet applied last against `gross_total`; `net_payable = gross_total \u2212 wallet_applied"
+            },
+            {
+              "step_number": 3,
+              "agent_role": "patch_author",
+              "agent_label": "3. Swarm Agent: Code & Patch Author",
+              "model_id": "claude-sonnet-5-5",
+              "context_mode": "shared_omnibus_bus",
+              "attempt": 1,
+              "max_tokens": 16000,
+              "stop_reason": "end_turn",
+              "latency_ms": 11645,
+              "input_tokens": 42788,
+              "output_tokens": 2152,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "prompt_preview": "[TURN 3 \u2014 CODE & PATCH AUTHOR]: Write the COMPLETE repaired `gst_cart_tax.py` strictly conforming to `ENG-STD-04` in one fenced ```python block.",
+              "output_preview": "```python\n\"\"\"NovaMart Checkout Pricing & GST Calculation Engine (ENG-STD-04 compliant build).\n\nAll monetary math uses decimal.Decimal quantized to paise with ROUND_HALF_UP.\nPrepaid wallet is a post-tax payment tender (CGST Act Sec 15(3)) and is applied\nonly after GST has been computed on the post-coupon taxable value.\n\"\"\"\n\nfrom dataclasses import dataclass\nfrom decimal import Decimal, ROUND_HALF_UP\n\nPAISE = Decimal(\"0.01\")\n_ZERO = Decimal(\"0.00\")\n_HUNDRED = Decimal(\"100\")\n_TWO = Decimal(\"2\")\n_STACK_CAP_FRACTION = Decimal(\"0.50\")\n\n\n@dataclass(frozen=True)\nclass CartLine:\n    sku: str\n    unit_price_inr: Decimal\n    qty: int\n    gst_rate_pct: Decimal = Decimal(\"18.00\")\n\n\n@dataclass(frozen=True)\nclass CouponSpec:\n    code: str\n    discount_pct: Decimal\n    max_discount_inr: Decimal\n    active: bool = True\n\n\n@dataclass(frozen=True)\nclass CartTaxBreakdown:\n    gross_subtotal_inr: Decimal\n    discount_inr: Decimal\n    taxable_subtotal_inr: Decimal\n    cgst_inr: Decimal\n    sgst_inr: Decimal\n    igst_inr: Decimal\n    total_gst_inr: Decimal\n    wallet_applied_inr: Decimal\n    net_payable_inr: Decimal\n\n\ndef _d(v) -> Decimal:\n    \"\"\"Normalize any numeric input to Decimal without binary float drift.\"\"\"\n    return v if isinstance(v, Decimal) else Decimal(str(v))\n\n\ndef _q(v: Decimal) -> Decimal:\n    \"\"\"Quantize to paise using ROUND_HALF_UP (banker's rounding is banned).\"\"\"\n    return v.quantize(PAISE, rounding=ROUND_HALF_UP)\n\n\ndef compute_checkout_totals(\n    lines: list[CartLine],\n    coupons: list[CouponSpec],\n    wallet_credit_inr: Decimal = Decimal(\"0.00\"),\n    inter_state: bool = False,\n) -> CartTaxBreakdown:\n    # ---- 1. Input validation -------------------------------------------------\n    if not lines:\n        raise ValueError(\"cart must contain at least one line\")\n\n    wallet_credit = _d(wallet_credit_inr)\n    if wallet_credit < _ZERO:\n        raise ValueError(\"wallet_credit_inr must not be negative\")\n\n    line_grosses: list[Decimal] = []\n    line_rates: list[Decimal] "
+            },
+            {
+              "step_number": 4,
+              "agent_role": "security_critic",
+              "agent_label": "4. Swarm Agent: Security & Test Critic",
+              "model_id": "claude-haiku-5-5",
+              "context_mode": "shared_omnibus_bus",
+              "attempt": 1,
+              "max_tokens": 4000,
+              "stop_reason": "end_turn",
+              "latency_ms": 3509,
+              "input_tokens": 45462,
+              "output_tokens": 601,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "prompt_preview": "[TURN 4 \u2014 SECURITY & TEST CRITIC]:\n\n#### Deterministic PR-SANDBOX-GATE-01 (10/10)\n- CI-UNIT-01 [PASS]: Intra-state CGST/SGST nominal checkout -> gross=2000.00 cgst=180.00 sgst=180.00 net=2360.00\n- CI-UNIT-02 [PASS]: Active coupon per-coupon max ceiling clamp -> disc=250.00 taxable=1750.00 gst=315.00\n- CI-UNIT-03 [PASS]: Inter-state IGST & float-safe 19.99 * 3 precision -> inter_state igst=10.79 net=70.76\n- CI-UNIT-04 [PASS]: CGST Sec 15(3) wallet",
+              "output_preview": "**Verdict: ENG-STD-04 holds; gate 10/10 accepted, with two caveats.**\n\n**Verified against the patch:**\n- **Paise/Decimal:** All money is `Decimal` via `_d()` and quantized with `ROUND_HALF_UP`. No `float()` or built-in `round()` remains. Static AST `AST-DEC-01` is consistent with this.\n- **Sec 15(3) ordering:** Wallet is subtracted only after `total_gst` is computed on `taxable_subtotal`. No pre-tax deduction.\n- **Coupon invariants:** Inactive coupons skipped, per-coupon cap applied, 50% stack ceiling enforced.\n- **Odd-paise conservation:** `sgst = total_gst - cgst` guarantees `cgst + sgst == total_gst`.\n- **Timing/side channels, DPDP, lock ordering:** Not applicable to this module (no comparisons on secrets, no PII, no locks). Those controls live in `upi_webhook_auth.py` and `inventory_reservation.py`, which were out of scope for this patch.\n\n**Caveats:**\n1. **CI-UNIT-03 figures need re-derivation.** The 19.99 \u00d7 3 inter-state case should yield `gross = 59.97`; the reported `net = 70.76` only reconciles if a second line or GST rate is involved. Confirm the fixture before merge.\n2. **Mixed-slab GST is unexercised by the gate.** The proportional allocation path has no adversarial test. Add one before relying on it for multi-rate carts.\n\n**Sign-off:** Approved for merge contingent on resolving caveat 1 and adding the mixed-slab test. Verified CpO reporting belongs to the Lead Orchestrator memo."
+            },
+            {
+              "step_number": 5,
+              "agent_role": "orchestrator_merge",
+              "agent_label": "5. Lead Orchestrator (Merge Gate Sign-Off)",
+              "model_id": "claude-haiku-5-5",
+              "context_mode": "shared_omnibus_bus",
+              "attempt": 1,
+              "max_tokens": 4000,
+              "stop_reason": "end_turn",
+              "latency_ms": 2735,
+              "input_tokens": 46108,
+              "output_tokens": 389,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "prompt_preview": "[TURN 5 \u2014 LEAD ORCHESTRATOR MERGE GATE]:\n\n#### PR-SANDBOX-GATE-01 Status: `10/10` (Verified Outcome: `True`)\n\nEmit your final PR merge readiness sign-off.",
+              "output_preview": "**PR-4812 Merge Sign-off: Conditional, not ready for auto-merge**\n\n- **Gate result:** PR-SANDBOX-GATE-01 reports 10/10, but the critic's review flagged caveat 1 (CI-UNIT-03 expected `net=70.76` does not reconcile with `gross=59.97` for 19.99 \u00d7 3) and caveat 2 (mixed-slab proportional GST path has no adversarial test). A green count does not clear either issue.\n- **Required before auto-merge:** Re-derive CI-UNIT-03 fixture and expected values from the actual input; add a mixed-slab adversarial test and confirm it passes; re-run the gate and confirm 11/11 (or 10/10 with the corrected fixture).\n- **Scope note:** This sign-off covers `gst_cart_tax.py` only. `upi_webhook_auth.py` and `inventory_reservation.py` were not patched or verified in this PR.\n- **Verified CpO:** Not computed. I have no telemetry on agent API spend or retry counts for this run, so I cannot report a cost-per-verified-outcome figure without fabricating it."
+            }
+          ],
+          "patched_code": "\"\"\"NovaMart Checkout Pricing & GST Calculation Engine (ENG-STD-04 compliant build).\n\nAll monetary math uses decimal.Decimal quantized to paise with ROUND_HALF_UP.\nPrepaid wallet is a post-tax payment tender (CGST Act Sec 15(3)) and is applied\nonly after GST has been computed on the post-coupon taxable value.\n\"\"\"\n\nfrom dataclasses import dataclass\nfrom decimal import Decimal, ROUND_HALF_UP\n\nPAISE = Decimal(\"0.01\")\n_ZERO = Decimal(\"0.00\")\n_HUNDRED = Decimal(\"100\")\n_TWO = Decimal(\"2\")\n_STACK_CAP_FRACTION = Decimal(\"0.50\")\n\n\n@dataclass(frozen=True)\nclass CartLine:\n    sku: str\n    unit_price_inr: Decimal\n    qty: int\n    gst_rate_pct: Decimal = Decimal(\"18.00\")\n\n\n@dataclass(frozen=True)\nclass CouponSpec:\n    code: str\n    discount_pct: Decimal\n    max_discount_inr: Decimal\n    active: bool = True\n\n\n@dataclass(frozen=True)\nclass CartTaxBreakdown:\n    gross_subtotal_inr: Decimal\n    discount_inr: Decimal\n    taxable_subtotal_inr: Decimal\n    cgst_inr: Decimal\n    sgst_inr: Decimal\n    igst_inr: Decimal\n    total_gst_inr: Decimal\n    wallet_applied_inr: Decimal\n    net_payable_inr: Decimal\n\n\ndef _d(v) -> Decimal:\n    \"\"\"Normalize any numeric input to Decimal without binary float drift.\"\"\"\n    return v if isinstance(v, Decimal) else Decimal(str(v))\n\n\ndef _q(v: Decimal) -> Decimal:\n    \"\"\"Quantize to paise using ROUND_HALF_UP (banker's rounding is banned).\"\"\"\n    return v.quantize(PAISE, rounding=ROUND_HALF_UP)\n\n\ndef compute_checkout_totals(\n    lines: list[CartLine],\n    coupons: list[CouponSpec],\n    wallet_credit_inr: Decimal = Decimal(\"0.00\"),\n    inter_state: bool = False,\n) -> CartTaxBreakdown:\n    # ---- 1. Input validation -------------------------------------------------\n    if not lines:\n        raise ValueError(\"cart must contain at least one line\")\n\n    wallet_credit = _d(wallet_credit_inr)\n    if wallet_credit < _ZERO:\n        raise ValueError(\"wallet_credit_inr must not be negative\")\n\n    line_grosses: list[Decimal] = []\n    line_rates: list[Decimal] = []\n    for line in lines:\n        qty = int(line.qty)\n        unit_price = _d(line.unit_price_inr)\n        rate = _d(line.gst_rate_pct)\n        if qty <= 0:\n            raise ValueError(\"line qty must be positive\")\n        if unit_price < _ZERO:\n            raise ValueError(\"unit_price_inr must not be negative\")\n        if rate < _ZERO:\n            raise ValueError(\"gst_rate_pct must not be negative\")\n        line_grosses.append(_q(unit_price * Decimal(qty)))\n        line_rates.append(rate)\n\n    # ---- 2. Gross subtotal ---------------------------------------------------\n    gross_subtotal = _q(sum(line_grosses, _ZERO))\n\n    # ---- 3. Coupons: active only, per-coupon cap, 50% stack ceiling ----------\n    stacked_discount = _ZERO\n    for c in coupons or []:\n        pct = _d(c.discount_pct)\n        max_inr = _d(c.max_discount_inr)\n        if pct < _ZERO or max_inr < _ZERO:\n            raise ValueError(\"coupon discount_pct and max_discount_inr must not be negative\")\n        if not c.active:\n            continue\n        raw_disc = _q(gross_subtotal * (pct / _HUNDRED))\n        capped_disc = min(raw_disc, _q(max_inr))\n        stacked_discount += capped_disc\n\n    max_stack_cap = _q(gross_subtotal * _STACK_CAP_FRACTION)\n    total_discount = _q(min(stacked_discount, max_stack_cap))\n\n    # ---- 4. Taxable value BEFORE wallet (CGST Sec 15(3)) ---------------------\n    taxable_subtotal = _q(max(_ZERO, gross_subtotal - total_discount))\n\n    # ---- 5. GST computation and CGST/SGST/IGST split -------------------------\n    if gross_subtotal == _ZERO or taxable_subtotal == _ZERO:\n        total_gst = _ZERO\n    elif len(set(line_rates)) == 1:\n        total_gst = _q(taxable_subtotal * line_rates[0] / _HUNDRED)\n    else:\n        total_gst = _ZERO\n        for line_gross, rate in zip(line_grosses, line_rates):\n            line_taxable = line_gross * taxable_subtotal / gross_subtotal\n            total_gst += _q(line_taxable * rate / _HUNDRED)\n        total_gst = _q(total_gst)\n\n    if inter_state:\n        igst = total_gst\n        cgst = _ZERO\n        sgst = _ZERO\n    else:\n        cgst = _q(total_gst / _TWO)\n        sgst = _q(total_gst - cgst)\n        igst = _ZERO\n\n    # ---- 6. Prepaid wallet tender and net payable ----------------------------\n    gross_total = _q(taxable_subtotal + total_gst)\n    wallet_applied = _q(min(gross_total, _q(wallet_credit)))\n    net_payable = _q(gross_total - wallet_applied)\n\n    return CartTaxBreakdown(\n        gross_subtotal_inr=gross_subtotal,\n        discount_inr=total_discount,\n        taxable_subtotal_inr=taxable_subtotal,\n        cgst_inr=cgst,\n        sgst_inr=sgst,\n        igst_inr=igst,\n        total_gst_inr=total_gst,\n        wallet_applied_inr=wallet_applied,\n        net_payable_inr=net_payable,\n    )",
+          "final_signoff_memo": "**PR-4812 Merge Sign-off: Conditional, not ready for auto-merge**\n\n- **Gate result:** PR-SANDBOX-GATE-01 reports 10/10, but the critic's review flagged caveat 1 (CI-UNIT-03 expected `net=70.76` does not reconcile with `gross=59.97` for 19.99 \u00d7 3) and caveat 2 (mixed-slab proportional GST path has no adversarial test). A green count does not clear either issue.\n- **Required before auto-merge:** Re-derive CI-UNIT-03 fixture and expected values from the actual input; add a mixed-slab adversarial test and confirm it passes; re-run the gate and confirm 11/11 (or 10/10 with the corrected fixture).\n- **Scope note:** This sign-off covers `gst_cart_tax.py` only. `upi_webhook_auth.py` and `inventory_reservation.py` were not patched or verified in this PR.\n- **Verified CpO:** Not computed. I have no telemetry on agent API spend or retry counts for this run, so I cannot report a cost-per-verified-outcome figure without fabricating it.",
+          "sandbox_report": {
+            "total_checks": 10,
+            "passed_checks": 10,
+            "ci_unit_passed": 4,
+            "adversarial_passed": 4,
+            "ast_passed": 2,
+            "verified_outcome": true,
+            "execution_ms": 34,
+            "checks": [
+              {
+                "check_id": "CI-UNIT-01",
+                "category": "ci_unit",
+                "name": "Intra-state CGST/SGST nominal checkout",
+                "passed": true,
+                "detail": "gross=2000.00 cgst=180.00 sgst=180.00 net=2360.00"
+              },
+              {
+                "check_id": "CI-UNIT-02",
+                "category": "ci_unit",
+                "name": "Active coupon per-coupon max ceiling clamp",
+                "passed": true,
+                "detail": "disc=250.00 taxable=1750.00 gst=315.00"
+              },
+              {
+                "check_id": "CI-UNIT-03",
+                "category": "ci_unit",
+                "name": "Inter-state IGST & float-safe 19.99 * 3 precision",
+                "passed": true,
+                "detail": "inter_state igst=10.79 net=70.76"
+              },
+              {
+                "check_id": "CI-UNIT-04",
+                "category": "ci_unit",
+                "name": "CGST Sec 15(3) wallet applied strictly post-tax",
+                "passed": true,
+                "detail": "CGST Sec15(3) verified: taxable=2400.00 gst=432.00 net=2332.00"
+              },
+              {
+                "check_id": "ADV-FIN-01",
+                "category": "adversarial",
+                "name": "50% stacked coupon ceiling + inactive coupon filter",
+                "passed": true,
+                "detail": "stack_cap_50pct=1500.00 ignored_inactive=True"
+              },
+              {
+                "check_id": "ADV-FIN-02",
+                "category": "adversarial",
+                "name": "Odd-paise HALF_UP split & paise conservation",
+                "passed": true,
+                "detail": "odd_paise cgst=1.51 + sgst=1.50 == 3.01"
+              },
+              {
+                "check_id": "ADV-FIN-03",
+                "category": "adversarial",
+                "name": "Wallet excess clamped to net_payable=0.00",
+                "passed": true,
+                "detail": "wallet_clamped=118.00 net_payable=0.00"
+              },
+              {
+                "check_id": "ADV-FIN-04",
+                "category": "adversarial",
+                "name": "Rejects empty cart, qty<=0 & negative unit price",
+                "passed": true,
+                "detail": "Empty/zero-qty/negative-price inputs cleanly raised ValueError"
+              },
+              {
+                "check_id": "AST-SAFE-02",
+                "category": "ast",
+                "name": "Sandbox static AST safety guard",
+                "passed": true,
+                "detail": "Clean stdlib-only module AST; zero blocked OS/eval/network symbols."
+              },
+              {
+                "check_id": "AST-DEC-01",
+                "category": "ast",
+                "name": "ENG-STD-04 Decimal + ROUND_HALF_UP (No float round())",
+                "passed": true,
+                "detail": "Confirmed Decimal + ROUND_HALF_UP and zero calls to built-in round()."
+              }
+            ],
+            "unified_diff": "--- a/services/checkout-pricing-svc/src/gst_cart_tax.py\n+++ b/services/checkout-pricing-svc/src/gst_cart_tax.py\n@@ -1,7 +1,18 @@\n-\"\"\"NovaMart Checkout Pricing & GST Calculation Engine (Legacy Buggy Build).\"\"\"\n+\"\"\"NovaMart Checkout Pricing & GST Calculation Engine (ENG-STD-04 compliant build).\n+\n+All monetary math uses decimal.Decimal quantized to paise with ROUND_HALF_UP.\n+Prepaid wallet is a post-tax payment tender (CGST Act Sec 15(3)) and is applied\n+only after GST has been computed on the post-coupon taxable value.\n+\"\"\"\n \n from dataclasses import dataclass\n-from decimal import Decimal\n+from decimal import Decimal, ROUND_HALF_UP\n+\n+PAISE = Decimal(\"0.01\")\n+_ZERO = Decimal(\"0.00\")\n+_HUNDRED = Decimal(\"100\")\n+_TWO = Decimal(\"2\")\n+_STACK_CAP_FRACTION = Decimal(\"0.50\")\n \n \n @dataclass(frozen=True)\n@@ -33,47 +44,101 @@\n     net_payable_inr: Decimal\n \n \n+def _d(v) -> Decimal:\n+    \"\"\"Normalize any numeric input to Decimal without binary float drift.\"\"\"\n+    return v if isinstance(v, Decimal) else Decimal(str(v))\n+\n+\n+def _q(v: Decimal) -> Decimal:\n+    \"\"\"Quantize to paise using ROUND_HALF_UP (banker's rounding is banned).\"\"\"\n+    return v.quantize(PAISE, rounding=ROUND_HALF_UP)\n+\n+\n def compute_checkout_totals(\n     lines: list[CartLine],\n     coupons: list[CouponSpec],\n     wallet_credit_inr: Decimal = Decimal(\"0.00\"),\n     inter_state: bool = False,\n ) -> CartTaxBreakdown:\n-    # BUG 1: Uses IEEE-754 float and Python round() (banker's rounding / drift)\n-    # BUG 2: Never validates qty <= 0 or negative unit prices\n-    gross = sum(float(line.unit_price_inr) * line.qty for line in lines)\n+    # ---- 1. Input validation -------------------------------------------------\n+    if not lines:\n+        raise ValueError(\"cart must contain at least one line\")\n \n-    # BUG 3: Applies inactive coupons, ignores per-coupon max_discount_inr and 50% stack cap\n-    discount = 0.0\n-    for c in coupons:\n-        discount += gross * (float(c.discount_pct) / 100.0)\n+    wallet_credit = _d(wallet_credit_inr)\n+    if wallet_credit < _ZERO:\n+        raise ValueError(\"wallet_credit_inr must not be negative\")\n \n-    # BUG 4: Deducts prepaid wallet BEFORE calculating statutory GST (violates CGST Sec 15(3))\n-    wallet_used = min(gross - discount, float(wallet_credit_inr))\n-    taxable = max(0.0, gross - discount - wallet_used)\n+    line_grosses: list[Decimal] = []\n+    line_rates: list[Decimal] = []\n+    for line in lines:\n+        qty = int(line.qty)\n+        unit_price = _d(line.unit_price_inr)\n+        rate = _d(line.gst_rate_pct)\n+        if qty <= 0:\n+            raise ValueError(\"line qty must be positive\")\n+        if unit_price < _ZERO:\n+            raise ValueError(\"unit_price_inr must not be negative\")\n+        if rate < _ZERO:\n+            raise ValueError(\"gst_rate_pct must not be negative\")\n+        line_grosses.append(_q(unit_price * Decimal(qty)))\n+        line_rates.append(rate)\n \n-    avg_rate = float(lines[0].gst_rate_pct) if lines else 18.0\n-    total_gst = round(taxable * (avg_rate / 100.0), 2)\n+    # ---- 2. Gross subtotal ---------------------------------------------------\n+    gross_subtotal = _q(sum(line_grosses, _ZERO))\n+\n+    # ---- 3. Coupons: active only, per-coupon cap, 50% stack ceiling ----------\n+    stacked_discount = _ZERO\n+    for c in coupons or []:\n+        pct = _d(c.discount_pct)\n+        max_inr = _d(c.max_discount_inr)\n+        if pct < _ZERO or max_inr < _ZERO:\n+            raise ValueError(\"coupon discount_pct and max_discount_inr must not be negative\")\n+        if not c.active:\n+            continue\n+        raw_disc = _q(gross_subtotal * (pct / _HUNDRED))\n+        capped_disc = min(raw_disc, _q(max_inr))\n+        stacked_discount += capped_disc\n+\n+    max_stack_cap = _q(gross_subtotal * _STACK_CAP_FRACTION)\n+    total_discount = _q(min(stacked_discount, max_stack_cap))\n+\n+    # ---- 4. Taxable value BEFORE wallet (CGST Sec 15(3)) ---------------------\n+    taxable_subtotal = _q(max(_ZERO, gross_subtotal - total_discount))\n+\n+    # ---- 5. GST computation and CGST/SGST/IGST split -------------------------\n+    if gross_subtotal == _ZERO or taxable_subtotal == _ZERO:\n+        total_gst = _ZERO\n+    elif len(set(line_rates)) == 1:\n+        total_gst = _q(taxable_subtotal * line_rates[0] / _HUNDRED)\n+    else:\n+        total_gst = _ZERO\n+        for line_gross, rate in zip(line_grosses, line_rates):\n+            line_taxable = line_gross * taxable_subtotal / gross_subtotal\n+            total_gst += _q(line_taxable * rate / _HUNDRED)\n+        total_gst = _q(total_gst)\n \n     if inter_state:\n         igst = total_gst\n-        cgst = 0.0\n-        sgst = 0.0\n+        cgst = _ZERO\n+        sgst = _ZERO\n     else:\n-        # BUG 5: Odd paise total_gst split naively via round/2 loses 1 paise conservation\n-        cgst = round(total_gst / 2.0, 2)\n-        sgst = round(total_gst / 2.0, 2)\n-        igst = 0.0\n+        cgst = _q(total_gst / _TWO)\n+        sgst = _q(total_gst - cgst)\n+        igst = _ZERO\n \n-    net_payable = round(taxable + total_gst, 2)\n+    # ---- 6. Prepaid wallet tender and net payable ----------------------------\n+    gross_total = _q(taxable_subtotal + total_gst)\n+    wallet_applied = _q(min(gross_total, _q(wallet_credit)))\n+    net_payable = _q(gross_total - wallet_applied)\n+\n     return CartTaxBreakdown(\n-        gross_subtotal_inr=Decimal(str(round(gross, 2))),\n-        discount_inr=Decimal(str(round(discount, 2))),\n-        taxable_subtotal_inr=Decimal(str(round(taxable, 2))),\n-        cgst_inr=Decimal(str(cgst)),\n-        sgst_inr=Decimal(str(sgst)),\n-        igst_inr=Decimal(str(igst)),\n-        total_gst_inr=Decimal(str(total_gst)),\n-        wallet_applied_inr=Decimal(str(round(wallet_used, 2))),\n-        net_payable_inr=Decimal(str(net_payable)),\n+        gross_subtotal_inr=gross_subtotal,\n+        discount_inr=total_discount,\n+        taxable_subtotal_inr=taxable_subtotal,\n+        cgst_inr=cgst,\n+        sgst_inr=sgst,\n+        igst_inr=igst,\n+        total_gst_inr=total_gst,\n+        wallet_applied_inr=wallet_applied,\n+        net_payable_inr=net_payable,\n     )"
+          },
+          "provenance": {
+            "arm_id": "shared_bus_tiered_gate",
+            "repeat_index": 0,
+            "run_id": "dc5e8fe4-b035-43d9-8fbb-f4a78bb17698",
+            "started_at": "2026-11-26T08:12:29.805352+00:00",
             "sandbox_report": "current sandbox on patched_code_final"
           }
         }
@@ -1126,6 +1313,189 @@
             "started_at": "2026-11-25T15:08:37.281237+00:00",
             "sandbox_report": "current sandbox on patched_code_final"
           }
+        },
+        "unisolated_tiered_swarm": {
+          "rung_id": "unisolated_tiered_swarm",
+          "primary_model_id": "claude-haiku-5-5 + claude-sonnet-5-5",
+          "retries_used": 0,
+          "agent_turns": [
+            {
+              "step_number": 1,
+              "agent_role": "orchestrator_plan",
+              "agent_label": "1. Lead Orchestrator (Plan & Triage Dispatch)",
+              "model_id": "claude-haiku-5-5",
+              "context_mode": "shared_omnibus_bus",
+              "attempt": 1,
+              "max_tokens": 4000,
+              "stop_reason": "end_turn",
+              "latency_ms": 3151,
+              "input_tokens": 40519,
+              "output_tokens": 482,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "prompt_preview": "### INCIDENT / PR TICKET: SEC-772 (Security Threat Hunting)\n- Service: `upi-webhook-svc`\n- Target File: `services/upi-webhook-svc/src/upi_webhook_auth.py`\n- Severity: `P0 \u00b7 CWE-208 + DPDP Violation` \u00b7 Standard: `SEC-STD-02`\n- Summary: Threat Hunt 2: NPCI UPI Spoofed Replay, CWE-208 Timing Leak & DPDP PII Exposure \u2014 Red-team audit found missing `{ts}.{body}` HMAC binding, `!=` timing oracle, absent 300s timestamp check, duplicate `event_id` double",
+              "output_preview": "- **Standard applies:** `SEC-STD-02` (UPI webhook auth, Tier-0 P0, CWE-208 + DPDP). Target: `services/upi-webhook-svc/src/upi_webhook_auth.py` only; ignore sibling dumps (catalog, loyalty, invoice, CI logs, spans).\n- **Signature fix (SEC-01/AST-SEC-01):** Sign canonical `f\"{int(timestamp)}.{raw_body}\"`, normalize `sha256=` prefix/whitespace/case, verify ASCII 64-hex, and replace `!=` with `hmac.compare_digest`.\n- **Replay & idempotency (SEC-01/SEC-02):** Enforce symmetric `abs(now_ts - timestamp) <= replay_window_seconds` returning `STALE_OR_FUTURE_TIMESTAMP`; reject `amount_paise <= 0` as `INVALID_AMOUNT`; reject duplicate `event_id` as `DUPLICATE_EVENT_REPLAY` before any ledger write.\n- **DPDP redaction (SEC-03):** Add `_mask_vpa` (`ra***@okicici`) and `_mask_mobile` (last 4 digits only) and apply to every `audit_log` and `refund_ledger` entry on accept and reject paths; keep public names, dataclass fields, and attributes unchanged."
+            },
+            {
+              "step_number": 2,
+              "agent_role": "ci_triager",
+              "agent_label": "2. Swarm Agent: CI / Runtime Triager",
+              "model_id": "claude-haiku-5-5",
+              "context_mode": "shared_omnibus_bus",
+              "attempt": 1,
+              "max_tokens": 4000,
+              "stop_reason": "end_turn",
+              "latency_ms": 3214,
+              "input_tokens": 41033,
+              "output_tokens": 649,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "prompt_preview": "[TURN 2 \u2014 CI/CD & RUNTIME TRIAGER]: Pinpoint the exact broken lines and mandatory contracts for the Patch Author.",
+              "output_preview": "**Failing assertions \u2192 buggy lines (`upi_webhook_auth.py`)**\n\n- **SEC-01 (stale replay accepted):** `verify_and_process` has no timestamp check. Missing guard between `audit_log.append` and the HMAC block. Fix location: before signature verification.\n- **SEC-02 (duplicate refund):** `refund_ledger.append` / `processed_events.add` run with no `event_id in self.processed_events` check. Fix location: before ledger write.\n- **SEC-03 (PII leak):** Line `audit_log.append(f\"... vpa={payer_vpa} mobile={mobile} ...\")` writes raw VPA and mobile. Also `refund_ledger` stores raw `payer_vpa`/`mobile`.\n- **AST-SEC-01 (CWE-208):** `if signature_header != expected_digest:` uses non-constant-time comparison.\n\n**Mandatory contracts for Patch Author**\n\n1. Signed payload = `f\"{int(timestamp)}.{raw_body}\"`; normalize `sha256=` prefix, whitespace, case; ASCII 64-hex guard; compare only via `hmac.compare_digest`.\n2. Enforce `abs(now_ts - timestamp) <= replay_window_seconds` \u2192 `STALE_OR_FUTURE_TIMESTAMP`, no state mutation.\n3. `amount_paise <= 0` \u2192 `INVALID_AMOUNT` before any ledger write.\n4. Empty or duplicate `event_id` \u2192 `DUPLICATE_EVENT_REPLAY`; ledger written once only.\n5. `_mask_vpa` (`ra***@okicici`) and `_mask_mobile` (last 4 digits) applied to every `audit_log` and `refund_ledger` entry on accept and reject paths.\n6. Preserve all public names, `WebhookResult` fields, and attributes; stdlib-only imports."
+            },
+            {
+              "step_number": 3,
+              "agent_role": "patch_author",
+              "agent_label": "3. Swarm Agent: Code & Patch Author",
+              "model_id": "claude-sonnet-5-5",
+              "context_mode": "shared_omnibus_bus",
+              "attempt": 1,
+              "max_tokens": 16000,
+              "stop_reason": "end_turn",
+              "latency_ms": 12173,
+              "input_tokens": 42036,
+              "output_tokens": 2167,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "prompt_preview": "[TURN 3 \u2014 CODE & PATCH AUTHOR]: Write the COMPLETE repaired `upi_webhook_auth.py` strictly conforming to `SEC-STD-02` in one fenced ```python block.",
+              "output_preview": "```python\n\"\"\"NPCI UPI AutoPay & Refund Webhook Handler (SEC-STD-02 compliant build).\"\"\"\n\nfrom dataclasses import dataclass\nimport hashlib\nimport hmac\nimport re\n\n\n@dataclass(frozen=True)\nclass WebhookResult:\n    accepted: bool\n    reason: str\n    refund_id: str | None = None\n\n\n_HEX64_RE = re.compile(r\"^[0-9a-f]{64}$\")\n_SHA256_PREFIX = \"sha256=\"\n\n\ndef _mask_vpa(vpa: object) -> str:\n    \"\"\"DPDP Act 2023 masking: keep at most first 2 chars of the local part.\"\"\"\n    text = str(vpa) if vpa is not None else \"\"\n    if \"@\" in text:\n        local, _, handle = text.rpartition(\"@\")\n    else:\n        local, handle = text, \"\"\n    if len(local) > 2:\n        prefix = local[:2]\n    else:\n        prefix = local[:1]\n    if handle:\n        return f\"{prefix}***@{handle}\"\n    return f\"{prefix}***\"\n\n\ndef _mask_mobile(mobile: object) -> str:\n    \"\"\"DPDP Act 2023 masking: keep only the last 4 digits visible.\"\"\"\n    text = str(mobile) if mobile is not None else \"\"\n    digits = \"\".join(ch for ch in text if ch.isdigit())\n    if not digits:\n        return \"******\"\n    tail = digits[-4:]\n    return (\"*\" * 6) + tail\n\n\ndef _normalize_signature(signature_header: object) -> str:\n    text = str(signature_header) if signature_header is not None else \"\"\n    text = text.strip()\n    if text[: len(_SHA256_PREFIX)].lower() == _SHA256_PREFIX:\n        text = text[len(_SHA256_PREFIX):]\n    return text.strip().lower()\n\n\nclass UpiWebhookProcessor:\n    def __init__(self, webhook_secret: str, replay_window_seconds: int = 300) -> None:\n        self.webhook_secret = webhook_secret\n        self.replay_window_seconds = replay_window_seconds\n        self.processed_events: set[str] = set()\n        self.refund_ledger: list[dict[str, object]] = []\n        self.audit_log: list[str] = []\n\n    def _audit(\n        self,\n        stage: str,\n        event_id: str,\n        payer_vpa: str,\n        mobile: str,\n        timestamp: object,\n    ) -> None:\n        self.audit_log.append(\n            f\"{stage} event={event_id} vpa={_ma"
+            },
+            {
+              "step_number": 4,
+              "agent_role": "security_critic",
+              "agent_label": "4. Swarm Agent: Security & Test Critic",
+              "model_id": "claude-haiku-5-5",
+              "context_mode": "shared_omnibus_bus",
+              "attempt": 1,
+              "max_tokens": 4000,
+              "stop_reason": "end_turn",
+              "latency_ms": 3480,
+              "input_tokens": 44666,
+              "output_tokens": 647,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "prompt_preview": "[TURN 4 \u2014 SECURITY & TEST CRITIC]:\n\n#### Deterministic PR-SANDBOX-GATE-01 (10/10)\n- CI-UNIT-01 [PASS]: Valid ts.body HMAC with sha256= prefix -> accepted event EVT-101 -> REF-EVT-101\n- CI-UNIT-02 [PASS]: Boundary 300s timestamp & bare hex signature -> accepted boundary 300s & uppercase digest -> REF-EVT-102\n- CI-UNIT-03 [PASS]: Rejects spoofed/tampered body HMAC cleanly -> Rejected tampered payload with INVALID_SIGNATURE\n- CI-UNIT-04 [PASS]: Reje",
+              "output_preview": "Confirmed: `SEC-STD-02` and the AST security/privacy invariants hold for the Turn 3 patch, subject to two points below.\n\n**Verified against the patched module:**\n- **Signature (CWE-208):** Canonical `f\"{ts}.{raw_body}\"` HMAC-SHA256, `sha256=` normalization, ASCII 64-hex guard, and `hmac.compare_digest` only. No `==`/`!=` on digests.\n- **Replay window:** Symmetric `abs(now - ts) <= 300`, rejecting both stale and future-skewed timestamps before any state write.\n- **Idempotency:** `DUPLICATE_EVENT_REPLAY` checked before `processed_events`/`refund_ledger` mutation.\n- **Paise guard:** `amount_paise <= 0` rejected before state write.\n- **DPDP masking:** `_mask_vpa` and `_mask_mobile` applied to every audit line and ledger field, on accept and reject paths.\n- **Stdlib-only:** `dataclasses`, `hashlib`, `hmac`, `re`. No `subprocess`, `socket`, `eval`, `exec`, `os.system`, or `open`.\n\n**Caveats for the gate record:**\n1. The `_mask_mobile` output (`******3210`) keeps 4 trailing digits, which is the spec's stated behavior, not a leak. Audit should still confirm the DPDP policy allows that residual exposure.\n2. The `int(timestamp)` / `int(now_ts)` and `amount_paise` coercion fallbacks are defensive. Malformed input on the timestamp path fails closed; a non-integer `amount_paise` coerces to 0 and is rejected. Both are safe.\n\nThe 10/10 result is deterministic evidence for these invariants. I have not re-executed the test suite in this review, so the sign-off rests on the gate report plus the source inspection above."
+            },
+            {
+              "step_number": 5,
+              "agent_role": "orchestrator_merge",
+              "agent_label": "5. Lead Orchestrator (Merge Gate Sign-Off)",
+              "model_id": "claude-haiku-5-5",
+              "context_mode": "shared_omnibus_bus",
+              "attempt": 1,
+              "max_tokens": 4000,
+              "stop_reason": "end_turn",
+              "latency_ms": 2498,
+              "input_tokens": 45358,
+              "output_tokens": 387,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "prompt_preview": "[TURN 5 \u2014 LEAD ORCHESTRATOR MERGE GATE]:\n\n#### PR-SANDBOX-GATE-01 Status: `10/10` (Verified Outcome: `True`)\n\nEmit your final PR merge readiness sign-off.",
+              "output_preview": "**PR Merge Readiness Sign-off: SEC-772 / `upi-webhook-svc`**\n\n- **Verified patch:** `upi_webhook_auth.py` (Turn 3) enforces `SEC-STD-02`: canonical `{ts}.{body}` HMAC-SHA256 with `hmac.compare_digest`, symmetric 300s replay window, `amount_paise > 0`, `event_id` idempotency, and DPDP VPA/mobile masking on every audit and ledger write. Stdlib-only.\n- **Gate result:** `PR-SANDBOX-GATE-01` 10/10 PASS across CI-UNIT-01\u201304, ADV-SEC-01\u201304, AST-SAFE-02, AST-SEC-01. Critic sign-off (Turn 4) confirms all invariants, with the residual 4-digit mobile tail flagged for DPDP policy review.\n- **Readiness:** Approved for green-PR auto-merge, conditional on DPDP policy confirming the 4-digit mobile tail is acceptable. Verified `CpO` telemetry is not included in the inputs and is not reported here."
+            }
+          ],
+          "patched_code": "\"\"\"NPCI UPI AutoPay & Refund Webhook Handler (SEC-STD-02 compliant build).\"\"\"\n\nfrom dataclasses import dataclass\nimport hashlib\nimport hmac\nimport re\n\n\n@dataclass(frozen=True)\nclass WebhookResult:\n    accepted: bool\n    reason: str\n    refund_id: str | None = None\n\n\n_HEX64_RE = re.compile(r\"^[0-9a-f]{64}$\")\n_SHA256_PREFIX = \"sha256=\"\n\n\ndef _mask_vpa(vpa: object) -> str:\n    \"\"\"DPDP Act 2023 masking: keep at most first 2 chars of the local part.\"\"\"\n    text = str(vpa) if vpa is not None else \"\"\n    if \"@\" in text:\n        local, _, handle = text.rpartition(\"@\")\n    else:\n        local, handle = text, \"\"\n    if len(local) > 2:\n        prefix = local[:2]\n    else:\n        prefix = local[:1]\n    if handle:\n        return f\"{prefix}***@{handle}\"\n    return f\"{prefix}***\"\n\n\ndef _mask_mobile(mobile: object) -> str:\n    \"\"\"DPDP Act 2023 masking: keep only the last 4 digits visible.\"\"\"\n    text = str(mobile) if mobile is not None else \"\"\n    digits = \"\".join(ch for ch in text if ch.isdigit())\n    if not digits:\n        return \"******\"\n    tail = digits[-4:]\n    return (\"*\" * 6) + tail\n\n\ndef _normalize_signature(signature_header: object) -> str:\n    text = str(signature_header) if signature_header is not None else \"\"\n    text = text.strip()\n    if text[: len(_SHA256_PREFIX)].lower() == _SHA256_PREFIX:\n        text = text[len(_SHA256_PREFIX):]\n    return text.strip().lower()\n\n\nclass UpiWebhookProcessor:\n    def __init__(self, webhook_secret: str, replay_window_seconds: int = 300) -> None:\n        self.webhook_secret = webhook_secret\n        self.replay_window_seconds = replay_window_seconds\n        self.processed_events: set[str] = set()\n        self.refund_ledger: list[dict[str, object]] = []\n        self.audit_log: list[str] = []\n\n    def _audit(\n        self,\n        stage: str,\n        event_id: str,\n        payer_vpa: str,\n        mobile: str,\n        timestamp: object,\n    ) -> None:\n        self.audit_log.append(\n            f\"{stage} event={event_id} vpa={_mask_vpa(payer_vpa)} \"\n            f\"mobile={_mask_mobile(mobile)} ts={timestamp}\"\n        )\n\n    def verify_and_process(\n        self,\n        *,\n        event_id: str,\n        raw_body: str,\n        signature_header: str,\n        timestamp: int,\n        now_ts: int,\n        payer_vpa: str,\n        mobile: str,\n        amount_paise: int,\n    ) -> WebhookResult:\n        # DPDP Act 2023: only masked identifiers ever reach the audit log.\n        self._audit(\"recv\", event_id, payer_vpa, mobile, timestamp)\n\n        # Symmetric replay window: rejects stale replays AND future-skewed forgeries.\n        try:\n            ts_int = int(timestamp)\n            now_int = int(now_ts)\n        except (TypeError, ValueError):\n            self._audit(\"reject:STALE_OR_FUTURE_TIMESTAMP\", event_id, payer_vpa, mobile, timestamp)\n            return WebhookResult(accepted=False, reason=\"STALE_OR_FUTURE_TIMESTAMP\", refund_id=None)\n\n        if abs(now_int - ts_int) > int(self.replay_window_seconds):\n            self._audit(\"reject:STALE_OR_FUTURE_TIMESTAMP\", event_id, payer_vpa, mobile, timestamp)\n            return WebhookResult(accepted=False, reason=\"STALE_OR_FUTURE_TIMESTAMP\", refund_id=None)\n\n        # Canonical timestamp-bound HMAC-SHA256, verified in constant time.\n        provided_hex = _normalize_signature(signature_header)\n        canonical = f\"{ts_int}.{raw_body}\"\n        expected_hex = hmac.new(\n            self.webhook_secret.encode(\"utf-8\"),\n            canonical.encode(\"utf-8\"),\n            hashlib.sha256,\n        ).hexdigest()\n\n        signature_ok = False\n        if provided_hex.isascii() and _HEX64_RE.match(provided_hex) is not None:\n            signature_ok = hmac.compare_digest(expected_hex, provided_hex)\n        if not signature_ok:\n            self._audit(\"reject:INVALID_SIGNATURE\", event_id, payer_vpa, mobile, timestamp)\n            return WebhookResult(accepted=False, reason=\"INVALID_SIGNATURE\", refund_id=None)\n\n        # Positive paise guard, evaluated before any state mutation.\n        try:\n            amount_int = int(amount_paise)\n        except (TypeError, ValueError):\n            amount_int = 0\n        if amount_int <= 0:\n            self._audit(\"reject:INVALID_AMOUNT\", event_id, payer_vpa, mobile, timestamp)\n            return WebhookResult(accepted=False, reason=\"INVALID_AMOUNT\", refund_id=None)\n\n        # event_id idempotency: exactly one refund per event.\n        if not event_id or event_id in self.processed_events:\n            self._audit(\"reject:DUPLICATE_EVENT_REPLAY\", event_id, payer_vpa, mobile, timestamp)\n            return WebhookResult(accepted=False, reason=\"DUPLICATE_EVENT_REPLAY\", refund_id=None)\n\n        refund_id = f\"REF-{event_id}\"\n        self.processed_events.add(event_id)\n        self.refund_ledger.append(\n            {\n                \"event_id\": event_id,\n                \"refund_id\": refund_id,\n                \"amount_paise\": amount_int,\n                \"payer_vpa\": _mask_vpa(payer_vpa),\n                \"mobile\": _mask_mobile(mobile),\n            }\n        )\n        self._audit(\"accepted\", event_id, payer_vpa, mobile, timestamp)\n        return WebhookResult(accepted=True, reason=\"PROCESSED\", refund_id=refund_id)",
+          "final_signoff_memo": "**PR Merge Readiness Sign-off: SEC-772 / `upi-webhook-svc`**\n\n- **Verified patch:** `upi_webhook_auth.py` (Turn 3) enforces `SEC-STD-02`: canonical `{ts}.{body}` HMAC-SHA256 with `hmac.compare_digest`, symmetric 300s replay window, `amount_paise > 0`, `event_id` idempotency, and DPDP VPA/mobile masking on every audit and ledger write. Stdlib-only.\n- **Gate result:** `PR-SANDBOX-GATE-01` 10/10 PASS across CI-UNIT-01\u201304, ADV-SEC-01\u201304, AST-SAFE-02, AST-SEC-01. Critic sign-off (Turn 4) confirms all invariants, with the residual 4-digit mobile tail flagged for DPDP policy review.\n- **Readiness:** Approved for green-PR auto-merge, conditional on DPDP policy confirming the 4-digit mobile tail is acceptable. Verified `CpO` telemetry is not included in the inputs and is not reported here.",
+          "sandbox_report": {
+            "total_checks": 10,
+            "passed_checks": 10,
+            "ci_unit_passed": 4,
+            "adversarial_passed": 4,
+            "ast_passed": 2,
+            "verified_outcome": true,
+            "execution_ms": 39,
+            "checks": [
+              {
+                "check_id": "CI-UNIT-01",
+                "category": "ci_unit",
+                "name": "Valid ts.body HMAC with sha256= prefix",
+                "passed": true,
+                "detail": "accepted event EVT-101 -> REF-EVT-101"
+              },
+              {
+                "check_id": "CI-UNIT-02",
+                "category": "ci_unit",
+                "name": "Boundary 300s timestamp & bare hex signature",
+                "passed": true,
+                "detail": "accepted boundary 300s & uppercase digest -> REF-EVT-102"
+              },
+              {
+                "check_id": "CI-UNIT-03",
+                "category": "ci_unit",
+                "name": "Rejects spoofed/tampered body HMAC cleanly",
+                "passed": true,
+                "detail": "Rejected tampered payload with INVALID_SIGNATURE"
+              },
+              {
+                "check_id": "CI-UNIT-04",
+                "category": "ci_unit",
+                "name": "Rejects non-positive amount_paise before state write",
+                "passed": true,
+                "detail": "Rejected negative amount_paise cleanly"
+              },
+              {
+                "check_id": "ADV-SEC-01",
+                "category": "adversarial",
+                "name": "Blocks 900s stale timestamp replay",
+                "passed": true,
+                "detail": "Blocked 900s stale replay attack"
+              },
+              {
+                "check_id": "ADV-SEC-02",
+                "category": "adversarial",
+                "name": "Blocks +600s future clock-skew replay",
+                "passed": true,
+                "detail": "Blocked +600s future clock-skew attack"
+              },
+              {
+                "check_id": "ADV-SEC-03",
+                "category": "adversarial",
+                "name": "Enforces event_id idempotency (no double refund)",
+                "passed": true,
+                "detail": "Blocked duplicate event_id EVT-101 idempotently"
+              },
+              {
+                "check_id": "ADV-SEC-04",
+                "category": "adversarial",
+                "name": "DPDP Act 2023 log & ledger masking (VPA + mobile)",
+                "passed": true,
+                "detail": "Verified zero unmasked VPAs or 10-digit mobiles across 14 logs"
+              },
+              {
+                "check_id": "AST-SAFE-02",
+                "category": "ast",
+                "name": "Sandbox static AST safety guard",
+                "passed": true,
+                "detail": "Clean stdlib-only module AST; zero blocked OS/eval/network symbols."
+              },
+              {
+                "check_id": "AST-SEC-01",
+                "category": "ast",
+                "name": "SEC-STD-02 constant-time hmac.compare_digest (CWE-208)",
+                "passed": true,
+                "detail": "Confirmed constant-time hmac.compare_digest() with zero direct signature == comparisons."
+              }
+            ],
+            "unified_diff": "--- a/services/upi-webhook-svc/src/upi_webhook_auth.py\n+++ b/services/upi-webhook-svc/src/upi_webhook_auth.py\n@@ -1,8 +1,9 @@\n-\"\"\"NPCI UPI AutoPay & Refund Webhook Handler (Vulnerable Build).\"\"\"\n+\"\"\"NPCI UPI AutoPay & Refund Webhook Handler (SEC-STD-02 compliant build).\"\"\"\n \n from dataclasses import dataclass\n import hashlib\n import hmac\n+import re\n \n \n @dataclass(frozen=True)\n@@ -12,6 +13,44 @@\n     refund_id: str | None = None\n \n \n+_HEX64_RE = re.compile(r\"^[0-9a-f]{64}$\")\n+_SHA256_PREFIX = \"sha256=\"\n+\n+\n+def _mask_vpa(vpa: object) -> str:\n+    \"\"\"DPDP Act 2023 masking: keep at most first 2 chars of the local part.\"\"\"\n+    text = str(vpa) if vpa is not None else \"\"\n+    if \"@\" in text:\n+        local, _, handle = text.rpartition(\"@\")\n+    else:\n+        local, handle = text, \"\"\n+    if len(local) > 2:\n+        prefix = local[:2]\n+    else:\n+        prefix = local[:1]\n+    if handle:\n+        return f\"{prefix}***@{handle}\"\n+    return f\"{prefix}***\"\n+\n+\n+def _mask_mobile(mobile: object) -> str:\n+    \"\"\"DPDP Act 2023 masking: keep only the last 4 digits visible.\"\"\"\n+    text = str(mobile) if mobile is not None else \"\"\n+    digits = \"\".join(ch for ch in text if ch.isdigit())\n+    if not digits:\n+        return \"******\"\n+    tail = digits[-4:]\n+    return (\"*\" * 6) + tail\n+\n+\n+def _normalize_signature(signature_header: object) -> str:\n+    text = str(signature_header) if signature_header is not None else \"\"\n+    text = text.strip()\n+    if text[: len(_SHA256_PREFIX)].lower() == _SHA256_PREFIX:\n+        text = text[len(_SHA256_PREFIX):]\n+    return text.strip().lower()\n+\n+\n class UpiWebhookProcessor:\n     def __init__(self, webhook_secret: str, replay_window_seconds: int = 300) -> None:\n         self.webhook_secret = webhook_secret\n@@ -19,6 +58,19 @@\n         self.processed_events: set[str] = set()\n         self.refund_ledger: list[dict[str, object]] = []\n         self.audit_log: list[str] = []\n+\n+    def _audit(\n+        self,\n+        stage: str,\n+        event_id: str,\n+        payer_vpa: str,\n+        mobile: str,\n+        timestamp: object,\n+    ) -> None:\n+        self.audit_log.append(\n+            f\"{stage} event={event_id} vpa={_mask_vpa(payer_vpa)} \"\n+            f\"mobile={_mask_mobile(mobile)} ts={timestamp}\"\n+        )\n \n     def verify_and_process(\n         self,\n@@ -32,30 +84,61 @@\n         mobile: str,\n         amount_paise: int,\n     ) -> WebhookResult:\n-        # VULN 1 (DPDP Act 2023): Logs raw payer_vpa and 10-digit mobile into audit_log\n-        self.audit_log.append(f\"recv event={event_id} vpa={payer_vpa} mobile={mobile} ts={timestamp}\")\n+        # DPDP Act 2023: only masked identifiers ever reach the audit log.\n+        self._audit(\"recv\", event_id, payer_vpa, mobile, timestamp)\n \n-        # VULN 2: Signs raw_body ONLY instead of \"{timestamp}.{raw_body}\" and never checks timestamp window\n-        expected_digest = hmac.new(\n+        # Symmetric replay window: rejects stale replays AND future-skewed forgeries.\n+        try:\n+            ts_int = int(timestamp)\n+            now_int = int(now_ts)\n+        except (TypeError, ValueError):\n+            self._audit(\"reject:STALE_OR_FUTURE_TIMESTAMP\", event_id, payer_vpa, mobile, timestamp)\n+            return WebhookResult(accepted=False, reason=\"STALE_OR_FUTURE_TIMESTAMP\", refund_id=None)\n+\n+        if abs(now_int - ts_int) > int(self.replay_window_seconds):\n+            self._audit(\"reject:STALE_OR_FUTURE_TIMESTAMP\", event_id, payer_vpa, mobile, timestamp)\n+            return WebhookResult(accepted=False, reason=\"STALE_OR_FUTURE_TIMESTAMP\", refund_id=None)\n+\n+        # Canonical timestamp-bound HMAC-SHA256, verified in constant time.\n+        provided_hex = _normalize_signature(signature_header)\n+        canonical = f\"{ts_int}.{raw_body}\"\n+        expected_hex = hmac.new(\n             self.webhook_secret.encode(\"utf-8\"),\n-            raw_body.encode(\"utf-8\"),\n+            canonical.encode(\"utf-8\"),\n             hashlib.sha256,\n         ).hexdigest()\n \n-        # VULN 3 (CWE-208): Non-constant-time == comparison & breaks on sha256= prefix\n-        if signature_header != expected_digest:\n+        signature_ok = False\n+        if provided_hex.isascii() and _HEX64_RE.match(provided_hex) is not None:\n+            signature_ok = hmac.compare_digest(expected_hex, provided_hex)\n+        if not signature_ok:\n+            self._audit(\"reject:INVALID_SIGNATURE\", event_id, payer_vpa, mobile, timestamp)\n             return WebhookResult(accepted=False, reason=\"INVALID_SIGNATURE\", refund_id=None)\n \n-        # VULN 4: Never checks amount_paise <= 0 or duplicate event_id idempotency\n+        # Positive paise guard, evaluated before any state mutation.\n+        try:\n+            amount_int = int(amount_paise)\n+        except (TypeError, ValueError):\n+            amount_int = 0\n+        if amount_int <= 0:\n+            self._audit(\"reject:INVALID_AMOUNT\", event_id, payer_vpa, mobile, timestamp)\n+            return WebhookResult(accepted=False, reason=\"INVALID_AMOUNT\", refund_id=None)\n+\n+        # event_id idempotency: exactly one refund per event.\n+        if not event_id or event_id in self.processed_events:\n+            self._audit(\"reject:DUPLICATE_EVENT_REPLAY\", event_id, payer_vpa, mobile, timestamp)\n+            return WebhookResult(accepted=False, reason=\"DUPLICATE_EVENT_REPLAY\", refund_id=None)\n+\n         refund_id = f\"REF-{event_id}\"\n         self.processed_events.add(event_id)\n         self.refund_ledger.append(\n             {\n                 \"event_id\": event_id,\n                 \"refund_id\": refund_id,\n-                \"amount_paise\": amount_paise,\n-                \"payer_vpa\": payer_vpa,\n-                \"mobile\": mobile,\n+                \"amount_paise\": amount_int,\n+                \"payer_vpa\": _mask_vpa(payer_vpa),\n+                \"mobile\": _mask_mobile(mobile),\n             }\n         )\n+        self._audit(\"accepted\", event_id, payer_vpa, mobile, timestamp)\n         return WebhookResult(accepted=True, reason=\"PROCESSED\", refund_id=refund_id)"
+          },
+          "provenance": {
+            "arm_id": "shared_bus_tiered_gate",
+            "repeat_index": 0,
+            "run_id": "790de877-9de0-4937-829b-9e48b24bfedd",
+            "started_at": "2026-11-26T08:12:29.834258+00:00",
+            "sandbox_report": "current sandbox on patched_code_final"
+          }
         }
       }
     },
@@ -1678,6 +2048,189 @@
             "repeat_index": 0,
             "run_id": "be9572c8-ab5c-4672-946b-e3c528350f64",
             "started_at": "2026-11-25T15:09:49.185635+00:00",
+            "sandbox_report": "current sandbox on patched_code_final"
+          }
+        },
+        "unisolated_tiered_swarm": {
+          "rung_id": "unisolated_tiered_swarm",
+          "primary_model_id": "claude-haiku-5-5 + claude-sonnet-5-5",
+          "retries_used": 0,
+          "agent_turns": [
+            {
+              "step_number": 1,
+              "agent_role": "orchestrator_plan",
+              "agent_label": "1. Lead Orchestrator (Plan & Triage Dispatch)",
+              "model_id": "claude-haiku-5-5",
+              "context_mode": "shared_omnibus_bus",
+              "attempt": 1,
+              "max_tokens": 4000,
+              "stop_reason": "end_turn",
+              "latency_ms": 2986,
+              "input_tokens": 40558,
+              "output_tokens": 422,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "prompt_preview": "### INCIDENT / PR TICKET: FEAT-619 (Autonomous Feature Dev)\n- Service: `inventory-lock-svc`\n- Target File: `services/inventory-lock-svc/src/inventory_reservation.py`\n- Severity: `P1 \u00b7 Feature Spec + Concurrency` \u00b7 Standard: `CONC-STD-07`\n- Summary: Feature 3: Deadlock-Free Multi-FC Split-Cart Reservation & Idempotent Rollback \u2014 Festive flash-sale feature requires atomic split-FC reservations (`FC-BLR-01` + `FC-BOM-02` + `FC-DEL-03`) with sorted l",
+              "output_preview": "- **Standard:** Apply `CONC-STD-07` (Deadlock-Free Atomic Split-Cart Reservation) to `services/inventory-lock-svc/src/inventory_reservation.py`; this is a concurrency/atomicity failure, not pricing (`ENG-STD-04`) or auth (`SEC-STD-02`).\n- **Root causes to fix:** (1) acquire locks in `sorted((fc_id, sku_id))` order, not input order (CONC-01 AB-BA deadlock); (2) aggregate duplicate `(fc_id, sku_id)` lines before locking to avoid non-reentrant self-deadlock (CONC-03); (3) verify all keys under lock before deducting any stock, with no partial mutation or leaked locks (CONC-02).\n- **Idempotency:** short-circuit repeated `idempotency_key`s, validate inputs before locking, and track `_released_ids` so `release_reservation` returns `False` on a second call without re-inflating stock (CONC-04).\n- **Handoff:** CI Triager maps the four failing tests to these invariants; Patch Author delivers the full corrected file preserving public names and dataclasses, with `try/finally` lock release and `threading.Lock` only."
+            },
+            {
+              "step_number": 2,
+              "agent_role": "ci_triager",
+              "agent_label": "2. Swarm Agent: CI / Runtime Triager",
+              "model_id": "claude-haiku-5-5",
+              "context_mode": "shared_omnibus_bus",
+              "attempt": 1,
+              "max_tokens": 4000,
+              "stop_reason": "end_turn",
+              "latency_ms": 3162,
+              "input_tokens": 41012,
+              "output_tokens": 421,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "prompt_preview": "[TURN 2 \u2014 CI/CD & RUNTIME TRIAGER]: Pinpoint the exact broken lines and mandatory contracts for the Patch Author.",
+              "output_preview": "**Triage map (\u2264160 words):**\n\n- **CONC-01 (timeout, AB-BA):** `reserve_split_cart` loop, `for line in lines:` acquires locks in input order. *Contract:* build `agg`, then acquire `sorted(agg.keys())` sequentially.\n- **CONC-02 (partial deduct, leaked lock):** `self._stock[key] -= line.qty` runs inside the loop before later SKUs are checked, and the `raise` skips `lock.release()`. *Contract:* verify every key first, deduct only after all pass, and release in `try/finally`.\n- **CONC-03 (self-deadlock):** duplicate `(fc_id, sku_id)` lines call `lock.acquire()` twice on a non-reentrant `threading.Lock`. *Contract:* aggregate quantities into `agg` before any lock acquisition.\n- **CONC-04 (double restore):** `release_reservation` never marks the reservation consumed. *Contract:* track `_released_ids` under `_meta_lock` and return `False` on repeat.\n- **Also missing:** no `idempotency_key` cache, no `qty<=0`/empty-input validation (`ValueError`), and `setdefault` lock creation is unguarded."
+            },
+            {
+              "step_number": 3,
+              "agent_role": "patch_author",
+              "agent_label": "3. Swarm Agent: Code & Patch Author",
+              "model_id": "claude-sonnet-5-5",
+              "context_mode": "shared_omnibus_bus",
+              "attempt": 1,
+              "max_tokens": 16000,
+              "stop_reason": "end_turn",
+              "latency_ms": 13682,
+              "input_tokens": 41785,
+              "output_tokens": 2066,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "prompt_preview": "[TURN 3 \u2014 CODE & PATCH AUTHOR]: Write the COMPLETE repaired `inventory_reservation.py` strictly conforming to `CONC-STD-07` in one fenced ```python block.",
+              "output_preview": "```python\n\"\"\"Multi-FC Split-Cart Inventory Reservation Manager (CONC-STD-07).\n\nAtomic split-cart reservation across fulfillment centers with:\n  * fail-fast input validation,\n  * idempotent retry short-circuit,\n  * same-(fc_id, sku_id) aggregation (no self-deadlock),\n  * canonical sorted lock ordering (no AB-BA deadlock),\n  * all-or-nothing verify-then-deduct,\n  * exactly-once, idempotent release.\n\"\"\"\n\nfrom dataclasses import dataclass\nimport threading\nimport time\n\n\nclass InsufficientStockError(Exception):\n    pass\n\n\n@dataclass(frozen=True)\nclass CartItemReq:\n    fc_id: str\n    sku_id: str\n    qty: int\n\n\n@dataclass(frozen=True)\nclass ReservationReceipt:\n    reservation_id: str\n    idempotency_key: str\n    items: tuple[tuple[str, str, int], ...]\n\n\nclass InventoryReservationManager:\n    def __init__(self, initial_stock: dict[tuple[str, str], int]) -> None:\n        self._stock: dict[tuple[str, str], int] = dict(initial_stock)\n        self._meta_lock = threading.Lock()\n        self._locks: dict[tuple[str, str], threading.Lock] = {\n            k: threading.Lock() for k in initial_stock\n        }\n        # reservation_id -> aggregated allocation {(fc_id, sku_id): qty}\n        self._active_reservations: dict[str, dict[tuple[str, str], int]] = {}\n        # idempotency_key -> receipt for successful reservations\n        self._receipts: dict[str, ReservationReceipt] = {}\n        # reservation ids that have already been released\n        self._released_ids: set[str] = set()\n\n    def get_stock(self, fc_id: str, sku_id: str) -> int:\n        with self._meta_lock:\n            return int(self._stock.get((fc_id, sku_id), 0))\n\n    def _get_lock(self, key: tuple[str, str]) -> threading.Lock:\n        with self._meta_lock:\n            lock = self._locks.get(key)\n            if lock is None:\n                lock = threading.Lock()\n                self._locks[key] = lock\n            return lock\n\n    def reserve_split_cart(\n        self,\n        idempotency_key: str,\n        lines: list[CartI"
+            },
+            {
+              "step_number": 4,
+              "agent_role": "security_critic",
+              "agent_label": "4. Swarm Agent: Security & Test Critic",
+              "model_id": "claude-haiku-5-5",
+              "context_mode": "shared_omnibus_bus",
+              "attempt": 1,
+              "max_tokens": 4000,
+              "stop_reason": "end_turn",
+              "latency_ms": 3385,
+              "input_tokens": 44326,
+              "output_tokens": 554,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "prompt_preview": "[TURN 4 \u2014 SECURITY & TEST CRITIC]:\n\n#### Deterministic PR-SANDBOX-GATE-01 (10/10)\n- CI-UNIT-01 [PASS]: Multi-FC split-cart stock reservation -> Reserved split-FC cart RES-KEY-1 (rem 8 & 5)\n- CI-UNIT-02 [PASS]: Idempotent release_reservation (no double increment) -> Single-shot idempotent release verified\n- CI-UNIT-03 [PASS]: Idempotent reserve retry returns cached receipt -> Idempotent retry did not double-deduct stock\n- CI-UNIT-04 [PASS]: Fail-f",
+              "output_preview": "Partial confirmation, with one defect the gate did not catch.\n\n**Confirmed:**\n- **Lock ordering:** `sorted(agg.keys())` is used for acquisition and `reversed()` for release, so AB-BA deadlock is ruled out.\n- **Atomicity:** all keys are verified before any deduction, and the `finally` block releases every acquired lock.\n- **Idempotency:** retries return the cached receipt, both before and after lock acquisition, so concurrent duplicates cannot double-deduct.\n- **Release:** `_released_ids` is checked and set under `_meta_lock`, so only one releaser can restore stock.\n- **Security surface:** stdlib-only (`dataclasses`, `threading`, `time`), with no `subprocess`, `socket`, `eval`, `exec`, `open`, or `os.system`.\n\n**Defect to flag:**\n- `time.sleep(0.002)` runs while holding every stock lock, which slows the critical section and does nothing for correctness. It is not a deadlock risk, but it is test-only scaffolding that should be removed. A timing-based gate is not evidence of correctness.\n\n**Note on the gate:** `PR-SANDBOX-GATE-01` reports 10/10 PASS, but the AST checks confirm only sorting and import hygiene. Nothing in the output proves the lock-release path or the `_meta_lock` sections are free of nested-lock inversion, so that must be verified by code review, not the gate alone.\n\n**Verdict:** approve for merge after removing the `time.sleep` line. This is not a PII, paise, or timing side-channel issue, since the module handles no monetary or customer data."
+            },
+            {
+              "step_number": 5,
+              "agent_role": "orchestrator_merge",
+              "agent_label": "5. Lead Orchestrator (Merge Gate Sign-Off)",
+              "model_id": "claude-haiku-5-5",
+              "context_mode": "shared_omnibus_bus",
+              "attempt": 1,
+              "max_tokens": 4000,
+              "stop_reason": "end_turn",
+              "latency_ms": 3455,
+              "input_tokens": 44925,
+              "output_tokens": 459,
+              "cache_creation_tokens": 0,
+              "cache_read_tokens": 0,
+              "prompt_preview": "[TURN 5 \u2014 LEAD ORCHESTRATOR MERGE GATE]:\n\n#### PR-SANDBOX-GATE-01 Status: `10/10` (Verified Outcome: `True`)\n\nEmit your final PR merge readiness sign-off.",
+              "output_preview": "**FEAT-619 Merge Gate: NOT READY for auto-merge. Hold the PR.**\n\n- **Gate result is not sufficient on its own.** PR-SANDBOX-GATE-01 reports 10/10, but the AST checks verify only sorting and import hygiene. They do not prove the absence of nested-lock inversion across `_meta_lock` and the per-key locks, which needs code review.\n- **Required change before merge:** remove `time.sleep(0.002)` from the lock-held critical section in `reserve_split_cart`. The Critic flagged it, and the patch I delivered still contains it. Re-run the full 10/10 suite afterward.\n- **Re-verification needed:** CONC-01 through CONC-04 and ADV-CONC-01 through ADV-CONC-04 must pass on the revised file, with a human reviewer confirming lock ordering in `release_reservation`, which takes `_meta_lock` before the per-key locks, the reverse of the reserve path's pattern of lock-then-meta.\n- **CpO note:** a 10/10 result on the revised patch counts as a verified outcome. Passing on the current file does not, because it contains a known defect.\n\n**Final status:** conditional approval. Auto-merge is blocked until the `time.sleep` removal is applied and the suite is re-run green with a human reviewer sign-off on lock ordering."
+            }
+          ],
+          "patched_code": "\"\"\"Multi-FC Split-Cart Inventory Reservation Manager (CONC-STD-07).\n\nAtomic split-cart reservation across fulfillment centers with:\n  * fail-fast input validation,\n  * idempotent retry short-circuit,\n  * same-(fc_id, sku_id) aggregation (no self-deadlock),\n  * canonical sorted lock ordering (no AB-BA deadlock),\n  * all-or-nothing verify-then-deduct,\n  * exactly-once, idempotent release.\n\"\"\"\n\nfrom dataclasses import dataclass\nimport threading\nimport time\n\n\nclass InsufficientStockError(Exception):\n    pass\n\n\n@dataclass(frozen=True)\nclass CartItemReq:\n    fc_id: str\n    sku_id: str\n    qty: int\n\n\n@dataclass(frozen=True)\nclass ReservationReceipt:\n    reservation_id: str\n    idempotency_key: str\n    items: tuple[tuple[str, str, int], ...]\n\n\nclass InventoryReservationManager:\n    def __init__(self, initial_stock: dict[tuple[str, str], int]) -> None:\n        self._stock: dict[tuple[str, str], int] = dict(initial_stock)\n        self._meta_lock = threading.Lock()\n        self._locks: dict[tuple[str, str], threading.Lock] = {\n            k: threading.Lock() for k in initial_stock\n        }\n        # reservation_id -> aggregated allocation {(fc_id, sku_id): qty}\n        self._active_reservations: dict[str, dict[tuple[str, str], int]] = {}\n        # idempotency_key -> receipt for successful reservations\n        self._receipts: dict[str, ReservationReceipt] = {}\n        # reservation ids that have already been released\n        self._released_ids: set[str] = set()\n\n    def get_stock(self, fc_id: str, sku_id: str) -> int:\n        with self._meta_lock:\n            return int(self._stock.get((fc_id, sku_id), 0))\n\n    def _get_lock(self, key: tuple[str, str]) -> threading.Lock:\n        with self._meta_lock:\n            lock = self._locks.get(key)\n            if lock is None:\n                lock = threading.Lock()\n                self._locks[key] = lock\n            return lock\n\n    def reserve_split_cart(\n        self,\n        idempotency_key: str,\n        lines: list[CartItemReq],\n    ) -> ReservationReceipt:\n        # 1. Fail-fast validation before any locking or mutation.\n        if not idempotency_key:\n            raise ValueError(\"idempotency_key is required\")\n        if not lines:\n            raise ValueError(\"lines must not be empty\")\n        for line in lines:\n            if not line.fc_id or not line.sku_id:\n                raise ValueError(\"fc_id and sku_id must be non-empty\")\n            if int(line.qty) <= 0:\n                raise ValueError(\"qty must be positive\")\n\n        # 2. Idempotent retry short-circuit.\n        with self._meta_lock:\n            existing = self._receipts.get(idempotency_key)\n            if existing is not None:\n                return existing\n\n        # 3. Aggregate duplicate (fc_id, sku_id) lines.\n        agg: dict[tuple[str, str], int] = {}\n        for line in lines:\n            key = (line.fc_id, line.sku_id)\n            agg[key] = agg.get(key, 0) + int(line.qty)\n\n        # 4. Canonical global lock ordering.\n        ordered_keys = sorted(agg.keys())\n        locks = [self._get_lock(k) for k in ordered_keys]\n\n        acquired: list[threading.Lock] = []\n        try:\n            for lk in locks:\n                lk.acquire()\n                acquired.append(lk)\n                time.sleep(0.002)  # contention window; safe under sorted order\n\n            # Re-check idempotency now that we hold the stock locks, so two\n            # concurrent retries with the same key cannot both deduct.\n            with self._meta_lock:\n                existing = self._receipts.get(idempotency_key)\n                if existing is not None:\n                    return existing\n\n            # 5. Verify ALL keys before deducting ANY.\n            for key in ordered_keys:\n                if self._stock.get(key, 0) < agg[key]:\n                    raise InsufficientStockError(f\"Short stock for {key}\")\n\n            # Deduct (all checks passed, all locks held).\n            for key in ordered_keys:\n                self._stock[key] = self._stock.get(key, 0) - agg[key]\n\n            res_id = f\"RES-{idempotency_key}\"\n            receipt = ReservationReceipt(\n                reservation_id=res_id,\n                idempotency_key=idempotency_key,\n                items=tuple((k[0], k[1], agg[k]) for k in ordered_keys),\n            )\n            with self._meta_lock:\n                self._active_reservations[res_id] = dict(agg)\n                self._receipts[idempotency_key] = receipt\n            return receipt\n        finally:\n            for lk in reversed(acquired):\n                lk.release()\n\n    def release_reservation(self, reservation_id: str) -> bool:\n        with self._meta_lock:\n            alloc = self._active_reservations.get(reservation_id)\n            if alloc is None or reservation_id in self._released_ids:\n                return False\n            alloc_snapshot = dict(alloc)\n\n        ordered_keys = sorted(alloc_snapshot.keys())\n        locks = [self._get_lock(k) for k in ordered_keys]\n\n        acquired: list[threading.Lock] = []\n        try:\n            for lk in locks:\n                lk.acquire()\n                acquired.append(lk)\n\n            # Re-verify under lock: exactly one releaser may win.\n            with self._meta_lock:\n                if reservation_id in self._released_ids:\n                    return False\n                if reservation_id not in self._active_reservations:\n                    return False\n                self._released_ids.add(reservation_id)\n\n            for key in ordered_keys:\n                self._stock[key] = self._stock.get(key, 0) + alloc_snapshot[key]\n            return True\n        finally:\n            for lk in reversed(acquired):\n                lk.release()",
+          "final_signoff_memo": "**FEAT-619 Merge Gate: NOT READY for auto-merge. Hold the PR.**\n\n- **Gate result is not sufficient on its own.** PR-SANDBOX-GATE-01 reports 10/10, but the AST checks verify only sorting and import hygiene. They do not prove the absence of nested-lock inversion across `_meta_lock` and the per-key locks, which needs code review.\n- **Required change before merge:** remove `time.sleep(0.002)` from the lock-held critical section in `reserve_split_cart`. The Critic flagged it, and the patch I delivered still contains it. Re-run the full 10/10 suite afterward.\n- **Re-verification needed:** CONC-01 through CONC-04 and ADV-CONC-01 through ADV-CONC-04 must pass on the revised file, with a human reviewer confirming lock ordering in `release_reservation`, which takes `_meta_lock` before the per-key locks, the reverse of the reserve path's pattern of lock-then-meta.\n- **CpO note:** a 10/10 result on the revised patch counts as a verified outcome. Passing on the current file does not, because it contains a known defect.\n\n**Final status:** conditional approval. Auto-merge is blocked until the `time.sleep` removal is applied and the suite is re-run green with a human reviewer sign-off on lock ordering.",
+          "sandbox_report": {
+            "total_checks": 10,
+            "passed_checks": 10,
+            "ci_unit_passed": 4,
+            "adversarial_passed": 4,
+            "ast_passed": 2,
+            "verified_outcome": true,
+            "execution_ms": 376,
+            "checks": [
+              {
+                "check_id": "CI-UNIT-01",
+                "category": "ci_unit",
+                "name": "Multi-FC split-cart stock reservation",
+                "passed": true,
+                "detail": "Reserved split-FC cart RES-KEY-1 (rem 8 & 5)"
+              },
+              {
+                "check_id": "CI-UNIT-02",
+                "category": "ci_unit",
+                "name": "Idempotent release_reservation (no double increment)",
+                "passed": true,
+                "detail": "Single-shot idempotent release verified"
+              },
+              {
+                "check_id": "CI-UNIT-03",
+                "category": "ci_unit",
+                "name": "Idempotent reserve retry returns cached receipt",
+                "passed": true,
+                "detail": "Idempotent retry did not double-deduct stock"
+              },
+              {
+                "check_id": "CI-UNIT-04",
+                "category": "ci_unit",
+                "name": "Fail-fast validation on empty cart & qty<=0",
+                "passed": true,
+                "detail": "Validated empty lines, blank keys & non-positive qty"
+              },
+              {
+                "check_id": "ADV-CONC-01",
+                "category": "adversarial",
+                "name": "50x concurrent reverse-order stress (no AB-BA deadlock)",
+                "passed": true,
+                "detail": "50 concurrent reverse-order split reservations completed deadlock-free"
+              },
+              {
+                "check_id": "ADV-CONC-02",
+                "category": "adversarial",
+                "name": "Atomic all-or-nothing abort & clean lock release",
+                "passed": true,
+                "detail": "Atomic all-or-nothing rollback + clean lock release verified"
+              },
+              {
+                "check_id": "ADV-CONC-03",
+                "category": "adversarial",
+                "name": "Duplicate (fc_id, sku_id) line aggregation & lock dedup",
+                "passed": true,
+                "detail": "Same-(fc_id, sku_id) line aggregation verified without self-deadlock"
+              },
+              {
+                "check_id": "ADV-CONC-04",
+                "category": "adversarial",
+                "name": "Reserve -> release -> re-reserve stock conservation",
+                "passed": true,
+                "detail": "Full reserve -> release -> re-reserve lifecycle conservation verified"
+              },
+              {
+                "check_id": "AST-SAFE-02",
+                "category": "ast",
+                "name": "Sandbox static AST safety guard",
+                "passed": true,
+                "detail": "Clean stdlib-only module AST; zero blocked OS/eval/network symbols."
+              },
+              {
+                "check_id": "AST-CONC-01",
+                "category": "ast",
+                "name": "CONC-STD-07 sorted() canonical lock-order acquisition",
+                "passed": true,
+                "detail": "Confirmed sorted() global lock ordering with threading.Lock."
+              }
+            ],
+            "unified_diff": "--- a/services/inventory-lock-svc/src/inventory_reservation.py\n+++ b/services/inventory-lock-svc/src/inventory_reservation.py\n@@ -1,4 +1,13 @@\n-\"\"\"Multi-FC Split-Cart Inventory Reservation Manager (Incomplete Naive Stub).\"\"\"\n+\"\"\"Multi-FC Split-Cart Inventory Reservation Manager (CONC-STD-07).\n+\n+Atomic split-cart reservation across fulfillment centers with:\n+  * fail-fast input validation,\n+  * idempotent retry short-circuit,\n+  * same-(fc_id, sku_id) aggregation (no self-deadlock),\n+  * canonical sorted lock ordering (no AB-BA deadlock),\n+  * all-or-nothing verify-then-deduct,\n+  * exactly-once, idempotent release.\n+\"\"\"\n \n from dataclasses import dataclass\n import threading\n@@ -26,45 +35,125 @@\n class InventoryReservationManager:\n     def __init__(self, initial_stock: dict[tuple[str, str], int]) -> None:\n         self._stock: dict[tuple[str, str], int] = dict(initial_stock)\n+        self._meta_lock = threading.Lock()\n         self._locks: dict[tuple[str, str], threading.Lock] = {\n             k: threading.Lock() for k in initial_stock\n         }\n-        self._active_reservations: dict[str, list[CartItemReq]] = {}\n+        # reservation_id -> aggregated allocation {(fc_id, sku_id): qty}\n+        self._active_reservations: dict[str, dict[tuple[str, str], int]] = {}\n+        # idempotency_key -> receipt for successful reservations\n+        self._receipts: dict[str, ReservationReceipt] = {}\n+        # reservation ids that have already been released\n+        self._released_ids: set[str] = set()\n \n     def get_stock(self, fc_id: str, sku_id: str) -> int:\n-        return int(self._stock.get((fc_id, sku_id), 0))\n+        with self._meta_lock:\n+            return int(self._stock.get((fc_id, sku_id), 0))\n+\n+    def _get_lock(self, key: tuple[str, str]) -> threading.Lock:\n+        with self._meta_lock:\n+            lock = self._locks.get(key)\n+            if lock is None:\n+                lock = threading.Lock()\n+                self._locks[key] = lock\n+            return lock\n \n     def reserve_split_cart(\n         self,\n         idempotency_key: str,\n         lines: list[CartItemReq],\n     ) -> ReservationReceipt:\n-        # BUG 1: No validation for empty lines or qty <= 0, no idempotency cache,\n-        # no duplicate-SKU aggregation, and unsorted lock acquisition causes AB-BA deadlocks!\n+        # 1. Fail-fast validation before any locking or mutation.\n+        if not idempotency_key:\n+            raise ValueError(\"idempotency_key is required\")\n+        if not lines:\n+            raise ValueError(\"lines must not be empty\")\n+        for line in lines:\n+            if not line.fc_id or not line.sku_id:\n+                raise ValueError(\"fc_id and sku_id must be non-empty\")\n+            if int(line.qty) <= 0:\n+                raise ValueError(\"qty must be positive\")\n+\n+        # 2. Idempotent retry short-circuit.\n+        with self._meta_lock:\n+            existing = self._receipts.get(idempotency_key)\n+            if existing is not None:\n+                return existing\n+\n+        # 3. Aggregate duplicate (fc_id, sku_id) lines.\n+        agg: dict[tuple[str, str], int] = {}\n         for line in lines:\n             key = (line.fc_id, line.sku_id)\n-            lock = self._locks.setdefault(key, threading.Lock())\n-            lock.acquire()\n-            time.sleep(0.002)\n-            # BUG 2: Partial mutation before checking later items leaks stock and locks!\n-            if self._stock.get(key, 0) < line.qty:\n-                raise InsufficientStockError(f\"Short stock for {key}\")\n-            self._stock[key] -= line.qty\n+            agg[key] = agg.get(key, 0) + int(line.qty)\n \n-        res_id = f\"RES-{idempotency_key}\"\n-        self._active_reservations[res_id] = list(lines)\n-        return ReservationReceipt(\n-            reservation_id=res_id,\n-            idempotency_key=idempotency_key,\n-            items=tuple((ln.fc_id, ln.sku_id, ln.qty) for ln in lines),\n-        )\n+        # 4. Canonical global lock ordering.\n+        ordered_keys = sorted(agg.keys())\n+        locks = [self._get_lock(k) for k in ordered_keys]\n+\n+        acquired: list[threading.Lock] = []\n+        try:\n+            for lk in locks:\n+                lk.acquire()\n+                acquired.append(lk)\n+                time.sleep(0.002)  # contention window; safe under sorted order\n+\n+            # Re-check idempotency now that we hold the stock locks, so two\n+            # concurrent retries with the same key cannot both deduct.\n+            with self._meta_lock:\n+                existing = self._receipts.get(idempotency_key)\n+                if existing is not None:\n+                    return existing\n+\n+            # 5. Verify ALL keys before deducting ANY.\n+            for key in ordered_keys:\n+                if self._stock.get(key, 0) < agg[key]:\n+                    raise InsufficientStockError(f\"Short stock for {key}\")\n+\n+            # Deduct (all checks passed, all locks held).\n+            for key in ordered_keys:\n+                self._stock[key] = self._stock.get(key, 0) - agg[key]\n+\n+            res_id = f\"RES-{idempotency_key}\"\n+            receipt = ReservationReceipt(\n+                reservation_id=res_id,\n+                idempotency_key=idempotency_key,\n+                items=tuple((k[0], k[1], agg[k]) for k in ordered_keys),\n+            )\n+            with self._meta_lock:\n+                self._active_reservations[res_id] = dict(agg)\n+                self._receipts[idempotency_key] = receipt\n+            return receipt\n+        finally:\n+            for lk in reversed(acquired):\n+                lk.release()\n \n     def release_reservation(self, reservation_id: str) -> bool:\n-        # BUG 3: Does not lock keys in canonical order or prevent double-release inflation\n-        items = self._active_reservations.get(reservation_id)\n-        if not items:\n-            return False\n-        for ln in items:\n-            key = (ln.fc_id, ln.sku_id)\n-            self._stock[key] = self._stock.get(key, 0) + ln.qty\n-        return True\n+        with self._meta_lock:\n+            alloc = self._active_reservations.get(reservation_id)\n+            if alloc is None or reservation_id in self._released_ids:\n+                return False\n+            alloc_snapshot = dict(alloc)\n+\n+        ordered_keys = sorted(alloc_snapshot.keys())\n+        locks = [self._get_lock(k) for k in ordered_keys]\n+\n+        acquired: list[threading.Lock] = []\n+        try:\n+            for lk in locks:\n+                lk.acquire()\n+                acquired.append(lk)\n+\n+            # Re-verify under lock: exactly one releaser may win.\n+            with self._meta_lock:\n+                if reservation_id in self._released_ids:\n+                    return False\n+                if reservation_id not in self._active_reservations:\n+                    return False\n+                self._released_ids.add(reservation_id)\n+\n+            for key in ordered_keys:\n+                self._stock[key] = self._stock.get(key, 0) + alloc_snapshot[key]\n+            return True\n+        finally:\n+            for lk in reversed(acquired):\n+                lk.release()"
+          },
+          "provenance": {
+            "arm_id": "shared_bus_tiered_gate",
+            "repeat_index": 0,
+            "run_id": "dbeab802-bcda-41bb-8d2a-6b4adff18f6c",
+            "started_at": "2026-11-26T08:12:29.844921+00:00",
             "sandbox_report": "current sandbox on patched_code_final"
           }
         }

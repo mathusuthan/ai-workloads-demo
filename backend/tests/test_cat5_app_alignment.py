@@ -26,8 +26,13 @@ from app.models import Cat5AblationPortfolio  # noqa: E402
 
 RUNS = BACKEND_DIR / "experiments" / "cat5_ablation" / "runs.jsonl"
 HAVE_ABLATION = RUNS.is_file()
-APP_RUNGS = ("unbounded_sonnet_loop", "bounded_sonnet_cached_gate", "hybrid_haiku_sonnet_governed")
+APP_RUNGS = ("unbounded_sonnet_loop", "bounded_sonnet_cached_gate", "hybrid_haiku_sonnet_governed", "unbounded_haiku_loop")
 PRESET = CAT5_PRESETS[0]
+
+
+def _golden_rungs() -> set[str]:
+    """Rungs the committed golden file replays (rung 4, the raw-table loop on Haiku, is absent until its live run)."""
+    return set(runner.load_cat5_replays()["presets"]["inv-01"]["rungs"])
 
 
 def _load_script(name: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> ModuleType:
@@ -123,6 +128,23 @@ def test_rung1_safety_cap_is_12_turns(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(calls) == 12 and res.steps_used == 12 and res.max_step_budget == 12
 
 
+def test_rung4_is_rung1_on_haiku(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The raw-table loop on Haiku: rung 1's raw tools, prompt, 12-turn cap and no cache; no gate, so no escalation path."""
+    inv = PRESET["invoice_id"]
+    calls = _fake(monkeypatch, [_step("claude-haiku-5-5", [_tu(i, "query_invoice_raw", invoice_id=inv)], "tool_use") for i in range(20)])
+    res, raw = _live("unbounded_haiku_loop")
+    assert runner.CAT5_BUDGETS["unbounded_haiku_loop"] == 12 and res.max_step_budget == 12
+    assert len(calls) == 12 and res.steps_used == 12  # no wrap-up turn, as rung 1
+    assert all(kw["model_tier"] == "claude-haiku-5-5" for kw in calls)  # never switches to Sonnet
+    assert all(kw["use_prefix_cache"] is False and kw["max_tokens"] == 4096 and kw["tools"] == runner.NAIVE_TOOLS for kw in calls)
+    assert calls[0]["system_text"] == get_cat5_system_prompt("unbounded_sonnet_loop") == get_cat5_system_prompt("unbounded_haiku_loop")
+    assert res.escalated_to_sonnet is False and not any(s.escalated_from_haiku for s in res.steps)
+    # a commit goes through without the policy tool (ungoverned, as rung 1)
+    calls = _fake(monkeypatch, [_step("claude-haiku-5-5", [_commit(1)], "tool_use"), _step("claude-haiku-5-5", [], "end_turn", text="Done.")])
+    res, raw = _live("unbounded_haiku_loop")
+    assert raw["committed_voucher"] is not None and res.evaluation.exact_match and len(calls) == 2
+
+
 @pytest.mark.parametrize("rung", ["bounded_sonnet_cached_gate", "hybrid_haiku_sonnet_governed"])
 def test_governed_rungs_keep_budget_4_plus_wrap_up(monkeypatch: pytest.MonkeyPatch, rung: str) -> None:
     inv = PRESET["invoice_id"]
@@ -152,8 +174,12 @@ def test_rung1_prompt_is_the_ablation_neutral_text() -> None:
 
 @pytest.mark.skipif(not HAVE_ABLATION, reason="ablation records not present")
 def _golden_keys_pending() -> list[tuple[str, str, int]]:
-    keys = [(a, p, ablation.GOLDEN_REPEAT_INDEX) for a in ablation.APP_RUNG_FOR_ARM for p in ("inv-01", "inv-02", "inv-03")]
-    return ablation.select_pending(keys, ablation.load_jsonl(RUNS))
+    """Golden source keys not recorded yet, for cells that have runs. A cell with no runs at all (the Haiku "without" cell
+    before its live run) is "run pending": the builder skips it and the other rungs are still checked."""
+    recs = ablation.load_jsonl(RUNS)
+    recorded = {r["arm_id"] for r in recs if ablation.record_is_current(r)}
+    keys = [(a, p, ablation.GOLDEN_REPEAT_INDEX) for a in ablation.APP_RUNG_FOR_ARM if a in recorded for p in ("inv-01", "inv-02", "inv-03")]
+    return ablation.select_pending(keys, recs)
 
 
 def test_golden_builder_fixed_mapping_and_idempotent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -163,6 +189,7 @@ def test_golden_builder_fixed_mapping_and_idempotent(monkeypatch: pytest.MonkeyP
     mod = _load_script("build_cat5_golden_from_ablation", monkeypatch, tmp_path)
     assert ablation.APP_RUNG_FOR_ARM == {
         "raw_free_sonnet": "unbounded_sonnet_loop",
+        "raw_free_haiku": "unbounded_haiku_loop",
         "bundle_gate_sonnet_cached": "bounded_sonnet_cached_gate",
         "bundle_gate_haiku_escalate": "hybrid_haiku_sonnet_governed",
     }
@@ -177,8 +204,11 @@ def test_golden_builder_fixed_mapping_and_idempotent(monkeypatch: pytest.MonkeyP
     assert out.read_text() == first_g and summ.read_text() == first_s  # unchanged content is not rewritten
     g = json.loads(first_g)
     assert g["provenance"]["source"] == ablation.ABLATION_GOLDEN_SOURCE
+    built = set(g["presets"]["inv-01"]["rungs"])
+    assert built <= set(APP_RUNGS) and set(APP_RUNGS) - built <= {"unbounded_haiku_loop"}  # rung 4 only while run pending
     for pid in ("inv-01", "inv-02", "inv-03"):
-        for rid in APP_RUNGS:
+        assert set(g["presets"][pid]["rungs"]) == built
+        for rid in built:
             prov = g["presets"][pid]["provenance"][rid]
             assert prov["repeat_index"] == 0 and ablation.APP_RUNG_FOR_ARM[prov["arm_id"]] == rid
             assert all(s["max_tokens"] == 4096 and s["stop_reason"] for s in g["presets"][pid]["rungs"][rid]["steps"])
@@ -212,19 +242,20 @@ def test_golden_builder_raises_on_replay_mismatch(monkeypatch: pytest.MonkeyPatc
 # ------------------------------------------------------------------------ 4. portfolio + API
 
 
-def test_portfolio_loads_with_the_three_cells() -> None:
+def test_portfolio_loads_with_the_four_cells() -> None:
     p = runner.load_cat5_ablation_portfolio()
     assert p is not None and isinstance(p, Cat5AblationPortfolio) and p.schema_version == 2
     assert [a.arm_id for a in p.arms] == list(ablation.ARM_IDS)
-    assert [(a.design, a.model_column) for a in p.arms] == [("without", "sonnet"), ("with", "sonnet"), ("with", "haiku_first")]
-    assert [a.app_rung_id for a in p.arms] == list(APP_RUNGS) and all(a.runnable_in_app for a in p.arms)
-    assert p.invoice_count_pooled == 12 and p.repeats == 3 and p.runs_per_arm == 36 and p.expected_runs == 108
+    assert [(a.design, a.model_column) for a in p.arms] == [("without", "sonnet"), ("without", "haiku"), ("with", "sonnet"), ("with", "haiku")]
+    assert [a.app_rung_id for a in p.arms] == [ablation.APP_RUNG_FOR_ARM[a] for a in ablation.ARM_IDS]
+    assert set(a.app_rung_id for a in p.arms) == set(APP_RUNGS) and all(a.runnable_in_app for a in p.arms)
+    assert p.invoice_count_pooled == 12 and p.repeats == 3 and p.runs_per_arm == 36 and p.expected_runs == 144
     assert all(a.expected_runs == 36 and a.runs + a.pending_runs == 36 for a in p.arms)
     assert p.pooled_runs == sum(a.runs for a in p.arms) and p.pending_runs == sum(a.pending_runs for a in p.arms)
     assert p.matrix_complete is (p.pending_runs == 0)
     assert p.arms[0].pending_runs == 0  # the without-cell is complete
     assert sum(a.cap_hits for a in p.arms) == 0
-    assert [a.escalate for a in p.arms] == [False, False, True]
+    assert [a.escalate for a in p.arms] == [False, False, False, True]  # the Haiku "without" cell has no escalation path
     dumped = p.model_dump()
     for gone in ("levers", "baseline", "gate_disagreement", "superseded_records", "original_scripted_captures"):
         assert gone not in dumped
@@ -253,9 +284,17 @@ def test_replay_api_returns_ablation_portfolio(client: TestClient, pid: str) -> 
     assert resp.status_code == 200, resp.text
     data = resp.json()
     port = data["ablation_portfolio"]
-    assert port is not None and len(port["arms"]) == 3 and port["pooled_runs"] + port["pending_runs"] == 108
+    assert port is not None and len(port["arms"]) == 4 and port["pooled_runs"] + port["pending_runs"] == 144
     assert "original_scripted_captures" not in port and "levers" not in port
     rungs = {r["rung_id"]: r for r in data["results"]}
+    golden = _golden_rungs()
+    assert set(rungs) == golden and len(data["results"]) == len(golden)
+    assert data["pending_rungs"] == [r for r in APP_RUNGS if r not in golden]  # rung 4 is "run pending" until its live run
+    if "unbounded_haiku_loop" in rungs:
+        r4 = rungs["unbounded_haiku_loop"]
+        assert r4["max_step_budget"] == 12 and r4["rung_title"].startswith("4. Free-Choice") and "Haiku" in r4["rung_title"]
+    else:
+        assert "run pending" in data["orchestration_callout"]
     assert rungs["unbounded_sonnet_loop"]["max_step_budget"] == 12
     assert rungs["unbounded_sonnet_loop"]["rung_title"].startswith("1. Free-Choice")
     blob = json.dumps([r["architectural_notes"] for r in data["results"]]) + data["orchestration_callout"]
@@ -322,10 +361,10 @@ def test_seed_cat5_writes_ablation_traces_with_real_stop_reasons(monkeypatch: py
     mod = _load_script("seed_traces_from_replays", monkeypatch, tmp_path)
     n = mod.seed_cat5()
     files = list((tmp_path / "traces").rglob("*.json"))
-    assert n == len(files) == 9
+    assert n == len(files) == 12  # 3 invoices x 4 rungs
     golden = runner.load_cat5_replays()["presets"]
     idx = [json.loads(line) for line in (tmp_path / "traces" / "index.jsonl").read_text().splitlines()]
-    assert len(idx) == 9 and {e["relative_path"] for e in idx} == {str(p.relative_to(tmp_path / "traces")) for p in files}
+    assert len(idx) == 12 and {e["relative_path"] for e in idx} == {str(p.relative_to(tmp_path / "traces")) for p in files}
     for p in files:
         r = json.loads(p.read_text())
         rung = r["extra_metadata"]["rung_id"]
@@ -342,29 +381,45 @@ def test_seed_cat5_writes_ablation_traces_with_real_stop_reasons(monkeypatch: py
 
 
 @pytest.mark.skipif(not HAVE_ABLATION, reason="ablation records not present")
-def test_validator_cat5_reads_the_three_cells_and_judges_the_lever_as_a_whole(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_validator_cat5_reads_the_four_cells_and_judges_the_lever_as_a_whole(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     mod = _load_script("validate_deck_claims", monkeypatch, tmp_path)
     info, src = mod.cat5_ablation_info()
     assert src == "backend/replays/cat5_ablation_summary.json" and info is not None
     assert list(info["arms"]) == mod.CAT5_ARMS == list(ablation.ARM_IDS)
     pooled = mod.cat5_ablation_units(info["run_ids"])
     assert set(pooled) == set(mod.CAT5_ARMS) and {a: len(v) for a, v in pooled.items()} == {a: info["arms"][a]["runs"] for a in mod.CAT5_ARMS}
+    recorded = [a for a in mod.CAT5_ARMS if pooled[a]]
+    pending_cells = [a for a in mod.CAT5_ARMS if not pooled[a]]
+    assert set(pending_cells) <= {"raw_free_haiku"}  # only the Haiku "without" cell may still be pending
     res = mod.analyse()
     c5 = res["categories"]["cat5"]
     assert c5["source"] == "ablation" and c5["max_cost_diff_vs_summary_per_1k"] < 0.01
     for gone in ("levers", "gate_disagreement", "baseline"):
         assert gone not in c5
-    assert c5["lever_parts"] == {"max_step_budgets": "NOT SHOWN", "deterministic_guardrails": "SUPPORTED", "small_model_routing": "SUPPORTED"}
+    assert c5["pending_cells"] == pending_cells
+    comps = c5["comparisons"]
+    assert list(comps) == ["with vs without the lever, Sonnet", "with vs without the lever, Haiku (Haiku-first with it)",
+                           "Haiku vs Sonnet, without the lever", "Haiku-first vs Sonnet, with the lever"]
+    needs_haiku_without = {"with vs without the lever, Haiku (Haiku-first with it)", "Haiku vs Sonnet, without the lever"}
+    assert {k for k, v in comps.items() if v is None} == (needs_haiku_without if pending_cells else set())
+    assert c5["lever_parts"]["max_step_budgets"] == "NOT SHOWN"
+    if pending_cells:  # verdicts as recorded today; once the Haiku "without" cell exists they follow its numbers
+        assert c5["lever_parts"] == {"max_step_budgets": "NOT SHOWN", "deterministic_guardrails": "SUPPORTED", "small_model_routing": "SUPPORTED"}
     common = set(c5["common_invoices"])
-    assert common == set.intersection(*({u["preset_id"] for u in pooled[a]} for a in mod.CAT5_ARMS))
+    assert common == set.intersection(*({u["preset_id"] for u in pooled[a]} for a in recorded))
     rows = {c["claim"]: c for c in res["claims"] if c["category"] == "Cat 5"}
     lever = rows["Max-step budgets + deterministic guardrails + small-model routing for routine tool calls"]
-    assert lever["verdict"] == "PARTLY SUPPORTED" and "Judged as a whole, without → with" in lever["note"]
+    assert "Judged as a whole in three parts" in lever["note"] and "on the same model set-up" in lever["note"]
+    assert "Haiku vs Sonnet on the same design" in lever["note"] and "no escalation path" in lever["note"]
     assert "one narrow query" in lever["note"] and "cached prefix" in lever["note"]
-    assert rows["…without losing accuracy (implicit)"]["verdict"] == "PARTLY SUPPORTED"
+    if pending_cells:
+        assert lever["verdict"] == "PARTLY SUPPORTED" and "run pending" in lever["measured"]
+        assert rows["…without losing accuracy (implicit)"]["verdict"] == "PARTLY SUPPORTED"
     assert rows["Input 25k–150k+ tokens per task"]["verdict"] == "SUPPORTED"
     md = mod.render_markdown(res)
-    assert "| | Sonnet 5.5 | Haiku-first, escalating to Sonnet |" in md and "(not run)" in md
+    assert "| | Sonnet 5.5 | Haiku 5.5 (with the lever: Haiku first, Sonnet on escalation) |" in md and "(not run)" not in md
+    assert "The app's four rungs are these four cells" in md and "Sonnet only" not in md.split("### 5.")[1].split("### 6.")[0]
+    assert ("run pending" in md.split("### 5.")[1].split("### 6.")[0]) is bool(pending_cells)
     for gone in ("When the policy gate is wrong", "Old scripted rung 1", "What each step changed", "capture script selected runs by outcome"):
         assert gone not in md
     assert mod.render_markdown(mod.analyse()) == md  # deterministic
@@ -381,7 +436,7 @@ def test_validator_cat5_falls_back(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     assert info is None and "could be read" in src
     res = mod.analyse()
     c5 = res["categories"]["cat5"]
-    assert c5["source"] == "golden replays" and set(c5["rungs"]) == set(APP_RUNGS)
+    assert c5["source"] == "golden replays" and set(c5["rungs"]) == _golden_rungs()
     rows = {c["claim"]: c["verdict"] for c in res["claims"] if c["category"] == "Cat 5"}
     assert rows["…without losing accuracy (implicit)"] == "NOT TESTABLE"
     assert "Source: the Category 5 golden replays" in mod.render_markdown(res)

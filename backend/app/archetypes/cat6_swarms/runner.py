@@ -58,7 +58,30 @@ CAT6_RUNG_TO_PATTERN: dict[str, str] = {
     "unisolated_broadcast_swarm": "unisolated_shared_bus_swarm",
     "isolated_cached_sonnet_swarm": "isolated_repo_cached_swarm",
     "tiered_hybrid_cpo_swarm": "tiered_hybrid_cpo_swarm",
+    "unisolated_tiered_swarm": "unisolated_shared_bus_tiered_swarm",
 }
+# App rungs in number order (rung 1..4). The 2x2 design: without the lever = rungs 1 (Sonnet) and 4 (Haiku agents +
+# Sonnet patch author); with it = rungs 2 (Sonnet) and 3 (Haiku agents + Sonnet patch author).
+CAT6_RUNG_IDS: tuple[Cat6RungId, ...] = (
+    "unisolated_broadcast_swarm",
+    "isolated_cached_sonnet_swarm",
+    "tiered_hybrid_cpo_swarm",
+    "unisolated_tiered_swarm",
+)
+CAT6_SHARED_BUS_RUNGS: frozenset[str] = frozenset({"unisolated_broadcast_swarm", "unisolated_tiered_swarm"})
+CAT6_TIERED_RUNGS: frozenset[str] = frozenset({"tiered_hybrid_cpo_swarm", "unisolated_tiered_swarm"})
+# Rungs whose recorded runs may not exist yet: a replay request reports them in `pending_rungs` ("run pending")
+# instead of failing, so the other rungs still replay. Every other rung missing from the replays is a 404.
+CAT6_REPLAY_PENDING_OK_RUNGS: frozenset[str] = frozenset({"unisolated_tiered_swarm"})
+
+
+def cat6_primary_model_id(rung_id: str) -> str:
+    return "claude-haiku-5-5 + claude-sonnet-5-5" if rung_id in CAT6_TIERED_RUNGS else "claude-sonnet-5-5"
+
+
+def cat6_trace_model_id(res: Cat6RungResult) -> str:
+    """Model a rung's trace rollup is filed under: Haiku when a tiered rung ran mostly Haiku turns."""
+    return "claude-haiku-5-5" if res.rung_id in CAT6_TIERED_RUNGS and res.haiku_turns >= res.sonnet_turns else "claude-sonnet-5-5"
 
 
 def _preset_map() -> dict[str, dict[str, Any]]:
@@ -82,6 +105,18 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
                 "Streams the entire repo standards + unrelated neighbor services & OTel spans uncached across one growing shared thread.",
                 # completed with the measured portfolio verified count by _apply_measured_claims
                 "Same role instructions, output caps, PR-SANDBOX-GATE-01 and one-retry limit as the isolated rungs; only the context design differs.",
+            ],
+        )
+    if rung_id == "unisolated_tiered_swarm":
+        return (
+            "4. Shared-Bus Swarm + Sandbox Gate (Haiku agents + Sonnet Author)",
+            "Without the lever, Haiku agents + Sonnet patch author",
+            [
+                # replaced with measured sizes by _apply_measured_claims
+                "Streams the entire repo standards + unrelated neighbor services & OTel spans uncached across one growing shared thread.",
+                # completed with the measured portfolio verified count by _apply_measured_claims
+                "Same shared thread, role instructions, output caps, PR-SANDBOX-GATE-01 and one-retry limit as rung 1; "
+                "Orchestrator, CI Triager, Security Critic & Merge Gate run on Claude Haiku 5.5, the patch author on Sonnet 5.5.",
             ],
         )
     if rung_id == "isolated_cached_sonnet_swarm":
@@ -112,7 +147,7 @@ def _compute_step_cold_warm(
     seen_cache_models: set[str],
 ) -> tuple[float, float]:
     prefix_tok = finops.cache_creation_tokens + finops.cache_read_tokens
-    if rung_id == "unisolated_broadcast_swarm" or prefix_tok <= 0:
+    if rung_id in CAT6_SHARED_BUS_RUNGS or prefix_tok <= 0:
         return finops.total_cost_usd, finops.total_cost_usd
 
     is_first_cold = finops.model_id not in seen_cache_models
@@ -282,15 +317,29 @@ def _apply_measured_claims(
     naive = ok.get("unisolated_broadcast_swarm")
     iso = ok.get("isolated_cached_sonnet_swarm")
     hybrid = ok.get("tiered_hybrid_cpo_swarm")
-    if naive:
-        prompt = naive.total_uncached_input_tokens + naive.total_cache_creation_tokens + naive.total_cache_read_tokens
+    bus_tiered = ok.get("unisolated_tiered_swarm")
+    for bus in (naive, bus_tiered):
+        if not bus:
+            continue
+        prompt = bus.total_uncached_input_tokens + bus.total_cache_creation_tokens + bus.total_cache_read_tokens
         set_note(
-            naive,
+            bus,
             0,
             f"Streams the entire ~{len(SHARED_REPO_PREFIX_MARKDOWN) / 1000:.0f}k-char repo standards + "
             f"~{len(UNFILTERED_REPO_AND_TELEMETRY_NOISE) / 1000:.0f}k-char unrelated neighbor services & OTel spans "
             f"uncached across one growing shared thread ({prompt:,} prompt tok this run).",
         )
+    if bus_tiered:
+        row = rows.get("unisolated_tiered_swarm")
+        if row is not None:
+            set_note(
+                bus_tiered,
+                1,
+                "Same shared thread, role instructions, output caps, PR-SANDBOX-GATE-01 and one-retry limit as rung 1, "
+                "with Haiku 5.5 on every role except the Sonnet patch author; "
+                f"{row.verified_outcomes_count}/{row.prs_evaluated} of its {row.prs_evaluated}-incident portfolio "
+                f"patches verified ({row.checks_passed_total}/{row.checks_total} sandbox checks).",
+            )
     if iso:
         prefix = max(t.finops.cache_creation_tokens + t.finops.cache_read_tokens for t in iso.agent_turns)
         set_note(
@@ -354,7 +403,7 @@ def _apply_cross_rung_savings(results: list[Cat6RungResult]) -> None:
 
 
 def _role_model(rung_id: Cat6RungId, role_key: str) -> str:
-    if rung_id == "tiered_hybrid_cpo_swarm" and role_key != "patch_author":
+    if rung_id in CAT6_TIERED_RUNGS and role_key != "patch_author":
         return "claude-haiku-5-5"
     return "claude-sonnet-5-5"
 
@@ -376,8 +425,9 @@ async def _run_live_cat6_for_rung(
     final_memo = ""
     sandbox_dict: dict[str, Any] | None = None
 
-    if rung_id == "unisolated_broadcast_swarm":
+    if rung_id in CAT6_SHARED_BUS_RUNGS:
         # Shared growing bus: same role instructions, caps, sandbox gate and one retry as the isolated rungs.
+        # Rung 1 runs Sonnet on every turn; rung 4 runs Haiku on every role except the Sonnet patch author.
         bus_messages: list[dict[str, Any]] = []
         step_counter = 0
 
@@ -387,7 +437,7 @@ async def _run_live_cat6_for_rung(
             max_tokens = cat6_max_tokens(role_key=role_key)
             bus_messages.append({"role": "user", "content": u_text})
             raw = await run_cat6_swarm_agent_call(
-                model_tier="claude-sonnet-5-5",
+                model_tier=_role_model(rung_id, role_key),
                 shared_repo_prefix="",
                 role_instructions=get_cat6_agent_system_prompt(rung_id, role_key),
                 messages=[dict(m) for m in bus_messages],
@@ -469,7 +519,7 @@ async def _run_live_cat6_for_rung(
             "orchestrator_merge",
             build_cat6_shared_bus_turn_message(preset, "orchestrator_merge", sandbox_report=sandbox_dict),
         )
-        primary_model_id = "claude-sonnet-5-5"
+        primary_model_id = cat6_primary_model_id(rung_id)
     else:
         # Context-isolated + Byte-identical Cached Repo Prefix + Deterministic Sandbox Gate
         step_counter = 0
@@ -601,11 +651,7 @@ async def _run_live_cat6_for_rung(
                 critic_verdict=critic_verdict,
             ),
         )
-        primary_model_id = (
-            "claude-haiku-5-5 + claude-sonnet-5-5"
-            if rung_id == "tiered_hybrid_cpo_swarm"
-            else "claude-sonnet-5-5"
-        )
+        primary_model_id = cat6_primary_model_id(rung_id)
 
     result = finalize_cat6_rung_result(
         rung_id=rung_id,
@@ -661,7 +707,7 @@ def _build_cat6_result_from_replay(
                 agent_label=str(rt.get("agent_label") or AGENT_ROLE_LABELS.get(rt["agent_role"], rt["agent_role"])),
                 model_id=str(rt["model_id"]),
                 context_mode=rt.get("context_mode")
-                or ("shared_omnibus_bus" if rung_id == "unisolated_broadcast_swarm" else "isolated_prefix_cached"),
+                or ("shared_omnibus_bus" if rung_id in CAT6_SHARED_BUS_RUNGS else "isolated_prefix_cached"),
                 attempt=int(rt.get("attempt") or 1),
                 latency_ms=int(rt.get("latency_ms") or 0),
                 finops=fin,
@@ -694,13 +740,12 @@ def _build_portfolio_scorecard(
     active_results: list[Cat6RungResult],
     replays: dict[str, Any],
 ) -> list[Cat6PortfolioRungRollup]:
-    """Compute Cost per Verified Outcome (CpO) & daily Band 5 tokens across all 3 PRs."""
+    """Compute Cost per Verified Outcome (CpO) & daily Band 5 tokens across all 3 PRs.
+
+    A rung with no recorded run (no replay and not run now) has no row.
+    """
     presets_replays = replays.get("presets") or {}
-    by_rung_runs: dict[Cat6RungId, list[Cat6RungResult]] = {
-        "unisolated_broadcast_swarm": [],
-        "isolated_cached_sonnet_swarm": [],
-        "tiered_hybrid_cpo_swarm": [],
-    }
+    by_rung_runs: dict[Cat6RungId, list[Cat6RungResult]] = {rid: [] for rid in CAT6_RUNG_IDS}
     for preset in CAT6_PRESETS:
         pid = preset["id"]
         if pid == active_preset_id:
@@ -722,11 +767,7 @@ def _build_portfolio_scorecard(
     rollups: list[Cat6PortfolioRungRollup] = []
     naive_ref_cpo: float | None = None
 
-    for rid in (
-        "unisolated_broadcast_swarm",
-        "isolated_cached_sonnet_swarm",
-        "tiered_hybrid_cpo_swarm",
-    ):
+    for rid in CAT6_RUNG_IDS:
         runs = by_rung_runs[rid]
         if not runs:
             continue
@@ -761,15 +802,12 @@ def _build_portfolio_scorecard(
         )
 
         label, _, _ = _rung_metadata(rid)
-        routing_desc = (
-            "Sonnet 5.5 on one shared thread (uncached) + Sandbox"
-            if rid == "unisolated_broadcast_swarm"
-            else (
-                "Sonnet 5.5 Isolated + Cached Repo + Sandbox"
-                if rid == "isolated_cached_sonnet_swarm"
-                else "Haiku 5.5 Orch/Triage/Critic/Merge + Sonnet Author"
-            )
-        )
+        routing_desc = {
+            "unisolated_broadcast_swarm": "Sonnet 5.5 on one shared thread (uncached) + Sandbox",
+            "isolated_cached_sonnet_swarm": "Sonnet 5.5 Isolated + Cached Repo + Sandbox",
+            "tiered_hybrid_cpo_swarm": "Haiku 5.5 Orch/Triage/Critic/Merge + Sonnet Author",
+            "unisolated_tiered_swarm": "Haiku 5.5 Orch/Triage/Critic/Merge + Sonnet Author on one shared thread (uncached) + Sandbox",
+        }[rid]
         rollups.append(
             Cat6PortfolioRungRollup(
                 rung_id=rid,
@@ -805,6 +843,7 @@ async def execute_cat6_run(
     run_group_id = str(uuid4())
     replays = load_cat6_replays()
     results: list[Cat6RungResult] = []
+    pending_rungs: list[Cat6RungId] = []
 
     if req.mode == "replay":
         preset_trace = (replays.get("presets") or {}).get(preset["id"])
@@ -816,11 +855,20 @@ async def execute_cat6_run(
         for rid in req.rungs:
             raw_rung = (preset_trace.get("rungs") or {}).get(rid)
             if not raw_rung:
+                if rid in CAT6_REPLAY_PENDING_OK_RUNGS:
+                    pending_rungs.append(rid)  # run pending: no recorded run to replay yet
+                    continue
                 raise HTTPException(
                     status_code=404,
                     detail=f"Replay trace missing rung `{rid}` on {preset['id']}.",
                 )
             results.append(_build_cat6_result_from_replay(rung_id=rid, preset=preset, raw_rung=raw_rung))
+        if not results:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Replay pending for {', '.join(f'`{r}`' for r in pending_rungs)} on {preset['id']}: "
+                "run pending, no recorded runs yet. Run it live, or replay the other rungs.",
+            )
         mode_used = "replay"
     else:
         creds = credit_shield.resolve_live_credentials(
@@ -862,11 +910,7 @@ async def execute_cat6_run(
     for res in results:
         if res.status != "ok":
             continue
-        fin_model = (
-            "claude-haiku-5-5"
-            if res.rung_id == "tiered_hybrid_cpo_swarm" and res.haiku_turns >= res.sonnet_turns
-            else "claude-sonnet-5-5"
-        )
+        fin_model = cat6_trace_model_id(res)
         rollup_fin = rollup_multi_call_finops(
             calls=[t.finops for t in res.agent_turns],
             total_cost_usd=res.cold_run_cost_usd,
@@ -894,7 +938,7 @@ async def execute_cat6_run(
             },
             request_params={
                 "endpoint": "messages.create",
-                "prefix_cache_enabled": res.rung_id != "unisolated_broadcast_swarm",
+                "prefix_cache_enabled": res.rung_id not in CAT6_SHARED_BUS_RUNGS,
                 "max_tokens_by_role": cat6_caps_by_role(),
                 "timeout_s": CALL_TIMEOUT_S,
                 "code_snippets": list(CAT6_CODE_SNIPPETS.keys()),
@@ -938,6 +982,15 @@ async def execute_cat6_run(
             "and PR-SANDBOX-GATE-01 on every rung), on Sonnet and on Haiku agents + a Sonnet patch author, by Cost "
             "per Verified Outcome (CpO)."
         )
+    bus_tiered = next((r for r in results if r.rung_id == "unisolated_tiered_swarm" and r.status == "ok"), None)
+    if bus_tiered:
+        bt_pass = bus_tiered.sandbox_report.passed_checks if bus_tiered.sandbox_report else 0
+        callout += (
+            f" The shared bus with Haiku agents + a Sonnet patch author: ${bus_tiered.cost_per_1k_runs_cold_usd:.2f}/1k "
+            f"runs (sandbox {bt_pass}/10)."
+        )
+    elif "unisolated_tiered_swarm" in pending_rungs:
+        callout += " Rung 4 (shared bus, Haiku agents + Sonnet patch author): run pending."
 
     return Cat6RunResponse(
         mode_used=mode_used,  # type: ignore[arg-type]
@@ -953,4 +1006,5 @@ async def execute_cat6_run(
         results=results,
         portfolio_scorecard=scorecard,
         swarm_callout=callout,
+        pending_rungs=pending_rungs,
     )

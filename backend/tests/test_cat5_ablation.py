@@ -34,7 +34,8 @@ BACKEND = Path(__file__).resolve().parent.parent
 P = CAT5_ABLATION_PRESETS_BY_ID
 GATE_ARMS = ("bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate")
 ALL_ARMS = (*ab.ARM_IDS, *ab.OTHER_LEVER_ARM_IDS)  # the displayed cells, then the other single levers tried
-NEUTRAL_ARMS = ("raw_free_sonnet", "raw_free_sonnet_cached", "bundle_sonnet_cached", "bundle_haiku_cached")
+NEUTRAL_ARMS = ("raw_free_sonnet", "raw_free_haiku", "raw_free_sonnet_cached", "bundle_sonnet_cached", "bundle_haiku_cached")
+UNCACHED_ARMS = ("raw_free_sonnet", "raw_free_haiku")  # the two "without" cells
 
 
 # --------------------------------------------------------------------------------------------------
@@ -134,10 +135,10 @@ def bundle_script(preset_id: str, **override: Any) -> list:
 
 
 def test_displayed_and_other_lever_arms_and_tool_lists() -> None:
-    assert ab.ARM_IDS == ("raw_free_sonnet", "bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate")
+    assert ab.ARM_IDS == ("raw_free_sonnet", "raw_free_haiku", "bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate")
     assert ab.OTHER_LEVER_ARM_IDS == ("raw_free_sonnet_cached", "bundle_sonnet_cached", "bundle_haiku_cached")
-    assert set(ab.ARMS) == set(ALL_ARMS) and len(ALL_ARMS) == 6
-    for a in ("raw_free_sonnet", "raw_free_sonnet_cached"):
+    assert set(ab.ARMS) == set(ALL_ARMS) and len(ALL_ARMS) == 7
+    for a in ("raw_free_sonnet", "raw_free_haiku", "raw_free_sonnet_cached"):
         tools = ab.tools_for(a)
         assert tools == NAIVE_TOOLS and all(x is y for x, y in zip(tools, NAIVE_TOOLS))
         assert [t["name"] for t in tools] == [
@@ -157,12 +158,20 @@ def test_displayed_and_other_lever_arms_and_tool_lists() -> None:
 def test_caps_and_flags() -> None:
     assert ab.MAX_TOKENS_PER_TURN == 4096
     for a in NEUTRAL_ARMS:
-        assert ab.ARMS[a].turn_cap == 12 and not ab.ARMS[a].gate and ab.ARMS[a].session_rung_id == "unbounded_sonnet_loop"
+        assert ab.ARMS[a].turn_cap == 12 and not ab.ARMS[a].gate and not ab.ARMS[a].escalate
+        assert ab.ARMS[a].session_rung_id == ("unbounded_haiku_loop" if a == "raw_free_haiku" else "unbounded_sonnet_loop")
     for a in GATE_ARMS:
         assert ab.ARMS[a].step_budget == 4 and ab.ARMS[a].turn_cap == 5 and ab.ARMS[a].gate
-    assert not ab.ARMS["raw_free_sonnet"].cached
-    assert all(ab.ARMS[a].cached for a in ALL_ARMS if a != "raw_free_sonnet")
+    assert not any(ab.ARMS[a].cached for a in UNCACHED_ARMS)
+    assert all(ab.ARMS[a].cached for a in ALL_ARMS if a not in UNCACHED_ARMS)
     assert ab.ARMS["bundle_haiku_cached"].start_model == "claude-haiku-5-5"
+    # the Haiku "without" cell is the Sonnet "without" cell on Haiku: same tools, prompt text, caps and cache setting
+    s_arm, h_arm = ab.ARMS["raw_free_sonnet"], ab.ARMS["raw_free_haiku"]
+    assert h_arm.start_model == "claude-haiku-5-5" and s_arm.start_model == "claude-sonnet-5-5"
+    fields = ("tool_set", "cached", "escalate", "gate", "prompt", "turn_cap", "step_budget", "voucher_computed_by")
+    assert [getattr(h_arm, f) for f in fields] == [getattr(s_arm, f) for f in fields]
+    assert ab.tools_for("raw_free_haiku") == ab.tools_for("raw_free_sonnet")
+    assert ab.base_system_text("raw_free_haiku") == ab.base_system_text("raw_free_sonnet")
     assert ab.ARMS["bundle_gate_haiku_escalate"].escalate
     assert sum(ab.ARMS[a].escalate for a in ALL_ARMS) == 1
 
@@ -606,15 +615,17 @@ def test_analysis_with_records(tmp_path: Path) -> None:
     assert [e["preset_id"] for e in s["non_exact_runs"]] == ["inv-02"]
     assert s["non_exact_runs"][0]["mismatched_fields"] == ["debit_note_deduction_inr"]
     assert s["data_quality"]["cache_anomalies"] == 0 and s["data_quality"]["no_voucher_committed"] == 0
-    # the Haiku-first cell has no runs yet: pending, listed per version
-    h = s["arms"]["bundle_gate_haiku_escalate"]
-    assert h["runs"] == 0 and h["pending"] == {"runs": 2, "invoices": ["inv-02", "inv-04"]}
-    assert not s["matrix"]["complete"] and len(s["matrix"]["pending_keys"]) == 2 and s["matrix"]["balanced"] is False
+    # the two Haiku cells (without, and Haiku-first with) have no runs yet: pending, listed per version
+    for arm in ("raw_free_haiku", "bundle_gate_haiku_escalate"):
+        h = s["arms"][arm]
+        assert h["runs"] == 0 and h["pending"] == {"runs": 2, "invoices": ["inv-02", "inv-04"]}
+    assert not s["matrix"]["complete"] and len(s["matrix"]["pending_keys"]) == 4 and s["matrix"]["balanced"] is False
     two = ab.summarise(recs, arm_ids=[raw, "bundle_gate_sonnet_cached"], preset_ids=["inv-04", "inv-02"], expected_repeats=1)
     assert two["matrix"]["complete"] and two["matrix"]["balanced"]
     md = ab.render_markdown(s)
     assert "raw_free_sonnet / inv-02 / r0" in md
-    assert "Pending (not run yet): 2 runs — bundle_gate_haiku_escalate: inv-02, inv-04 (2 runs)." in md
+    assert ("Pending (not run yet): 4 runs — raw_free_haiku: inv-02, inv-04 (2 runs); "
+            "bundle_gate_haiku_escalate: inv-02, inv-04 (2 runs).") in md
     assert "Pending" not in ab.render_markdown(two)
     path = tmp_path / "runs.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in recs) + "\n")
@@ -627,7 +638,7 @@ def test_runner_cli_dry_run(capsys: pytest.CaptureFixture[str], tmp_path: Path) 
     mod = _load_script("cat5_ablation")
     rc = asyncio.run(mod.run_matrix(mod.parse_args(["--dry-run", "--out", str(tmp_path / "runs.jsonl"), "--repeats", "1"])))
     out = capsys.readouterr().out
-    assert rc == 0 and "36 pending" in out and "TOTAL typical" in out and "no API calls" in out
+    assert rc == 0 and "48 pending" in out and "TOTAL typical" in out and "no API calls" in out
     assert not (tmp_path / "runs.jsonl").exists()
 
 
@@ -644,6 +655,7 @@ PINNED_ARM_FP = {
     "raw_free_sonnet": "fa74bab5f98fe213", "raw_free_sonnet_cached": "822ce1258d319483",
     "bundle_sonnet_cached": "939b70b26767c959", "bundle_gate_sonnet_cached": "12bad949bbbfe136",
     "bundle_haiku_cached": "5e361d76fef73f56", "bundle_gate_haiku_escalate": "6bd6026d3c4df79a",
+    "raw_free_haiku": "c83ae8631cbc673d",
 }
 
 
@@ -779,6 +791,6 @@ def test_runner_cli_invoice_dry_run(capsys: pytest.CaptureFixture[str], tmp_path
     mod = _load_script("cat5_ablation")
     rc = asyncio.run(mod.run_matrix(mod.parse_args(["--dry-run", "--invoices", "inv-06", "--out", str(tmp_path / "r.jsonl")])))
     cap = capsys.readouterr()
-    assert rc == 0 and "9 pending" in cap.out and "WARNING" not in cap.err
+    assert rc == 0 and "12 pending" in cap.out and "WARNING" not in cap.err
     with pytest.raises(SystemExit):
         mod.parse_args(["--dry-run", "--group", "gate_disagreement"])

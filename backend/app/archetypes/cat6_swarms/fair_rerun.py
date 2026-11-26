@@ -1,14 +1,15 @@
-"""Category 6 fair-rerun experiment harness: three cells, one record per run, pure analysis helpers.
+"""Category 6 fair-rerun experiment harness: four cells, one record per run, pure analysis helpers.
 
 The design compared is the deck's lever (isolated agents + cached repo prefix) against the same swarm on one
 shared bus, all with the same role instructions, output caps, sandbox gate and one retry:
 
-                         Sonnet on every turn        Haiku agents + Sonnet patch author
-    without the lever    shared_bus_matched_gate     (not run)
+                         Sonnet 5.5                  Haiku agents + Sonnet patch author
+    without the lever    shared_bus_matched_gate     shared_bus_tiered_gate
     with the lever       isolated_cached_gate        tiered_gate
 
 This module is importable without an API key. Each arm follows the same control flow as the matching app rung
-in `runner.py`, with per-run cold caches and full-text capture of every call.
+in `runner.py`, with per-run cold caches and full-text capture of every call. An arm with no records yet is
+reported as "run pending" by `summarise` (and left out of the expected matrix) rather than as missing runs.
 
 Records hold raw tokens only (never dollars) so they stay valid if prices change; cost is derived at
 analysis time from `app.core.pricing.compute_run_finops`.
@@ -44,7 +45,13 @@ from app.archetypes.cat6_swarms.sandbox_verifier import (
     extract_python_code,
 )
 from app.core.anthropic_service import AnthropicRawResult, run_cat6_swarm_agent_call
-from app.core.pricing import LEGACY_MODEL_RATES, MODEL_RATES, compute_run_finops
+from app.core.pricing import (
+    HAIKU_LONG_PROMPT_INPUT_OUTPUT_PER_1M_USD,
+    HAIKU_LONG_PROMPT_THRESHOLD_TOKENS,
+    LEGACY_MODEL_RATES,
+    MODEL_RATES,
+    compute_run_finops,
+)
 from app.data.cat6_fixtures import CAT6_PRESETS, SHARED_REPO_PREFIX_MARKDOWN
 
 SCHEMA_VERSION = 1
@@ -121,25 +128,37 @@ ARMS: dict[str, ArmSpec] = {
             instructions_summary="Governed per-role prompts",
             models_summary="Haiku except patch_author (Sonnet)",
         ),
+        # `shared_bus_matched_gate` with the model assignment of `tiered_gate`: same thread, prompts, caps and gate.
+        ArmSpec(
+            arm_id="shared_bus_tiered_gate",
+            context="shared_bus",
+            prompt_rung_id="unisolated_tiered_swarm",
+            tiered=True,
+            gate_enabled=True,
+            context_summary="Shared growing thread, repo manual + noise, uncached",
+            instructions_summary="Governed per-role prompts (same as the isolated arms)",
+            models_summary="Haiku except patch_author (Sonnet)",
+        ),
     )
 }
 ARM_IDS: tuple[str, ...] = tuple(ARMS)
 
-# The displayed design: the deck's lever (rows) x the models (columns); None = not run.
+# The displayed design: the deck's lever (rows) x the models (columns). An arm with no records shows "run pending".
 DESIGN_ROWS: dict[str, str] = {
     "without": "Without: shared bus, same instructions, sandbox check with one retry",
     "with": "With: isolated agents + cached repo prefix, sandbox check with one retry",
 }
 DESIGN_COLUMNS: dict[str, str] = {
-    "sonnet": "Sonnet on every turn",
+    "sonnet": "Sonnet 5.5",
     "tiered": "Haiku agents + Sonnet patch author",
 }
 DESIGN_CELLS: dict[tuple[str, str], str | None] = {
     ("without", "sonnet"): "shared_bus_matched_gate",
-    ("without", "tiered"): None,
+    ("without", "tiered"): "shared_bus_tiered_gate",
     ("with", "sonnet"): "isolated_cached_gate",
     ("with", "tiered"): "tiered_gate",
 }
+RUN_PENDING = "run pending"
 
 
 def _arm(arm_id: str) -> ArmSpec:
@@ -421,17 +440,37 @@ def select_pending(planned: Iterable[RunKey], existing_records: Iterable[dict[st
     return [k for k in planned if k not in done]
 
 
+def price_call_usd(model_id: str, *, uncached: float, cache_write: float, cache_read: float, output: float) -> float:
+    """One call at `model_id`'s rates, with Haiku's long-prompt tier when the prompt exceeds 100K tokens.
+
+    Long-prompt cache rates are not in the repo, so a long Haiku call's cache tokens are priced conservatively:
+    writes at 1.25x the long input rate, reads at the full long input rate (no read discount).
+    """
+    prompt = uncached + cache_write + cache_read
+    long_rates = HAIKU_LONG_PROMPT_INPUT_OUTPUT_PER_1M_USD.get(model_id)
+    if long_rates and prompt > HAIKU_LONG_PROMPT_THRESHOLD_TOKENS:
+        r_in, r_out = long_rates
+        return (uncached * r_in + cache_write * r_in * 1.25 + cache_read * r_in + output * r_out) / 1_000_000
+    return compute_run_finops(
+        model_id=model_id,
+        input_tokens=int(round(uncached)),
+        output_tokens=int(round(output)),
+        cache_creation_tokens=int(round(cache_write)),
+        cache_read_tokens=int(round(cache_read)),
+    ).total_cost_usd
+
+
 def _price_turn(turn: dict[str, Any], *, cache_creation: int, cache_read: int) -> float:
     model_id = str(turn.get("model_id") or "")
     if model_id not in MODEL_RATES and model_id not in LEGACY_MODEL_RATES:
         model_id = str(turn["intended_model_id"])
-    return compute_run_finops(
-        model_id=model_id,
-        input_tokens=int(turn.get("input_tokens") or 0),
-        output_tokens=int(turn.get("output_tokens") or 0),
-        cache_creation_tokens=cache_creation,
-        cache_read_tokens=cache_read,
-    ).total_cost_usd
+    return price_call_usd(
+        model_id,
+        uncached=int(turn.get("input_tokens") or 0),
+        cache_write=cache_creation,
+        cache_read=cache_read,
+        output=int(turn.get("output_tokens") or 0),
+    )
 
 
 def turn_billed_cost_usd(turn: dict[str, Any]) -> float:
@@ -490,6 +529,176 @@ class BudgetGuard:
     @property
     def exhausted(self) -> bool:
         return self.spent_usd >= self.max_usd
+
+
+# --------------------------------------------------------------------------------------------------
+# Dry-run cost estimate (pure; reads recorded tokens only)
+# --------------------------------------------------------------------------------------------------
+
+# Upper bound on the one gate-retry user message (10 failing-check lines + the ask). The largest retry message
+# built offline from real failing sandbox reports is 2,163 characters (~0.6k tokens).
+RETRY_MESSAGE_TOKEN_ALLOWANCE = 2_000
+_RUN_SLOTS: tuple[tuple[str, int], ...] = (
+    ("orchestrator_plan", 1),
+    ("ci_triager", 1),
+    ("patch_author", 1),
+    ("patch_author", 2),
+    ("security_critic", 1),
+    ("orchestrator_merge", 1),
+)
+# Isolated arms: the earlier turn whose output is pasted into this turn's payload.
+_ISOLATED_FEEDS: dict[tuple[str, int], tuple[str, int]] = {
+    ("ci_triager", 1): ("orchestrator_plan", 1),
+    ("patch_author", 1): ("ci_triager", 1),
+    ("patch_author", 2): ("ci_triager", 1),
+    ("security_critic", 1): ("patch_author", 2),
+    ("orchestrator_merge", 1): ("security_critic", 1),
+}
+
+
+def _prompt_tokens(turn: dict[str, Any]) -> int:
+    return (
+        int(turn.get("input_tokens") or 0)
+        + int(turn.get("cache_creation_tokens") or 0)
+        + int(turn.get("cache_read_tokens") or 0)
+    )
+
+
+def estimate_reference_arm(arm_id: str, records: Iterable[dict[str, Any]]) -> str:
+    """The arm whose recorded tokens calibrate `arm_id`: itself once it has ok records, else the Sonnet arm
+    with the same context design (same messages and caps; only the model per role differs)."""
+    arm = _arm(arm_id)
+    if any(r.get("status") == "ok" and r.get("arm_id") == arm_id and r.get("turns") for r in records):
+        return arm_id
+    return next(a for a, s in ARMS.items() if s.context == arm.context and not s.tiered)
+
+
+def _max_haiku(calls: Iterable[tuple[str, str, float]]) -> dict[str, Any]:
+    best: dict[str, Any] = {"prompt_tokens": 0, "role": None}
+    for model, role, prompt in calls:
+        if model == HAIKU_MODEL_ID and prompt > best["prompt_tokens"]:
+            best = {"prompt_tokens": int(round(prompt)), "role": role}
+    return best
+
+
+def estimate_run(arm_id: str, preset_id: str, records: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """Typical and worst-case $ for one run of `arm_id` on `preset_id`, from recorded tokens.
+
+    Typical: the reference arm's recorded runs on this incident, each turn re-priced at this arm's model for
+    that role (cold view: the first call per model writes the cached prefix). Worst case: one gate retry, every
+    call writing its full output cap, and every prompt at the largest recorded prompt for that turn plus every
+    output that could precede it on the thread (shared bus: all earlier outputs at their caps and the retry
+    message; isolated: the pasted-in upstream output at its cap). Any Haiku call over 100K prompt tokens is
+    priced at the long-prompt rate (`price_call_usd`).
+    """
+    arm = _arm(arm_id)
+    ref_arm = estimate_reference_arm(arm_id, records)
+    ok = [r for r in records if r.get("status") == "ok" and r.get("arm_id") == ref_arm and r.get("turns")]
+    refs = [r for r in ok if r.get("preset_id") == preset_id] or ok
+    if not refs or not any(t.get("agent_role") == "patch_author" for r in refs for t in r["turns"]):
+        raise ValueError(f"No ok records of `{ref_arm}` to calibrate the estimate for `{arm_id}`")
+
+    typical_costs: list[float] = []
+    typical_calls: list[tuple[str, str, float]] = []
+    for r in refs:
+        turns = []
+        for t in r.get("turns") or []:
+            model = intended_model_id(arm_id, str(t["agent_role"]))
+            turns.append({**t, "model_id": model, "intended_model_id": model})
+            typical_calls.append((model, str(t["agent_role"]), float(_prompt_tokens(t))))
+        typical_costs.append(cold_warm_costs_usd(turns, cached_arm=arm.cached)[0])
+
+    base: dict[tuple[str, int], int] = {}
+    prefix: dict[tuple[str, int], int] = {}
+    for r in refs:
+        for t in r.get("turns") or []:
+            slot = (str(t["agent_role"]), int(t.get("attempt") or 1))
+            base[slot] = max(base.get(slot, 0), _prompt_tokens(t))
+            prefix[slot] = max(
+                prefix.get(slot, 0), int(t.get("cache_creation_tokens") or 0) + int(t.get("cache_read_tokens") or 0)
+            )
+    largest = max(base.values())
+    base.setdefault(("patch_author", 2), base.get(("patch_author", 1), largest))
+    prefix.setdefault(("patch_author", 2), prefix.get(("patch_author", 1), 0))
+
+    worst_calls: list[tuple[str, str, float]] = []
+    worst_usd = 0.0
+    seen_models: set[str] = set()
+    earlier_caps = 0
+    for k, slot in enumerate(_RUN_SLOTS):
+        role, attempt = slot
+        model = intended_model_id(arm_id, role)
+        cap = max_tokens_for(arm_id, role)
+        retried = k >= _RUN_SLOTS.index(("patch_author", 2))
+        if arm.context == "shared_bus":
+            prompt = base.get(slot, largest) + earlier_caps + (RETRY_MESSAGE_TOKEN_ALLOWANCE if retried else 0)
+        else:
+            feed = _ISOLATED_FEEDS.get(slot)
+            prompt = base.get(slot, largest) + (max_tokens_for(arm_id, feed[0]) if feed else 0)
+            prompt += RETRY_MESSAGE_TOKEN_ALLOWANCE if slot == ("patch_author", 2) else 0
+        pre = prefix.get(slot, 0) if arm.cached else 0
+        first = model not in seen_models
+        seen_models.add(model)
+        worst_usd += price_call_usd(
+            model,
+            uncached=prompt - pre,
+            cache_write=pre if first else 0,
+            cache_read=0 if first else pre,
+            output=cap,
+        )
+        worst_calls.append((model, role, float(prompt)))
+        earlier_caps += cap
+
+    long_typical = sum(1 for m, _, p in typical_calls if m == HAIKU_MODEL_ID and p > HAIKU_LONG_PROMPT_THRESHOLD_TOKENS)
+    long_worst = sum(1 for m, _, p in worst_calls if m == HAIKU_MODEL_ID and p > HAIKU_LONG_PROMPT_THRESHOLD_TOKENS)
+    return {
+        "arm_id": arm_id,
+        "preset_id": preset_id,
+        "reference_arm_id": ref_arm,
+        "reference_runs": len(refs),
+        "typical_usd": statistics.fmean(typical_costs),
+        "worst_case_usd": worst_usd,
+        "max_haiku_prompt_typical": _max_haiku(typical_calls),
+        "max_haiku_prompt_worst": _max_haiku(worst_calls),
+        "haiku_long_prompt_calls_typical": long_typical,
+        "haiku_long_prompt_calls_worst": long_worst,
+    }
+
+
+def estimate_matrix(keys: Sequence[RunKey], records: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """Per-arm and total typical / worst-case $ for the pending `keys`."""
+    per_arm: dict[str, dict[str, Any]] = {}
+    for arm_id, preset_id, _ in keys:
+        est = estimate_run(arm_id, preset_id, records)
+        slot = per_arm.setdefault(
+            arm_id,
+            {
+                "runs": 0,
+                "typical_usd": 0.0,
+                "worst_case_usd": 0.0,
+                "reference_arm_id": est["reference_arm_id"],
+                "max_haiku_prompt_typical": {"prompt_tokens": 0, "role": None},
+                "max_haiku_prompt_worst": {"prompt_tokens": 0, "role": None},
+                "haiku_long_prompt_calls_typical": 0,
+                "haiku_long_prompt_calls_worst": 0,
+            },
+        )
+        slot["runs"] += 1
+        slot["typical_usd"] += est["typical_usd"]
+        slot["worst_case_usd"] += est["worst_case_usd"]
+        for view in ("typical", "worst"):
+            key = f"max_haiku_prompt_{view}"
+            if est[key]["prompt_tokens"] > slot[key]["prompt_tokens"]:
+                slot[key] = est[key]
+            slot[f"haiku_long_prompt_calls_{view}"] += est[f"haiku_long_prompt_calls_{view}"]
+    for slot in per_arm.values():
+        slot["typical_usd_per_run"] = slot["typical_usd"] / slot["runs"]
+        slot["worst_case_usd_per_run"] = slot["worst_case_usd"] / slot["runs"]
+    return {
+        "per_arm": per_arm,
+        "total_typical_usd": sum(s["typical_usd"] for s in per_arm.values()),
+        "total_worst_case_usd": sum(s["worst_case_usd"] for s in per_arm.values()),
+    }
 
 
 # --------------------------------------------------------------------------------------------------
@@ -675,9 +884,16 @@ def summarise(
     preset_ids: Sequence[str] | None = None,
     expected_repeats: int | None = None,
 ) -> dict[str, Any]:
-    """Summarise fair-rerun records: latest ok record per key, errors counted separately."""
+    """Summarise fair-rerun records: latest ok record per key, errors counted separately.
+
+    An arm with no records at all (ok or error) is "run pending": it is listed in `pending_arm_ids`, shown as
+    "run pending" in its design cell, and left out of `arm_ids`, `arms` and the expected matrix. Once any of its
+    runs is recorded it is analysed like every other arm (missing keys count as missing).
+    """
     preset_ids = [p["id"] for p in CAT6_PRESETS] if preset_ids is None else list(preset_ids)
-    arm_ids = list(arm_ids)
+    recorded_arms = {r.get("arm_id") for r in records}
+    pending_arm_ids = [a for a in arm_ids if a not in recorded_arms]
+    arm_ids = [a for a in arm_ids if a in recorded_arms]
 
     latest_ok: dict[RunKey, dict[str, Any]] = {}
     errors: list[dict[str, Any]] = []
@@ -730,8 +946,13 @@ def summarise(
             "rows": DESIGN_ROWS,
             "columns": DESIGN_COLUMNS,
             "cells": {f"{r}|{c}": arm for (r, c), arm in DESIGN_CELLS.items()},
+            "cell_status": {
+                f"{r}|{c}": (RUN_PENDING if arm in pending_arm_ids else "recorded" if arm in arm_ids else None)
+                for (r, c), arm in DESIGN_CELLS.items()
+            },
         },
         "arm_ids": arm_ids,
+        "pending_arm_ids": pending_arm_ids,
         "preset_ids": preset_ids,
         "expected_repeats": expected_repeats,
         "record_count": len(records),
@@ -760,5 +981,15 @@ def summarise(
         "error_spend_usd": sum(record_billed_cost_usd(r) for r in errors),
         "model_fallbacks": model_fallbacks([*ok_list, *errors]),
         "max_tokens_stopped_turns": max_tokens_stopped_turns([*ok_list, *errors]),
+        "max_haiku_prompt_tokens": max(
+            (_prompt_tokens(t) for r in [*ok_list, *errors] for t in r.get("turns") or [] if t.get("model_id") == HAIKU_MODEL_ID),
+            default=0,
+        ),
+        "haiku_calls_over_100k_prompt": sum(
+            1
+            for r in [*ok_list, *errors]
+            for t in r.get("turns") or []
+            if t.get("model_id") == HAIKU_MODEL_ID and _prompt_tokens(t) > HAIKU_LONG_PROMPT_THRESHOLD_TOKENS
+        ),
         "arms": arms_out,
     }

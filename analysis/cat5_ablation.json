@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-26T06:29:06.051897+00:00",
+  "generated_at": "2026-11-26T08:14:54.625636+00:00",
   "fixture_version": "cat5-ablation-fixtures-2026-11-26.v1",
   "settings": {
     "max_tokens_per_turn": 4096,
@@ -23,6 +23,20 @@
       "step_budget": 12,
       "voucher_computed_by": "model",
       "summary": "5 raw SELECT * tools + commit; no cache; Sonnet; neutral protocol"
+    },
+    "raw_free_haiku": {
+      "arm_id": "raw_free_haiku",
+      "tool_set": "raw",
+      "cached": false,
+      "start_model": "claude-haiku-5-5",
+      "escalate": false,
+      "gate": false,
+      "prompt": "neutral",
+      "session_rung_id": "unbounded_haiku_loop",
+      "turn_cap": 12,
+      "step_budget": 12,
+      "voucher_computed_by": "model",
+      "summary": "5 raw SELECT * tools + commit; no cache; Haiku; neutral protocol"
     },
     "bundle_gate_sonnet_cached": {
       "arm_id": "bundle_gate_sonnet_cached",
@@ -55,6 +69,7 @@
   },
   "arm_ids": [
     "raw_free_sonnet",
+    "raw_free_haiku",
     "bundle_gate_sonnet_cached",
     "bundle_gate_haiku_escalate"
   ],
@@ -73,10 +88,10 @@
     "inv-12"
   ],
   "expected_repeats": 3,
-  "record_count": 108,
-  "ok_runs_used": 108,
+  "record_count": 144,
+  "ok_runs_used": 144,
   "matrix": {
-    "expected_runs": 108,
+    "expected_runs": 144,
     "complete": true,
     "balanced": true,
     "pending_keys": [],
@@ -93,6 +108,18 @@
       "raw_free_sonnet|inv-10": 3,
       "raw_free_sonnet|inv-11": 3,
       "raw_free_sonnet|inv-12": 3,
+      "raw_free_haiku|inv-01": 3,
+      "raw_free_haiku|inv-02": 3,
+      "raw_free_haiku|inv-03": 3,
+      "raw_free_haiku|inv-04": 3,
+      "raw_free_haiku|inv-05": 3,
+      "raw_free_haiku|inv-06": 3,
+      "raw_free_haiku|inv-07": 3,
+      "raw_free_haiku|inv-08": 3,
+      "raw_free_haiku|inv-09": 3,
+      "raw_free_haiku|inv-10": 3,
+      "raw_free_haiku|inv-11": 3,
+      "raw_free_haiku|inv-12": 3,
       "bundle_gate_sonnet_cached|inv-01": 3,
       "bundle_gate_sonnet_cached|inv-02": 3,
       "bundle_gate_sonnet_cached|inv-03": 3,
@@ -1625,6 +1652,1518 @@
             "warm": 172.72666666666666
           },
           "total_billed_usd": 0.51818
+        }
+      },
+      "pending": {
+        "runs": 0,
+        "invoices": []
+      }
+    },
+    "raw_free_haiku": {
+      "runs": 36,
+      "exact": {
+        "k": 36,
+        "n": 36,
+        "rate": 1.0,
+        "wilson95": [
+          0.9035813714055363,
+          1.0
+        ]
+      },
+      "decision_correct": {
+        "k": 36,
+        "n": 36,
+        "rate": 1.0,
+        "wilson95": [
+          0.9035813714055363,
+          1.0
+        ]
+      },
+      "committed": {
+        "k": 36,
+        "n": 36,
+        "rate": 1.0,
+        "wilson95": [
+          0.9035813714055363,
+          1.0
+        ]
+      },
+      "field_match_rate": {
+        "decision": 1.0,
+        "authorized_net_principal_inr": 1.0,
+        "authorized_gst_payout_inr": 1.0,
+        "gst_escrow_holdback_inr": 1.0,
+        "debit_note_deduction_inr": 1.0
+      },
+      "field_accuracy_pct_mean": 100.0,
+      "evidence_recall_pct_mean": 100.0,
+      "tool_precision_pct_mean": 17.11388888888889,
+      "tool_calls_per_run": {
+        "query_invoice_raw": 1.0,
+        "query_po_raw": 1.0,
+        "query_grn_wms_telemetry": 1.0,
+        "query_vendor_audit_history": 0.9166666666666666,
+        "query_contract_amendments_and_dock_logs": 0.9722222222222222,
+        "commit_reconciliation_voucher": 1.0
+      },
+      "tool_calls_total_per_run": {
+        "mean": 5.888888888888889,
+        "min": 4.0,
+        "max": 6.0
+      },
+      "runs_calling_tool": {
+        "query_invoice_raw": 36,
+        "query_po_raw": 36,
+        "query_grn_wms_telemetry": 36,
+        "query_vendor_audit_history": 33,
+        "query_contract_amendments_and_dock_logs": 35,
+        "commit_reconciliation_voucher": 36
+      },
+      "disallowed_tool_calls": {
+        "total": 0,
+        "per_run": 0.0,
+        "by_name": {}
+      },
+      "turns": {
+        "mean": 3.9166666666666665,
+        "min": 3.0,
+        "max": 4.0
+      },
+      "cap_hits": 0,
+      "truncated_turns": 0,
+      "runs_with_truncation": 0,
+      "escalation": {
+        "expected": 6,
+        "fired": 0,
+        "expected_and_fired": 0,
+        "fired_not_expected": 0,
+        "gate_flagged": 0
+      },
+      "tokens_per_run_mean": {
+        "uncached_input": 68861.55555555556,
+        "cache_write": 0.0,
+        "cache_read": 0.0,
+        "output": 2002.5277777777778,
+        "thinking": 0.0
+      },
+      "cost_per_1k_invoices_usd": {
+        "billed": 7.887419444444444,
+        "cold": 7.887419444444444,
+        "warm": 7.887419444444444
+      },
+      "total_billed_usd": 0.2839471,
+      "by_tier": {
+        "routine": {
+          "runs": 15,
+          "exact": {
+            "k": 15,
+            "n": 15,
+            "rate": 1.0,
+            "wilson95": [
+              0.7961166989641515,
+              1.0
+            ]
+          },
+          "decision_correct": {
+            "k": 15,
+            "n": 15,
+            "rate": 1.0,
+            "wilson95": [
+              0.7961166989641515,
+              1.0
+            ]
+          },
+          "committed": {
+            "k": 15,
+            "n": 15,
+            "rate": 1.0,
+            "wilson95": [
+              0.7961166989641515,
+              1.0
+            ]
+          },
+          "field_match_rate": {
+            "decision": 1.0,
+            "authorized_net_principal_inr": 1.0,
+            "authorized_gst_payout_inr": 1.0,
+            "gst_escrow_holdback_inr": 1.0,
+            "debit_note_deduction_inr": 1.0
+          },
+          "field_accuracy_pct_mean": 100.0,
+          "evidence_recall_pct_mean": 100.0,
+          "tool_precision_pct_mean": 16.7,
+          "tool_calls_per_run": {
+            "query_invoice_raw": 1.0,
+            "query_po_raw": 1.0,
+            "query_grn_wms_telemetry": 1.0,
+            "query_vendor_audit_history": 1.0,
+            "query_contract_amendments_and_dock_logs": 1.0,
+            "commit_reconciliation_voucher": 1.0
+          },
+          "tool_calls_total_per_run": {
+            "mean": 6.0,
+            "min": 6.0,
+            "max": 6.0
+          },
+          "runs_calling_tool": {
+            "query_invoice_raw": 15,
+            "query_po_raw": 15,
+            "query_grn_wms_telemetry": 15,
+            "query_vendor_audit_history": 15,
+            "query_contract_amendments_and_dock_logs": 15,
+            "commit_reconciliation_voucher": 15
+          },
+          "disallowed_tool_calls": {
+            "total": 0,
+            "per_run": 0.0,
+            "by_name": {}
+          },
+          "turns": {
+            "mean": 4.0,
+            "min": 4.0,
+            "max": 4.0
+          },
+          "cap_hits": 0,
+          "truncated_turns": 0,
+          "runs_with_truncation": 0,
+          "escalation": {
+            "expected": 0,
+            "fired": 0,
+            "expected_and_fired": 0,
+            "fired_not_expected": 0,
+            "gate_flagged": 0
+          },
+          "tokens_per_run_mean": {
+            "uncached_input": 70798.73333333334,
+            "cache_write": 0.0,
+            "cache_read": 0.0,
+            "output": 1907.4666666666667,
+            "thinking": 0.0
+          },
+          "cost_per_1k_invoices_usd": {
+            "billed": 8.033606666666667,
+            "cold": 8.033606666666667,
+            "warm": 8.033606666666667
+          },
+          "total_billed_usd": 0.1205041
+        },
+        "dispute": {
+          "runs": 15,
+          "exact": {
+            "k": 15,
+            "n": 15,
+            "rate": 1.0,
+            "wilson95": [
+              0.7961166989641515,
+              1.0
+            ]
+          },
+          "decision_correct": {
+            "k": 15,
+            "n": 15,
+            "rate": 1.0,
+            "wilson95": [
+              0.7961166989641515,
+              1.0
+            ]
+          },
+          "committed": {
+            "k": 15,
+            "n": 15,
+            "rate": 1.0,
+            "wilson95": [
+              0.7961166989641515,
+              1.0
+            ]
+          },
+          "field_match_rate": {
+            "decision": 1.0,
+            "authorized_net_principal_inr": 1.0,
+            "authorized_gst_payout_inr": 1.0,
+            "gst_escrow_holdback_inr": 1.0,
+            "debit_note_deduction_inr": 1.0
+          },
+          "field_accuracy_pct_mean": 100.0,
+          "evidence_recall_pct_mean": 100.0,
+          "tool_precision_pct_mean": 16.7,
+          "tool_calls_per_run": {
+            "query_invoice_raw": 1.0,
+            "query_po_raw": 1.0,
+            "query_grn_wms_telemetry": 1.0,
+            "query_vendor_audit_history": 1.0,
+            "query_contract_amendments_and_dock_logs": 1.0,
+            "commit_reconciliation_voucher": 1.0
+          },
+          "tool_calls_total_per_run": {
+            "mean": 6.0,
+            "min": 6.0,
+            "max": 6.0
+          },
+          "runs_calling_tool": {
+            "query_invoice_raw": 15,
+            "query_po_raw": 15,
+            "query_grn_wms_telemetry": 15,
+            "query_vendor_audit_history": 15,
+            "query_contract_amendments_and_dock_logs": 15,
+            "commit_reconciliation_voucher": 15
+          },
+          "disallowed_tool_calls": {
+            "total": 0,
+            "per_run": 0.0,
+            "by_name": {}
+          },
+          "turns": {
+            "mean": 4.0,
+            "min": 4.0,
+            "max": 4.0
+          },
+          "cap_hits": 0,
+          "truncated_turns": 0,
+          "runs_with_truncation": 0,
+          "escalation": {
+            "expected": 6,
+            "fired": 0,
+            "expected_and_fired": 0,
+            "fired_not_expected": 0,
+            "gate_flagged": 0
+          },
+          "tokens_per_run_mean": {
+            "uncached_input": 71219.06666666667,
+            "cache_write": 0.0,
+            "cache_read": 0.0,
+            "output": 2234.6666666666665,
+            "thinking": 0.0
+          },
+          "cost_per_1k_invoices_usd": {
+            "billed": 8.23924,
+            "cold": 8.23924,
+            "warm": 8.23924
+          },
+          "total_billed_usd": 0.12358859999999999
+        },
+        "hard_stop": {
+          "runs": 6,
+          "exact": {
+            "k": 6,
+            "n": 6,
+            "rate": 1.0,
+            "wilson95": [
+              0.6096657120978346,
+              1.0
+            ]
+          },
+          "decision_correct": {
+            "k": 6,
+            "n": 6,
+            "rate": 1.0,
+            "wilson95": [
+              0.6096657120978346,
+              1.0
+            ]
+          },
+          "committed": {
+            "k": 6,
+            "n": 6,
+            "rate": 1.0,
+            "wilson95": [
+              0.6096657120978346,
+              1.0
+            ]
+          },
+          "field_match_rate": {
+            "decision": 1.0,
+            "authorized_net_principal_inr": 1.0,
+            "authorized_gst_payout_inr": 1.0,
+            "gst_escrow_holdback_inr": 1.0,
+            "debit_note_deduction_inr": 1.0
+          },
+          "field_accuracy_pct_mean": 100.0,
+          "evidence_recall_pct_mean": 100.0,
+          "tool_precision_pct_mean": 19.183333333333334,
+          "tool_calls_per_run": {
+            "query_invoice_raw": 1.0,
+            "query_po_raw": 1.0,
+            "query_grn_wms_telemetry": 1.0,
+            "query_vendor_audit_history": 0.5,
+            "query_contract_amendments_and_dock_logs": 0.8333333333333334,
+            "commit_reconciliation_voucher": 1.0
+          },
+          "tool_calls_total_per_run": {
+            "mean": 5.333333333333333,
+            "min": 4.0,
+            "max": 6.0
+          },
+          "runs_calling_tool": {
+            "query_invoice_raw": 6,
+            "query_po_raw": 6,
+            "query_grn_wms_telemetry": 6,
+            "query_vendor_audit_history": 3,
+            "query_contract_amendments_and_dock_logs": 5,
+            "commit_reconciliation_voucher": 6
+          },
+          "disallowed_tool_calls": {
+            "total": 0,
+            "per_run": 0.0,
+            "by_name": {}
+          },
+          "turns": {
+            "mean": 3.5,
+            "min": 3.0,
+            "max": 4.0
+          },
+          "cap_hits": 0,
+          "truncated_turns": 0,
+          "runs_with_truncation": 0,
+          "escalation": {
+            "expected": 0,
+            "fired": 0,
+            "expected_and_fired": 0,
+            "fired_not_expected": 0,
+            "gate_flagged": 0
+          },
+          "tokens_per_run_mean": {
+            "uncached_input": 58124.833333333336,
+            "cache_write": 0.0,
+            "cache_read": 0.0,
+            "output": 1659.8333333333333,
+            "thinking": 0.0
+          },
+          "cost_per_1k_invoices_usd": {
+            "billed": 6.642399999999999,
+            "cold": 6.642399999999999,
+            "warm": 6.642399999999999
+          },
+          "total_billed_usd": 0.0398544
+        }
+      },
+      "by_invoice": {
+        "inv-01": {
+          "runs": 3,
+          "exact": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "decision_correct": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "committed": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "field_match_rate": {
+            "decision": 1.0,
+            "authorized_net_principal_inr": 1.0,
+            "authorized_gst_payout_inr": 1.0,
+            "gst_escrow_holdback_inr": 1.0,
+            "debit_note_deduction_inr": 1.0
+          },
+          "field_accuracy_pct_mean": 100.0,
+          "evidence_recall_pct_mean": 100.0,
+          "tool_precision_pct_mean": 16.7,
+          "tool_calls_per_run": {
+            "query_invoice_raw": 1.0,
+            "query_po_raw": 1.0,
+            "query_grn_wms_telemetry": 1.0,
+            "query_vendor_audit_history": 1.0,
+            "query_contract_amendments_and_dock_logs": 1.0,
+            "commit_reconciliation_voucher": 1.0
+          },
+          "tool_calls_total_per_run": {
+            "mean": 6.0,
+            "min": 6.0,
+            "max": 6.0
+          },
+          "runs_calling_tool": {
+            "query_invoice_raw": 3,
+            "query_po_raw": 3,
+            "query_grn_wms_telemetry": 3,
+            "query_vendor_audit_history": 3,
+            "query_contract_amendments_and_dock_logs": 3,
+            "commit_reconciliation_voucher": 3
+          },
+          "disallowed_tool_calls": {
+            "total": 0,
+            "per_run": 0.0,
+            "by_name": {}
+          },
+          "turns": {
+            "mean": 4.0,
+            "min": 4.0,
+            "max": 4.0
+          },
+          "cap_hits": 0,
+          "truncated_turns": 0,
+          "runs_with_truncation": 0,
+          "escalation": {
+            "expected": 0,
+            "fired": 0,
+            "expected_and_fired": 0,
+            "fired_not_expected": 0,
+            "gate_flagged": 0
+          },
+          "tokens_per_run_mean": {
+            "uncached_input": 73906.0,
+            "cache_write": 0.0,
+            "cache_read": 0.0,
+            "output": 1939.3333333333333,
+            "thinking": 0.0
+          },
+          "cost_per_1k_invoices_usd": {
+            "billed": 8.360266666666666,
+            "cold": 8.360266666666666,
+            "warm": 8.360266666666666
+          },
+          "total_billed_usd": 0.0250808
+        },
+        "inv-02": {
+          "runs": 3,
+          "exact": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "decision_correct": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "committed": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "field_match_rate": {
+            "decision": 1.0,
+            "authorized_net_principal_inr": 1.0,
+            "authorized_gst_payout_inr": 1.0,
+            "gst_escrow_holdback_inr": 1.0,
+            "debit_note_deduction_inr": 1.0
+          },
+          "field_accuracy_pct_mean": 100.0,
+          "evidence_recall_pct_mean": 100.0,
+          "tool_precision_pct_mean": 16.7,
+          "tool_calls_per_run": {
+            "query_invoice_raw": 1.0,
+            "query_po_raw": 1.0,
+            "query_grn_wms_telemetry": 1.0,
+            "query_vendor_audit_history": 1.0,
+            "query_contract_amendments_and_dock_logs": 1.0,
+            "commit_reconciliation_voucher": 1.0
+          },
+          "tool_calls_total_per_run": {
+            "mean": 6.0,
+            "min": 6.0,
+            "max": 6.0
+          },
+          "runs_calling_tool": {
+            "query_invoice_raw": 3,
+            "query_po_raw": 3,
+            "query_grn_wms_telemetry": 3,
+            "query_vendor_audit_history": 3,
+            "query_contract_amendments_and_dock_logs": 3,
+            "commit_reconciliation_voucher": 3
+          },
+          "disallowed_tool_calls": {
+            "total": 0,
+            "per_run": 0.0,
+            "by_name": {}
+          },
+          "turns": {
+            "mean": 4.0,
+            "min": 4.0,
+            "max": 4.0
+          },
+          "cap_hits": 0,
+          "truncated_turns": 0,
+          "runs_with_truncation": 0,
+          "escalation": {
+            "expected": 3,
+            "fired": 0,
+            "expected_and_fired": 0,
+            "fired_not_expected": 0,
+            "gate_flagged": 0
+          },
+          "tokens_per_run_mean": {
+            "uncached_input": 74316.0,
+            "cache_write": 0.0,
+            "cache_read": 0.0,
+            "output": 2354.3333333333335,
+            "thinking": 0.0
+          },
+          "cost_per_1k_invoices_usd": {
+            "billed": 8.608766666666666,
+            "cold": 8.608766666666666,
+            "warm": 8.608766666666666
+          },
+          "total_billed_usd": 0.0258263
+        },
+        "inv-03": {
+          "runs": 3,
+          "exact": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "decision_correct": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "committed": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "field_match_rate": {
+            "decision": 1.0,
+            "authorized_net_principal_inr": 1.0,
+            "authorized_gst_payout_inr": 1.0,
+            "gst_escrow_holdback_inr": 1.0,
+            "debit_note_deduction_inr": 1.0
+          },
+          "field_accuracy_pct_mean": 100.0,
+          "evidence_recall_pct_mean": 100.0,
+          "tool_precision_pct_mean": 19.466666666666665,
+          "tool_calls_per_run": {
+            "query_invoice_raw": 1.0,
+            "query_po_raw": 1.0,
+            "query_grn_wms_telemetry": 1.0,
+            "query_vendor_audit_history": 0.6666666666666666,
+            "query_contract_amendments_and_dock_logs": 0.6666666666666666,
+            "commit_reconciliation_voucher": 1.0
+          },
+          "tool_calls_total_per_run": {
+            "mean": 5.333333333333333,
+            "min": 4.0,
+            "max": 6.0
+          },
+          "runs_calling_tool": {
+            "query_invoice_raw": 3,
+            "query_po_raw": 3,
+            "query_grn_wms_telemetry": 3,
+            "query_vendor_audit_history": 2,
+            "query_contract_amendments_and_dock_logs": 2,
+            "commit_reconciliation_voucher": 3
+          },
+          "disallowed_tool_calls": {
+            "total": 0,
+            "per_run": 0.0,
+            "by_name": {}
+          },
+          "turns": {
+            "mean": 3.6666666666666665,
+            "min": 3.0,
+            "max": 4.0
+          },
+          "cap_hits": 0,
+          "truncated_turns": 0,
+          "runs_with_truncation": 0,
+          "escalation": {
+            "expected": 0,
+            "fired": 0,
+            "expected_and_fired": 0,
+            "fired_not_expected": 0,
+            "gate_flagged": 0
+          },
+          "tokens_per_run_mean": {
+            "uncached_input": 57237.0,
+            "cache_write": 0.0,
+            "cache_read": 0.0,
+            "output": 1636.6666666666667,
+            "thinking": 0.0
+          },
+          "cost_per_1k_invoices_usd": {
+            "billed": 6.542033333333333,
+            "cold": 6.542033333333333,
+            "warm": 6.542033333333333
+          },
+          "total_billed_usd": 0.0196261
+        },
+        "inv-04": {
+          "runs": 3,
+          "exact": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "decision_correct": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "committed": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "field_match_rate": {
+            "decision": 1.0,
+            "authorized_net_principal_inr": 1.0,
+            "authorized_gst_payout_inr": 1.0,
+            "gst_escrow_holdback_inr": 1.0,
+            "debit_note_deduction_inr": 1.0
+          },
+          "field_accuracy_pct_mean": 100.0,
+          "evidence_recall_pct_mean": 100.0,
+          "tool_precision_pct_mean": 16.7,
+          "tool_calls_per_run": {
+            "query_invoice_raw": 1.0,
+            "query_po_raw": 1.0,
+            "query_grn_wms_telemetry": 1.0,
+            "query_vendor_audit_history": 1.0,
+            "query_contract_amendments_and_dock_logs": 1.0,
+            "commit_reconciliation_voucher": 1.0
+          },
+          "tool_calls_total_per_run": {
+            "mean": 6.0,
+            "min": 6.0,
+            "max": 6.0
+          },
+          "runs_calling_tool": {
+            "query_invoice_raw": 3,
+            "query_po_raw": 3,
+            "query_grn_wms_telemetry": 3,
+            "query_vendor_audit_history": 3,
+            "query_contract_amendments_and_dock_logs": 3,
+            "commit_reconciliation_voucher": 3
+          },
+          "disallowed_tool_calls": {
+            "total": 0,
+            "per_run": 0.0,
+            "by_name": {}
+          },
+          "turns": {
+            "mean": 4.0,
+            "min": 4.0,
+            "max": 4.0
+          },
+          "cap_hits": 0,
+          "truncated_turns": 0,
+          "runs_with_truncation": 0,
+          "escalation": {
+            "expected": 0,
+            "fired": 0,
+            "expected_and_fired": 0,
+            "fired_not_expected": 0,
+            "gate_flagged": 0
+          },
+          "tokens_per_run_mean": {
+            "uncached_input": 74785.66666666667,
+            "cache_write": 0.0,
+            "cache_read": 0.0,
+            "output": 1754.3333333333333,
+            "thinking": 0.0
+          },
+          "cost_per_1k_invoices_usd": {
+            "billed": 8.355733333333331,
+            "cold": 8.355733333333331,
+            "warm": 8.355733333333331
+          },
+          "total_billed_usd": 0.025067199999999998
+        },
+        "inv-05": {
+          "runs": 3,
+          "exact": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "decision_correct": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "committed": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "field_match_rate": {
+            "decision": 1.0,
+            "authorized_net_principal_inr": 1.0,
+            "authorized_gst_payout_inr": 1.0,
+            "gst_escrow_holdback_inr": 1.0,
+            "debit_note_deduction_inr": 1.0
+          },
+          "field_accuracy_pct_mean": 100.0,
+          "evidence_recall_pct_mean": 100.0,
+          "tool_precision_pct_mean": 16.7,
+          "tool_calls_per_run": {
+            "query_invoice_raw": 1.0,
+            "query_po_raw": 1.0,
+            "query_grn_wms_telemetry": 1.0,
+            "query_vendor_audit_history": 1.0,
+            "query_contract_amendments_and_dock_logs": 1.0,
+            "commit_reconciliation_voucher": 1.0
+          },
+          "tool_calls_total_per_run": {
+            "mean": 6.0,
+            "min": 6.0,
+            "max": 6.0
+          },
+          "runs_calling_tool": {
+            "query_invoice_raw": 3,
+            "query_po_raw": 3,
+            "query_grn_wms_telemetry": 3,
+            "query_vendor_audit_history": 3,
+            "query_contract_amendments_and_dock_logs": 3,
+            "commit_reconciliation_voucher": 3
+          },
+          "disallowed_tool_calls": {
+            "total": 0,
+            "per_run": 0.0,
+            "by_name": {}
+          },
+          "turns": {
+            "mean": 4.0,
+            "min": 4.0,
+            "max": 4.0
+          },
+          "cap_hits": 0,
+          "truncated_turns": 0,
+          "runs_with_truncation": 0,
+          "escalation": {
+            "expected": 0,
+            "fired": 0,
+            "expected_and_fired": 0,
+            "fired_not_expected": 0,
+            "gate_flagged": 0
+          },
+          "tokens_per_run_mean": {
+            "uncached_input": 65880.66666666667,
+            "cache_write": 0.0,
+            "cache_read": 0.0,
+            "output": 1953.3333333333333,
+            "thinking": 0.0
+          },
+          "cost_per_1k_invoices_usd": {
+            "billed": 7.564733333333333,
+            "cold": 7.564733333333333,
+            "warm": 7.564733333333333
+          },
+          "total_billed_usd": 0.022694199999999998
+        },
+        "inv-06": {
+          "runs": 3,
+          "exact": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "decision_correct": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "committed": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "field_match_rate": {
+            "decision": 1.0,
+            "authorized_net_principal_inr": 1.0,
+            "authorized_gst_payout_inr": 1.0,
+            "gst_escrow_holdback_inr": 1.0,
+            "debit_note_deduction_inr": 1.0
+          },
+          "field_accuracy_pct_mean": 100.0,
+          "evidence_recall_pct_mean": 100.0,
+          "tool_precision_pct_mean": 16.7,
+          "tool_calls_per_run": {
+            "query_invoice_raw": 1.0,
+            "query_po_raw": 1.0,
+            "query_grn_wms_telemetry": 1.0,
+            "query_vendor_audit_history": 1.0,
+            "query_contract_amendments_and_dock_logs": 1.0,
+            "commit_reconciliation_voucher": 1.0
+          },
+          "tool_calls_total_per_run": {
+            "mean": 6.0,
+            "min": 6.0,
+            "max": 6.0
+          },
+          "runs_calling_tool": {
+            "query_invoice_raw": 3,
+            "query_po_raw": 3,
+            "query_grn_wms_telemetry": 3,
+            "query_vendor_audit_history": 3,
+            "query_contract_amendments_and_dock_logs": 3,
+            "commit_reconciliation_voucher": 3
+          },
+          "disallowed_tool_calls": {
+            "total": 0,
+            "per_run": 0.0,
+            "by_name": {}
+          },
+          "turns": {
+            "mean": 4.0,
+            "min": 4.0,
+            "max": 4.0
+          },
+          "cap_hits": 0,
+          "truncated_turns": 0,
+          "runs_with_truncation": 0,
+          "escalation": {
+            "expected": 0,
+            "fired": 0,
+            "expected_and_fired": 0,
+            "fired_not_expected": 0,
+            "gate_flagged": 0
+          },
+          "tokens_per_run_mean": {
+            "uncached_input": 66361.0,
+            "cache_write": 0.0,
+            "cache_read": 0.0,
+            "output": 2072.3333333333335,
+            "thinking": 0.0
+          },
+          "cost_per_1k_invoices_usd": {
+            "billed": 7.672266666666667,
+            "cold": 7.672266666666667,
+            "warm": 7.672266666666667
+          },
+          "total_billed_usd": 0.0230168
+        },
+        "inv-07": {
+          "runs": 3,
+          "exact": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "decision_correct": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "committed": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "field_match_rate": {
+            "decision": 1.0,
+            "authorized_net_principal_inr": 1.0,
+            "authorized_gst_payout_inr": 1.0,
+            "gst_escrow_holdback_inr": 1.0,
+            "debit_note_deduction_inr": 1.0
+          },
+          "field_accuracy_pct_mean": 100.0,
+          "evidence_recall_pct_mean": 100.0,
+          "tool_precision_pct_mean": 16.7,
+          "tool_calls_per_run": {
+            "query_invoice_raw": 1.0,
+            "query_po_raw": 1.0,
+            "query_grn_wms_telemetry": 1.0,
+            "query_vendor_audit_history": 1.0,
+            "query_contract_amendments_and_dock_logs": 1.0,
+            "commit_reconciliation_voucher": 1.0
+          },
+          "tool_calls_total_per_run": {
+            "mean": 6.0,
+            "min": 6.0,
+            "max": 6.0
+          },
+          "runs_calling_tool": {
+            "query_invoice_raw": 3,
+            "query_po_raw": 3,
+            "query_grn_wms_telemetry": 3,
+            "query_vendor_audit_history": 3,
+            "query_contract_amendments_and_dock_logs": 3,
+            "commit_reconciliation_voucher": 3
+          },
+          "disallowed_tool_calls": {
+            "total": 0,
+            "per_run": 0.0,
+            "by_name": {}
+          },
+          "turns": {
+            "mean": 4.0,
+            "min": 4.0,
+            "max": 4.0
+          },
+          "cap_hits": 0,
+          "truncated_turns": 0,
+          "runs_with_truncation": 0,
+          "escalation": {
+            "expected": 0,
+            "fired": 0,
+            "expected_and_fired": 0,
+            "fired_not_expected": 0,
+            "gate_flagged": 0
+          },
+          "tokens_per_run_mean": {
+            "uncached_input": 75241.0,
+            "cache_write": 0.0,
+            "cache_read": 0.0,
+            "output": 2195.6666666666665,
+            "thinking": 0.0
+          },
+          "cost_per_1k_invoices_usd": {
+            "billed": 8.621933333333333,
+            "cold": 8.621933333333333,
+            "warm": 8.621933333333333
+          },
+          "total_billed_usd": 0.0258658
+        },
+        "inv-08": {
+          "runs": 3,
+          "exact": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "decision_correct": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "committed": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "field_match_rate": {
+            "decision": 1.0,
+            "authorized_net_principal_inr": 1.0,
+            "authorized_gst_payout_inr": 1.0,
+            "gst_escrow_holdback_inr": 1.0,
+            "debit_note_deduction_inr": 1.0
+          },
+          "field_accuracy_pct_mean": 100.0,
+          "evidence_recall_pct_mean": 100.0,
+          "tool_precision_pct_mean": 16.7,
+          "tool_calls_per_run": {
+            "query_invoice_raw": 1.0,
+            "query_po_raw": 1.0,
+            "query_grn_wms_telemetry": 1.0,
+            "query_vendor_audit_history": 1.0,
+            "query_contract_amendments_and_dock_logs": 1.0,
+            "commit_reconciliation_voucher": 1.0
+          },
+          "tool_calls_total_per_run": {
+            "mean": 6.0,
+            "min": 6.0,
+            "max": 6.0
+          },
+          "runs_calling_tool": {
+            "query_invoice_raw": 3,
+            "query_po_raw": 3,
+            "query_grn_wms_telemetry": 3,
+            "query_vendor_audit_history": 3,
+            "query_contract_amendments_and_dock_logs": 3,
+            "commit_reconciliation_voucher": 3
+          },
+          "disallowed_tool_calls": {
+            "total": 0,
+            "per_run": 0.0,
+            "by_name": {}
+          },
+          "turns": {
+            "mean": 4.0,
+            "min": 4.0,
+            "max": 4.0
+          },
+          "cap_hits": 0,
+          "truncated_turns": 0,
+          "runs_with_truncation": 0,
+          "escalation": {
+            "expected": 0,
+            "fired": 0,
+            "expected_and_fired": 0,
+            "fired_not_expected": 0,
+            "gate_flagged": 0
+          },
+          "tokens_per_run_mean": {
+            "uncached_input": 65303.666666666664,
+            "cache_write": 0.0,
+            "cache_read": 0.0,
+            "output": 1926.6666666666667,
+            "thinking": 0.0
+          },
+          "cost_per_1k_invoices_usd": {
+            "billed": 7.4937,
+            "cold": 7.4937,
+            "warm": 7.4937
+          },
+          "total_billed_usd": 0.0224811
+        },
+        "inv-09": {
+          "runs": 3,
+          "exact": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "decision_correct": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "committed": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "field_match_rate": {
+            "decision": 1.0,
+            "authorized_net_principal_inr": 1.0,
+            "authorized_gst_payout_inr": 1.0,
+            "gst_escrow_holdback_inr": 1.0,
+            "debit_note_deduction_inr": 1.0
+          },
+          "field_accuracy_pct_mean": 100.0,
+          "evidence_recall_pct_mean": 100.0,
+          "tool_precision_pct_mean": 16.7,
+          "tool_calls_per_run": {
+            "query_invoice_raw": 1.0,
+            "query_po_raw": 1.0,
+            "query_grn_wms_telemetry": 1.0,
+            "query_vendor_audit_history": 1.0,
+            "query_contract_amendments_and_dock_logs": 1.0,
+            "commit_reconciliation_voucher": 1.0
+          },
+          "tool_calls_total_per_run": {
+            "mean": 6.0,
+            "min": 6.0,
+            "max": 6.0
+          },
+          "runs_calling_tool": {
+            "query_invoice_raw": 3,
+            "query_po_raw": 3,
+            "query_grn_wms_telemetry": 3,
+            "query_vendor_audit_history": 3,
+            "query_contract_amendments_and_dock_logs": 3,
+            "commit_reconciliation_voucher": 3
+          },
+          "disallowed_tool_calls": {
+            "total": 0,
+            "per_run": 0.0,
+            "by_name": {}
+          },
+          "turns": {
+            "mean": 4.0,
+            "min": 4.0,
+            "max": 4.0
+          },
+          "cap_hits": 0,
+          "truncated_turns": 0,
+          "runs_with_truncation": 0,
+          "escalation": {
+            "expected": 0,
+            "fired": 0,
+            "expected_and_fired": 0,
+            "fired_not_expected": 0,
+            "gate_flagged": 0
+          },
+          "tokens_per_run_mean": {
+            "uncached_input": 65208.0,
+            "cache_write": 0.0,
+            "cache_read": 0.0,
+            "output": 2104.3333333333335,
+            "thinking": 0.0
+          },
+          "cost_per_1k_invoices_usd": {
+            "billed": 7.572966666666667,
+            "cold": 7.572966666666667,
+            "warm": 7.572966666666667
+          },
+          "total_billed_usd": 0.0227189
+        },
+        "inv-10": {
+          "runs": 3,
+          "exact": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "decision_correct": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "committed": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "field_match_rate": {
+            "decision": 1.0,
+            "authorized_net_principal_inr": 1.0,
+            "authorized_gst_payout_inr": 1.0,
+            "gst_escrow_holdback_inr": 1.0,
+            "debit_note_deduction_inr": 1.0
+          },
+          "field_accuracy_pct_mean": 100.0,
+          "evidence_recall_pct_mean": 100.0,
+          "tool_precision_pct_mean": 16.7,
+          "tool_calls_per_run": {
+            "query_invoice_raw": 1.0,
+            "query_po_raw": 1.0,
+            "query_grn_wms_telemetry": 1.0,
+            "query_vendor_audit_history": 1.0,
+            "query_contract_amendments_and_dock_logs": 1.0,
+            "commit_reconciliation_voucher": 1.0
+          },
+          "tool_calls_total_per_run": {
+            "mean": 6.0,
+            "min": 6.0,
+            "max": 6.0
+          },
+          "runs_calling_tool": {
+            "query_invoice_raw": 3,
+            "query_po_raw": 3,
+            "query_grn_wms_telemetry": 3,
+            "query_vendor_audit_history": 3,
+            "query_contract_amendments_and_dock_logs": 3,
+            "commit_reconciliation_voucher": 3
+          },
+          "disallowed_tool_calls": {
+            "total": 0,
+            "per_run": 0.0,
+            "by_name": {}
+          },
+          "turns": {
+            "mean": 4.0,
+            "min": 4.0,
+            "max": 4.0
+          },
+          "cap_hits": 0,
+          "truncated_turns": 0,
+          "runs_with_truncation": 0,
+          "escalation": {
+            "expected": 0,
+            "fired": 0,
+            "expected_and_fired": 0,
+            "fired_not_expected": 0,
+            "gate_flagged": 0
+          },
+          "tokens_per_run_mean": {
+            "uncached_input": 73637.33333333333,
+            "cache_write": 0.0,
+            "cache_read": 0.0,
+            "output": 1844.6666666666667,
+            "thinking": 0.0
+          },
+          "cost_per_1k_invoices_usd": {
+            "billed": 8.286066666666667,
+            "cold": 8.286066666666667,
+            "warm": 8.286066666666667
+          },
+          "total_billed_usd": 0.0248582
+        },
+        "inv-11": {
+          "runs": 3,
+          "exact": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "decision_correct": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "committed": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "field_match_rate": {
+            "decision": 1.0,
+            "authorized_net_principal_inr": 1.0,
+            "authorized_gst_payout_inr": 1.0,
+            "gst_escrow_holdback_inr": 1.0,
+            "debit_note_deduction_inr": 1.0
+          },
+          "field_accuracy_pct_mean": 100.0,
+          "evidence_recall_pct_mean": 100.0,
+          "tool_precision_pct_mean": 18.900000000000002,
+          "tool_calls_per_run": {
+            "query_invoice_raw": 1.0,
+            "query_po_raw": 1.0,
+            "query_grn_wms_telemetry": 1.0,
+            "query_vendor_audit_history": 0.3333333333333333,
+            "query_contract_amendments_and_dock_logs": 1.0,
+            "commit_reconciliation_voucher": 1.0
+          },
+          "tool_calls_total_per_run": {
+            "mean": 5.333333333333333,
+            "min": 5.0,
+            "max": 6.0
+          },
+          "runs_calling_tool": {
+            "query_invoice_raw": 3,
+            "query_po_raw": 3,
+            "query_grn_wms_telemetry": 3,
+            "query_vendor_audit_history": 1,
+            "query_contract_amendments_and_dock_logs": 3,
+            "commit_reconciliation_voucher": 3
+          },
+          "disallowed_tool_calls": {
+            "total": 0,
+            "per_run": 0.0,
+            "by_name": {}
+          },
+          "turns": {
+            "mean": 3.3333333333333335,
+            "min": 3.0,
+            "max": 4.0
+          },
+          "cap_hits": 0,
+          "truncated_turns": 0,
+          "runs_with_truncation": 0,
+          "escalation": {
+            "expected": 0,
+            "fired": 0,
+            "expected_and_fired": 0,
+            "fired_not_expected": 0,
+            "gate_flagged": 0
+          },
+          "tokens_per_run_mean": {
+            "uncached_input": 59012.666666666664,
+            "cache_write": 0.0,
+            "cache_read": 0.0,
+            "output": 1683.0,
+            "thinking": 0.0
+          },
+          "cost_per_1k_invoices_usd": {
+            "billed": 6.742766666666666,
+            "cold": 6.742766666666666,
+            "warm": 6.742766666666666
+          },
+          "total_billed_usd": 0.020228299999999998
+        },
+        "inv-12": {
+          "runs": 3,
+          "exact": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "decision_correct": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "committed": {
+            "k": 3,
+            "n": 3,
+            "rate": 1.0,
+            "wilson95": [
+              0.43850296824495455,
+              1.0
+            ]
+          },
+          "field_match_rate": {
+            "decision": 1.0,
+            "authorized_net_principal_inr": 1.0,
+            "authorized_gst_payout_inr": 1.0,
+            "gst_escrow_holdback_inr": 1.0,
+            "debit_note_deduction_inr": 1.0
+          },
+          "field_accuracy_pct_mean": 100.0,
+          "evidence_recall_pct_mean": 100.0,
+          "tool_precision_pct_mean": 16.7,
+          "tool_calls_per_run": {
+            "query_invoice_raw": 1.0,
+            "query_po_raw": 1.0,
+            "query_grn_wms_telemetry": 1.0,
+            "query_vendor_audit_history": 1.0,
+            "query_contract_amendments_and_dock_logs": 1.0,
+            "commit_reconciliation_voucher": 1.0
+          },
+          "tool_calls_total_per_run": {
+            "mean": 6.0,
+            "min": 6.0,
+            "max": 6.0
+          },
+          "runs_calling_tool": {
+            "query_invoice_raw": 3,
+            "query_po_raw": 3,
+            "query_grn_wms_telemetry": 3,
+            "query_vendor_audit_history": 3,
+            "query_contract_amendments_and_dock_logs": 3,
+            "commit_reconciliation_voucher": 3
+          },
+          "disallowed_tool_calls": {
+            "total": 0,
+            "per_run": 0.0,
+            "by_name": {}
+          },
+          "turns": {
+            "mean": 4.0,
+            "min": 4.0,
+            "max": 4.0
+          },
+          "cap_hits": 0,
+          "truncated_turns": 0,
+          "runs_with_truncation": 0,
+          "escalation": {
+            "expected": 3,
+            "fired": 0,
+            "expected_and_fired": 0,
+            "fired_not_expected": 0,
+            "gate_flagged": 0
+          },
+          "tokens_per_run_mean": {
+            "uncached_input": 75449.66666666667,
+            "cache_write": 0.0,
+            "cache_read": 0.0,
+            "output": 2565.6666666666665,
+            "thinking": 0.0
+          },
+          "cost_per_1k_invoices_usd": {
+            "billed": 8.8278,
+            "cold": 8.8278,
+            "warm": 8.8278
+          },
+          "total_billed_usd": 0.0264834
         }
       },
       "pending": {
@@ -4646,16 +6185,16 @@
     }
   ],
   "notes": [
-    "Without: the free-choice loop over the five raw SELECT * tools on Sonnet (no step budget beyond a 12-turn safety cap, no policy tool, no prompt cache). With: a 4-step budget and the deterministic policy tool (run_policy_tolerance_gate; the commit is refused until it has run), and the with-design also uses one narrow query (fetch_3way_match_bundle) in place of the raw tables and sends the policy manual as a cached prefix, so the difference is not the budget and the tool alone.",
-    "The policy manual (SOP-AP-3WAY-2026.v4) is the system text of every version. The without-version runs the free-choice protocol; the with-versions run the app's rung-2 and rung-3 prompts unchanged.",
+    "Without: the free-choice loop over the five raw SELECT * tools (no step budget beyond a 12-turn safety cap, no policy tool, no prompt cache), on Sonnet and on Haiku; the Haiku version has no escalation path, since only the policy tool can flag one. With: a 4-step budget and the deterministic policy tool (run_policy_tolerance_gate; the commit is refused until it has run), and the with-design also uses one narrow query (fetch_3way_match_bundle) in place of the raw tables and sends the policy manual as a cached prefix, so the difference is not the budget and the tool alone.",
+    "The policy manual (SOP-AP-3WAY-2026.v4) is the system text of every version. Both without-versions run the free-choice protocol; the with-versions run the app's rung-2 and rung-3 prompts unchanged.",
     "Escalation (Haiku-first version): the run switches to Sonnet from the next turn when the policy tool sets escalation_required, which it does only for a multi-factor commercial dispute (two or more of: partial DOA or short receipt, signed contract amendment, unauthorized line price rise, disallowed freight; manual 6.2). Expected escalations: inv-02 and inv-12.",
     "Thinking differs by model in the app's call function: Sonnet runs with thinking {type: between_tools}, Haiku with thinking disabled.",
     "Each cached run starts with its own nonce line, so it writes the cache on its first turn and reads it after (cold cache per run). Costs are derived from recorded tokens with app/core/pricing.py; cold/warm by the app's _compute_step_cold_warm rule.",
     "Loop rule: a turn cut off by max_tokens ends the run and its tool_use blocks are recorded but not executed; tool_use blocks in any other turn are executed and the loop continues, whatever the stop_reason.",
-    "Voucher ids in the without-version end in -UNB: it reuses the app session's unbounded_sonnet_loop rung id, from which the app derives the voucher-id suffix.",
+    "Voucher ids in the without-versions end in -UNB: they use the app session's unbounded_sonnet_loop and unbounded_haiku_loop rung ids, from which the app derives the voucher-id suffix.",
     "Tool precision (the app's metric) credits only the narrow query, the policy tool and the commit, so a raw SELECT * call is never counted optimal; it is not comparable between the without- and with-versions.",
     "The Anthropic SDK client retries failed or timed-out calls (default max_retries=2) inside one recorded turn; a retried call is not visible in the records and may have been billed.",
-    "Limits: 12 invoices x 3 runs per version; every version committed exact vouchers on nearly every run, so the data separates the versions on cost and turns, not on accuracy."
+    "Limits: 12 invoices x 3 runs per version; the invoices test simple arithmetic (quantities x rates, a GST split, a debit note)."
   ],
   "run_ids": {
     "pooled": {
@@ -4696,6 +6235,44 @@
         "596be7cb-29aa-4be1-83a0-0bbcdc0adfed",
         "5750091c-aa37-4e4f-b45a-516e2670ddd4",
         "0d3f798a-271e-4e39-a8ac-0a017ebc56a2"
+      ],
+      "raw_free_haiku": [
+        "a5d98355-9e18-4136-834e-0724548322df",
+        "16bbf2aa-72a6-47e6-85c5-b928de85ce5a",
+        "66dc09a2-3bcc-4c06-b0ac-32c53c2bd29d",
+        "fd62e5df-4fab-4dae-80c7-beab784f2de6",
+        "04f7c041-b3e2-4aa9-909c-fcce2e114765",
+        "f46ee1f2-9e1e-4b5b-97fe-624fb08d4b58",
+        "60e57b2c-16d3-4a10-af6e-027fce510084",
+        "7ba86ed4-82b9-4b34-933e-005eddff5021",
+        "f3c938b7-293a-45ca-8ac8-c67b920cbdb9",
+        "972d9ae7-2ae8-47e1-beea-5d874ef9aac5",
+        "3fab3a9f-b8cb-473b-808b-665c858182e6",
+        "8b41fd55-35b0-458e-8420-67286615700c",
+        "bc650734-2397-4865-b2e3-abd92812d343",
+        "a0baa82c-93e0-4838-953c-7f17d262f9b3",
+        "c8f2a6f0-c537-4e13-b443-9fdce6c9dd56",
+        "885a5ec4-4c4f-4cd1-9f23-e8f551b670a1",
+        "b4ace452-0345-4370-b5c0-cf2f9550370b",
+        "d88aa1e7-a2f5-4441-9ee5-3aefb3e43837",
+        "46241b1c-30f3-4814-ae73-50fd5b883280",
+        "d61746f7-eafd-439c-9440-e940c48e097b",
+        "199417e7-efb7-4f3e-a21b-8f79a4fc6fc5",
+        "1e7ef94f-fe6e-47d3-a18d-026d565618eb",
+        "4a60f87b-cb42-4fcd-8ba3-d45cb40112c8",
+        "fae7855e-3624-415f-b0f8-44d5f58101e7",
+        "420f081b-77ff-46e5-98ee-339e155b6578",
+        "4a655c9b-40da-46ea-b73c-0e2a6af2e8c0",
+        "ffe9320b-34ff-4829-8fe6-4119db44482c",
+        "9a127a91-fd03-475f-83f2-0ee88eff9db2",
+        "c2dd7eda-14a2-41ec-b9fa-969380a17bb3",
+        "22de271c-2a70-49a6-8193-4c97583bd2f0",
+        "f2b5717c-929e-4101-b73b-38a5a7d3623b",
+        "85cefc27-2f0a-4c91-a0b0-3f18ae94feed",
+        "7a30614c-89dd-419f-b9a8-ff948a7e8603",
+        "b172a914-180e-43a7-a8a6-e79146597ed7",
+        "557eca45-9b24-4ba2-8e37-6ba01105bb61",
+        "52820757-2777-406f-b0a6-09289ccf50cc"
       ],
       "bundle_gate_sonnet_cached": [
         "79809437-137d-46ce-b213-b25fd460b1ed",

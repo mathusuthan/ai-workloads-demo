@@ -11,13 +11,15 @@ const RUNG_LABEL: Record<Cat5RungId, string> = {
   unbounded_sonnet_loop: 'Rung 1',
   bounded_sonnet_cached_gate: 'Rung 2',
   hybrid_haiku_sonnet_governed: 'Rung 3',
+  unbounded_haiku_loop: 'Rung 4',
 }
 
 const ROWS: { design: Cat5AblationArm['design']; title: string; detail: string }[] = [
   {
     design: 'without',
     title: 'Without',
-    detail: 'Free-choice loop over raw ERP tables; no step budget, no policy tool.',
+    detail:
+      'Free-choice loop over raw ERP tables; no step budget, no policy tool. On Haiku there is no escalation path: only the policy tool can flag one.',
   },
   {
     design: 'with',
@@ -29,8 +31,16 @@ const ROWS: { design: Cat5AblationArm['design']; title: string; detail: string }
 
 const COLUMNS: { key: Cat5AblationArm['model_column']; title: string }[] = [
   { key: 'sonnet', title: 'Sonnet 5.5' },
-  { key: 'haiku_first', title: 'Haiku-first, escalating to Sonnet' },
+  { key: 'haiku', title: 'Haiku 5.5' },
 ]
+
+// Each cell's own model set-up, shown under its numbers.
+const CELL_MODEL: Record<string, string> = {
+  'without|sonnet': 'Without · Sonnet 5.5',
+  'without|haiku': 'Without · Haiku 5.5 (no escalation path)',
+  'with|sonnet': 'With · Sonnet 5.5',
+  'with|haiku': 'With · Haiku 5.5 first (Sonnet on escalation)',
+}
 
 function money(x: number | null | undefined): string {
   return x == null ? '—' : `$${x.toFixed(2)}`
@@ -42,11 +52,23 @@ function num(x: number | null | undefined, digits = 1): string {
 
 function Cell({ arm }: { arm: Cat5AblationArm | undefined }) {
   if (!arm) {
-    return <td className="py-2 pr-3 align-top text-[11px] text-slate-400">not run</td>
+    return <td className="py-2 pr-3 align-top text-[11px] text-slate-400">—</td>
   }
   const expected = arm.expected_runs || arm.runs
+  const model = CELL_MODEL[`${arm.design}|${arm.model_column}`]
+  if (arm.runs === 0) {
+    return (
+      <td className="py-2 pr-3 align-top">
+        <div className="text-[10px] font-bold text-slate-500">{model}</div>
+        <span className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-800">
+          run pending · {expected} runs
+        </span>
+      </td>
+    )
+  }
   return (
     <td className="py-2 pr-3 align-top">
+      <div className="text-[10px] font-bold text-slate-500">{model}</div>
       <div className="font-mono text-[11px] text-slate-900">
         <div>
           <span className="font-bold">{arm.exact}</span> of {arm.runs} correct vouchers
@@ -85,7 +107,7 @@ export function Cat5AblationPanel({ portfolio }: Cat5AblationPanelProps) {
       <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">Step Budget + Deterministic Policy Tool</h2>
       <p className="mt-1 max-w-4xl text-xs leading-relaxed text-slate-600">
         The deck's improvement for this archetype: a maximum step budget, a deterministic guardrail that computes the
-        voucher, and routing to the small model first. Each version ran on the same invoices.
+        voucher, and routing to the small model first. Each design ran on Sonnet and on Haiku, on the same invoices.
       </p>
     </div>
   )
@@ -137,10 +159,9 @@ export function Cat5AblationPanel({ portfolio }: Cat5AblationPanelProps) {
       <p className="mt-3 text-[10px] leading-relaxed text-slate-500">
         Method: {portfolio.invoice_count_pooled} invoices × {portfolio.repeats} runs per version; vouchers scored field by
         field against a hand-derived answer. “Cold” counts writing the cached policy manual on every invoice; “warm”
-        assumes it is already cached. The Haiku-first version switches to Sonnet when the policy tool flags a multi-factor
-        dispute. {caps === 0 ? 'No run reached its turn cap.' : `${caps} run${caps === 1 ? '' : 's'} reached a turn cap.`}
-        {pending > 0 && ` ${pending} runs are not recorded yet; those cells show the runs recorded so far.`} Every version
-        scored at or near 100%, so these runs separate the versions on cost and turns, not on accuracy.
+        assumes it is already cached. With the lever, the Haiku-first version switches to Sonnet when the policy tool
+        flags a multi-factor dispute; without it, the Haiku version has no policy tool and so no escalation path. {caps === 0 ? 'No run reached its turn cap.' : `${caps} run${caps === 1 ? '' : 's'} reached a turn cap.`}
+        {pending > 0 && ` ${pending} runs are not recorded yet; those cells show the runs recorded so far.`}
       </p>
     </section>
   )

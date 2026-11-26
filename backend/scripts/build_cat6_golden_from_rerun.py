@@ -5,6 +5,11 @@ Fixed, pre-declared mapping (never chosen by outcome): repeat_index 0 of each ar
     shared_bus_matched_gate -> unisolated_broadcast_swarm   (without the lever, Sonnet)
     isolated_cached_gate    -> isolated_cached_sonnet_swarm (with the lever, Sonnet)
     tiered_gate             -> tiered_hybrid_cpo_swarm      (with the lever, Haiku agents + Sonnet patch author)
+    shared_bus_tiered_gate  -> unisolated_tiered_swarm      (without the lever, Haiku agents + Sonnet patch author)
+
+A mapped arm in `PENDING_OK_ARMS` with no ok record at all is left out ("run pending", listed in
+`provenance.pending_rungs`); the app then reports that rung's replay as pending. Once any of its runs is
+recorded, a missing repeat-0 record raises like every other arm.
 
 The output keeps the schema `runner._build_cat6_result_from_replay` reads (the live path's `raw_record`),
 adds `stop_reason`/`max_tokens` per turn and provenance, and stores `sandbox_report` as the current sandbox's
@@ -42,7 +47,11 @@ GOLDEN_MAPPING: dict[str, str] = {
     "unisolated_broadcast_swarm": "shared_bus_matched_gate",
     "isolated_cached_sonnet_swarm": "isolated_cached_gate",
     "tiered_hybrid_cpo_swarm": "tiered_gate",
+    "unisolated_tiered_swarm": "shared_bus_tiered_gate",
 }
+PENDING_OK_ARMS: frozenset[str] = frozenset({"shared_bus_tiered_gate"})
+SHARED_BUS_RUNGS: frozenset[str] = frozenset({"unisolated_broadcast_swarm", "unisolated_tiered_swarm"})
+TIERED_RUNGS: frozenset[str] = frozenset({"tiered_hybrid_cpo_swarm", "unisolated_tiered_swarm"})
 GOLDEN_REPEAT_INDEX = 0
 USE_CASE = "checkout_ci_self_healing_swarm"
 PROMPT_PREVIEW_CHARS = 450  # same truncation as runner._run_live_cat6_for_rung
@@ -72,7 +81,7 @@ def convert_record(
     sandbox: Callable[[str, str], dict[str, Any]] = evaluate_patch_in_sandbox,
 ) -> dict[str, Any]:
     """One fair-rerun record -> one golden-replay rung (the live path's raw_record schema)."""
-    context_mode = "shared_omnibus_bus" if rung_id == "unisolated_broadcast_swarm" else "isolated_prefix_cached"
+    context_mode = "shared_omnibus_bus" if rung_id in SHARED_BUS_RUNGS else "isolated_prefix_cached"
     turns = []
     for t in record["turns"]:
         role = str(t["agent_role"])
@@ -104,7 +113,7 @@ def convert_record(
     return {
         "rung_id": rung_id,
         "primary_model_id": (
-            "claude-haiku-5-5 + claude-sonnet-5-5" if rung_id == "tiered_hybrid_cpo_swarm" else "claude-sonnet-5-5"
+            "claude-haiku-5-5 + claude-sonnet-5-5" if rung_id in TIERED_RUNGS else "claude-sonnet-5-5"
         ),
         "retries_used": int(record.get("retries_used") or 0),
         "agent_turns": turns,
@@ -129,26 +138,30 @@ def build_golden(
     sandbox: Callable[[str, str], dict[str, Any]] = evaluate_patch_in_sandbox,
 ) -> dict[str, Any]:
     """Golden-replay document without the rebuild timestamp (added by `write_golden`)."""
+    records = list(records)
     pids = list(preset_ids) if preset_ids is not None else [p["id"] for p in CAT6_PRESETS]
+    recorded_arms = {r.get("arm_id") for r in records if r.get("status") == "ok"}
+    pending = {rung: arm for rung, arm in GOLDEN_MAPPING.items() if arm in PENDING_OK_ARMS and arm not in recorded_arms}
+    mapping = {rung: arm for rung, arm in GOLDEN_MAPPING.items() if rung not in pending}
     presets: dict[str, Any] = {}
     for pid in pids:
         presets[pid] = {
             "use_case": USE_CASE,
             "rungs": {
                 rung_id: convert_record(_select(records, arm_id, pid), rung_id, sandbox=sandbox)
-                for rung_id, arm_id in GOLDEN_MAPPING.items()
+                for rung_id, arm_id in mapping.items()
             },
         }
-    return {
-        "provenance": {
-            "source": "cat6 fair rerun",
-            "source_file": source_file,
-            "mapping": {rung: {"arm_id": arm, "repeat_index": GOLDEN_REPEAT_INDEX} for rung, arm in GOLDEN_MAPPING.items()},
-            "selection_rule": "fixed pre-declared mapping, repeat_index 0 for every preset (not selected by outcome)",
-            "sandbox_report": "current sandbox on each record's patched_code_final",
-        },
-        "presets": presets,
+    provenance: dict[str, Any] = {
+        "source": "cat6 fair rerun",
+        "source_file": source_file,
+        "mapping": {rung: {"arm_id": arm, "repeat_index": GOLDEN_REPEAT_INDEX} for rung, arm in mapping.items()},
+        "selection_rule": "fixed pre-declared mapping, repeat_index 0 for every preset (not selected by outcome)",
+        "sandbox_report": "current sandbox on each record's patched_code_final",
     }
+    if pending:
+        provenance["pending_rungs"] = {rung: {"arm_id": arm, "status": "run pending"} for rung, arm in pending.items()}
+    return {"provenance": provenance, "presets": presets}
 
 
 def _without_timestamp(doc: dict[str, Any]) -> dict[str, Any]:
@@ -205,6 +218,8 @@ def main(argv: list[str] | None = None) -> int:
                 f"{r['provenance']['run_id'][:8]} | turns={len(r['agent_turns'])} retries={r['retries_used']} "
                 f"| sandbox {s['passed_checks']}/{s['total_checks']} verified={s['verified_outcome']}"
             )
+    for rid, p in (doc["provenance"].get("pending_rungs") or {}).items():
+        print(f"{rid:<30} <- {p['arm_id']}: run pending (no ok records yet; the app reports this rung's replay as pending)")
     print(f"{'Wrote' if changed else 'Unchanged:'} {args.out}")
     return 0
 

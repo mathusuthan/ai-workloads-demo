@@ -20,7 +20,8 @@ from app.archetypes.cat6_swarms.sandbox_verifier import evaluate_patch_in_sandbo
 
 RUNS_JSONL = BACKEND_DIR / "experiments" / "cat6_fair_rerun" / "runs.jsonl"
 OTHER_JSONL = BACKEND_DIR / "experiments" / "cat6_fair_rerun" / "other_designs" / "runs.jsonl"
-SHOWN_ARMS = {"shared_bus_matched_gate", "isolated_cached_gate", "tiered_gate"}
+SHOWN_ARMS = {"shared_bus_matched_gate", "isolated_cached_gate", "tiered_gate", "shared_bus_tiered_gate"}
+PENDING_OK_ARMS = {"shared_bus_tiered_gate"}  # may have no records yet (run pending)
 
 
 def _load():
@@ -149,7 +150,9 @@ def test_real_records_already_pruned_on_a_temp_copy(tmp_path: Path) -> None:
 @pytest.mark.skipif(not RUNS_JSONL.is_file(), reason="fair-rerun records not present")
 def test_main_file_holds_exactly_the_displayed_cells() -> None:
     recs = [json.loads(x) for x in RUNS_JSONL.read_text(encoding="utf-8").splitlines() if x.strip()]
-    assert len(recs) == 45 and {r["arm_id"] for r in recs} == SHOWN_ARMS
+    arms = {r["arm_id"] for r in recs}
+    assert SHOWN_ARMS - PENDING_OK_ARMS <= arms <= SHOWN_ARMS
+    assert sum(1 for r in recs if r["arm_id"] not in PENDING_OK_ARMS) == 45
     if OTHER_JSONL.is_file():
         others = [json.loads(x) for x in OTHER_JSONL.read_text(encoding="utf-8").splitlines() if x.strip()]
         assert {r["arm_id"] for r in others}.isdisjoint(SHOWN_ARMS)

@@ -4,15 +4,19 @@ Golden replays — fixed, pre-declared mapping (never chosen by outcome): repeat
 that match the app's runnable rungs, on the three original invoices (inv-01..03):
 
     raw_free_sonnet             -> unbounded_sonnet_loop         (free-choice raw-table loop, no cache, no gate)
+    raw_free_haiku              -> unbounded_haiku_loop          (the same loop on Haiku; no escalation path)
     bundle_gate_sonnet_cached   -> bounded_sonnet_cached_gate
     bundle_gate_haiku_escalate  -> hybrid_haiku_sonnet_governed
+
+A version with no current record at all (not run yet) is left out of the golden file ("run pending"); once any of
+its runs is recorded, a missing repeat 0 on inv-01..03 fails the build as for the other versions.
 
 Each rung keeps the schema `runner._build_cat5_result_from_replay` reads, with real stop reasons, thinking tokens
 and provenance. SQL text, tables touched, optimal-call flags and gate snapshots are rebuilt by replaying the
 recorded tool calls, in order, on a fresh ERP session of the same kind; every replayed tool output must hash to
 the recorded `result_sha256` and the replayed voucher must equal the recorded one, or the build fails.
 
-Summary — the three versions (without / with on Sonnet / with on Haiku-first) on all 12 invoices, by tier and by
+Summary — the four versions (without / with, on Sonnet and on Haiku) on all 12 invoices, by tier and by
 invoice, from the same `ablation.summarise()` path as scripts/analyze_cat5_ablation.py.
 
 Inputs are only read. A file whose content is unchanged (ignoring `provenance.rebuilt_at`) is not rewritten.
@@ -53,6 +57,7 @@ USE_CASE = "invoice_3way_reconciliation"
 RESULT_PREVIEW_CHARS = 2200  # as runner._run_live_cat5_for_rung
 PRIMARY_MODEL = {
     "unbounded_sonnet_loop": "claude-sonnet-5-5",
+    "unbounded_haiku_loop": "claude-haiku-5-5",
     "bounded_sonnet_cached_gate": "claude-sonnet-5-5",
     "hybrid_haiku_sonnet_governed": "claude-haiku-5-5 -> claude-sonnet-5-5 (conditional)",
 }
@@ -141,10 +146,13 @@ def convert_record(record: dict[str, Any]) -> dict[str, Any]:
 def build_golden(records: list[dict[str, Any]], *, source_file: str) -> tuple[dict[str, Any], dict[str, dict[str, str]]]:
     presets: dict[str, Any] = {}
     run_ids: dict[str, dict[str, str]] = {}
+    recorded_arms = {a for a, _p, _r in latest_ok_current(records)}
     for pid in ORIGINAL_INVOICES:
         rungs: dict[str, Any] = {}
         prov: dict[str, Any] = {}
         for arm_id, rung_id in APP_RUNG_FOR_ARM.items():
+            if arm_id not in recorded_arms:
+                continue  # run pending: no run of this version recorded yet
             rec = select_record(records, arm_id, pid)
             rungs[rung_id] = convert_record(rec)
             prov[rung_id] = {
@@ -167,8 +175,9 @@ def build_golden(records: list[dict[str, Any]], *, source_file: str) -> tuple[di
             "selection_rule": (f"fixed pre-declared mapping: repeat_index {GOLDEN_REPEAT_INDEX} of "
                                + ", ".join(f"{a} -> {r}" for a, r in APP_RUNG_FOR_ARM.items())
                                + " on inv-01..03 (not selected by outcome)"),
-            "rung_1_note": ("unbounded_sonnet_loop runs the free-choice protocol: the model chooses among the raw "
-                            "SELECT * tools, several per turn allowed; no cache; no policy tool."),
+            "rung_1_note": ("unbounded_sonnet_loop and unbounded_haiku_loop run the free-choice protocol: the model "
+                            "chooses among the raw SELECT * tools, several per turn allowed; no cache; no policy tool "
+                            "(so no escalation path on Haiku)."),
             "trace_note": ("SQL text, tables touched, optimal-call flags and gate snapshots were rebuilt by replaying the "
                            "recorded tool calls on a fresh ERP session; every output matched the recorded sha256."),
             "settings_note": "Every turn ran with max_tokens 4096; stop_reason values are as returned by the API.",
@@ -228,6 +237,9 @@ def main(argv: list[str] | None = None) -> int:
                   f"stops={[s['stop_reason'] for s in rung['steps']]} calls={rung['total_tool_calls']} {v.get('decision', '-')}")
     print(f"{'Wrote' if changed_g else 'Unchanged:'} {out_path}")
     for a in portfolio["arms"]:
+        if not a["runs"]:
+            print(f"  {a['arm_id']:<27} run pending ({a['pending_runs']} runs)")
+            continue
         print(f"  {a['arm_id']:<27} exact {a['exact']}/{a['runs']} ${a['cost_per_1k_billed_usd']:.2f}/1k billed "
               f"${a['cost_per_1k_warm_usd']:.2f} warm turns {a['turns_mean']:.2f}")
     print(f"{'Wrote' if changed_s else 'Unchanged:'} {summary_path}")

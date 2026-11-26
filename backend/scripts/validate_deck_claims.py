@@ -25,12 +25,14 @@ Reads these sources and writes a JSON + Markdown report:
                                  the golden replays)
 5b. backend/experiments/cat5_ablation/runs.jsonl (read-only) + backend/replays/cat5_ablation_summary.json
                                  (fallback analysis/cat5_ablation.json)
-                              -> Category 5: the three displayed cells (with / without the deck's lever, 12 invoices x 3
-                                 repeats each) selected by the summary's run ids, costs recomputed from each turn's tokens;
+                              -> Category 5: the four displayed cells (with / without the deck's lever x Sonnet / Haiku,
+                                 12 invoices x 3 repeats each; a cell with no records yet is "run pending" and the rows
+                                 use the recorded cells) selected by the summary's run ids, costs recomputed from each turn's tokens;
                                  quality from the summary (falls back to the golden replays if the records cannot be read)
 6. backend/experiments/cat6_fair_rerun/runs.jsonl (read-only)
-                              -> Category 6: the fair-rerun records of the three displayed cells (with / without
-                                 the deck's lever x models; 3 incidents x 5 repeats each);
+                              -> Category 6: the fair-rerun records of the four displayed cells (with / without
+                                 the deck's lever x models; 3 incidents x 5 repeats each; a cell with no records
+                                 yet is "run pending" and the rows use the recorded cells);
                                  sandbox verdicts as stored in the records
 
 Costs are recomputed per call from recorded token counts. Nothing is read from the
@@ -98,19 +100,27 @@ CAT1_COLS = {"sonnet": "Sonnet 5.5", "haiku": "Haiku 5.5"}
 CAT5_ABLATION = BACKEND / "experiments" / "cat5_ablation" / "runs.jsonl"
 CAT5_ABLATION_SUMMARY = REPLAYS / "cat5_ablation_summary.json"
 CAT5_ABLATION_ANALYSIS = OUT_DIR / "cat5_ablation.json"
-# the three displayed cells: without the deck's lever (Sonnet), with it (Sonnet), with it (Haiku-first, escalating to Sonnet)
-CAT5_ARMS = ["raw_free_sonnet", "bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate"]
-CAT5_APP_RUNGS = ["unbounded_sonnet_loop", "bounded_sonnet_cached_gate", "hybrid_haiku_sonnet_governed"]
+# the 2x2 displayed cells: without the deck's lever (Sonnet, Haiku), with it (Sonnet, Haiku-first escalating to Sonnet)
+CAT5_ARMS = ["raw_free_sonnet", "raw_free_haiku", "bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate"]
+# cells the ablation path needs recorded; the Haiku "without" cell may still be pending ("run pending")
+CAT5_REQUIRED_ARMS = ["raw_free_sonnet", "bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate"]
+CAT5_APP_RUNGS = ["unbounded_sonnet_loop", "bounded_sonnet_cached_gate", "hybrid_haiku_sonnet_governed", "unbounded_haiku_loop"]
 CAT5_ARM_FOR_RUNG = {"unbounded_sonnet_loop": "raw_free_sonnet", "bounded_sonnet_cached_gate": "bundle_gate_sonnet_cached",
-                     "hybrid_haiku_sonnet_governed": "bundle_gate_haiku_escalate"}
+                     "hybrid_haiku_sonnet_governed": "bundle_gate_haiku_escalate", "unbounded_haiku_loop": "raw_free_haiku"}
 CAT6_RERUN = BACKEND / "experiments" / "cat6_fair_rerun" / "runs.jsonl"
-CAT6_ARMS = ["shared_bus_matched_gate", "isolated_cached_gate", "tiered_gate"]
-# The deck's lever (rows) x models (columns); None = not run. Same instructions, caps and sandbox gate in every cell.
-CAT6_DESIGN = {("without", "sonnet"): "shared_bus_matched_gate", ("without", "tiered"): None,
+# Design order: without the lever (Sonnet, Haiku agents + Sonnet patch author), then with it (same two columns).
+CAT6_ARMS = ["shared_bus_matched_gate", "shared_bus_tiered_gate", "isolated_cached_gate", "tiered_gate"]
+# The deck's lever (rows) x models (columns). Same instructions, caps and sandbox gate in every cell.
+CAT6_DESIGN = {("without", "sonnet"): "shared_bus_matched_gate", ("without", "tiered"): "shared_bus_tiered_gate",
                ("with", "sonnet"): "isolated_cached_gate", ("with", "tiered"): "tiered_gate"}
 CAT6_ROWS = {"without": "Without: shared bus, same instructions, sandbox check with one retry",
              "with": "With: isolated agents + cached repo prefix, sandbox check with one retry"}
-CAT6_COLS = {"sonnet": "Sonnet on every turn", "tiered": "Haiku agents + Sonnet patch author"}
+CAT6_COLS = {"sonnet": "Sonnet 5.5", "tiered": "Haiku agents + Sonnet patch author"}
+CAT6_CELL = {"shared_bus_matched_gate": "without the lever (shared bus), Sonnet",
+             "shared_bus_tiered_gate": "without the lever (shared bus), Haiku agents + Sonnet patch author",
+             "isolated_cached_gate": "with the lever, Sonnet",
+             "tiered_gate": "with the lever, Haiku agents + Sonnet patch author"}
+CAT6_RUN_PENDING = "run pending"
 
 SONNET, HAIKU = "claude-sonnet-5-5", "claude-haiku-5-5"
 
@@ -674,7 +684,8 @@ def cat5_golden_units(seeds):
     """Fallback: one unit per (invoice x app rung) from the golden replays, quality from the seed traces."""
     d = load(5)
     pat = {"unbounded_sonnet_loop": "unbounded_uncached_react_loop", "bounded_sonnet_cached_gate": "bounded_sonnet_cached_gate",
-           "hybrid_haiku_sonnet_governed": "hybrid_haiku_sonnet_governed_loop"}
+           "hybrid_haiku_sonnet_governed": "hybrid_haiku_sonnet_governed_loop",
+           "unbounded_haiku_loop": "unbounded_uncached_react_loop_haiku"}
     units = defaultdict(list)
     for iid, p in d["presets"].items():
         for rung, r in p["rungs"].items():
@@ -1310,7 +1321,7 @@ def analyse():
               q4_source.get("reason") or "the Category 4 rerun summary lacks a cell")
         claim("Cat 4", "…without losing answer quality (implicit)", "no quality data", "NOT TESTABLE", q4_source.get("reason") or "")
 
-    # ---------------- Cat 5 (without / with the deck's lever: 3 cells x 12 invoices x 3 repeats)
+    # ---------------- Cat 5 (without / with the deck's lever x Sonnet / Haiku: 4 cells x 12 invoices x 3 repeats)
     info5, info5_source = cat5_ablation_info()
     u5 = None
     if info5 and info5.get("run_ids") and CAT5_ABLATION.is_file():
@@ -1318,9 +1329,10 @@ def analyse():
             u5 = cat5_ablation_units(info5["run_ids"])
         except (OSError, KeyError, TypeError, json.JSONDecodeError):
             u5 = None
-    if u5 and all(u5.get(a) for a in CAT5_ARMS) and all(a in info5["arms"] for a in CAT5_ARMS):
-        order5 = CAT5_ARMS
-        WO5, WS5, WH5 = order5  # without (Sonnet); with (Sonnet); with (Haiku-first)
+    if u5 and all(u5.get(a) for a in CAT5_REQUIRED_ARMS) and all(a in info5["arms"] for a in CAT5_REQUIRED_ARMS):
+        WO5, WOH5, WS5, WH5 = CAT5_ARMS  # without: Sonnet, Haiku; with: Sonnet, Haiku-first
+        order5 = [a for a in CAT5_ARMS if u5.get(a) and a in info5["arms"]]  # recorded cells
+        pend_cells5 = [a for a in CAT5_ARMS if a not in order5]  # cells with no run recorded yet ("run pending")
         s5 = summarize_rungs(u5, order5)
         a5 = info5["arms"]
         q5 = {a: {"runs": a5[a]["runs"], "exact": a5[a]["exact"], "decision_correct": a5[a]["decision_correct"],
@@ -1330,7 +1342,7 @@ def analyse():
                   "escalation_expected": a5[a]["escalation_expected"], "truncated_turns": a5[a]["truncated_turns"],
                   "expected_runs": a5[a]["expected_runs"], "pending_runs": a5[a]["pending_runs"],
                   "summary_cost_billed": a5[a]["summary_cost_billed"]} for a in order5}
-        # while a cell has pending runs, every comparison uses the invoices recorded in all three cells
+        # while a recorded cell has pending runs, every comparison uses the invoices recorded in all recorded cells
         common5 = sorted(set.intersection(*({u["preset_id"] for u in u5[a]} for a in order5)))
         pending5 = sum(q5[a]["pending_runs"] for a in order5)
         pending_inv5 = sorted({p for a in order5 for p in a5[a]["pending_invoices"]})
@@ -1344,6 +1356,8 @@ def analyse():
                       "turns_mean": st.mean(u["steps"] for u in cu5[a]), "escalations": sum(1 for u in cu5[a] if u["escalated"])}
 
         def cmp5(old, new):
+            if old not in cq5 or new not in cq5:
+                return None  # a cell is pending: no comparison yet
             out = {"from": old, "to": new, "exact_from": cq5[old]["exact"], "exact_to": cq5[new]["exact"], "runs": cq5[new]["runs"],
                    "turns_from": cq5[old]["turns_mean"], "turns_to": cq5[new]["turns_mean"],
                    "clear_loss": cq5[new]["ci"][1] < cq5[old]["ci"][0],
@@ -1352,81 +1366,119 @@ def analyse():
                 f, t = cs5[old][f"cost_per_1k_{v}"], cs5[new][f"cost_per_1k_{v}"]
                 out[f"{v}_from"], out[f"{v}_to"], out[f"{v}_change_pct"] = f, t, (t / f - 1) * 100 if f else None
             return out
-        with5, route5 = cmp5(WO5, WS5), cmp5(WS5, WH5)
+        # (name, older/costlier cell, cheaper cell): the lever on each model set-up; the smaller model on each design
+        pairs5 = {"with vs without the lever, Sonnet": cmp5(WO5, WS5),
+                  "with vs without the lever, Haiku (Haiku-first with it)": cmp5(WOH5, WH5),
+                  "Haiku vs Sonnet, without the lever": cmp5(WO5, WOH5),
+                  "Haiku-first vs Sonnet, with the lever": cmp5(WS5, WH5)}
         cost_check = max(abs(s5[a]["cost_per_1k_billed"] - (q5[a]["summary_cost_billed"] or 0)) for a in order5)
         res["categories"]["cat5"] = {"rungs": s5, "quality": q5, "source": "ablation", "summary_source": info5_source,
                                      "records": sum(len(u5[a]) for a in order5), "invoices_pooled": info5["invoices_pooled"],
                                      "repeats": info5["repeats"], "settings": info5["settings"], "data_quality": info5["data_quality"],
                                      "non_exact_runs": info5["non_exact_runs"], "pending_runs": pending5, "pending_invoices": pending_inv5,
-                                     "common_invoices": common5, "with_vs_without": with5, "haiku_first_vs_sonnet": route5,
+                                     "pending_cells": pend_cells5, "common_invoices": common5, "comparisons": pairs5,
                                      "max_cost_diff_vs_summary_per_1k": cost_check, "app_rungs": dict(CAT5_ARM_FOR_RUNG)}
         on5 = (f" (compared on the {len(common5)} invoices recorded in every cell; {pending5} runs not recorded yet)" if pending5 else "")
-        runs_txt5 = "/".join(str(q5[a]["runs"]) for a in order5)
-        rk5 = lambda v: f"{v['prompt_tokens_range'][0]/1e3:.0f}k–{v['prompt_tokens_range'][1]/1e3:.0f}k"  # noqa: E731
+        pend_note5 = ("".join(f"{CAT5_LABELS[a].split(' (')[0]}: run pending (no runs recorded yet), so this row uses the "
+                              f"{len(order5)} recorded cells. " for a in pend_cells5))
+        cell5 = lambda a, fn: fn(a) if a in order5 else "run pending"  # noqa: E731
+        runs_txt5 = "/".join(str(q5[a]["runs"]) if a in order5 else "0" for a in CAT5_ARMS)
+        rk5 = lambda a: f"{s5[a]['prompt_tokens_range'][0]/1e3:.0f}k–{s5[a]['prompt_tokens_range'][1]/1e3:.0f}k"  # noqa: E731
         claim("Cat 5", "Input 25k–150k+ tokens per task",
-              f"n={runs_txt5} runs: " + "; ".join(f"{CAT5_LABELS[a]} {rk5(s5[a])}" for a in order5),
+              f"n={runs_txt5} runs: " + "; ".join(f"{CAT5_LABELS[a]} {cell5(a, rk5)}" for a in CAT5_ARMS),
               verdict(min(s5[a]["prompt_tokens_range"][0] for a in order5) >= 25_000, s5[WO5]["prompt_tokens_range"][0] >= 25_000),
-              "Every cell is in the band. With the lever, most of it is cache reads of the policy manual resent each turn: uncached input per invoice "
+              pend_note5 + ("Every recorded cell is in the band. " if pend_cells5 else "Every cell is in the band. ")
+              + "With the lever, most of it is cache reads of the policy manual resent each turn: uncached input per invoice "
               "(median) is " + "; ".join(f"{CAT5_LABELS[a].split(' (')[0]} {_k(med([sum(c['in'] for c in u['calls']) for u in u5[a]]))}" for a in order5) + ".")
-        outs5 = {a: s5[a]["output_tokens_range"] for a in order5}
         all_out = [tok(u["calls"])["output"] for a in order5 for u in u5[a]]
         in_band5 = sum(1 for o in all_out if 1500 <= o <= 8000)
         tl5 = sorted({u["steps"] for a in order5 for u in u5[a]})
+        ok5 = lambda a: f"{s5[a]['output_tokens_range'][0]:,}–{s5[a]['output_tokens_range'][1]:,}"  # noqa: E731
         claim("Cat 5", "Output 1,500–8,000 tokens per task",
-              "; ".join(f"{CAT5_LABELS[a]} {outs5[a][0]:,}–{outs5[a][1]:,}" for a in order5) + f"; {in_band5}/{len(all_out)} runs in band",
+              "; ".join(f"{CAT5_LABELS[a]} {cell5(a, ok5)}" for a in CAT5_ARMS) + f"; {in_band5}/{len(all_out)} runs in band",
               verdict(in_band5 == len(all_out), in_band5 > 0),
-              f"Median {med(all_out):,.0f} output tokens per invoice; output includes extended thinking (Sonnet only). "
+              pend_note5 + f"Median {med(all_out):,.0f} output tokens per invoice; output includes extended thinking (Sonnet only). "
               f"These are short {tl5[0]}–{tl5[-1]}-turn loops.")
-        # lever row: the deck's lever judged as a whole, without -> with, in three parts
+
+        # lever row: the deck's lever judged as a whole in three parts. The guardrail part compares with vs without the lever
+        # on each model set-up; the routing part compares Haiku with Sonnet on each design, so the model and the design
+        # are separated once both Haiku cells exist.
+        def pair_text(name, c):
+            if c is None:
+                return f"{name}: run pending"
+            return (f"{name}: cost {c['billed_change_pct']:+.0f}% billed ({_money(c['billed_from'])} → {_money(c['billed_to'])}/1k; "
+                    f"warm {_money(c['warm_from'])} → {_money(c['warm_to'])}), turns {c['turns_from']:.1f} → {c['turns_to']:.1f}, "
+                    f"exact vouchers {c['exact_from']}/{c['runs']} → {c['exact_to']}/{c['runs']}")
+
+        def gate_ok(c):  # the written rule used before: cost up with no accuracy gain, or a clear loss, contradicts the part
+            return not (c["clear_loss"] or (c["billed_change_pct"] > 0 and c["exact_to"] <= c["exact_from"]))
+
+        def route_ok(c):
+            return c["billed_change_pct"] < 0 and c["not_lower"]
+
+        def combine(oks):
+            return "SUPPORTED" if all(oks) else ("NOT SUPPORTED" if not any(oks) else "PARTLY SUPPORTED")
+
         caps5 = sum(q5[a]["cap_hits"] for a in order5)
-        wo_max, wo_cap = q5[WO5]["turns_max"], q5[WO5]["turn_cap"]
+        wo_max, wo_cap = max(q5[a]["turns_max"] for a in (WO5, WOH5) if a in q5), q5[WO5]["turn_cap"]
         w_turns, w_cap = q5[WS5]["turns_mean"], q5[WS5]["turn_cap"]
         esc5 = cq5[WH5]["escalations"]
+        g_names = ["with vs without the lever, Sonnet", "with vs without the lever, Haiku (Haiku-first with it)"]
+        r_names = ["Haiku vs Sonnet, without the lever", "Haiku-first vs Sonnet, with the lever"]
+        g_have = [n for n in g_names if pairs5[n]]
+        r_have = [n for n in r_names if pairs5[n]]
         budget_part = (f"max-step budgets: {caps5} of {sum(q5[a]['runs'] for a in order5)} runs hit a cap; without the lever ({wo_cap}-turn safety cap) "
                        f"runs finished in at most {wo_max} turns, with it in {w_turns:.0f} of {w_cap}")
-        with_part = (f"with vs without the lever (Sonnet): cost {with5['billed_change_pct']:+.0f}% billed ({_money(with5['billed_from'])} → {_money(with5['billed_to'])}/1k; "
-                     f"warm {_money(with5['warm_from'])} → {_money(with5['warm_to'])}), turns {with5['turns_from']:.1f} → {with5['turns_to']:.1f}, "
-                     f"exact vouchers {with5['exact_from']}/{with5['runs']} → {with5['exact_to']}/{with5['runs']}")
-        route_part = (f"Haiku-first vs Sonnet (with the lever): cost {route5['billed_change_pct']:+.0f}% billed ({_money(route5['billed_from'])} → "
-                      f"{_money(route5['billed_to'])}/1k; warm {_money(route5['warm_from'])} → {_money(route5['warm_to'])}), exact vouchers "
-                      f"{route5['exact_from']}/{route5['runs']} → {route5['exact_to']}/{route5['runs']}, switched to Sonnet in {esc5} of {cq5[WH5]['runs']} runs")
-        # part verdicts: SUPPORTED / NOT SUPPORTED / NOT SHOWN (the lever never came into play)
         p_budget = "NOT SHOWN" if caps5 == 0 else "SUPPORTED"
-        p_gate = ("NOT SUPPORTED" if with5["clear_loss"] or (with5["billed_change_pct"] > 0 and with5["exact_to"] <= with5["exact_from"])
-                  else "SUPPORTED")
-        p_route = "SUPPORTED" if route5["billed_change_pct"] < 0 and route5["not_lower"] else "NOT SUPPORTED"
+        p_gate = combine([gate_ok(pairs5[n]) for n in g_have])
+        p_route = combine([route_ok(pairs5[n]) for n in r_have])
         parts5 = [p_budget, p_gate, p_route]
         v_lever = ("SUPPORTED" if all(x == "SUPPORTED" for x in parts5) else
-                   "PARTLY SUPPORTED" if "SUPPORTED" in parts5 else "NOT SUPPORTED")
-        word = {"SUPPORTED": "supported", "NOT SUPPORTED": "not supported", "NOT SHOWN": "not shown"}
+                   "PARTLY SUPPORTED" if any(x in ("SUPPORTED", "PARTLY SUPPORTED") for x in parts5) else "NOT SUPPORTED")
+        word = {"SUPPORTED": "supported", "NOT SUPPORTED": "not supported", "NOT SHOWN": "not shown", "PARTLY SUPPORTED": "partly supported"}
         note_b = ("no loop ran long on these invoices, so a budget saved nothing here; whether it prevents runaway cost is untested"
                   if p_budget == "NOT SHOWN" else f"{caps5} runs reached a cap")
-        note_g = (f"with the lever, cost changed {with5['billed_change_pct']:+.0f}% and exact vouchers {with5['exact_from']} → {with5['exact_to']} of {with5['runs']}. "
-                  "The with-design also replaces the raw tables with one narrow query and sends the policy manual as a cached prefix, so the saving belongs "
-                  "to the design as a whole and these cells cannot split it between the guardrail and those changes")
-        note_r = (f"starting on Haiku changed cost {route5['billed_change_pct']:+.0f}% against Sonnet on the same design, with exact vouchers "
-                  f"{route5['exact_from']} → {route5['exact_to']} of {route5['runs']}; it switched to Sonnet in {esc5} of {cq5[WH5]['runs']} runs, the runs where the "
-                  "policy tool flags a multi-factor dispute (manual 6.2)")
+
+        def brief(n):
+            c = pairs5[n]
+            return f"{n}, cost {c['billed_change_pct']:+.0f}% and exact vouchers {c['exact_from']} → {c['exact_to']} of {c['runs']}"
+        note_g = ("; ".join(brief(n) for n in g_have)
+                  + (" (the Haiku column is pending)" if len(g_have) < len(g_names) else "")
+                  + ". The with-design also replaces the raw tables with one narrow query and sends the policy manual as a cached prefix, so the saving "
+                  "belongs to the design as a whole and these cells cannot split it between the guardrail and those changes")
+        note_r = ("; ".join(brief(n) for n in r_have)
+                  + f"; with the lever the Haiku-first version switched to Sonnet in {esc5} of {cq5[WH5]['runs']} runs, the runs where the policy tool "
+                  "flags a multi-factor dispute (manual 6.2); without it there is no policy tool and so no escalation path"
+                  + ("" if len(r_have) == len(r_names) else
+                     ". The Haiku cell without the lever is pending, so the model cannot yet be separated from the design"))
         claim("Cat 5", "Max-step budgets + deterministic guardrails + small-model routing for routine tool calls",
-              "; ".join([budget_part, with_part, route_part]) + on5,
+              "; ".join([budget_part, *(pair_text(n, pairs5[n]) for n in g_names + r_names)]) + on5,
               v_lever,
-              f"Judged as a whole, without → with, in three parts. (1) Step budgets: {word[p_budget]} — {note_b}. (2) Deterministic guardrails (the with-design): "
-              f"{word[p_gate]} — {note_g}. (3) Small-model routing: {word[p_route]} — {note_r}. "
-              f"As a whole: {sum(x == 'SUPPORTED' for x in parts5)} of 3 parts supported, {sum(x == 'NOT SUPPORTED' for x in parts5)} contradicted, "
-              f"{sum(x == 'NOT SHOWN' for x in parts5)} never came into play.")
+              pend_note5 + f"Judged as a whole in three parts. (1) Step budgets: {word[p_budget]} — {note_b}. (2) Deterministic guardrails (with vs without "
+              f"the lever on the same model set-up): {word[p_gate]} — {note_g}. (3) Small-model routing (Haiku vs Sonnet on the same design): "
+              f"{word[p_route]} — {note_r}. "
+              f"As a whole: {sum(x == 'SUPPORTED' for x in parts5)} of 3 parts supported, {sum(x == 'PARTLY SUPPORTED' for x in parts5)} partly, "
+              f"{sum(x == 'NOT SUPPORTED' for x in parts5)} contradicted, {sum(x == 'NOT SHOWN' for x in parts5)} never came into play.")
         res["categories"]["cat5"]["lever_parts"] = {"max_step_budgets": p_budget, "deterministic_guardrails": p_gate, "small_model_routing": p_route}
+        have5 = [n for n in g_names + r_names if pairs5[n]]
         ceiling5 = all(cq5[a]["exact"] == cq5[a]["runs"] for a in order5)
+        lower5 = [n for n in have5 if not pairs5[n]["not_lower"]]
         claim("Cat 5", "…without losing accuracy (implicit)",
-              f"exact vouchers: with vs without the lever (Sonnet) {cq5[WS5]['exact']}/{cq5[WS5]['runs']} vs {cq5[WO5]['exact']}/{cq5[WO5]['runs']}; "
-              f"Haiku-first vs Sonnet (with the lever) {cq5[WH5]['exact']}/{cq5[WH5]['runs']} vs {cq5[WS5]['exact']}/{cq5[WS5]['runs']}" + on5,
-              implicit_verdict(with5["clear_loss"] or route5["clear_loss"], with5["not_lower"] and route5["not_lower"], ceiling=ceiling5),
-              "Compared under the written rule: the lever against the same task without it, and Haiku-first against Sonnet on the row with the lever. "
-              + ("Every compared run committed the exact voucher, so a loss could not be detected (ceiling); " if ceiling5 else "")
-              + "the invoices test simple arithmetic (quantities × rates, a GST split, a debit note). All recorded runs: "
+              "exact vouchers: " + "; ".join(
+                  (f"{n} {pairs5[n]['exact_to']}/{pairs5[n]['runs']} vs {pairs5[n]['exact_from']}/{pairs5[n]['runs']}" if pairs5[n] else f"{n} run pending")
+                  for n in g_names + r_names) + on5,
+              implicit_verdict(any(pairs5[n]["clear_loss"] for n in have5), all(pairs5[n]["not_lower"] for n in have5), ceiling=ceiling5),
+              pend_note5 + "Compared under the written rule: the lever against the same task without it on each model set-up, and Haiku against Sonnet "
+              "with and without the lever" + (" (comparisons with a pending cell are not made yet). " if pend_cells5 else ". ")
+              + ("Every compared run committed the exact voucher, so a loss could not be detected (ceiling); the invoices test simple arithmetic"
+                 if ceiling5 else
+                 (("Fewer exact vouchers in the second-named cell (with the lever, or Haiku) of: " + "; ".join(lower5) + " (a clear loss needs "
+                   "non-overlapping 95% Wilson intervals). ") if lower5 else "") + "The invoices test simple arithmetic")
+              + " (quantities × rates, a GST split, a debit note). All recorded runs: "
               + "; ".join(f"{CAT5_LABELS[a].split(' (')[0]} {q5[a]['exact']}/{q5[a]['runs']}" for a in order5) + ".")
     else:
         u5 = cat5_golden_units(seeds)
-        order5 = CAT5_APP_RUNGS
+        order5 = [r for r in CAT5_APP_RUNGS if u5.get(r)]
         s5 = summarize_rungs(u5, order5)
         q5 = {r: {"exact_match": sum(1 for u in u5[r] if (u["evaluation"] or {}).get("exact_match")),
                   "steps": [u["steps"] for u in u5[r]], "escalations": sum(1 for u in u5[r] if u["escalated"])} for r in order5}
@@ -1441,9 +1493,10 @@ def analyse():
               "Three invoices cannot separate the levers; " + reason5 + ".")
         claim("Cat 5", "…without losing accuracy (implicit)", "no ablation data", "NOT TESTABLE", reason5)
 
-    # ---------------- Cat 6 (fair rerun: 3 cells x 3 incidents x 5 repeats; with / without the deck's lever)
+    # ---------------- Cat 6 (fair rerun: 4 cells x 3 incidents x 5 repeats; with / without the deck's lever x model set-up)
     u6 = cat6_units()
-    order6 = CAT6_ARMS
+    order6 = [a for a in CAT6_ARMS if u6.get(a)]  # recorded cells; a cell with no runs yet is "run pending"
+    pending6 = [a for a in CAT6_ARMS if not u6.get(a)]
     s6 = summarize_rungs(u6, order6)
     cpo = {}
     for r in order6:
@@ -1463,55 +1516,95 @@ def analyse():
                   "mean_total_tokens": st.mean(tok(u["calls"])["total"] for u in u6[r])}
     prefix6 = med([u["turn1_prefix"] for u in u6["isolated_cached_gate"]])
     res["categories"]["cat6"] = {"rungs": s6, "cpo": cpo, "source": "fair rerun",
-                                 "records": sum(len(u6[r]) for r in order6), "repo_prefix_tokens": prefix6}
-    sbm, iso6, tie6 = (s6[a] for a in order6)
-    n6 = cpo["shared_bus_matched_gate"]["runs"]
-    rk = lambda v, key: f"{v[key][0]/1e3:.0f}k–{v[key][1]/1e3:.0f}k"  # noqa: E731
+                                 "records": sum(len(u6[r]) for r in order6), "repo_prefix_tokens": prefix6, "pending": pending6}
+    SB6, SBT6, ISO6, TI6 = CAT6_ARMS
+    n6 = cpo[SB6]["runs"]
+    pend6 = ("; ".join(f"{CAT6_CELL[a][0].upper()}{CAT6_CELL[a][1:]}: {CAT6_RUN_PENDING}" for a in pending6)
+             + f" (no runs recorded yet), so this row uses the {len(order6)} recorded cells. ") if pending6 else ""
+
+    def per_cell6(fmt):
+        return "; ".join(f"{CAT6_CELL[a]} {fmt(a) if a in s6 else CAT6_RUN_PENDING}" for a in CAT6_ARMS)
+
+    rk = lambda a: f"{s6[a]['prompt_tokens_range'][0]/1e3:.0f}k–{s6[a]['prompt_tokens_range'][1]/1e3:.0f}k"  # noqa: E731
     in_band6 = [a for a in order6 if s6[a]["prompt_tokens_range"][0] >= 100_000]
+    wo_in6 = all(a in in_band6 for a in (SB6, SBT6) if a in s6)
     claim("Cat 6", "Input 100k–1M+ tokens per run",
-          f"n={n6} runs per cell: without the lever (shared bus, Sonnet) {rk(sbm, 'prompt_tokens_range')}; with the lever, Sonnet {rk(iso6, 'prompt_tokens_range')}; "
-          f"with the lever, Haiku agents + Sonnet patch author {rk(tie6, 'prompt_tokens_range')}",
+          f"n={n6} runs per cell: " + per_cell6(rk),
           verdict(len(in_band6) == len(order6), bool(in_band6)),
-          f"Without the lever every run is in the band, all of it uncached. With it, each run sends ~{iso6['prompt_tokens_median']/1e3:.0f}k, "
-          f"mostly cache reads of a ~{prefix6/1e3:.1f}k-token repo prefix, below the band.")
-    rk1 = lambda v: f"{v['output_tokens_range'][0]/1e3:.1f}k–{v['output_tokens_range'][1]/1e3:.1f}k"  # noqa: E731
+          pend6 + ("Without the lever every run is in the band, all of it uncached. " if wo_in6 else "Without the lever some runs are below the band. ")
+          + f"With it, each run sends ~{s6[ISO6]['prompt_tokens_median']/1e3:.0f}k, mostly cache reads of a ~{prefix6/1e3:.1f}k-token repo prefix"
+          + (", below the band." if all(s6[a]["prompt_tokens_range"][1] < 100_000 for a in (ISO6, TI6) if a in s6) else "."))
+    rk1 = lambda a: f"{s6[a]['output_tokens_range'][0]/1e3:.1f}k–{s6[a]['output_tokens_range'][1]/1e3:.1f}k"  # noqa: E731
     mt6 = sum(cpo[a]["turns_at_max_tokens"] for a in order6)
     tlen = sorted({len(u["calls"]) for a in order6 for u in u6[a]})
     turns6 = f"{tlen[0]}" if len(tlen) == 1 else f"{tlen[0]}–{tlen[-1]}"
     out_in6 = sum(1 for a in order6 for u in u6[a] if tok(u["calls"])["output"] >= 10_000)
     out_n6 = sum(len(u6[a]) for a in order6)
+    out_lo6 = min(s6[a]["output_tokens_range"][0] for a in order6) / 1e3
+    out_hi6 = -(-max(s6[a]["output_tokens_range"][1] for a in order6) // 1000)
     claim("Cat 6", "Output 10k–50k+ tokens per run",
-          f"without the lever {rk1(sbm)}; with the lever, Sonnet {rk1(iso6)}; with the lever, Haiku agents + Sonnet patch author {rk1(tie6)}; {out_in6}/{out_n6} runs in band",
+          per_cell6(rk1) + f"; {out_in6}/{out_n6} runs in band",
           verdict(out_in6 == out_n6, 0 < out_in6 < out_n6),
-          f"Every cell writes ~4–7k per run, below the band; the role prompts' word limits, the same in every cell, set the length. "
+          pend6 + (f"Every cell writes ~{out_lo6:.0f}–{out_hi6:.0f}k per run, below the band; " if out_in6 == 0 else f"{out_in6} of {out_n6} runs reach the band; ")
+          + "the role prompts' word limits, the same in every cell, set the length. "
           f"{mt6} of {sum(cpo[a]['turns_total'] for a in order6)} turns stopped on max_tokens. All runs are {turns6} turns on a single-file fix.")
-    sb_tot, ti_tot = cpo["shared_bus_matched_gate"]["mean_total_tokens"], cpo["tiered_gate"]["mean_total_tokens"]
+    runs_day6 = lambda a: (f"~{1.5e6/cpo[a]['mean_total_tokens']:.0f}–{10e6/cpo[a]['mean_total_tokens']:.0f} runs/dev/day "  # noqa: E731
+                           f"(mean {cpo[a]['mean_total_tokens']/1e3:.0f}k tokens/run)")
     claim("Cat 6", "1.5M–10M+ tokens per developer per day", f"not measurable: {res['categories']['cat6']['records']} single runs, no per-developer daily traffic", "NOT TESTABLE",
-          f"Would take ~{1.5e6/sb_tot:.0f}–{10e6/sb_tot:.0f} runs/dev/day without the lever (mean {sb_tot/1e3:.0f}k tokens/run), or ~{1.5e6/ti_tot:.0f}–{10e6/ti_tot:.0f} "
-          f"with it on Haiku agents + Sonnet patch author (mean {ti_tot/1e3:.0f}k).")
-    c_wo, c_w, c_ti = cpo["shared_bus_matched_gate"]["cpo"], cpo["isolated_cached_gate"]["cpo"], cpo["tiered_gate"]["cpo"]
+          f"Would take {runs_day6(SB6)} without the lever on Sonnet"
+          + (f", {runs_day6(SBT6)} without it on Haiku agents + Sonnet patch author" if SBT6 in cpo else "")
+          + f", or {runs_day6(TI6)} with it on Haiku agents + Sonnet patch author.")
+    # Comparisons (cheaper cell, cell it replaces): the lever on each model column; Haiku agents + Sonnet patch author
+    # against Sonnet on each row. A comparison with a pending cell is not made.
+    lever6 = [(ISO6, SB6, "Sonnet"), (TI6, SBT6, "Haiku agents + Sonnet patch author")]
+    model6 = [(SBT6, SB6, "without the lever"), (TI6, ISO6, "with the lever")]
+    lever6_m = [(w, wo, col) for w, wo, col in lever6 if w in cpo and wo in cpo]
+    model6_m = [(h, s, row) for h, s, row in model6 if h in cpo and s in cpo]
+
+    def cpo_change6(new, old, key="cpo"):
+        a, b = cpo[old][key], cpo[new][key]
+        if a is None or b is None:
+            return f"{_money(a)} → {_money(b)} (undefined with no verified run)"
+        return f"{_money(a)} → {_money(b)}, ~{a / b:.1f}× lower" if b < a else f"{_money(a)} → {_money(b)}, ~{b / a:.1f}× higher"
+
+    def lower6(new, old):
+        return cpo[new]["cpo"] is not None and (cpo[old]["cpo"] is None or cpo[new]["cpo"] < cpo[old]["cpo"])
+
     same_rate = len({cpo[a]["verified"] / cpo[a]["runs"] for a in order6}) == 1
     claim("Cat 6", "Isolate sub-agent contexts, cache the shared repo prefix, measure cost per verified outcome (CpO)",
-          "CpO per verified fix (billed): " + "; ".join(f"{RUNG_LABELS[a]} {_money(cpo[a]['cpo'])} ({cpo[a]['verified']}/{cpo[a]['runs']} verified)" for a in order6),
-          verdict(False, c_wo is not None and c_w is not None and c_w < c_wo),
-          f"On Sonnet, the lever cuts cost per verified fix ~{c_wo / c_w:.1f}× ({_money(c_wo)} → {_money(c_w)}; warm {_money(cpo['shared_bus_matched_gate']['cpo_warm'])} → {_money(cpo['isolated_cached_gate']['cpo_warm'])}); "
-          f"with Haiku agents + a Sonnet patch author it is {_money(c_ti)} (~{c_wo / c_ti:.1f}× below the shared bus). "
-          + ("The verified rate is the same in every cell, " if same_rate else "The verified rate differs between cells, ")
-          + "so every saving is cost per run and CpO adds nothing over it here (ceiling): the outcome side of the claim is untested.")
+          "CpO per verified fix (billed): " + "; ".join(
+              f"{RUNG_LABELS[a]} {_money(cpo[a]['cpo'])} ({cpo[a]['verified']}/{cpo[a]['runs']} verified)" if a in cpo else f"{RUNG_LABELS[a]} {CAT6_RUN_PENDING}"
+              for a in CAT6_ARMS),
+          verdict(False, bool(lever6_m) and all(lower6(w, wo) for w, wo, _ in lever6_m)),
+          pend6 + "With vs without the lever, cost per verified fix: "
+          + "; ".join(f"{col} {cpo_change6(w, wo)} (warm {cpo_change6(w, wo, 'cpo_warm')})" for w, wo, col in lever6_m)
+          + (f"; Haiku agents + Sonnet patch author: the without-the-lever cell is pending (with the lever against the shared bus on Sonnet: "
+             f"{cpo_change6(TI6, SB6)})" if SBT6 not in cpo and TI6 in cpo else "")
+          + ". Haiku agents + Sonnet patch author against Sonnet: "
+          + "; ".join(f"{row} {cpo_change6(h, s)}" for h, s, row in model6_m) + ". "
+          + ("The verified rate is the same in every cell, so every saving is cost per run and CpO adds nothing over it here (ceiling): "
+             "the outcome side of the claim is untested." if same_rate else
+             "The verified rate differs between cells, so CpO and cost per run differ; the verified counts are compared in the next row."))
     v6 = {a: (cpo[a]["verified"], cpo[a]["runs"]) for a in order6}
     lo6 = {a: wilson(*v6[a])[0] for a in order6}
     hi6 = {a: wilson(*v6[a])[1] for a in order6}
-    pairs6 = [("isolated_cached_gate", "shared_bus_matched_gate"), ("tiered_gate", "isolated_cached_gate")]
+    pairs6 = [(w, wo) for w, wo, _ in lever6_m] + [(h, s) for h, s, _ in model6_m]
     clear6 = any(hi6[new] < lo6[old] for new, old in pairs6)
     equal6 = all(v6[new][0] / v6[new][1] >= v6[old][0] / v6[old][1] for new, old in pairs6)
     ceiling6 = all(v6[a][0] == v6[a][1] for a in order6)
+    vf6 = lambda a: f"{v6[a][0]}/{v6[a][1]}" if a in v6 else CAT6_RUN_PENDING  # noqa: E731
     claim("Cat 6", "…without losing verified fixes (implicit)",
-          f"with vs without the lever (Sonnet): {v6['isolated_cached_gate'][0]}/{v6['isolated_cached_gate'][1]} vs {v6['shared_bus_matched_gate'][0]}/{v6['shared_bus_matched_gate'][1]}; "
-          f"Haiku agents + Sonnet patch author vs Sonnet (with the lever): {v6['tiered_gate'][0]}/{v6['tiered_gate'][1]} vs {v6['isolated_cached_gate'][0]}/{v6['isolated_cached_gate'][1]} "
-          "verified final patches",
+          "with vs without the lever: " + "; ".join(f"{col} {vf6(w)} vs {vf6(wo)}" for w, wo, col in lever6)
+          + "; Haiku agents + Sonnet patch author vs Sonnet: " + "; ".join(f"{row} {vf6(h)} vs {vf6(s)}" for h, s, row in model6)
+          + " verified final patches",
           implicit_verdict(clear6, equal6, ceiling=ceiling6),
-          ("Every cell verified every run, so a loss could not be detected (ceiling) on these single-file incidents. " if ceiling6 else "")
-          + "Compared under the written rule: the lever against the same swarm without it, and the cheaper models against Sonnet on the row with the lever.")
+          pend6
+          + (f"Every {'recorded ' if pending6 else ''}cell verified every run, so a loss could not be detected (ceiling) on these single-file incidents. " if ceiling6 else "")
+          + ("Lower verified count in the cheaper cell: " + "; ".join(
+              f"{CAT6_CELL[new]} against {CAT6_CELL[old]} ({vf6(new)} vs {vf6(old)})" for new, old in pairs6
+              if v6[new][0] / v6[new][1] < v6[old][0] / v6[old][1]) + ". " if not equal6 else "")
+          + "Compared under the written rule: the lever against the same swarm without it on each model set-up, and Haiku agents + a Sonnet patch "
+          "author against Sonnet with and without the lever" + (" (comparisons with a pending cell are not made yet)." if pending6 else "."))
 
     # ---------------- cross-category scale
     s1 = res["categories"]["cat1"].get("rungs") or {}
@@ -1553,6 +1646,7 @@ RUNG_LABELS = {
     "shared_bus_matched_gate": "Without the lever: shared bus, Sonnet",
     "isolated_cached_gate": "With the lever: isolated + cached, Sonnet",
     "tiered_gate": "With the lever: isolated + cached, Haiku agents + Sonnet patch author",
+    "shared_bus_tiered_gate": "Without the lever: shared bus, Haiku agents + Sonnet patch author",
 }
 UNIT = {"cat1": "item", "cat2": "document", "cat3": "10-turn session", "cat4": "4-question audit", "cat5": "invoice", "cat6": "incident run"}
 TITLE = {"cat1": "Classification, extraction & routing", "cat2": "Generative synthesis & drafting", "cat3": "Multi-turn assistants",
@@ -1581,6 +1675,7 @@ def _cat3_thinking_issue(res):
 
 CAT5_LABELS = {
     "raw_free_sonnet": "Without the lever, Sonnet (app rung 1)",
+    "raw_free_haiku": "Without the lever, Haiku (app rung 4)",
     "bundle_gate_sonnet_cached": "With the lever, Sonnet (app rung 2)",
     "bundle_gate_haiku_escalate": "With the lever, Haiku-first (app rung 3)",
 }
@@ -1736,20 +1831,35 @@ def _render_cat6(c):
             a = CAT6_DESIGN.get((rk, ck))
             v, s = (c["cpo"].get(a), c["rungs"].get(a)) if a else (None, None)
             if not v:
-                cells.append("(not run)")
+                cells.append(CAT6_RUN_PENDING)
                 continue
             cells.append(f"{v['verified']}/{v['runs']} verified · {_money(v['cost_per_run_cold'] * 1000)} / {_money(v['cost_per_run_warm'] * 1000)} per 1k runs · "
                          f"CpO {_money(v['cpo_cold'])} / {_money(v['cpo_warm'])} · {_k(s['prompt_tokens_median'])} / {_k(s['output_tokens_median'])} tokens · "
                          f"{v['model_s_mean']:.1f} s")
         L.append(f"| {rl} | " + " | ".join(cells) + " |")
+    for a in c.get("pending") or []:
+        L += ["", f"{CAT6_CELL[a][0].upper()}{CAT6_CELL[a][1:]}: {CAT6_RUN_PENDING} (no runs recorded yet); the claim rows use the "
+              f"{len(c['cpo'])} recorded cells."]
     return L + [""]
 
 
-CAT5_ROWS = {"without": "Without the lever (free-choice loop over raw ERP tables)",
+def _cat6_ceiling_note(res):
+    """The Category 6 sentence of the ceiling-effects limit, from the recorded cells ("" when no cell is at the ceiling)."""
+    c = (res.get("categories") or {}).get("cat6") or {}
+    cells = c.get("cpo") or {}
+    if not cells or not all(v["verified"] == v["runs"] for v in cells.values()):
+        return ""
+    runs = sorted({v["runs"] for v in cells.values()})
+    rate = f"{runs[0]}/{runs[0]}" if len(runs) == 1 else "all its runs"
+    return (f" Category 6: every {'recorded ' if c.get('pending') else ''}cell verified {rate}, so these incidents are too easy to show a "
+            "quality difference with or without the lever, and CpO equals cost per run in every cell.")
+
+
+CAT5_ROWS = {"without": "Without the lever (free-choice loop over raw ERP tables; on Haiku no escalation path, since only the policy tool can flag one)",
              "with": "With the lever: 4-step budget + deterministic policy tool (also one narrow query and a cached policy manual)"}
-CAT5_COLS = {"sonnet": "Sonnet 5.5", "haiku_first": "Haiku-first, escalating to Sonnet"}
-CAT5_DESIGN = {("without", "sonnet"): "raw_free_sonnet", ("with", "sonnet"): "bundle_gate_sonnet_cached",
-               ("with", "haiku_first"): "bundle_gate_haiku_escalate"}
+CAT5_COLS = {"sonnet": "Sonnet 5.5", "haiku": "Haiku 5.5 (with the lever: Haiku first, Sonnet on escalation)"}
+CAT5_DESIGN = {("without", "sonnet"): "raw_free_sonnet", ("without", "haiku"): "raw_free_haiku",
+               ("with", "sonnet"): "bundle_gate_sonnet_cached", ("with", "haiku"): "bundle_gate_haiku_escalate"}
 
 
 def _render_cat5(c):
@@ -1772,7 +1882,7 @@ def _render_cat5(c):
          f"answer. Costs are recomputed here from each turn's tokens (within ${c['max_cost_diff_vs_summary_per_1k']:.4f} per 1k of the summary). Every run wrote "
          f"its own cache (per-run nonce), so billed equals cold. Every turn ran at max_tokens {c['settings'].get('max_tokens_per_turn')}. "
          "Each cell: exact vouchers (95% Wilson interval); $ per 1k invoices cold / warm; median prompt / output tokens per invoice; mean model turns; "
-         "escalations to Sonnet. The app's three rungs are these three cells; their golden replays are repeat 0 on inv-01..03.", "",
+         "escalations to Sonnet. The app's four rungs are these four cells; their golden replays are repeat 0 on inv-01..03.", "",
          "| | " + " | ".join(CAT5_COLS.values()) + " |", "|---|" + "---|" * len(CAT5_COLS)]
     for rk, rl in CAT5_ROWS.items():
         cells = []
@@ -1780,7 +1890,7 @@ def _render_cat5(c):
             a = CAT5_DESIGN.get((rk, ck))
             v, s = (q.get(a), rungs.get(a)) if a else (None, None)
             if not v:
-                cells.append("(not run)")
+                cells.append("run pending")
                 continue
             ci = v["exact_ci"]
             cells.append(f"{v['exact']}/{v['runs']} exact ({ci[0]*100:.0f}–{ci[1]*100:.0f}%)"
@@ -1789,6 +1899,8 @@ def _render_cat5(c):
                          f"{_k(s['prompt_tokens_median'])} / {_k(s['output_tokens_median'])} tokens · {v['turns_mean']:.1f} turns"
                          + (f" · escalated {v['escalations']}/{v['runs']}" if a == "bundle_gate_haiku_escalate" else ""))
         L.append(f"| {rl} | " + " | ".join(cells) + " |")
+    for a in c.get("pending_cells") or []:
+        L += ["", f"{CAT5_LABELS.get(a, a)}: run pending (no runs recorded yet); the scorecard rows use the recorded cells."]
     if c.get("pending_runs"):
         L += ["", f"{c['pending_runs']} runs are not recorded yet (invoices {', '.join(c['pending_invoices'])}); the comparisons in the scorecard use the "
               f"{len(c['common_invoices'])} invoices recorded in every cell."]
@@ -1885,8 +1997,10 @@ def _cat5_unit_sentence(res):
     if c.get("source") != "ablation":
         return "Category 5 uses its golden replays (n=3 per rung; the experiment records could not be read). "
     n_exp = next(iter(c["quality"].values()))["expected_runs"]
-    return (f"Category 5 uses the {c['records']} recorded runs of its with/without design (3 cells × {c['invoices_pooled']} invoices × {c['repeats']} repeats, "
-            f"n={n_exp} per cell" + (f"; {c['pending_runs']} not recorded yet" if c.get("pending_runs") else "")
+    pend_cells = c.get("pending_cells") or []
+    return (f"Category 5 uses the {c['records']} recorded runs of its with/without design on Sonnet and Haiku (4 cells × {c['invoices_pooled']} invoices × "
+            f"{c['repeats']} repeats, n={n_exp} per cell" + (f"; {c['pending_runs']} not recorded yet" if c.get("pending_runs") else "")
+            + ("; " + ", ".join(CAT5_LABELS[a].split(' (')[0] for a in pend_cells) + ": run pending" if pend_cells else "")
             + "); its golden replays are repeat 0 of each cell on inv-01..03. ")
 
 
@@ -1918,6 +2032,24 @@ def _strip_number(text):
     return re.sub(r"^\d+\.\s+", "", text)
 
 
+def _cat5_ceiling_note(res):
+    """Category 5's ceiling line, from the recorded cells (a pending cell is named, not assumed)."""
+    c = res["categories"].get("cat5") or {}
+    q = c.get("quality") or {}
+    head = "**Ceiling effects.** Category 5: "
+    tail = "; the invoices test simple arithmetic (quantities × rates, a GST split, a debit note)."
+    if not q:
+        return head + "no recorded cells to judge" + tail
+    shares = {a: v["exact"] / v["runs"] for a, v in q.items() if v.get("runs")}
+    pend = [CAT5_LABELS.get(a, a).split(" (")[0] for a in c.get("pending_cells") or []]
+    pend_txt = (" (" + ", ".join(pend) + ": run pending)") if pend else ""
+    if shares and min(shares.values()) >= 0.9:
+        return (head + f"every recorded cell scored at or near 100% exact vouchers{pend_txt}, so accuracy differences between those cells "
+                "cannot be detected" + tail)
+    return (head + "exact-voucher shares per recorded cell: " + "; ".join(
+        f"{CAT5_LABELS.get(a, a).split(' (')[0]} {q[a]['exact']}/{q[a]['runs']}" for a in shares) + pend_txt + tail)
+
+
 def _known_limits(res):
     """One de-duplicated, present-tense list: limits of the data, the measurements and the app as they stand."""
     classes = ((res.get("dedup") or {}).get("totals") or {}).get("classes") or {}
@@ -1946,9 +2078,7 @@ def _known_limits(res):
         "**Levers changed together.** Category 1's with-design asks for the classification instead of a write-up and enforces the JSON schema in one step, so the "
         "saving cannot be split between the two. Category 5's with-design changes the step budget, the policy tool, the data access (one narrow query) and caching "
         "together, so its saving cannot be split between them.",
-        "**Ceiling effects.** Category 5: every cell scored at or near 100% exact vouchers, so accuracy differences between cells cannot be detected; the invoices "
-        "test simple arithmetic (quantities × rates, a GST split, a debit note). Category 6: every cell verified 15/15, so these incidents are too easy to show a "
-        "quality difference with or without the lever, and CpO equals cost per run in every cell.",
+        _cat5_ceiling_note(res) + _cat6_ceiling_note(res),
         "**Cache warming across rungs.** In captures where rungs and items ran in sequence, later calls can read caches written by earlier ones; the *billed* "
         "column includes this and the *cold* column removes it. Each Category 6 run writes its own cache (a per-run nonce in the cached prefix).",
         "**Trace `finops` is modelled, not billed, for multi-step rollups.** The Category 5 and 6 session rollups store a modelled cold-cache cost "
