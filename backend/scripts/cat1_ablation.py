@@ -1,23 +1,21 @@
-"""Category 1 seven-arm ablation runner.
+"""Category 1 four-cell experiment runner (Sonnet 5.5 / Haiku 5.5 x write-up / classification with JSON schema).
 
 Usage (from backend/):
-    .venv/bin/python scripts/cat1_ablation.py run --dry-run          # 252 planned runs + cost estimate, no calls
+    .venv/bin/python scripts/cat1_ablation.py run --dry-run          # 144 planned runs + cost estimate, no calls
     .venv/bin/python scripts/cat1_ablation.py run --max-usd 6 --concurrency 4
     .venv/bin/python scripts/cat1_ablation.py extract --dry-run      # planned extraction-judge calls + estimate + blinding check
     .venv/bin/python scripts/cat1_ablation.py extract --max-usd 8 --concurrency 4
 
-run: 7 arms x 12 items (6 presets, 6 batch items) x 3 repeats, ordered repeat -> item -> arm, through the app's own call
+run: 4 arms x 12 items (6 presets, 6 batch items) x 3 repeats, ordered repeat -> item -> arm, through the app's own call
 wrappers (keyword overrides only: cap, prompt, model, timeout, max_retries=0, no silent tool fallback). Appends one
 record per call to experiments/cat1_ablation/runs.jsonl. An ok record made with the current settings (including a
 truncated one, which is flagged) is never redone; error records stay and are retried; an ok record made with different
-settings is reported as superseded and its run is pending again. A missing GEMINI_API_KEY or a Gemini failure is an
-error record for that run only (never substituted). --max-usd counts every recorded run at the app's rate card and
+settings is reported as superseded and its run is pending again. --max-usd counts every recorded run at the app's rate card and
 refuses a run whose worst case (estimated input + max_tokens output) could cross the cap.
 
 extract: one blind extraction-judge pass (the Category 2 judge: model and settings from quality_scoring.py) over every
-free-text run, the 24 stored prose responses of the original capture, and a seeded sample of 20 schema outputs
-rendered as text. Every planned prompt is checked for blinding before anything is sent. A dry run before the runs
-exist estimates with stand-ins (stored prose / stored schema output).
+free-text run. Every planned prompt is checked for blinding before anything is sent. A dry run before the runs exist
+estimates with stand-ins (the golden replays' write-ups).
 """
 
 from __future__ import annotations
@@ -42,14 +40,13 @@ def append_record(path: Path, rec: dict[str, Any]) -> None:
         fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 
-def _keys() -> tuple[str | None, str | None]:
+def _anthropic_key() -> str | None:
     try:
         from app.config import get_settings
 
-        s = get_settings()
-        return (s.anthropic_api_key or None), (s.gemini_api_key or None)
+        return get_settings().anthropic_api_key or None
     except Exception:  # noqa: BLE001
-        return None, None
+        return None
 
 
 async def run_phase(args: argparse.Namespace, *, calls: ab.CallPaths | None = None) -> int:
@@ -66,7 +63,7 @@ async def run_phase(args: argparse.Namespace, *, calls: ab.CallPaths | None = No
     if sup:
         print(f"NOTE: {len(sup)} ok records were made with different settings (superseded; pending again, excluded from analysis): "
               f"{sorted({r['run_id'] for r in sup})[:6]}")
-    print("Estimate for pending runs (input = the original capture's measured input for that item and call path, adjusted for the "
+    print("Estimate for pending runs (input = the golden replays' measured input for that item and call path, adjusted for the "
           f"prompt-length difference at 3 chars/token; typical output ASSUMED {est['typical_output_assumed']}; worst = max_tokens output):")
     for a, s in est["by_arm"].items():
         cap = ab.CAPS.get(ab.ARM_BY_ID[a].task, 0)
@@ -74,9 +71,7 @@ async def run_phase(args: argparse.Namespace, *, calls: ab.CallPaths | None = No
     t = est["total"]
     print(f"  {'total':<21} {t['runs']:>3} runs  input≈{t['input_tokens']:,} tok  ${t['typical_usd']:.3f} typical / ${t['worst_case_usd']:.3f} worst")
     print(f"Budget: --max-usd ${args.max_usd:.2f}; already recorded ${guard.spent_usd:.4f}.")
-    anth, gem = _keys()
-    if not gem:
-        print("NOTE: GEMINI_API_KEY is not set; every gemini_decision run will be recorded as status=error (no substitution).")
+    anth = _anthropic_key()
     if args.dry_run:
         for i, p in enumerate(pending[: args.show], 1):
             e = ab.estimate_run(p, golden)
@@ -92,7 +87,7 @@ async def run_phase(args: argparse.Namespace, *, calls: ab.CallPaths | None = No
         if not anth:
             print("ANTHROPIC_API_KEY must be set (env or .env) for the run phase.", file=sys.stderr)
             return 2
-        calls = ab.make_app_call_paths(anth, gem)
+        calls = ab.make_app_call_paths(anth)
 
     def on_record(rec: dict[str, Any]) -> None:
         append_record(out, rec)
@@ -118,7 +113,7 @@ async def extract_phase(args: argparse.Namespace, *, judge_call: Any = None) -> 
     planned_free = [p["run_id"] for p in ab.plan_runs(args.repeats) if p["arm_id"] in ab.FREE_TEXT_ARMS]
     missing = [k for k in planned_free if k not in runs]
     standins = 0
-    if missing or not any(r["arm_id"].endswith("_schema") for r in runs.values()):
+    if missing:
         if not args.dry_run and missing:
             print(f"NOTE: {len(missing)} of {len(planned_free)} free-text runs have no current ok record; only existing runs are extracted "
                   "(re-run extract after the run phase completes to fill the rest).")
@@ -128,22 +123,21 @@ async def extract_phase(args: argparse.Namespace, *, judge_call: Any = None) -> 
                 if k not in runs:
                     runs[k] = v
                     standins += 1
-    targets = ab.extraction_targets(runs, golden)
+    targets = ab.extraction_targets(runs)
     plan = ab.plan_extractions(targets)
     bad = ab.blinding_report(plan, runs)
-    counts = {s: sum(1 for p in plan if p["source"] == s) for s in ("run", "golden", "schema_check")}
     out = Path(args.out)
     existing = ab.load_jsonl(out)
     pending = ab.select_pending_extractions(plan, existing)
     stale = qs.stale_ok_records(plan, existing)
     cal = ab.calibrate_judge_estimate()
     est = qs.estimate_plan(pending, chars_per_token=cal["chars_per_token"], max_tokens=args.max_tokens, typical_output_tokens=cal["typical_output_tokens"])
-    print(f"Planned {len(plan)} extraction calls (free-text runs: {counts['run']}, original capture: {counts['golden']}, schema-as-text check: "
-          f"{counts['schema_check']}); {len(plan) - len(pending)} already ok in {out.name}, {len(pending)} pending. Judge {qs.JUDGE_MODEL}, "
+    print(f"Planned {len(plan)} extraction calls (one per free-text run); {len(plan) - len(pending)} already ok in {out.name}, "
+          f"{len(pending)} pending. Judge {qs.JUDGE_MODEL}, "
           f"max_tokens {args.max_tokens}, thinking {qs.JUDGE_THINKING}, effort {qs.JUDGE_EFFORT}, one pass.")
     if standins:
-        print(f"NOTE: {standins} runs do not exist yet; the estimate uses stand-ins (stored prose for report arms, stored schema output rendered as "
-              "text for classify-text arms and the schema check). Prompt sizes are approximate.")
+        print(f"NOTE: {standins} runs do not exist yet; the estimate uses stand-ins (golden write-ups for report arms). "
+              "Prompt sizes are approximate.")
     print(f"Blinding: {len(plan) - len(bad)}/{len(plan)} planned prompts clean." + (f" VIOLATIONS: {dict(list(bad.items())[:5])}" if bad else ""))
     if stale:
         print(f"NOTE: {len(stale)} ok records were made from a different prompt/text than the current plan (pending again): {stale[:6]}")
@@ -162,7 +156,7 @@ async def extract_phase(args: argparse.Namespace, *, judge_call: Any = None) -> 
         print("Nothing to do.")
         return 0
     if judge_call is None:
-        anth, _ = _keys()
+        anth = _anthropic_key()
         if not anth:
             print("ANTHROPIC_API_KEY must be set (env or .env) for the extract phase.", file=sys.stderr)
             return 2

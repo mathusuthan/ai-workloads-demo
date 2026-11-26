@@ -51,50 +51,32 @@ def _load_replays(name: str) -> dict[str, Any]:
 def rule1_measured_impact() -> str | None:
     """Impact line for FinOps rule 1 (Cat 1 & 2), measured on the golden replays.
 
-    Range of per-item cost reduction for every rule-1 lever vs its naive baseline:
-    Cat 1 Haiku classification + JSON schema and Gemini Decision vs the Sonnet write-up; Cat 2 Sonnet section template and
-    Haiku section template vs unbounded Sonnet.
+    Range of per-item cost reduction of the deck's improvement vs the same model without it: Cat 1 classification
+    with a strict JSON schema vs the four-part write-up (Sonnet and Haiku); Cat 2 section template with length caps vs
+    the unbounded draft (Sonnet and Haiku, where both rungs are in the replays).
     """
     cuts: list[float] = []
     items = 0
 
-    def cost(model: str, tin: int, tout: int) -> float:
-        return compute_run_finops(model, int(tin or 0), int(tout or 0)).total_cost_usd
+    def cost(r: dict[str, Any]) -> float:
+        return compute_run_finops(r["model_id"], int(r.get("input_tokens") or 0), int(r.get("output_tokens") or 0)).total_cost_usd
 
-    cat1 = _load_replays("cat1_golden_replays.json")
-    for p in (cat1.get("presets") or {}).values():
-        r = p.get("rungs") or {}
-        if "sonnet_naive" not in r:
-            continue
-        base = cost(r["sonnet_naive"]["model_id"], r["sonnet_naive"]["input_tokens"], r["sonnet_naive"]["output_tokens"])
-        items += 1
-        for rid in ("haiku_calibrated", "gemini_decision"):
-            if rid in r:
-                c = pct_cut(base, cost(r[rid]["model_id"], r[rid]["input_tokens"], r[rid]["output_tokens"]))
-                if c is not None:
-                    cuts.append(c)
-    for b in (cat1.get("batch_items") or {}).values():
-        base = cost("claude-sonnet-5-5", b.get("sonnet_input_tokens"), b.get("sonnet_output_tokens"))
-        items += 1
-        for c in (
-            pct_cut(base, cost("claude-haiku-5-5", b.get("input_tokens"), b.get("haiku_output_tokens"))),
-            pct_cut(base, cost("gemini-decision-1", b.get("gemini_input_tokens"), 0)),
-        ):
-            if c is not None:
-                cuts.append(c)
-
-    cat2 = _load_replays("cat2_golden_replays.json")
-    for p in (cat2.get("presets") or {}).values():
-        r = p.get("rungs") or {}
-        if "sonnet_unbounded" not in r:
-            continue
-        base = cost(r["sonnet_unbounded"]["model_id"], r["sonnet_unbounded"]["input_tokens"], r["sonnet_unbounded"]["output_tokens"])
-        items += 1
-        for rid in ("sonnet_templated", "haiku_templated"):
-            if rid in r:
-                c = pct_cut(base, cost(r[rid]["model_id"], r[rid]["input_tokens"], r[rid]["output_tokens"]))
-                if c is not None:
-                    cuts.append(c)
+    pairs = {
+        "cat1_golden_replays.json": (("sonnet_naive", "sonnet_calibrated"), ("haiku_naive", "haiku_calibrated")),
+        "cat2_golden_replays.json": (("sonnet_unbounded", "sonnet_templated"), ("haiku_unbounded", "haiku_templated")),
+    }
+    for name, rung_pairs in pairs.items():
+        data = _load_replays(name)
+        for p in [*(data.get("presets") or {}).values(), *(data.get("batch_items") or {}).values()]:
+            r = p.get("rungs") or {}
+            counted = False
+            for without, with_ in rung_pairs:
+                if without in r and with_ in r:
+                    c = pct_cut(cost(r[without]), cost(r[with_]))
+                    if c is not None:
+                        cuts.append(c)
+                        counted = True
+            items += 1 if counted else 0
 
     if not cuts:
         return None

@@ -31,6 +31,7 @@ client = TestClient(app)
 def isolated_traces_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     test_traces = tmp_path / "traces"
     monkeypatch.setenv("NOVAMART_TRACES_DIR", str(test_traces))
+    monkeypatch.setenv("NOVAMART_RECORD_REPLAY_TRACES", "1")  # these tests read what replay requests write
     return test_traces
 
 

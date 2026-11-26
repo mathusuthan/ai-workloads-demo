@@ -35,7 +35,6 @@ from app.models import Cat3ChatTurnEntry  # noqa: E402
 
 PRESETS = {p["id"]: p for p in CAT3_PRESETS}
 KEYS = qr.load_quality_keys()
-GOLDEN_PATH = BACKEND_DIR / "replays" / "cat3_golden_replays.json"
 
 
 def run(coro: Any) -> Any:
@@ -483,12 +482,14 @@ def test_summarise_end_to_end_with_fake_records() -> None:
             recs.append(r)
     err, _, _ = execute("naive_full_history", "desk-01", turn_call=FakeTurn(fail_on_call=2), repeat_index=1)
     recs.append(err)
-    golden = json.loads(GOLDEN_PATH.read_text(encoding="utf-8")) if GOLDEN_PATH.is_file() else {"presets": {}}
-    s = qr.summarise(recs, keys=KEYS, golden=golden)
-    assert s["rerun"]["ok_runs_used"] == 6 and s["rerun"]["error_records"] == 1
+    other, _, _ = execute("prefix_cached_history", "desk-01")  # another lever: ignored by the summary
+    recs.append(other)
+    s = qr.summarise(recs, keys=KEYS)
+    assert s["rerun"]["ok_runs_used"] == 4 and s["rerun"]["error_records"] == 1
+    assert s["rung_ids"] == ["naive_full_history", "prefix_cached_summarized"] and "original_capture" not in s
     assert s["rerun"]["expected_repeats"] == 2
     assert not s["rerun"]["matrix"]["complete"]
-    assert len(s["misses_for_review"]) == 12 * 3  # fake answers never contain the expected values
+    assert len(s["misses_for_review"]) == 12 * 2  # fake answers never contain the expected values
     miss = s["misses_for_review"][0]
     assert set(miss) >= {"rung_id", "preset_id", "repeat_index", "probe_id", "expected_any_of", "answer_excerpt"}
     q = s["rerun"]["rungs"]["naive_full_history"]["quality"]
@@ -511,22 +512,11 @@ def test_model_mismatch_and_non_end_turn_detection() -> None:
 # --------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not GOLDEN_PATH.is_file(), reason="golden replays not present")
-def test_golden_replay_scoring_runs_with_zero_records() -> None:
-    golden = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
-    s = qr.summarise([], keys=KEYS, golden=golden)
-    assert s["rerun"]["ok_runs_used"] == 0
-    orig = s["original_capture"]["rungs"]
+def test_summarise_runs_with_zero_records() -> None:
+    s = qr.summarise([], keys=KEYS)
+    assert s["rerun"]["ok_runs_used"] == 0 and "original_capture" not in s
     for rid in qr.RUNG_IDS:
-        q = orig[rid]["quality"]
-        assert q["sessions"] == 2
-        n_turn = sum(1 for f in KEYS["facts"] if f["kind"] == "turn")
-        n_ledger = sum(1 for f in KEYS["facts"] if f["kind"] == "ledger")
-        assert q["turn_recall"]["turns_1_9"]["total"] == n_turn
-        assert q["ledger_recall"]["overall"]["total"] == n_ledger
-        assert q["probe_accuracy"]["overall"]["total"] == 0
-        for pid in PRESETS:
-            assert orig[rid]["by_preset"][pid]["quality"]["sessions"] == 1
+        assert s["rerun"]["rungs"][rid]["quality"]["sessions"] == 0
 
 
 # --------------------------------------------------------------------------------------------------
@@ -536,21 +526,20 @@ def test_golden_replay_scoring_runs_with_zero_records() -> None:
 
 def test_plan_order_and_resume_selection() -> None:
     planned = qr.plan_matrix(list(qr.RUNG_IDS), ["desk-01", "desk-02"], 2)
-    assert len(planned) == 12
-    assert planned[:4] == [
+    assert len(planned) == 8
+    assert planned[:3] == [
         ("naive_full_history", "desk-01", 0),
-        ("prefix_cached_history", "desk-01", 0),
         ("prefix_cached_summarized", "desk-01", 0),
         ("naive_full_history", "desk-02", 0),
     ]
     existing = [
         {"rung_id": "naive_full_history", "preset_id": "desk-01", "repeat_index": 0, "status": "ok"},
-        {"rung_id": "prefix_cached_history", "preset_id": "desk-01", "repeat_index": 0, "status": "error"},
+        {"rung_id": "prefix_cached_summarized", "preset_id": "desk-01", "repeat_index": 0, "status": "error"},
     ]
     pending = qr.select_pending(planned, existing)
     assert ("naive_full_history", "desk-01", 0) not in pending
-    assert ("prefix_cached_history", "desk-01", 0) in pending
-    assert len(pending) == 11
+    assert ("prefix_cached_summarized", "desk-01", 0) in pending
+    assert len(pending) == 7
 
 
 def test_budget_guard_counts_session_and_probe_phase() -> None:
@@ -575,7 +564,7 @@ def test_runner_cli_dry_run(capsys: pytest.CaptureFixture[str], tmp_path: Path) 
     code = run(mod.run_matrix(mod.parse_args(["--dry-run", "--repeats", "1", "--out", str(out)])))
     assert code == 0
     text = capsys.readouterr().out
-    assert "6 pending" in text and "Dry run: no API calls made." in text
+    assert "4 pending" in text and "Dry run: no API calls made." in text
     assert not out.exists()
 
 

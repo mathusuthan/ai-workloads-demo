@@ -6,12 +6,7 @@ from fastapi import APIRouter, Request
 
 from app.archetypes.cat1_triage.prompts import CODE_SNIPPETS
 from app.archetypes.cat1_triage.runner import execute_cat1_batch, execute_cat1_run
-from app.archetypes.cat1_triage.schemas import (
-    SKU_DECISION_QUESTIONS,
-    SKU_TAGGING_JSON_SCHEMA,
-    SUPPORT_DECISION_QUESTIONS,
-    SUPPORT_TRIAGE_JSON_SCHEMA,
-)
+from app.archetypes.cat1_triage.schemas import SKU_TAGGING_JSON_SCHEMA, SUPPORT_TRIAGE_JSON_SCHEMA
 from app.data.cat1_fixtures import CAT1_PRESETS
 from app.models import Cat1BatchRequest, Cat1BatchResponse, Cat1RunRequest, Cat1RunResponse
 
@@ -25,10 +20,6 @@ async def get_cat1_presets() -> dict[str, object]:
         "schemas": {
             "support_triage": SUPPORT_TRIAGE_JSON_SCHEMA,
             "sku_tagging": SKU_TAGGING_JSON_SCHEMA,
-        },
-        "decision_questions": {
-            "support_triage": SUPPORT_DECISION_QUESTIONS,
-            "sku_tagging": SKU_DECISION_QUESTIONS,
         },
         "code_snippets": CODE_SNIPPETS,
     }

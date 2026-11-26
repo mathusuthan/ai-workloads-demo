@@ -4,17 +4,22 @@ Importable without an API key; nothing here changes `runner.py` behaviour. A SES
 all 8 audit questions in order (audit-01 q1–q4, then audit-02 q1–q4) on one corpus scale (1 = the app's
 7-document deal room, 3 = + two deterministic distractor suppliers, see `scaled_corpus.py`).
 
-Rungs (the first three exactly as the app runs them, through the app's builders and call wrappers):
-  naive_full_corpus             all documents as uncached plain text, no citations
+The two versions every display shows (`RUNG_IDS`), both runnable in the app through the app's builders:
+  naive_full_corpus             without the deck improvement: all documents as uncached plain text, no citations
+  cached_rerank_hybrid          with it — hybrid retrieval paired with context caching: Haiku reads the FULL corpus
+                                as one cached block (per-session nonce) + the question and returns the top-5 chunk
+                                ids; Sonnet answers over exactly those chunks with native citations (`paired.py`)
+
+Other lever the harness can still run (`OTHER_LEVER_RUNG_IDS`); its records live in
+experiments/cat4_quality/other_levers/ and nothing displayed reads them:
   cached_full_corpus_citations  document blocks, cache_control on the last, native citations; a per-session
                                 nonce line opens the first document block so each session writes its own cache
-  hybrid_rag_rerank_citations   BM25 over the session corpus -> top 10 -> Haiku rerank -> top 5 -> Sonnet + citations
-  cached_rerank_hybrid (NEW)    Haiku reranker reads the FULL corpus as one cached block (per-session nonce) +
-                                the question and returns the top-5 chunk ids (same schema); Sonnet synthesises
-                                over exactly those chunks with citations as rung 3 does. No BM25 stage.
+(The records of the retrieval-without-cache lever, `hybrid_rag_rerank_citations`, are also in other_levers/; the code
+that ran it was removed after commit 7807557.)
 
 Every rerun question is asked as `scoped_question(q)`: one fixed supplier-scope line built from DEAL_ROOM_PROFILE (scope.py),
-a blank line, then the original text (same for all rungs and scales; the golden capture was asked without it).
+a blank line, then the question text (same for all rungs and scales). Each rung answers with its own synthesis prompt
+(`answer_formats.RUNG_ANSWER_FORMAT`).
 Records hold raw tokens only (never dollars); costs come from `app.core.pricing.compute_run_finops` at
 analysis time. Every answer is kept — zero-citation answers, truncations and contamination are data.
 """
@@ -38,26 +43,23 @@ from typing import Any
 from uuid import uuid4
 
 from app.archetypes.cat3_assistants.scoring import normalise_text
-from app.archetypes.cat4_rag.answer_formats import (  # noqa: F401 — ADOPTED_* re-exported for scripts
-    ADOPTED_ANSWER_FORMAT,
-    ADOPTED_ON,
-    ANSWER_FORMATS,
-    DEFAULT_ANSWER_FORMAT,
-    adopted_answer_format,
-    instruction_changes,
+from app.archetypes.cat4_rag.answer_formats import (  # noqa: F401 — RUNG_ANSWER_FORMAT re-exported for scripts
+    FULL_CORPUS,
+    RUNG_ANSWER_FORMAT,
+    record_answer_format,
+    rung_answer_format,
     synthesis_system_prompt,
 )
-from app.archetypes.cat4_rag.prompts import (
-    get_cat4_haiku_reranker_system_prompt,
-    get_cat4_synthesis_system_prompt,
-)
-from app.archetypes.cat4_rag.retriever import (
-    BM25_TOP_K,
+from app.archetypes.cat4_rag.paired import (  # noqa: F401 — get_full_corpus_reranker_system_prompt, nonce_line re-exported
+    PAIRED_RUNG,
     RERANK_TOP_K,
-    build_reranker_payload,
-    merge_rerank_funnel,
-    rank_chunks_bm25,
+    build_rerank_content,
+    format_chunks_for_reranker,
+    get_full_corpus_reranker_system_prompt,
+    nonce_line,
+    select_picked_chunks,
 )
+from app.archetypes.cat4_rag.prompts import get_cat4_synthesis_system_prompt
 from app.archetypes.cat4_rag.runner import (
     build_rung2_doc_blocks,
     build_rung3_chunk_blocks,
@@ -88,11 +90,14 @@ EXPERIMENT_DIR = BACKEND_DIR / "experiments" / "cat4_quality"
 RUNS_PATH = EXPERIMENT_DIR / "runs.jsonl"
 JUDGEMENTS_PATH = EXPERIMENT_DIR / "judgements.jsonl"
 
-APP_RUNG_IDS: tuple[str, ...] = ("naive_full_corpus", "cached_full_corpus_citations", "hybrid_rag_rerank_citations")
-NEW_RUNG = "cached_rerank_hybrid"
-RUNG_IDS: tuple[str, ...] = (*APP_RUNG_IDS, NEW_RUNG)
-CITATION_RUNGS = frozenset(RUNG_IDS[1:])
-RETRIEVAL_RUNGS = frozenset({"hybrid_rag_rerank_citations", NEW_RUNG})
+NEW_RUNG = PAIRED_RUNG  # "cached_rerank_hybrid"
+# Without and with the deck improvement: the two versions the app runs and every summary shows.
+RUNG_IDS: tuple[str, ...] = ("naive_full_corpus", PAIRED_RUNG)
+APP_RUNG_IDS: tuple[str, ...] = RUNG_IDS
+OTHER_LEVER_RUNG_IDS: tuple[str, ...] = ("cached_full_corpus_citations",)
+HARNESS_RUNG_IDS: tuple[str, ...] = ("naive_full_corpus", *OTHER_LEVER_RUNG_IDS, PAIRED_RUNG)
+CITATION_RUNGS = frozenset(HARNESS_RUNG_IDS[1:])
+RETRIEVAL_RUNGS = frozenset({NEW_RUNG})
 CACHED_CALL: dict[str, str] = {"cached_full_corpus_citations": "synthesis", NEW_RUNG: "rerank"}
 
 SONNET_MODEL_ID = "claude-sonnet-5-5"
@@ -278,22 +283,6 @@ def resolve_citations(corpus: ScaledCorpus, citations: Sequence[dict[str, Any]])
 # Prompt / block builders for the rerun
 # --------------------------------------------------------------------------------------------------
 
-_APP_RERANK_LINE = "From the 10 BM25 candidate contract chunks, select the EXACT 5 most decisive chunks needed to answer the query completely."
-_FULL_CORPUS_RERANK_LINE = "From all deal-room contract chunks provided above the query, select the EXACT 5 most decisive chunks needed to answer the query completely."
-
-
-def get_full_corpus_reranker_system_prompt() -> str:
-    """The app's reranker prompt with only its candidate-set sentence changed (rules 1–3 identical)."""
-    base = get_cat4_haiku_reranker_system_prompt()
-    if _APP_RERANK_LINE not in base:
-        raise RuntimeError("App reranker prompt changed; update the full-corpus variant")
-    return base.replace(_APP_RERANK_LINE, _FULL_CORPUS_RERANK_LINE)
-
-
-def nonce_line(nonce: str) -> str:
-    return f"[deal-room session {nonce}]\n"
-
-
 def build_rung2_session_blocks(corpus: ScaledCorpus, nonce: str) -> list[dict[str, Any]]:
     """App document blocks with the session nonce opening the first block (offset shifted so citations stay
     relative to the original document text)."""
@@ -304,41 +293,17 @@ def build_rung2_session_blocks(corpus: ScaledCorpus, nonce: str) -> list[dict[st
 
 
 def format_full_corpus_for_reranker(corpus: ScaledCorpus) -> str:
-    """Every chunk in the reranker's candidate format (same fields as `build_reranker_payload`, minus BM25 rank)."""
-    blocks = [
-        f"CHUNK_ID: {ch['chunk_id']} | DOC: {ch['doc_code']} — {ch['doc_title']} | CLAUSE: {ch['clause_ref']}\n"
-        f"HEADING: {ch['section_heading']}\n"
-        f"EXCERPT:\n{ch['text']}"
-        for ch in corpus.flat_chunks
-    ]
-    return (f"=== DEAL-ROOM CHUNKS (full corpus: {len(blocks)} chunks) ===\n\n" + "\n\n---\n\n".join(blocks))
+    """Every chunk in the reranker's candidate format (`paired.format_chunks_for_reranker`)."""
+    return format_chunks_for_reranker(corpus.flat_chunks)
 
 
 def build_full_corpus_rerank_content(corpus: ScaledCorpus, question: str, nonce: str) -> list[dict[str, Any]]:
-    return [
-        {"type": "text", "text": nonce_line(nonce) + format_full_corpus_for_reranker(corpus),
-         "cache_control": {"type": "ephemeral"}},
-        {"type": "text", "text": (f"=== DUE-DILIGENCE QUERY ===\n{question}\n\n"
-                                  f"Select the exact {RERANK_TOP_K} most decisive chunks from the deal-room chunks above.")},
-    ]
+    return build_rerank_content(corpus.flat_chunks, question, nonce)
 
 
 def select_full_corpus_chunks(corpus: ScaledCorpus, structured: dict[str, Any] | None) -> tuple[list[dict[str, Any]], list[str]]:
     """Valid, de-duplicated reranker picks in order (at most 5; no backfill) and the invalid ids returned."""
-    by_id = corpus.chunk_by_id
-    picked: list[dict[str, Any]] = []
-    invalid: list[str] = []
-    for entry in (structured or {}).get("selected_chunks") or []:
-        cid = str(entry.get("chunk_id") or "").strip()
-        if cid not in by_id:
-            invalid.append(cid)
-            continue
-        if any(p["chunk_id"] == cid for p in picked):
-            continue
-        picked.append(by_id[cid])
-        if len(picked) >= RERANK_TOP_K:
-            break
-    return picked, invalid
+    return select_picked_chunks(corpus.chunk_by_id, structured)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -383,10 +348,9 @@ async def run_question(
     synth_call: SynthCall,
     rerank_call: RerankCall,
     max_retries: int | None = DEFAULT_MAX_RETRIES,
-    answer_format: str = DEFAULT_ANSWER_FORMAT,
 ) -> dict[str, Any]:
     """One question on one rung; raises on API failure (the session loop records it)."""
-    q = scoped_question(str(q_spec["question"]))  # BM25 query, reranker query and synthesis user message
+    q = scoped_question(str(q_spec["question"]))  # clause-pick query and synthesis user message
     expected = list(q_spec.get("expected_chunk_ids") or [])
     calls: list[dict[str, Any]] = []
     retrieval: dict[str, Any] | None = None
@@ -402,40 +366,6 @@ async def run_question(
         doc_blocks = build_rung2_session_blocks(corpus, nonce)
         use_cache = True
         sent = {"mode": "full_corpus", "documents": len(corpus.hydrated_docs), "chunk_ids": None}
-    elif rung_id == "hybrid_rag_rerank_citations":
-        ranked = rank_chunks_bm25(q, corpus.flat_chunks, top_k=BM25_TOP_K)
-        candidates = [c for c in ranked if c["is_bm25_candidate"]]
-        payload = build_reranker_payload(q, candidates)
-        raw = await rerank_call(
-            rerank_payload=payload,
-            system_prompt=get_cat4_haiku_reranker_system_prompt(),
-            schema=RERANK_JSON_SCHEMA,
-            api_key=api_key,
-            max_tokens=RERANK_MAX_TOKENS,
-            timeout_s=RERANK_TIMEOUT_S,
-            max_retries=max_retries,
-        )
-        calls.append(_call_record("rerank", raw, max_tokens=RERANK_MAX_TOKENS, timeout_s=RERANK_TIMEOUT_S, cached=False))
-        selected, _funnel, bm25_recall, rerank_recall = merge_rerank_funnel(
-            bm25_ranked=ranked, reranker_structured=raw.structured, expected_chunk_ids=expected, top_k_rerank=RERANK_TOP_K
-        )
-        valid_picks = [str(e.get("chunk_id") or "").strip() for e in (raw.structured or {}).get("selected_chunks") or []]
-        cand_ids = {c["chunk_id"] for c in candidates}
-        rank_of = {c["chunk_id"]: c["bm25_rank"] for c in ranked}
-        retrieval = {
-            "bm25_top": [{"chunk_id": c["chunk_id"], "rank": c["bm25_rank"], "score": c["bm25_score"],
-                          "supplier": corpus.supplier_of_chunk(c["chunk_id"])} for c in candidates],
-            "expected_bm25_ranks": {cid: rank_of.get(cid) for cid in expected},
-            "reranker_raw": raw.structured,
-            "selected_chunk_ids": [c["chunk_id"] for c in selected],
-            "backfilled_chunk_ids": [c["chunk_id"] for c in selected if c["chunk_id"] not in valid_picks],
-            "invalid_picks": [p for p in valid_picks if p not in cand_ids],
-            "recall_after_bm25": _recall(expected, cand_ids),
-            "recall_after_rerank": _recall(expected, [c["chunk_id"] for c in selected]),
-            "app_recall_pct": {"bm25": bm25_recall, "rerank": rerank_recall},
-        }
-        doc_blocks = build_rung3_chunk_blocks(selected)
-        sent = {"mode": "chunks", "chunk_ids": [c["chunk_id"] for c in selected]}
     elif rung_id == NEW_RUNG:
         raw = await rerank_call(
             rerank_payload="",
@@ -463,7 +393,7 @@ async def run_question(
         raise ValueError(f"unknown rung {rung_id}")
 
     synth = await synth_call(
-        system_prompt=synthesis_system_prompt(with_citations=doc_blocks is not None, answer_format=answer_format),
+        system_prompt=synthesis_system_prompt(with_citations=doc_blocks is not None, answer_format=rung_answer_format(rung_id)),
         user_question=q,
         documents_for_blocks=doc_blocks,
         uncached_corpus_text=uncached_text,
@@ -505,11 +435,8 @@ async def execute_session(
     synth_call: SynthCall | None = None,
     rerank_call: RerankCall | None = None,
     max_retries: int | None = DEFAULT_MAX_RETRIES,
-    answer_format: str = DEFAULT_ANSWER_FORMAT,
 ) -> dict[str, Any]:
     """One session (8 questions, sequential); never raises. Stops at the first failed question."""
-    if answer_format not in ANSWER_FORMATS:
-        raise ValueError(f"unknown answer_format {answer_format!r}; expected one of {ANSWER_FORMATS}")
     if synth_call is None or rerank_call is None:
         from app.core.anthropic_service import run_cat4_haiku_reranker, run_cat4_rag_synthesis
 
@@ -530,8 +457,8 @@ async def execute_session(
         "corpus": {**corpus_size(corpus), "fingerprint": corpus_fingerprint(corpus), "document_order": DOCUMENT_ORDER},
         "settings": {"synth_max_tokens": SYNTH_MAX_TOKENS, "rerank_max_tokens": RERANK_MAX_TOKENS,
                      "synth_timeout_s": SYNTH_TIMEOUT_S, "rerank_timeout_s": RERANK_TIMEOUT_S,
-                     "max_retries": max_retries, "bm25_top_k": BM25_TOP_K, "rerank_top_k": RERANK_TOP_K,
-                     "question_scope_line": scope_line(), "answer_format": answer_format},
+                     "max_retries": max_retries, "rerank_top_k": RERANK_TOP_K,
+                     "question_scope_line": scope_line(), "answer_format": rung_answer_format(rung_id)},
         "answers": [],
     }
     t0 = time.perf_counter()
@@ -541,8 +468,7 @@ async def execute_session(
                 "expected_chunk_ids": list(q_spec.get("expected_chunk_ids") or [])}
         try:
             ans = await run_question(rung_id=rung_id, corpus=corpus, q_spec=q_spec, nonce=nonce, api_key=api_key,
-                                     synth_call=synth_call, rerank_call=rerank_call, max_retries=max_retries,
-                                     answer_format=answer_format)
+                                     synth_call=synth_call, rerank_call=rerank_call, max_retries=max_retries)
             record["answers"].append({**base, **ans})
         except Exception as exc:  # noqa: BLE001 — recorded, never raised
             record["answers"].append({**base, "status": "error", "error_message": f"{type(exc).__name__}: {exc}"[:1000],
@@ -555,60 +481,55 @@ async def execute_session(
     return record
 
 
-RunKey = tuple[str, int, int, str]  # (rung, scale, repeat, answer_format)
+RunKey = tuple[str, int, int]  # (rung, scale, repeat)
 
 
 def answer_format_of(record: dict[str, Any]) -> str:
-    """The session's answer format; records from before the variant existed carry none and are "original"."""
-    return str((record.get("settings") or {}).get("answer_format") or DEFAULT_ANSWER_FORMAT)
+    """The synthesis prompt a recorded session used (see `answer_formats.record_answer_format`)."""
+    return record_answer_format(record)
 
 
 def record_key(record: dict[str, Any]) -> RunKey:
-    return (str(record["rung_id"]), int(record["scale"]), int(record["repeat_index"]), answer_format_of(record))
+    return (str(record["rung_id"]), int(record["scale"]), int(record["repeat_index"]))
 
 
 def _norm_key(key: Sequence[Any]) -> RunKey:
-    """(rung, scale, repeat) keys from before the variant are the original format."""
-    return (str(key[0]), int(key[1]), int(key[2]), str(key[3]) if len(key) > 3 else DEFAULT_ANSWER_FORMAT)
+    return (str(key[0]), int(key[1]), int(key[2]))
 
 
-def plan_matrix(rungs: Sequence[str], scales: Sequence[int], repeats: int,
-                answer_format: str = DEFAULT_ANSWER_FORMAT) -> list[RunKey]:
-    """Ordered by repeat, then scale, then rung (one answer format per plan)."""
-    return [(r, s, i, answer_format) for i in range(repeats) for s in scales for r in rungs]
+def plan_matrix(rungs: Sequence[str], scales: Sequence[int], repeats: int) -> list[RunKey]:
+    """Ordered by repeat, then scale, then rung."""
+    return [(r, s, i) for i in range(repeats) for s in scales for r in rungs]
 
 
 def is_current_settings(record: dict[str, Any]) -> bool:
-    """False for a session recorded at a different synthesis output cap than SYNTH_MAX_TOKENS (or with no settings),
-    or with an answer format this harness does not know. The answer format itself never supersedes: a variant
-    session is a separate key, and records without one are the original format."""
+    """True for a session recorded at SYNTH_MAX_TOKENS with its rung's synthesis prompt."""
     settings = record.get("settings") or {}
-    return settings.get("synth_max_tokens") == SYNTH_MAX_TOKENS and answer_format_of(record) in ANSWER_FORMATS
+    return (settings.get("synth_max_tokens") == SYNTH_MAX_TOKENS
+            and answer_format_of(record) == rung_answer_format(str(record.get("rung_id"))))
 
 
 def superseded_sessions(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{"rung_id": r.get("rung_id"), "scale": r.get("scale"), "repeat_index": r.get("repeat_index"), "run_id": r.get("run_id"),
              "status": r.get("status"), "synth_max_tokens": (r.get("settings") or {}).get("synth_max_tokens"),
-             "current_synth_max_tokens": SYNTH_MAX_TOKENS, "answer_format": answer_format_of(r)}
+             "current_synth_max_tokens": SYNTH_MAX_TOKENS}
             for r in records if not is_current_settings(r)]
 
 
 def select_pending(planned: Iterable[Sequence[Any]], existing: Iterable[dict[str, Any]]) -> list[Any]:
-    """A key is done only with an ok record at the current settings and the same answer format; superseded records
-    leave it pending. Planned keys are returned as given."""
+    """A key is done only with an ok record at the current settings. Planned keys are returned as given."""
     done = {record_key(r) for r in existing if r.get("status") == "ok" and is_current_settings(r)}
     return [k for k in planned if _norm_key(k) not in done]
 
 
-def latest_ok_sessions(records: Iterable[dict[str, Any]], *, answer_format: str | None = None) -> list[dict[str, Any]]:
-    """Latest ok record per key at the current settings (superseded sessions are never used); every answer format
-    unless `answer_format` is given."""
+def latest_ok_sessions(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Latest ok record per key at the current settings."""
     latest: dict[RunKey, dict[str, Any]] = {}
     for r in records:
-        if r.get("status") == "ok" and is_current_settings(r) and answer_format in (None, answer_format_of(r)):
+        if r.get("status") == "ok" and is_current_settings(r):
             latest[record_key(r)] = r
-    return [latest[k] for k in sorted(latest, key=lambda k: (ANSWER_FORMATS.index(k[3]),
-                                                            RUNG_IDS.index(k[0]) if k[0] in RUNG_IDS else 99, k[1], k[2]))]
+    order = HARNESS_RUNG_IDS
+    return [latest[k] for k in sorted(latest, key=lambda k: (order.index(k[0]) if k[0] in order else 99, k[1], k[2]))]
 
 
 def load_jsonl(path: Path | str) -> list[dict[str, Any]]:
@@ -820,7 +741,6 @@ def score_answer(
     if rung_id in RETRIEVAL_RUNGS and ret:
         sel = ret.get("selected_chunk_ids") or []
         out["retrieval"] = {
-            "recall_after_bm25": ret.get("recall_after_bm25"),
             "recall_after_rerank": ret.get("recall_after_rerank") or _recall(expected, sel),
             "selected": len(sel),
             "distractors_selected": sum(1 for c in sel if corpus.supplier_of_chunk(c) in DISTRACTOR_SUPPLIERS),
@@ -833,48 +753,8 @@ def score_answer(
 
 
 # --------------------------------------------------------------------------------------------------
-# Golden replays as the "original capture" group (scale 1, n = 1 per rung x question)
+# Golden replays (used to calibrate the token estimates)
 # --------------------------------------------------------------------------------------------------
-
-
-def golden_answers(golden: dict[str, Any]) -> list[dict[str, Any]]:
-    """The 24 golden answers in the rerun answer shape (citations resolved to chunks; calls rebuilt from tokens)."""
-    corpus = build_scaled_corpus(1)
-    q_specs = {(p["id"], q["question_id"]): q for p in CAT4_PRESETS for q in p["questions"]}
-    out = []
-    for pid, pdata in (golden.get("presets") or {}).items():
-        for rung_id, qs in (pdata.get("rungs") or {}).items():
-            for i, rq in enumerate(qs):
-                spec = q_specs.get((pid, rq["question_id"])) or {}
-                calls = []
-                if int(rq.get("reranker_input_tokens") or 0) > 0:
-                    calls.append({"role": "rerank", "model_id": rq.get("reranker_model_id") or HAIKU_MODEL_ID,
-                                  "intended_model_id": HAIKU_MODEL_ID, "stop_reason": None,
-                                  "input_tokens": int(rq["reranker_input_tokens"]), "output_tokens": int(rq.get("reranker_output_tokens") or 0),
-                                  "cache_creation_tokens": 0, "cache_read_tokens": 0, "thinking_tokens": 0, "cache_control": False})
-                calls.append({"role": "synthesis", "model_id": rq.get("model_id") or SONNET_MODEL_ID, "intended_model_id": SONNET_MODEL_ID,
-                              "stop_reason": rq.get("stop_reason"), "input_tokens": int(rq["input_tokens"]),
-                              "output_tokens": int(rq["output_tokens"]), "cache_creation_tokens": int(rq.get("cache_creation_tokens") or 0),
-                              "cache_read_tokens": int(rq.get("cache_read_tokens") or 0), "thinking_tokens": 0,
-                              "cache_control": rung_id == "cached_full_corpus_citations"})
-                funnel = rq.get("retrieval_funnel") or []
-                retrieval = None
-                if funnel:
-                    expected = list(spec.get("expected_chunk_ids") or [])
-                    cands = [f["chunk_id"] for f in funnel if f.get("stage") in ("selected_by_reranker", "pruned_by_reranker")]
-                    sel = [f["chunk_id"] for f in funnel if f.get("stage") == "selected_by_reranker"]
-                    retrieval = {"selected_chunk_ids": sel, "recall_after_bm25": _recall(expected, cands),
-                                 "recall_after_rerank": _recall(expected, sel), "backfilled_chunk_ids": [], "invalid_picks": []}
-                out.append({
-                    "source": "golden", "rung_id": rung_id, "scale": 1, "repeat_index": 0, "q_index": i if pid == "audit-01" else 4 + i,
-                    "preset_id": pid, "question_id": rq["question_id"], "question": rq["question"],
-                    "expected_chunk_ids": list(spec.get("expected_chunk_ids") or []),
-                    "status": "ok", "answer_markdown": rq["answer_markdown"], "segments": rq.get("segments") or [],
-                    "citations": resolve_citations(corpus, rq.get("citations") or []),
-                    "chunks_sent": {"mode": "chunks", "chunk_ids": sel} if funnel else {"mode": "full_corpus", "chunk_ids": None},
-                    "retrieval": retrieval, "calls": calls,
-                })
-    return out
 
 
 def load_golden(path: Path | str | None = None) -> dict[str, Any]:
@@ -895,7 +775,7 @@ class CharsPerToken:
 
 
 def calibrate_chars_per_token(golden: dict[str, Any]) -> CharsPerToken:
-    """From the golden capture: prompt chars / recorded prompt tokens per call type (scale 1)."""
+    """From the golden replays: prompt chars / recorded prompt tokens per call type (scale 1)."""
     corpus = build_scaled_corpus(1)
     plain_chars = len(build_uncached_corpus_text(corpus.hydrated_docs))
     block_chars = sum(len(b["data"]) + len(b["block_title"]) + len(b["block_context"]) for b in build_rung2_doc_blocks(corpus.hydrated_docs))
@@ -908,9 +788,13 @@ def calibrate_chars_per_token(golden: dict[str, Any]) -> CharsPerToken:
         for rq in (pdata.get("rungs") or {}).get("cached_full_corpus_citations") or []:
             tok = int(rq["input_tokens"]) + int(rq.get("cache_creation_tokens") or 0) + int(rq.get("cache_read_tokens") or 0)
             blocks.append((block_chars + sys_cite + len(rq["question"])) / max(1, tok))
-        for rq in (pdata.get("rungs") or {}).get("hybrid_rag_rerank_citations") or []:
-            if rq.get("reranker_payload") and int(rq.get("reranker_input_tokens") or 0):
-                rerank.append((len(rq["reranker_payload"]) + len(get_cat4_haiku_reranker_system_prompt())) / int(rq["reranker_input_tokens"]))
+        for rq in (pdata.get("rungs") or {}).get(PAIRED_RUNG) or []:
+            tok = (int(rq.get("reranker_input_tokens") or 0) + int(rq.get("reranker_cache_creation_tokens") or 0)
+                   + int(rq.get("reranker_cache_read_tokens") or 0))
+            if tok:
+                chars = (len(format_chunks_for_reranker(corpus.flat_chunks)) + len(get_full_corpus_reranker_system_prompt())
+                         + len(str(rq.get("question_as_asked") or rq["question"])))
+                rerank.append(chars / tok)
     d = CharsPerToken()
     return CharsPerToken(
         plain=statistics.fmean(plain) if plain else d.plain,
@@ -923,20 +807,18 @@ def _rate(mid: str):
     return MODEL_RATES[mid]
 
 
-def estimate_session(rung_id: str, scale: int, cpt: CharsPerToken, *, typical_out: dict[str, int] | None = None,
-                     answer_format: str = DEFAULT_ANSWER_FORMAT) -> dict[str, Any]:
+def estimate_session(rung_id: str, scale: int, cpt: CharsPerToken, *, typical_out: dict[str, int] | None = None) -> dict[str, Any]:
     """Estimated prompt tokens and $ for one session (typical output and worst case = max_tokens)."""
     typical_out = typical_out or {"synthesis": 1050, "rerank": 450}
     corpus = build_scaled_corpus(scale)
     son, hai = _rate(SONNET_MODEL_ID), _rate(HAIKU_MODEL_ID)
-    # the golden calibration questions had no scope line; a variant answer format adds its extra prompt characters
-    extra = (len(synthesis_system_prompt(with_citations=True, answer_format=answer_format))
+    # the scope line and the rung's own synthesis-prompt lines are added to the calibrated prompt size
+    extra = (len(synthesis_system_prompt(with_citations=True, answer_format=rung_answer_format(rung_id)))
              - len(synthesis_system_prompt(with_citations=True)))
     scope = len(scope_line()) + 2 + extra
     plain_tok = (len(build_uncached_corpus_text(corpus.hydrated_docs)) + 1200 + scope) / cpt.plain
     block_tok = sum(len(b["data"]) + len(b["block_title"]) + len(b["block_context"]) for b in build_rung2_doc_blocks(corpus.hydrated_docs)) / cpt.doc_blocks
     chunk_tok = statistics.fmean(c["char_count"] for c in corpus.flat_chunks) * RERANK_TOP_K / cpt.doc_blocks + (1200 + scope) / cpt.doc_blocks
-    rerank10_tok = (statistics.fmean(c["char_count"] for c in corpus.flat_chunks) * BM25_TOP_K + 900 + scope) / cpt.rerank
     rerank_full_tok = (len(format_full_corpus_for_reranker(corpus)) + 900) / cpt.rerank
     n = len(session_questions())
     calls: list[tuple[str, float, float, float, int]] = []  # (model, uncached, write, read, max_out)
@@ -945,9 +827,6 @@ def estimate_session(rung_id: str, scale: int, cpt: CharsPerToken, *, typical_ou
             calls.append((SONNET_MODEL_ID, plain_tok, 0, 0, SYNTH_MAX_TOKENS))
         elif rung_id == "cached_full_corpus_citations":
             calls.append((SONNET_MODEL_ID, 120 + scope / cpt.doc_blocks, block_tok if i == 0 else 0, 0 if i == 0 else block_tok, SYNTH_MAX_TOKENS))
-        elif rung_id == "hybrid_rag_rerank_citations":
-            calls.append((HAIKU_MODEL_ID, rerank10_tok, 0, 0, RERANK_MAX_TOKENS))
-            calls.append((SONNET_MODEL_ID, chunk_tok, 0, 0, SYNTH_MAX_TOKENS))
         else:
             calls.append((HAIKU_MODEL_ID, 150 + scope / cpt.rerank, rerank_full_tok if i == 0 else 0, 0 if i == 0 else rerank_full_tok, RERANK_MAX_TOKENS))
             calls.append((SONNET_MODEL_ID, chunk_tok, 0, 0, SYNTH_MAX_TOKENS))
@@ -1009,8 +888,7 @@ async def run_sessions(
     async def one(key: RunKey, reserved: float) -> None:
         try:
             rec = await execute_session(rung_id=key[0], scale=key[1], repeat_index=key[2], api_key=api_key,
-                                        synth_call=synth_call, rerank_call=rerank_call, max_retries=max_retries,
-                                        answer_format=_norm_key(key)[3])
+                                        synth_call=synth_call, rerank_call=rerank_call, max_retries=max_retries)
             guard.settle(reserved, rec)
             counts["ok" if rec["status"] == "ok" else "error"] += 1
             on_record(rec)
@@ -1161,8 +1039,8 @@ def build_judge_prompt(question: str, answer_text: str) -> tuple[list[dict[str, 
 
 BLINDING_FORBIDDEN: tuple[str, ...] = (
     "claude", "sonnet", "haiku", "opus", "anthropic", "rung", "token", "cost", "price", "usd", "model",
-    "cache", "cached", "naive", "hybrid", "rerank", "bm25", "scale", "distractor", "kaveri", "narmada", "corpus",
-    "golden", "replay", "session", "repeat", *RUNG_IDS,
+    "cache", "cached", "naive", "hybrid", "rerank", "scale", "distractor", "kaveri", "narmada", "corpus",
+    "golden", "replay", "session", "repeat", *HARNESS_RUNG_IDS,
 )
 
 
@@ -1184,34 +1062,27 @@ def _sha(*parts: str) -> str:
     return h.hexdigest()
 
 
-def judge_items(scope: str, *, golden: dict[str, Any] | None = None, records: Sequence[dict[str, Any]] = ()) -> list[dict[str, Any]]:
-    """Answers to judge: golden (24), rerun (every answer of the latest ok sessions), or all."""
+def judge_items(records: Sequence[dict[str, Any]] = ()) -> list[dict[str, Any]]:
+    """Answers to judge: every ok answer of the latest ok sessions."""
     items: list[dict[str, Any]] = []
-    if scope in ("golden", "all"):
-        for a in golden_answers(golden or load_golden()):
-            items.append({**a, "source": "golden"})
-    if scope in ("rerun", "all"):
-        for r in latest_ok_sessions(records):
-            for a in r.get("answers") or []:
-                if a.get("status") == "ok":
-                    items.append({**a, "source": "rerun", "rung_id": r["rung_id"], "scale": r["scale"],
-                                  "repeat_index": r["repeat_index"], "run_id": r["run_id"],
-                                  "answer_format": answer_format_of(r)})
+    for r in latest_ok_sessions(records):
+        for a in r.get("answers") or []:
+            if a.get("status") == "ok":
+                items.append({**a, "source": "rerun", "rung_id": r["rung_id"], "scale": r["scale"],
+                              "repeat_index": r["repeat_index"], "run_id": r["run_id"],
+                              "answer_format": answer_format_of(r)})
     return items
 
 
 def judge_question(item: dict[str, Any]) -> str:
-    """What the answer was actually asked: the scoped question for rerun answers, the original for golden ones."""
-    if item.get("source") == "rerun":
-        return str(item.get("question_as_asked") or scoped_question(item["question"]))
-    return str(item["question"])
+    """The question as the answer was asked (with the scope line)."""
+    return str(item.get("question_as_asked") or scoped_question(item["question"]))
 
 
 def judge_call_id(item: dict[str, Any], judge_repeat: int) -> str:
-    """Deterministic id. A non-original answer format is part of it (original ids are unchanged, so existing
-    judgements still match)."""
-    fmt = item.get("answer_format") or DEFAULT_ANSWER_FORMAT
-    tag = "" if fmt == DEFAULT_ANSWER_FORMAT else f"{fmt}:"
+    """Deterministic id; a retrieval rung's answer format is part of it."""
+    fmt = item.get("answer_format") or FULL_CORPUS
+    tag = "" if fmt == FULL_CORPUS else f"{fmt}:"
     return (f"judge:{item['source']}:{item['rung_id']}:s{item['scale']}:r{item['repeat_index']}:{tag}"
             f"{item['preset_id']}:{item['question_id']}:j{judge_repeat}")
 
@@ -1226,7 +1097,7 @@ def plan_judge_calls(items: Sequence[dict[str, Any]], *, repeats: int = JUDGE_RE
                 "call_id": judge_call_id(it, j), "judge_repeat": j, "source": it["source"], "rung_id": it["rung_id"],
                 "scale": it["scale"], "repeat_index": it["repeat_index"], "preset_id": it["preset_id"],
                 "question_id": it["question_id"], "run_id": it.get("run_id"),
-                "answer_format": it.get("answer_format") or DEFAULT_ANSWER_FORMAT,
+                "answer_format": it.get("answer_format") or FULL_CORPUS,
                 "answer_sha256": _sha(it.get("answer_markdown") or ""),
                 "prompt_sha256": _sha(*(b["text"] for b in system), user),
                 "system": system, "user": user, "question": question,
@@ -1341,7 +1212,7 @@ async def execute_judge_call(planned: dict[str, Any], *, judge_call: JudgeCall, 
         "schema_version": SCHEMA_VERSION,
         **{k: planned[k] for k in ("call_id", "judge_repeat", "source", "rung_id", "scale", "repeat_index",
                                    "preset_id", "question_id", "run_id", "answer_sha256", "prompt_sha256")},
-        "answer_format": planned.get("answer_format") or DEFAULT_ANSWER_FORMAT,
+        "answer_format": planned.get("answer_format") or FULL_CORPUS,
         "status": "error", "error_type": None, "error_message": None, "judge_model_requested": JUDGE_MODEL,
         "settings": {"max_tokens": max_tokens, "thinking": dict(JUDGE_THINKING), "effort": JUDGE_EFFORT,
                      "timeout_s": JUDGE_TIMEOUT_S, "max_retries": 0},
@@ -1454,7 +1325,7 @@ async def run_judge_plan(
 #   "scoped"  the claim is limited to what was provided ("X is not in the text provided", "None stated in the text
 #             provided", "the excerpts give no X", "no X appears in these excerpts").
 # Statements about a named document ("the MSA does not specify …") or about the real world ("no penalty applies")
-# are not flagged. Validated against the judge's absence-type material errors (`validate_absence_detector`).
+# are not flagged.
 
 _ABS_NOUNS = (r"(?:documents?|deal[- ]?room|contracts?|agreements?|corpus|records?|files?|materials?|text|excerpts?|"
               r"extracts?|chunks?|passages?|clauses? provided|sources?)")
@@ -1526,50 +1397,6 @@ def judge_absence_errors(judgement: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
-# The validator's keyword rule for "claims the documents lack something" (scripts/validate_deck_claims.py,
-# `_cat4_absence_issue_text`), kept here verbatim so the detector is validated on the same 18 known claims.
-KNOWN_ABSENCE_KEYWORDS = re.compile(r"\bno\b|\bnot (in|state|specify|quantif|give|contain)|missing|does not|do not|absent|cannot be quantified")
-
-
-def validate_absence_detector(records: Sequence[dict[str, Any]], judgements: Sequence[dict[str, Any]]) -> dict[str, Any]:
-    """Detector vs the known absence claims: the judge's material errors on the two retrieval rungs (original format)
-    whose claim matches the validator's keyword rule. Also lists every corpus-form hit on the cached full-corpus
-    answers (that rung saw every clause, so a corpus-form claim there is either true or a false positive)."""
-    jidx = _judgement_index(judgements)
-    known, fp_cached = [], []
-    for r in latest_ok_sessions(records, answer_format=DEFAULT_ANSWER_FORMAT):
-        for a in r.get("answers") or []:
-            if a.get("status") != "ok":
-                continue
-            key = ("rerun", r["rung_id"], int(r["scale"]), int(r["repeat_index"]), a["preset_id"], a["question_id"], DEFAULT_ANSWER_FORMAT)
-            sha = _sha(a.get("answer_markdown") or "")
-            js = [j for j in jidx.get(key, []) if j.get("answer_sha256") == sha and j.get("run_id") == r.get("run_id")]
-            where = {"rung_id": r["rung_id"], "scale": int(r["scale"]), "repeat_index": int(r["repeat_index"]),
-                     "question": question_key(a["preset_id"], a["question_id"])}
-            if r["rung_id"] in RETRIEVAL_RUNGS:
-                for j in js:
-                    for e in j["parsed"]["factual_errors"]:
-                        if e["severity"] == "material" and KNOWN_ABSENCE_KEYWORDS.search(e["claim_quote"].lower()):
-                            on_quote = absence_claims(e["claim_quote"])
-                            known.append({**where, "claim_quote": e["claim_quote"],
-                                          "detected": bool(on_quote), "form": on_quote[0]["form"] if on_quote else None})
-            if r["rung_id"] == "cached_full_corpus_citations":
-                for c in absence_claims(a.get("answer_markdown") or ""):
-                    if c["form"] == "corpus":
-                        fp_cached.append({**where, "sentence": c["sentence"],
-                                          "judge_material_errors": sum(1 for j in js for e in j["parsed"]["factual_errors"] if e["severity"] == "material")})
-    hits = [k for k in known if k["detected"]]
-    return {
-        "known_claims": len(known),
-        "detected": len(hits),
-        "recall": (len(hits) / len(known)) if known else None,
-        "detected_by_form": dict(Counter(k["form"] for k in hits)),
-        "missed": [k for k in known if not k["detected"]],
-        "known": known,
-        "cached_full_corpus_corpus_form_hits": fp_cached,
-    }
-
-
 # --------------------------------------------------------------------------------------------------
 # Summary (pure)
 # --------------------------------------------------------------------------------------------------
@@ -1616,7 +1443,6 @@ def pool_scores(scores: Sequence[dict[str, Any]]) -> dict[str, Any]:
             sum(1 for s in scores if s["contamination"].get("synthesis_saw_distractor_text")), len(scores)),
         "citation_contaminated_answers": measure(sum(1 for s in scores if s["contamination"]["distractor_chunks_cited"]), len(scores)),
         "retrieval": {
-            "recall_after_bm25": _pool([r.get("recall_after_bm25") for r in ret]) if any(r.get("recall_after_bm25") for r in ret) else None,
             "recall_after_rerank": _pool([r.get("recall_after_rerank") for r in ret]),
             "distractors_selected": measure(sum(r["distractors_selected"] for r in ret), sum(r["selected"] for r in ret)),
             "backfilled": sum(r["backfilled"] for r in ret),
@@ -1704,8 +1530,8 @@ def _judgement_index(judgements: Sequence[dict[str, Any]]) -> dict[tuple, list[d
         if r.get("status") == "ok":
             latest[r["call_id"]] = r
     for r in latest.values():
-        idx.setdefault((r["source"], r["rung_id"], int(r["scale"]), int(r["repeat_index"]), r["preset_id"], r["question_id"],
-                        r.get("answer_format") or DEFAULT_ANSWER_FORMAT), []).append(r)
+        idx.setdefault((r["source"], r["rung_id"], int(r["scale"]), int(r["repeat_index"]), r["preset_id"], r["question_id"]),
+                       []).append(r)
     return idx
 
 
@@ -1765,10 +1591,15 @@ def summarise(
     records: Sequence[dict[str, Any]],
     *,
     keys: dict[str, Any] | None = None,
-    golden: dict[str, Any] | None = None,
     judgements: Sequence[dict[str, Any]] = (),
+    rung_ids: Sequence[str] = RUNG_IDS,
 ) -> dict[str, Any]:
+    """Scores, judge pooling and data quality for the latest ok sessions of `rung_ids` (default: the two displayed
+    versions; records of other rungs are ignored)."""
     keys = keys or load_quality_keys()
+    rung_ids = list(rung_ids)
+    records = [r for r in records if r.get("rung_id") in rung_ids]
+    judgements = [j for j in judgements if j.get("rung_id") in rung_ids]
     contamination = build_contamination_index(keys)
     corpora = {s: build_scaled_corpus(s) for s in SCALES}
     jidx = _judgement_index(judgements)
@@ -1777,100 +1608,71 @@ def summarise(
 
     used_judgements: set[str] = set()
 
-    def judged(src: str, a: dict[str, Any], rung: str, scale: int, rep: int, run_id: str | None = None,
-               fmt: str = DEFAULT_ANSWER_FORMAT) -> list[dict[str, Any]]:
-        """Judgements of exactly this answer (same answer text; same session for rerun answers)."""
+    def judged(a: dict[str, Any], rung: str, scale: int, rep: int, run_id: str | None) -> list[dict[str, Any]]:
+        """Judgements of exactly this answer (same answer text, same session)."""
         sha = _sha(a.get("answer_markdown") or "")
-        out = [j for j in jidx.get((src, rung, scale, rep, a["preset_id"], a["question_id"], fmt), [])
-               if j.get("answer_sha256") == sha and (src == "golden" or j.get("run_id") == run_id)]
+        out = [j for j in jidx.get(("rerun", rung, scale, rep, a["preset_id"], a["question_id"]), [])
+               if j.get("answer_sha256") == sha and j.get("run_id") == run_id]
         used_judgements.update(j["call_id"] for j in out)
         return out
 
     groups: dict[str, Any] = {}
     per_question: dict[str, Any] = {}
     review: dict[str, list[dict[str, Any]]] = {"material_errors": [], "contaminated_answers": []}
-    for fmt in ANSWER_FORMATS:
-        for rung in RUNG_IDS:
-            for scale in SCALES:
-                sess = [r for r in ok if r["rung_id"] == rung and int(r["scale"]) == scale and answer_format_of(r) == fmt]
-                if not sess:
-                    continue
-                answers, scores, js = [], [], []
-                for r in sess:
-                    for a in r["answers"]:
-                        s = score_answer(a, rung_id=rung, corpus=corpora[scale], keys=keys, contamination=contamination)
-                        answers.append(a)
-                        scores.append(s)
-                        jj = judged("rerun", a, rung, scale, int(r["repeat_index"]), r.get("run_id"), fmt)
-                        js += jj
-                        _collect_review(review, "rerun", rung, scale, int(r["repeat_index"]), a, s, jj, fmt)
-                gkey = group_key(rung, scale, fmt)
-                groups[gkey] = {"rung_id": rung, "scale": scale, "answer_format": fmt,
-                                **summarise_group(answers, scores, len(sess), js)}
-                for pid, q in session_questions():
-                    qa = [(a, s) for a, s in zip(answers, scores) if a["preset_id"] == pid and a["question_id"] == q["question_id"]]
-                    qj = [j for a, _ in qa for j in js if j["preset_id"] == pid and j["question_id"] == q["question_id"]]
-                    per_question[f"{gkey}|{pid}/{q['question_id']}"] = {
-                        "rung_id": rung, "scale": scale, "answer_format": fmt, "question": question_key(pid, q["question_id"]),
-                        **summarise_group([a for a, _ in qa], [s for _, s in qa], len(sess), qj)}
-    # original capture (golden, scale 1, n = 1)
-    golden = golden if golden is not None else load_golden()
-    g_groups: dict[str, Any] = {}
-    g_answers = golden_answers(golden)
-    for rung in RUNG_IDS:
-        ga = [a for a in g_answers if a["rung_id"] == rung]
-        if not ga:
-            continue
-        gs, gj = [], []
-        for a in ga:
-            s = score_answer(a, rung_id=rung, corpus=corpora[1], keys=keys, contamination=contamination)
-            gs.append(s)
-            jj = judged("golden", a, rung, 1, 0)
-            gj += jj
-            _collect_review(review, "golden", rung, 1, 0, a, s, jj)
-        g_groups[rung] = {"rung_id": rung, "scale": 1, **summarise_group(ga, gs, 1, gj),
-                          "per_question": {question_key(a["preset_id"], a["question_id"]): s for a, s in zip(ga, gs)}}
+    for rung in rung_ids:
+        for scale in SCALES:
+            sess = [r for r in ok if r["rung_id"] == rung and int(r["scale"]) == scale]
+            if not sess:
+                continue
+            answers, scores, js = [], [], []
+            for r in sess:
+                for a in r["answers"]:
+                    s = score_answer(a, rung_id=rung, corpus=corpora[scale], keys=keys, contamination=contamination)
+                    answers.append(a)
+                    scores.append(s)
+                    jj = judged(a, rung, scale, int(r["repeat_index"]), r.get("run_id"))
+                    js += jj
+                    _collect_review(review, rung, scale, int(r["repeat_index"]), a, s, jj)
+            gkey = group_key(rung, scale)
+            groups[gkey] = {"rung_id": rung, "scale": scale, **summarise_group(answers, scores, len(sess), js)}
+            for pid, q in session_questions():
+                qa = [(a, s) for a, s in zip(answers, scores) if a["preset_id"] == pid and a["question_id"] == q["question_id"]]
+                qj = [j for a, _ in qa for j in js if j["preset_id"] == pid and j["question_id"] == q["question_id"]]
+                per_question[f"{gkey}|{pid}/{q['question_id']}"] = {
+                    "rung_id": rung, "scale": scale, "question": question_key(pid, q["question_id"]),
+                    **summarise_group([a for a, _ in qa], [s for _, s in qa], len(sess), qj)}
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": _utc_now_iso(),
         "keys_version": keys["meta"].get("keys_version"),
         "key_counts": key_counts(keys),
-        "rung_ids": list(RUNG_IDS),
+        "rung_ids": rung_ids,
         "scales": list(SCALES),
         "corpus": {str(s): corpus_size(corpora[s]) for s in SCALES},
+        "rung_answer_formats": {r: rung_answer_format(r) for r in rung_ids},
         "rerun": {
             "record_count": len(records),
             "ok_sessions_used": len(ok),
             "superseded_record_count": len(records) - len(current),
             "groups": groups,
             "per_question": per_question,
-            "break_even": break_even_tables(groups),
-            "break_even_adopted": break_even_tables(groups, adopted=True),
             "data_quality": {**data_quality(current), "superseded_sessions": superseded_sessions(records),
                              **judge_data_quality(judgements, used_judgements,
-                                                  expected=sum(len(r["answers"]) for r in ok) + len(g_answers))},
+                                                  expected=sum(len(r["answers"]) for r in ok))},
         },
-        "original_capture": {"groups": g_groups,
-                             "break_even": break_even_tables({f"{r}|1": g for r, g in g_groups.items()})["1"]},
         "judge": {"records": len(judgements), "ok": sum(1 for j in judgements if j.get("status") == "ok"),
                   "spend_usd": sum(judgement_cost_usd(j) for j in judgements)},
         "for_lead_review": review,
-        "answer_formats": sorted({answer_format_of(r) for r in ok}, key=ANSWER_FORMATS.index),
-        "absence_detector_validation": validate_absence_detector(current, judgements),
     }
 
 
-def group_key(rung: str, scale: int, answer_format: str = DEFAULT_ANSWER_FORMAT) -> str:
-    """'rung|scale' for the original format (unchanged keys); 'rung|scale|format' for a variant."""
-    return f"{rung}|{scale}" if answer_format == DEFAULT_ANSWER_FORMAT else f"{rung}|{scale}|{answer_format}"
+def group_key(rung: str, scale: int) -> str:
+    return f"{rung}|{scale}"
 
 
-def _collect_review(review: dict[str, list[dict[str, Any]]], source: str, rung: str, scale: int, rep: int,
-                    a: dict[str, Any], s: dict[str, Any], judged: Sequence[dict[str, Any]],
-                    fmt: str = DEFAULT_ANSWER_FORMAT) -> None:
-    where = {"source": source, "rung_id": rung, "scale": scale, "repeat_index": rep, "question": question_key(a["preset_id"], a["question_id"])}
-    if fmt != DEFAULT_ANSWER_FORMAT:
-        where["answer_format"] = fmt
+def _collect_review(review: dict[str, list[dict[str, Any]]], rung: str, scale: int, rep: int,
+                    a: dict[str, Any], s: dict[str, Any], judged: Sequence[dict[str, Any]]) -> None:
+    where = {"source": "rerun", "rung_id": rung, "scale": scale, "repeat_index": rep, "question": question_key(a["preset_id"], a["question_id"])}
     if s["contamination"]["contaminated"]:
         text = str(a.get("answer_markdown") or "")
         quotes = []
@@ -1886,19 +1688,16 @@ def _collect_review(review: dict[str, list[dict[str, Any]]], source: str, rung: 
                 review["material_errors"].append({**where, "judge_call_id": j["call_id"], **e})
 
 
-def break_even_tables(groups: dict[str, Any], *, adopted: bool = False) -> dict[str, Any]:
+def break_even_tables(groups: dict[str, Any]) -> dict[str, Any]:
     """Per scale: questions sharing one cache write at which A becomes cheaper than B (warm per-question cost +
-    one-off cache-write premium, both measured). Original-format groups by default; `adopted=True` uses each rung's
-    adopted answer format (retrieval rungs: scoped_absence sessions; full-corpus rungs: original)."""
+    one-off cache-write premium, both measured). Compares the levers tried (not displayed; for the experiment
+    history); pass groups from `summarise(..., rung_ids=HARNESS_RUNG_IDS)`."""
     out: dict[str, Any] = {}
-    pairs = [("cached_full_corpus_citations", "hybrid_rag_rerank_citations"),
-             (NEW_RUNG, "hybrid_rag_rerank_citations"),
-             ("cached_full_corpus_citations", NEW_RUNG)]
+    pairs = [("cached_full_corpus_citations", NEW_RUNG)]
     for scale in SCALES:
         rows = []
         for a, b in pairs:
-            fa, fb = (adopted_answer_format(a), adopted_answer_format(b)) if adopted else (DEFAULT_ANSWER_FORMAT,) * 2
-            ga, gb = groups.get(group_key(a, scale, fa)), groups.get(group_key(b, scale, fb))
+            ga, gb = groups.get(group_key(a, scale)), groups.get(group_key(b, scale))
             if not ga or not gb:
                 continue
             ca, cb = ga["cost_per_question"]["warm"]["total"], gb["cost_per_question"]["warm"]["total"]
@@ -1914,7 +1713,7 @@ def break_even_tables(groups: dict[str, Any], *, adopted: bool = False) -> dict[
 # App-facing portfolio (replays/cat4_quality_summary.json)
 # --------------------------------------------------------------------------------------------------
 
-PORTFOLIO_SCHEMA_VERSION = 2  # 2: answer formats (retrieval versions shown before / now)
+PORTFOLIO_SCHEMA_VERSION = 4
 GOLDEN_REPEAT_INDEX = 0
 GOLDEN_SCALE = 1
 
@@ -1923,13 +1722,9 @@ def _cell_from_group(g: dict[str, Any]) -> dict[str, Any]:
     ret = g.get("retrieval") or {}
     j = g.get("judge") or {}
     cost = g["cost_per_question"]
-    fmt = g.get("answer_format") or DEFAULT_ANSWER_FORMAT
-    ab = g.get("absence") or {}
     return {
         "rung_id": g["rung_id"],
         "runnable_in_app": g["rung_id"] in APP_RUNG_IDS,
-        "answer_format": fmt,
-        "adopted": fmt == adopted_answer_format(g["rung_id"]),
         "scale": int(g["scale"]),
         "sessions": int(g["sessions"]),
         "answers": int(g["answers"]),
@@ -1947,7 +1742,6 @@ def _cell_from_group(g: dict[str, Any]) -> dict[str, Any]:
         "value_contaminated_unattributed_answers": g.get("value_contaminated_unattributed_answers"),
         "citation_contaminated_answers": g["citation_contaminated_answers"],
         "exposure_answers": g.get("answers_whose_synthesis_saw_distractor_text"),
-        "recall_after_bm25": ret.get("recall_after_bm25"),
         "recall_after_rerank": ret.get("recall_after_rerank"),
         "distractors_selected": ret.get("distractors_selected"),
         "backfilled": ret.get("backfilled"),
@@ -1965,16 +1759,13 @@ def _cell_from_group(g: dict[str, Any]) -> dict[str, Any]:
         "cost_per_question_billed_sonnet_usd": cost["billed"]["sonnet"],
         "cost_per_question_billed_haiku_usd": cost["billed"]["haiku"],
         "cache_write_premium_usd": g.get("cache_write_premium_usd") or 0.0,
-        "answers_with_documents_lack_claim": ab.get("answers_with_corpus_form_claim"),
-        "answers_with_not_in_text_provided_claim": ab.get("answers_with_scoped_form_claim"),
-        "judged_answers_with_unsupported_absence_claim": ab.get("judged_answers_with_unsupported_absence_claim"),
     }
 
 
 def _question_row(v: dict[str, Any]) -> dict[str, Any]:
     j = v.get("judge") or {}
     return {
-        "rung_id": v["rung_id"], "scale": int(v["scale"]), "answer_format": v.get("answer_format") or DEFAULT_ANSWER_FORMAT,
+        "rung_id": v["rung_id"], "scale": int(v["scale"]),
         "question": v["question"], "answers": int(v["answers"]),
         "fact_recall": v["fact_recall"], "citations_per_answer_mean": v["citations_per_answer_mean"],
         "zero_citation_answers": v["zero_citation_answers"], "citations_at_expected": v["citations_at_expected"],
@@ -1991,32 +1782,23 @@ def build_quality_portfolio(
     judgements: Sequence[dict[str, Any]],
     *,
     keys: dict[str, Any] | None = None,
-    golden: dict[str, Any] | None = None,
     source_file: str | None = None,
     judgements_file: str | None = None,
 ) -> dict[str, Any]:
     """Pooled rerun picture for the app, from the same `summarise()` path as scripts/analyze_cat4_quality.py.
 
-    `cells`: every rung x scale in the rung's adopted answer format (`adopted: true`, what the app runs now), plus
-    the retrieval rungs' original-format cells (`adopted: false`, "before"); full-corpus rungs appear once (their
-    format was not changed). n = sessions x 8 answers. Break-even uses the adopted cells. `golden_mapped`: per rung x
-    question for the sessions the app's recorded runs come from (repeat 0, scale 1, adopted format). Deterministic."""
+    `cells`: both versions x both scales (n = sessions x 8 answers). `golden_mapped`: per rung x question for the sessions the
+    app's recorded runs come from (repeat 0, scale 1). Deterministic."""
     keys = keys or load_quality_keys()
-    retrieval = [r for r in RUNG_IDS if adopted_answer_format(r) != DEFAULT_ANSWER_FORMAT]
-    # each rung's adopted format, plus the original ("before") for rungs whose format changed
-    records = [r for r in records if answer_format_of(r) in (adopted_answer_format(r.get("rung_id", "")), DEFAULT_ANSWER_FORMAT)]
-    full = summarise(records, keys=keys, golden=golden if golden is not None else {"presets": {}}, judgements=judgements)
+    full = summarise(records, keys=keys, judgements=judgements)
     mapped_records = [r for r in latest_ok_sessions(records)
-                      if int(r["repeat_index"]) == GOLDEN_REPEAT_INDEX and int(r["scale"]) == GOLDEN_SCALE
-                      and answer_format_of(r) == adopted_answer_format(r["rung_id"])]
-    mapped = summarise(mapped_records, keys=keys, golden={"presets": {}}, judgements=judgements)
+                      if int(r["repeat_index"]) == GOLDEN_REPEAT_INDEX and int(r["scale"]) == GOLDEN_SCALE]
+    mapped = summarise(mapped_records, keys=keys, judgements=judgements)
     rr = full["rerun"]
     dq = rr["data_quality"]
     cells = [_cell_from_group(g) for g in rr["groups"].values()]
-    cells.sort(key=lambda c: (RUNG_IDS.index(c["rung_id"]), c["scale"], not c["adopted"]))
+    cells.sort(key=lambda c: (RUNG_IDS.index(c["rung_id"]), c["scale"]))
     sessions = sorted({c["sessions"] for c in cells})
-    expected_cells = len(RUNG_IDS) * len(SCALES) + len(retrieval) * len(SCALES)
-    changes = instruction_changes()
     return {
         "schema_version": PORTFOLIO_SCHEMA_VERSION,
         "source": "cat4 quality rerun",
@@ -2037,29 +1819,10 @@ def build_quality_portfolio(
         "scales": list(SCALES),
         "corpus": {k: {"documents": v["documents"], "chunks": v["chunks"], "chars": v["chars"]} for k, v in full["corpus"].items()},
         "synth_max_tokens": SYNTH_MAX_TOKENS,
-        "matrix_complete": len(cells) == expected_cells and all(c["adopted"] or c["rung_id"] in retrieval for c in cells)
-                           and len(sessions) == 1,
-        "adopted_answer_formats": {r: adopted_answer_format(r) for r in RUNG_IDS},
-        "format_change": {
-            "adopted_on": ADOPTED_ON,
-            "answer_format": "scoped_absence",
-            "rungs": retrieval,
-            "removed": changes["removed"],
-            "added": changes["added"],
-            "note": ("Retrieval versions only: their answers now say a term is not in the text provided instead of saying "
-                     "the documents lack it. Before and after are separate session sets (3 sessions of 8 questions per "
-                     "version and corpus size each). The full-corpus versions were not changed or re-measured."),
-        },
+        "matrix_complete": len(cells) == len(RUNG_IDS) * len(SCALES) and len(sessions) == 1,
         "cells": cells,
-        "break_even_basis": ("Each version's adopted answer format: the retrieval versions' scoped_absence sessions, the "
-                             "full-corpus versions' original sessions (measured warm cost per question + one-off cache-write premium)."),
-        "break_even": {scale: [{k: r[k] for k in ("a", "b", "premium_a_usd", "per_question_a_usd", "premium_b_usd",
-                                                    "per_question_b_usd", "n_star", "questions", "verdict")} for r in rows]
-                       for scale, rows in rr["break_even_adopted"].items()},
         "golden_mapped": {
-            "selection_rule": (f"repeat_index {GOLDEN_REPEAT_INDEX}, corpus scale {GOLDEN_SCALE}, every rung, in the rung's "
-                               "adopted answer format"),
-            "answer_formats": {r["rung_id"]: answer_format_of(r) for r in mapped_records},
+            "selection_rule": f"repeat_index {GOLDEN_REPEAT_INDEX}, corpus scale {GOLDEN_SCALE}, both versions",
             "run_ids": {r["rung_id"]: r["run_id"] for r in mapped_records},
             "questions": [_question_row(v) for v in mapped["rerun"]["per_question"].values()],
         },

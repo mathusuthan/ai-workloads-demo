@@ -250,7 +250,7 @@ export function MatrixHome({ catalog }: MatrixHomeProps) {
                         ? arch.id === 1
                           ? 'Open 4-Rung Arena & Batch Lab'
                           : arch.id === 2
-                            ? 'Open 3-Rung Synthesis & HITL Studio'
+                            ? 'Open Without vs With Template Arena & HITL Studio'
                             : arch.id === 3
                               ? 'Open IT & HR Session Caching Desk'
                               : arch.id === 4

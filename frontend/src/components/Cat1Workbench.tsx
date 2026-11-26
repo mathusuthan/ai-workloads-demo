@@ -32,7 +32,34 @@ interface Cat1WorkbenchProps {
   onRefreshSystemStatus: () => void
 }
 
-const ALL_RUNGS: RungId[] = ['sonnet_naive', 'haiku_naive', 'haiku_calibrated', 'gemini_decision']
+const ALL_RUNGS: RungId[] = ['sonnet_naive', 'haiku_naive', 'sonnet_calibrated', 'haiku_calibrated']
+const ALL_VISIBLE: Record<RungId, boolean> = {
+  sonnet_naive: true,
+  haiku_naive: true,
+  sonnet_calibrated: true,
+  haiku_calibrated: true,
+}
+const NONE_VISIBLE: Record<RungId, boolean> = {
+  sonnet_naive: false,
+  haiku_naive: false,
+  sonnet_calibrated: false,
+  haiku_calibrated: false,
+}
+// Replay reveal order: the fast classification rungs arrive first, the long write-ups last.
+const REVEAL_SCHEDULE: Array<[RungId, number]> = [
+  ['haiku_calibrated', 200],
+  ['sonnet_calibrated', 450],
+  ['haiku_naive', 950],
+  ['sonnet_naive', 1450],
+]
+
+function fmtUsd(x: number): string {
+  return `$${x < 1 ? x.toFixed(4) : x.toFixed(2)}`
+}
+
+function fmtPct(x: number | null | undefined): string {
+  return x == null ? '—' : `${x.toFixed(0)}%`
+}
 
 export function Cat1Workbench({
   archetype,
@@ -55,12 +82,7 @@ export function Cat1Workbench({
     presetsData.presets.find((p) => p.sub_task === 'support_triage')?.payload ?? ''
   )
   const [simulateTiming, setSimulateTiming] = useState<boolean>(true)
-  const [visibleRungs, setVisibleRungs] = useState<Record<RungId, boolean>>({
-    sonnet_naive: true,
-    haiku_naive: true,
-    haiku_calibrated: true,
-    gemini_decision: true,
-  })
+  const [visibleRungs, setVisibleRungs] = useState<Record<RungId, boolean>>(ALL_VISIBLE)
 
   const [runResponse, setRunResponse] = useState<Cat1RunResponse | null>(null)
   const [batchResponse, setBatchResponse] = useState<Cat1BatchResponse | null>(null)
@@ -70,7 +92,7 @@ export function Cat1Workbench({
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const [inspectorOpen, setInspectorOpen] = useState(false)
-  const [inspectorTab, setInspectorTab] = useState<'code' | 'schema' | 'questions'>('code')
+  const [inspectorTab, setInspectorTab] = useState<'code' | 'schema'>('code')
 
   const selectedPreset = useMemo(
     () => presetsData.presets.find((p) => p.id === selectedPresetId) ?? filteredPresets[0],
@@ -128,38 +150,15 @@ export function Cat1Workbench({
       }
 
       if (resp.mode_used === 'replay' && simulateTiming) {
-        setVisibleRungs({
-          sonnet_naive: false,
-          haiku_naive: false,
-          haiku_calibrated: false,
-          gemini_decision: false,
-        })
-        window.setTimeout(
-          () => setVisibleRungs((prev) => ({ ...prev, gemini_decision: true })),
-          180
-        )
-        window.setTimeout(
-          () => setVisibleRungs((prev) => ({ ...prev, haiku_calibrated: true })),
-          480
-        )
-        window.setTimeout(
-          () => setVisibleRungs((prev) => ({ ...prev, haiku_naive: true })),
-          950
-        )
-        window.setTimeout(
-          () => setVisibleRungs((prev) => ({ ...prev, sonnet_naive: true })),
-          1450
-        )
+        setVisibleRungs(NONE_VISIBLE)
+        for (const [rung, delay] of REVEAL_SCHEDULE) {
+          window.setTimeout(() => setVisibleRungs((prev) => ({ ...prev, [rung]: true })), delay)
+        }
       } else {
-        setVisibleRungs({
-          sonnet_naive: true,
-          haiku_naive: true,
-          haiku_calibrated: true,
-          gemini_decision: true,
-        })
+        setVisibleRungs(ALL_VISIBLE)
       }
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Failed to run 3-Rung Arena.')
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to run the 4-rung arena.')
     } finally {
       setLoadingArena(false)
     }
@@ -207,7 +206,7 @@ export function Cat1Workbench({
   }
 
   const handleInspectorTabKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    const order: Array<'code' | 'schema' | 'questions'> = ['code', 'schema', 'questions']
+    const order: Array<'code' | 'schema'> = ['code', 'schema']
     const idx = order.indexOf(inspectorTab)
     if (e.key === 'ArrowRight') {
       e.preventDefault()
@@ -265,11 +264,10 @@ export function Cat1Workbench({
               {archetype.title} — {archetype.novamart_product_name}
             </h1>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-600 sm:text-sm">
-              Compare asking a model for a four-part write-up (<strong>Sonnet 5.5</strong>, then{' '}
-              <strong>Haiku 5.5</strong>) with asking <strong>Haiku 5.5</strong> for just the classification
-              through a JSON schema, and with a non-autoregressive decision model (<strong>Gemini Decision 1</strong>;{' '}
-              <strong>Jev</strong> as a rate-card comparator). The experiment below the rungs shows which change
-              saves the money: asking for less and the smaller model, not the schema.
+              The same ticket or SKU on <strong>Sonnet 5.5</strong> and <strong>Haiku 5.5</strong>, without the
+              improvement (a <strong>four-part write-up</strong> in free text) and with it (the{' '}
+              <strong>classification with a strict JSON schema</strong>). The experiment below the rungs shows the
+              four cells over 12 items and 3 repeats.
             </p>
           </div>
 
@@ -363,7 +361,7 @@ export function Cat1Workbench({
         </div>
       )}
 
-      {/* TAB PANEL 1: 3-RUNG ARENA (no padding/border directly on tabpanel per tabs guide) */}
+      {/* TAB PANEL 1: 4-RUNG ARENA (no padding/border directly on tabpanel per tabs guide) */}
       <div role="tabpanel" aria-labelledby="tab-arena" hidden={activeView !== 'arena'}>
         <div className="space-y-6">
           {/* Preset Picker & Input Envelope */}
@@ -444,7 +442,7 @@ export function Cat1Workbench({
                   onChange={(e) => setSimulateTiming(e.target.checked)}
                   className="accent-blue-600"
                 />
-                <span>Simulate staggered latency arrival in Replay mode (shows Rung 3 speed gap)</span>
+                <span>Simulate staggered latency arrival in Replay mode (classification answers arrive first)</span>
               </label>
 
               <button
@@ -500,35 +498,19 @@ export function Cat1Workbench({
                 ))}
               </div>
 
-              {/* System-1 Architectural Boundary + Deterministic PII Masking Panel */}
+              {/* Boundary note + Deterministic PII Masking Panel */}
               <section className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-5 shadow-xs">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="max-w-3xl space-y-1.5">
                     <div className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-indigo-900">
                       <ShieldCheck className="h-4 w-4 text-indigo-700" />
-                      System-1 Boundary &amp; Companion Deterministic PII Gate
+                      Boundary &amp; Companion Deterministic PII Gate
                     </div>
                     <p className="text-xs leading-relaxed text-slate-700">
                       {runResponse.system1_boundary_note}
                     </p>
                   </div>
 
-                  {runResponse.jev_comparator && (
-                    <div className="rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-xs shadow-2xs">
-                      <div className="font-bold text-emerald-900">
-                        TypeSafe Jev Reference Benchmark
-                      </div>
-                      <div className="mt-0.5 font-mono text-sm font-extrabold text-slate-900">
-                        ${runResponse.jev_comparator.cost_per_1k_usd.toFixed(4)} / 1k runs
-                        <span className="ml-2 text-xs text-emerald-700">
-                          (-{runResponse.jev_comparator.savings_vs_naive_pct.toFixed(1)}%)
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-slate-500">
-                        $0.042/M input · $0 output · Same System-1 boundary
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
@@ -578,12 +560,12 @@ export function Cat1Workbench({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-base font-extrabold text-slate-900">
-                  12-Item Queue Benchmark &amp; 6-Tier CFO Scale Projection
+                  12-Item Queue Benchmark &amp; CFO Scale Projection
                 </h2>
                 <p className="mt-0.5 text-xs text-slate-600">
-                  Runs the mixed Support Escalations + Cold-Start SKU feed through the four rungs, with the Batch
-                  API price for the Haiku schema rung (computed at 50%, not run), Gemini Decision 1, and Jev
-                  rate-card economics.
+                  Runs the mixed Support Escalations + Cold-Start SKU feed through the four rungs: Sonnet 5.5 and
+                  Haiku 5.5, without the improvement (four-part write-up) and with it (classification with a strict
+                  JSON schema). The two "with" rows also show the Batch API price (computed at 50%, not run).
                 </p>
               </div>
 
@@ -673,7 +655,7 @@ export function Cat1Workbench({
                               Unit Cost
                             </div>
                             <div className="font-mono text-sm font-extrabold text-blue-700">
-                              ${m.cost_per_1k_usd < 1 ? m.cost_per_1k_usd.toFixed(4) : m.cost_per_1k_usd.toFixed(2)}
+                              {fmtUsd(m.cost_per_1k_usd)}
                             </div>
                             <div className="text-[10px] text-slate-500">per 1k</div>
                           </div>
@@ -685,11 +667,10 @@ export function Cat1Workbench({
                 </section>
               )}
 
-              {/* 6-Tier CFO Comparison Table (Responsive Table Pattern) */}
+              {/* CFO Comparison Table of the four rungs (Responsive Table Pattern) */}
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <h3 id="cfo-table-heading" className="mb-3 text-sm font-extrabold text-slate-900">
-                  6-Tier FinOps Architecture Comparison ({batchResponse.total_items}-Item Mean:{' '}
-                  {batchResponse.avg_input_tokens} in tok/item)
+                  FinOps Comparison of the Four Rungs ({batchResponse.total_items}-Item Mean)
                 </h3>
 
                 <div
@@ -708,23 +689,25 @@ export function Cat1Workbench({
                         '--label-4': '"Cost / 1k"',
                         '--label-5': '"100k / mo"',
                         '--label-6': '"1M / mo"',
-                        '--label-7': '"Savings vs Rung 1"',
+                        '--label-7': '"Batch API (computed)"',
+                        '--label-8': '"Savings vs Sonnet write-up"',
                       } as React.CSSProperties
                     }
                   >
                     <caption className="sr-only">
-                      6-tier unit economics and accuracy comparison across the Sonnet write-up, the Haiku write-up,
-                      Haiku classification with a JSON schema, its Batch API price (computed), Gemini Decision 1, and
-                      TypeSafe Jev.
+                      Unit economics and accuracy of Sonnet 5.5 and Haiku 5.5, without the improvement (four-part
+                      write-up) and with it (classification with a strict JSON schema); the Batch API price of the two
+                      "with" rows is computed, not run.
                     </caption>
                     <thead className="bg-slate-900 text-[11px] font-bold uppercase tracking-wider text-slate-200">
                       <tr>
-                        <th className="px-4 py-3">Architecture Tier</th>
+                        <th className="px-4 py-3">Rung</th>
                         <th className="px-4 py-3 font-mono">Avg In / Out Tok</th>
                         <th className="px-4 py-3 font-mono">Field Accuracy</th>
                         <th className="px-4 py-3 text-right font-mono">Cost / 1k</th>
                         <th className="px-4 py-3 text-right font-mono">100k / mo</th>
                         <th className="px-4 py-3 text-right font-mono">1M / mo</th>
+                        <th className="px-4 py-3 text-right font-mono">Batch API (computed)</th>
                         <th className="px-4 py-3 text-right font-mono">Savings</th>
                       </tr>
                     </thead>
@@ -761,18 +744,32 @@ export function Cat1Workbench({
                               </div>
                             ) : (
                               <span className="text-[11px] text-slate-400">
-                                {row.schema_compliance_label || 'Ref only'}
+                                {row.schema_compliance_label || 'not scored'}
                               </span>
                             )}
                           </td>
                           <td className="px-4 py-3 text-right font-mono font-bold tabular-nums text-slate-900">
-                            ${row.cost_per_1k_usd < 1 ? row.cost_per_1k_usd.toFixed(4) : row.cost_per_1k_usd.toFixed(2)}
+                            {fmtUsd(row.cost_per_1k_usd)}
                           </td>
                           <td className="px-4 py-3 text-right font-mono tabular-nums text-slate-800">
                             ${row.monthly_100k_usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                           <td className="px-4 py-3 text-right font-mono font-bold tabular-nums text-slate-900">
                             ${row.monthly_1m_usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono tabular-nums text-slate-700">
+                            {row.batch_cost_per_1k_usd != null ? (
+                              <div>
+                                <div>{fmtUsd(row.batch_cost_per_1k_usd)} / 1k</div>
+                                {row.batch_monthly_1m_usd != null && (
+                                  <div className="text-[10px] text-slate-500">
+                                    ${row.batch_monthly_1m_usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / 1M mo
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-right font-mono font-bold tabular-nums">
                             {row.savings_vs_naive_pct > 0 ? (
@@ -810,14 +807,14 @@ export function Cat1Workbench({
                         '--label-2': '"Sub-task"',
                         '--label-3': '"Tokens"',
                         '--label-4': '"Haiku 5.5 schema"',
-                        '--label-5': '"Gemini Decision 1"',
-                        '--label-6': '"Accuracy (S/HN/H/G)"',
+                        '--label-5': '"Sonnet 5.5 schema"',
+                        '--label-6': '"Accuracy (SW/HW/SS/HS)"',
                         '--label-7': '"Regex PII"',
                       } as React.CSSProperties
                     }
                   >
                     <caption className="sr-only">
-                      Item-level classification outputs and ground-truth accuracy across the Sonnet write-up, the Haiku write-up, Haiku 5.5 with a JSON schema, and Gemini Decision 1.
+                      Item-level classification outputs and ground-truth accuracy for the Sonnet and Haiku write-ups and the Sonnet and Haiku JSON-schema classifications.
                     </caption>
                     <thead className="bg-slate-900 text-[11px] font-bold uppercase tracking-wider text-slate-200">
                       <tr>
@@ -825,7 +822,7 @@ export function Cat1Workbench({
                         <th className="px-4 py-3">Track</th>
                         <th className="px-4 py-3 font-mono">In / Haiku Out</th>
                         <th className="px-4 py-3">Haiku 5.5 Verdict</th>
-                        <th className="px-4 py-3">Gemini Decision 1 (0 Out)</th>
+                        <th className="px-4 py-3">Sonnet 5.5 Verdict</th>
                         <th className="px-4 py-3 font-mono">Accuracy (vs GT)</th>
                         <th className="px-4 py-3 text-right font-mono">PII Masked</th>
                       </tr>
@@ -863,27 +860,33 @@ export function Cat1Workbench({
                           </td>
                           <td className="px-4 py-3 font-mono text-[11px] text-indigo-800">
                             {String(
-                              item.gemini_decision.queue ??
-                                item.gemini_decision.compliance_status ??
+                              item.sonnet_schema_decision.queue ??
+                                item.sonnet_schema_decision.compliance_status ??
                                 ''
                             )}{' '}
-                            <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold">
-                              {(item.gemini_confidence * 100).toFixed(1)}% conf
+                            <span className="text-slate-400">
+                              (
+                              {String(
+                                item.sonnet_schema_decision.priority ??
+                                  item.sonnet_schema_decision.leaf_category ??
+                                  ''
+                              )}
+                              )
                             </span>
                           </td>
                           <td className="px-4 py-3 font-mono text-[10px]">
                             <div className="flex flex-wrap gap-1">
-                              <span className="rounded bg-rose-50 px-1.5 py-0.5 text-rose-800 ring-1 ring-rose-200">
-                                S:{item.sonnet_accuracy_pct == null ? '—' : `${item.sonnet_accuracy_pct.toFixed(0)}%`}
+                              <span className="rounded bg-rose-50 px-1.5 py-0.5 text-rose-800 ring-1 ring-rose-200" title="Sonnet write-up (usable as a classification)">
+                                SW:{fmtPct(item.sonnet_accuracy_pct)}
                               </span>
-                              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-900 ring-1 ring-amber-200">
-                                HN:{item.haiku_naive_accuracy_pct == null ? '—' : `${item.haiku_naive_accuracy_pct.toFixed(0)}%`}
+                              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-900 ring-1 ring-amber-200" title="Haiku write-up (usable as a classification)">
+                                HW:{fmtPct(item.haiku_naive_accuracy_pct)}
                               </span>
-                              <span className="rounded bg-blue-50 px-1.5 py-0.5 font-bold text-blue-800 ring-1 ring-blue-200">
-                                H:{(item.haiku_accuracy_pct ?? 0).toFixed(0)}%
+                              <span className="rounded bg-indigo-50 px-1.5 py-0.5 font-bold text-indigo-800 ring-1 ring-indigo-200" title="Sonnet classification with JSON schema">
+                                SS:{fmtPct(item.sonnet_schema_accuracy_pct)}
                               </span>
-                              <span className="rounded bg-indigo-50 px-1.5 py-0.5 font-bold text-indigo-800 ring-1 ring-indigo-200">
-                                G:{(item.gemini_accuracy_pct ?? 0).toFixed(0)}%
+                              <span className="rounded bg-blue-50 px-1.5 py-0.5 font-bold text-blue-800 ring-1 ring-blue-200" title="Haiku classification with JSON schema">
+                                HS:{fmtPct(item.haiku_accuracy_pct)}
                               </span>
                             </div>
                           </td>
@@ -914,7 +917,7 @@ export function Cat1Workbench({
         open={inspectorOpen}
         onClose={() => setInspectorOpen(false)}
         title="Category 1 Architecture & SDK Inspector"
-        subtitle="Inspect the call settings, the Rung 2 JSON schema, and the Gemini Decisions API questions"
+        subtitle="Inspect the call settings of the four rungs and the JSON schema of the classification rungs"
         maxWidthClass="max-w-3xl"
       >
         <div className="space-y-4">
@@ -927,8 +930,7 @@ export function Cat1Workbench({
             {(
               [
                 ['code', 'Python SDK Comparison'],
-                ['schema', 'Rung 2 JSON Schema'],
-                ['questions', 'Rung 3 Gemini Decision Questions'],
+                ['schema', 'Classification JSON Schema'],
               ] as const
             ).map(([tid, label]) => (
               <button
@@ -950,7 +952,7 @@ export function Cat1Workbench({
 
           <div role="tabpanel" aria-labelledby="insp-tab-code" hidden={inspectorTab !== 'code'}>
             <div className="space-y-3">
-              {(['sonnet_naive', 'haiku_naive', 'haiku_calibrated', 'gemini_decision'] as const).map((rId) => (
+              {ALL_RUNGS.map((rId) => (
                 <pre
                   key={rId}
                   className="overflow-x-auto rounded-xl bg-slate-950 p-3.5 font-mono text-[11px] leading-relaxed text-slate-100"
@@ -967,15 +969,6 @@ export function Cat1Workbench({
             </pre>
           </div>
 
-          <div
-            role="tabpanel"
-            aria-labelledby="insp-tab-questions"
-            hidden={inspectorTab !== 'questions'}
-          >
-            <pre className="overflow-x-auto rounded-xl bg-slate-950 p-4 font-mono text-[11px] leading-relaxed text-indigo-200">
-              {JSON.stringify(presetsData.decision_questions[subTask], null, 2)}
-            </pre>
-          </div>
         </div>
       </NativeModal>
     </div>

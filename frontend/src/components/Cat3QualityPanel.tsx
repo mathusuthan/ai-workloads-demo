@@ -13,14 +13,12 @@ interface Cat3QualityPanelProps {
 }
 
 const RUNG_SHORT: Record<Cat3RungId, string> = {
-  naive_full_history: 'Rung 1 · Full history',
-  prefix_cached_history: 'Rung 2 · Cached full history',
-  prefix_cached_summarized: 'Rung 3 · Cached + compacted memory',
+  naive_full_history: 'Without · Full history, no cache',
+  prefix_cached_summarized: 'With · Cached prefix + sliding-window summaries',
 }
 
 const RUNG_BAR: Record<Cat3RungId, string> = {
   naive_full_history: 'bg-rose-500',
-  prefix_cached_history: 'bg-amber-500',
   prefix_cached_summarized: 'bg-emerald-600',
 }
 
@@ -97,7 +95,7 @@ export function Cat3QualityPanel({ results, portfolio }: Cat3QualityPanelProps) 
   const scored = ok.filter((r) => r.quality)
   const maxCost = Math.max(0, ...ok.map((r) => r.cost_per_1k_sessions_usd))
 
-  // Probe rows: union of every rung's probes, in answer-key order of the first rung that has them.
+  // Probe rows: union of both versions' probes, in answer-key order of the first version that has them.
   const probeRows: { key: string; question: string; expected: string; originTurn: number }[] = []
   for (const r of scored) {
     for (const p of r.quality?.probes ?? []) {
@@ -115,9 +113,9 @@ export function Cat3QualityPanel({ results, portfolio }: Cat3QualityPanelProps) 
           <ShieldCheck className="h-4 w-4" />
           Answer Quality vs Cost · Scored Against a Fixed Answer Key
         </div>
-        <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">What Each Context Strategy Keeps — and What It Leaves Out</h2>
+        <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">What Each Version Keeps — and What It Leaves Out</h2>
         <p className="mt-1 max-w-4xl text-xs leading-relaxed text-slate-600">
-          Every reply is checked for the specific IDs, amounts and dates the answer key expects. After Turn 10, each rung
+          Every reply is checked for the specific IDs, amounts and dates the answer key expects. After Turn 10, each version
           is asked six short questions about details from earlier turns. Cost is the full 10-turn session.
         </p>
       </div>
@@ -127,7 +125,7 @@ export function Cat3QualityPanel({ results, portfolio }: Cat3QualityPanelProps) 
           Quality scores are not available for this run.
         </p>
       ) : (
-        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
           {ok.map((r) => {
             const q = r.quality
             const pf = portfolio?.rungs.find((x) => x.rung_id === r.rung_id)
@@ -165,13 +163,13 @@ export function Cat3QualityPanel({ results, portfolio }: Cat3QualityPanelProps) 
                     </div>
                   </>
                 ) : (
-                  <p className="text-[11px] text-slate-500">Not scored for this rung.</p>
+                  <p className="text-[11px] text-slate-500">Not scored for this version.</p>
                 )}
                 <div className="border-t border-slate-200 pt-2 text-[10px] leading-snug text-slate-600">
                   {pf && portfolio ? (
                     <>
                       <strong className="text-slate-700">
-                        Across all {portfolio.runs} rerun sessions ({pf.runs} on this rung):
+                        Across all {portfolio.runs} rerun sessions ({pf.runs} on this version):
                       </strong>{' '}
                       grounded {frac(pf.turn_recall)} · early details {frac(pf.ledger_by_origin['1-3'])} · recall{' '}
                       {frac(pf.probe_accuracy)}

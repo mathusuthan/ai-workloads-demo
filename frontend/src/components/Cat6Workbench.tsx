@@ -287,16 +287,15 @@ export function Cat6Workbench({
               {archetype.title} — {archetype.novamart_product_name}
             </h1>
             <p className="mt-1 text-sm leading-relaxed text-slate-600">
-              Contrast an <strong className="text-slate-900">Unisolated Shared-Bus Swarm</strong> on
-              Sonnet 5.5 against{' '}
+              One swarm with and without the deck&apos;s lever,{' '}
               <strong className="text-slate-900">
-                Isolated Sub-Agent Contexts + Byte-Identical Repo Prefix Cache + PR-SANDBOX-GATE-01
-              </strong>{' '}
-              and{' '}
-              <strong className="text-slate-900">
-                Haiku Orchestration + Sonnet Patch Author Routing
-              </strong>{' '}
-              graded by <strong className="text-violet-800">Cost per Verified Outcome (CpO)</strong>.
+                Isolated Sub-Agent Contexts + Byte-Identical Repo Prefix Cache
+              </strong>
+              : a <strong className="text-slate-900">Shared-Bus Swarm</strong> on Sonnet 5.5 against the
+              isolated swarm on Sonnet 5.5 and on{' '}
+              <strong className="text-slate-900">Haiku agents + a Sonnet Patch Author</strong>. Every
+              rung has the same role instructions and PR-SANDBOX-GATE-01 with one retry, graded by{' '}
+              <strong className="text-violet-800">Cost per Verified Outcome (CpO)</strong>.
             </p>
           </div>
 
@@ -583,7 +582,7 @@ export function Cat6Workbench({
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-extrabold text-slate-900">
-                    Sub-Agent Context Isolation vs. Shared Omnibus Bloat
+                    Prompt Tokens per Turn: With and Without Context Isolation
                   </h2>
                   <p className="text-[11px] text-slate-500">
                     Prompt tokens per swarm handoff step (O(N) bus accumulation vs. flat isolated prefixes)

@@ -23,7 +23,6 @@ import statistics
 from collections import Counter
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass
-from functools import lru_cache
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -31,10 +30,6 @@ from uuid import uuid4
 
 from app.archetypes.cat5_orchestration.accuracy import evaluate_cat5_adjudication
 from app.archetypes.cat5_orchestration.erp_db import (
-    BUNDLE_VERSION,
-    BUNDLE_VERSION_V1,
-    GATE_VERSION,
-    GATE_VERSION_V1,
     GOVERNED_TOOLS,
     NAIVE_TOOLS,
     Cat5ErpSession,
@@ -53,9 +48,6 @@ from app.data.cat5_ablation_fixtures import (
     CAT5_ABLATION_ALL_INVOICE_IDS,
     CAT5_ABLATION_DEFAULT_INVOICE_IDS,
     CAT5_ABLATION_ERP_ROWS,
-    CAT5_ABLATION_EXCLUDED_PENDING_REVIEW,
-    CAT5_ABLATION_GATE_DISAGREEMENT,
-    CAT5_ABLATION_GATE_DISAGREEMENT_IDS,
     CAT5_ABLATION_FIXTURE_VERSION,
     CAT5_ABLATION_PRESETS,
     CAT5_ABLATION_PRESETS_BY_ID,
@@ -75,16 +67,8 @@ GATE_TURN_CAP = GATE_STEP_BUDGET + 1  # as runner: governed hard_loop_cap = max_
 NEUTRAL_TURN_CAP = 12
 CALL_TIMEOUT_S = 180.0
 TOOL_RESULT_HEAD_CHARS = 1500
-# Recorded only (not compared for superseding). v2: tool_use blocks run unless the turn hit max_tokens.
+# Recorded only (not compared for superseding): tool_use blocks run unless the turn hit max_tokens.
 LOOP_RULE = "v2-execute-tool-use-unless-truncated"
-
-# Policy gate fixed after the experiment (manual 2.1: the 1.5% band only for index-linked POs) and the bundle now
-# returns the PO currency notes. Records carry `gate_version` / `bundle_version` in settings; records written before
-# the fix lack them and are v1. Neither is in _SETTINGS_COMPARED: for the 11 default invoices the fixed gate returns
-# byte-identical output (tested), and the added bundle field does not bear on them (no inside-band rise on any of
-# them), so their records stay current. Only where the two gate versions disagree (inv-06) does a gate arm's record
-# count for its own gate version (see `gate_version_matters`).
-GATE_FIX_DATE = "2026-11-26"
 
 # The app's rung 1 now uses this same text (prompts.CAT5_FREE_CHOICE_PROTOCOL); one definition for both.
 NEUTRAL_PROTOCOL = CAT5_FREE_CHOICE_PROTOCOL
@@ -141,31 +125,18 @@ ARMS: dict[str, ArmSpec] = {
                 "GOVERNED_TOOLS; cached; Haiku -> Sonnet on gate escalation; today's hybrid prompt"),
     )
 }
-ARM_IDS: tuple[str, ...] = tuple(ARMS)
-
-LEVERS: tuple[tuple[str, str, str], ...] = (
-    ("caching alone", "raw_free_sonnet", "raw_free_sonnet_cached"),
-    ("narrow query", "raw_free_sonnet_cached", "bundle_sonnet_cached"),
-    ("deterministic gate", "bundle_sonnet_cached", "bundle_gate_sonnet_cached"),
-    ("model swap without gate", "bundle_sonnet_cached", "bundle_haiku_cached"),
-    ("gate + tiering", "bundle_haiku_cached", "bundle_gate_haiku_escalate"),
-    ("gate Sonnet -> gate Haiku escalate", "bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate"),
-)
-
-_ARM_DIFF_FIELDS: tuple[str, ...] = ("tool_set", "cached", "start_model", "escalate", "gate", "prompt", "turn_cap")
-
+# The deck's improvement, without and with (the cells every display shows): the free-choice raw-table loop on
+# Sonnet; the 4-step budget + deterministic policy tool (with one narrow query and the cached policy manual) on
+# Sonnet, and Haiku-first escalating to Sonnet.
+ARM_IDS: tuple[str, ...] = ("raw_free_sonnet", "bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate")
+# Single levers tried on the way (valid runs kept in experiments/cat5_ablation/other_levers/, not displayed).
+OTHER_LEVER_ARM_IDS: tuple[str, ...] = ("raw_free_sonnet_cached", "bundle_sonnet_cached", "bundle_haiku_cached")
 
 def _arm(arm_id: str) -> ArmSpec:
     try:
         return ARMS[arm_id]
     except KeyError:
         raise ValueError(f"Unknown Cat 5 ablation arm `{arm_id}`; expected one of {list(ARMS)}") from None
-
-
-def arm_differences(a: str, b: str) -> list[str]:
-    """Attributes that differ between two arms, e.g. ['cached: False -> True']."""
-    sa, sb = _arm(a), _arm(b)
-    return [f"{f}: {getattr(sa, f)} -> {getattr(sb, f)}" for f in _ARM_DIFF_FIELDS if getattr(sa, f) != getattr(sb, f)]
 
 
 def _commit_tool(tools: Sequence[dict[str, Any]]) -> dict[str, Any]:
@@ -228,8 +199,6 @@ def current_settings(arm_id: str, preset_id: str) -> dict[str, Any]:
         "timeout_s": CALL_TIMEOUT_S,
         "fixture_version": CAT5_ABLATION_FIXTURE_VERSION,
         "loop_rule": LOOP_RULE,
-        "gate_version": GATE_VERSION,
-        "bundle_version": BUNDLE_VERSION,
         "invoice_fingerprint": invoice_fingerprint(preset_id),
         "arm_fingerprint": arm_fingerprint(arm_id),
     }
@@ -271,60 +240,58 @@ class AblationErpSession(Cat5ErpSession):
         *,
         rung_id: str,
         extra_rows: dict[str, list[dict[str, Any]]] | None = None,
-        gate_version: str = GATE_VERSION,
-        bundle_version: str = BUNDLE_VERSION,
     ) -> None:
-        # self.conn = create_seeded_erp_connection()
-        super().__init__(rung_id=rung_id, gate_version=gate_version, bundle_version=bundle_version)
+        super().__init__(rung_id=rung_id)
         insert_ablation_rows(self.conn, CAT5_ABLATION_ERP_ROWS if extra_rows is None else extra_rows)
 
     def all_vouchers(self) -> list[dict[str, Any]]:
         return [dict(r) for r in self.conn.execute("SELECT * FROM reconciliation_vouchers ORDER BY voucher_id")]
 
 
-def gate_output_for(preset_id: str, gate_version: str = GATE_VERSION) -> dict[str, Any]:
+def gate_output_for(preset_id: str) -> dict[str, Any]:
     """Run the app's deterministic gate on a fresh extended ERP for one invoice."""
     s = AblationErpSession(rung_id="bounded_sonnet_cached_gate")
     try:
-        return evaluate_deterministic_policy_gate(
-            s.conn, CAT5_ABLATION_PRESETS_BY_ID[preset_id]["invoice_id"], gate_version=gate_version
-        )
+        return evaluate_deterministic_policy_gate(s.conn, CAT5_ABLATION_PRESETS_BY_ID[preset_id]["invoice_id"])
     finally:
         s.close()
 
 
-def record_gate_version(record: dict[str, Any]) -> str:
-    """Gate version a record ran against; records written before the fix lack the field and are v1."""
-    return str((record.get("settings") or {}).get("gate_version") or GATE_VERSION_V1)
+_REPLAY_CACHE: dict[str, bool] = {}
 
 
-def record_bundle_version(record: dict[str, Any]) -> str:
-    return str((record.get("settings") or {}).get("bundle_version") or BUNDLE_VERSION_V1)
+def record_tool_outputs_current(record: dict[str, Any]) -> bool:
+    """Every executed tool call in the record, replayed in order on a fresh ERP session of the arm's kind, returns the
+    bytes it returned when recorded (its result_sha256): the policy tool, the narrow query, the raw queries and the
+    commit alike. A record made while any tool returned something else is stale. True for a run without tool calls."""
+    arm = ARMS.get(str(record.get("arm_id")))
+    if arm is None:
+        return False
+    calls = [
+        (c.get("name"), c.get("input"), c.get("result_sha256"))
+        for t in record.get("turns") or []
+        for c in t.get("tool_calls") or []
+        if c.get("executed")
+    ]
+    key = _sha(json.dumps([arm.session_rung_id, calls], sort_keys=True, default=str))
+    if key not in _REPLAY_CACHE:
+        session = AblationErpSession(rung_id=arm.session_rung_id)
+        try:
+            ok = True
+            for name, inp, sha in calls:
+                if _sha(session.execute_tool(str(name), dict(inp or {}))[0]) != sha:
+                    ok = False
+                    break
+        finally:
+            session.close()
+        _REPLAY_CACHE[key] = ok
+    return _REPLAY_CACHE[key]
 
 
-def session_for_record(record: dict[str, Any], *, rung_id: str) -> AblationErpSession:
-    """A fresh ERP session with the tool versions the record ran against (for replaying its recorded tool calls)."""
-    return AblationErpSession(rung_id=rung_id, gate_version=record_gate_version(record),
-                              bundle_version=record_bundle_version(record))
-
-
-@lru_cache(maxsize=None)
-def gate_versions_disagree(preset_id: str) -> bool:
-    """True when the pre-fix (v1) and current gate return different output for this invoice."""
-    return json.dumps(gate_output_for(preset_id, GATE_VERSION_V1), sort_keys=True) != json.dumps(
-        gate_output_for(preset_id, GATE_VERSION), sort_keys=True
-    )
-
-
-def gate_version_matters(arm_id: str, preset_id: str) -> bool:
-    """A gate arm's outcome on an invoice where the gate versions disagree depends on the gate version (inv-06)."""
-    return bool(_arm(arm_id).gate) and preset_id in CAT5_ABLATION_PRESETS_BY_ID and gate_versions_disagree(preset_id)
-
-
-def compare_with_gate(preset_id: str, gate_version: str = GATE_VERSION) -> dict[str, Any]:
+def compare_with_gate(preset_id: str) -> dict[str, Any]:
     """Hand-derived ground truth vs the gate: per-field differences (rupees within 0.005) + escalation."""
     gt = CAT5_ABLATION_PRESETS_BY_ID[preset_id]["ground_truth"]
-    g = gate_output_for(preset_id, gate_version)
+    g = gate_output_for(preset_id)
     gate_vals = {"decision": g.get("recommended_decision"), **{f: g.get(f) for f in VOUCHER_FIELDS[1:]}}
     diffs: dict[str, dict[str, Any]] = {}
     for f in VOUCHER_FIELDS:
@@ -577,58 +544,23 @@ def is_current_settings(record: dict[str, Any]) -> bool:
     return all(got.get(k) == cur[k] for k in _SETTINGS_COMPARED)
 
 
-def superseded_records(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    out = []
-    for r in records:
-        if is_current_settings(r):
-            continue
-        s = r.get("settings") or {}
-        out.append(
-            {
-                "reason": ARTIFACT_REASON if harness_artifact(r) else "settings changed",
-                "run_id": r.get("run_id"),
-                "arm_id": r.get("arm_id"),
-                "preset_id": r.get("preset_id"),
-                "repeat_index": r.get("repeat_index"),
-                "status": r.get("status"),
-                "recorded": {k: s.get(k) for k in _SETTINGS_COMPARED},
-            }
-        )
-    return out
-
-
-def is_current_gate(record: dict[str, Any]) -> bool:
-    """False only for a gate-arm record on an invoice where the gate versions disagree, run on a non-current gate.
-    Such a record is kept as before-fix evidence (reported by gate version, not superseded); its key is pending
-    again at the current gate."""
-    try:
-        matters = gate_version_matters(str(record["arm_id"]), str(record["preset_id"]))
-    except (KeyError, ValueError):
-        return True
-    return not matters or record_gate_version(record) == GATE_VERSION
+def record_is_current(record: dict[str, Any]) -> bool:
+    """An ok record valid under the current settings and loop rule whose every tool call returned what that tool
+    returns now (`record_tool_outputs_current`)."""
+    return record.get("status") == "ok" and is_current_settings(record) and record_tool_outputs_current(record)
 
 
 def select_pending(planned: Iterable[RunKey], existing: Iterable[dict[str, Any]]) -> list[RunKey]:
-    """A key is done only with an `ok` record at the current settings (and, where it matters, the current gate);
-    errors and superseded records leave it pending."""
-    done = {record_key(r) for r in existing if r.get("status") == "ok" and is_current_settings(r) and is_current_gate(r)}
+    """A key is done only with a current record (see `record_is_current`)."""
+    done = {record_key(r) for r in existing if record_is_current(r)}
     return [k for k in planned if k not in done]
 
 
 def latest_ok_current(records: Iterable[dict[str, Any]]) -> dict[RunKey, dict[str, Any]]:
     out: dict[RunKey, dict[str, Any]] = {}
     for r in records:
-        if r.get("status") == "ok" and is_current_settings(r) and is_current_gate(r):
+        if record_is_current(r):
             out[record_key(r)] = r  # file order: later wins
-    return out
-
-
-def latest_ok_by_gate_version(records: Iterable[dict[str, Any]]) -> dict[str, dict[RunKey, dict[str, Any]]]:
-    """Latest ok record per key at current settings, split by the gate version it ran against."""
-    out: dict[str, dict[RunKey, dict[str, Any]]] = {}
-    for r in records:
-        if r.get("status") == "ok" and is_current_settings(r):
-            out.setdefault(record_gate_version(r), {})[record_key(r)] = r
     return out
 
 
@@ -697,23 +629,6 @@ SUMMARY_PATH = GOLDEN_PATH.parent / "cat5_ablation_summary.json"
 ABLATION_GOLDEN_SOURCE = "cat5 ablation"
 
 
-def original_scripted_golden(golden_path: Path | str | None = None, summary_path: Path | str | None = None) -> dict[str, Any]:
-    """The original scripted naive captures (the old `unbounded_sonnet_loop` prompt), as a golden-shaped dict.
-
-    Until the golden file is rebuilt from the ablation it holds them itself; afterwards they live in
-    replays/cat5_ablation_summary.json (`original_scripted_captures`)."""
-    golden = load_golden(golden_path)
-    if (golden.get("provenance") or {}).get("source") != ABLATION_GOLDEN_SOURCE:
-        held = {pid: {"rungs": {"unbounded_sonnet_loop": p["rungs"]["unbounded_sonnet_loop"]}}
-                for pid, p in (golden.get("presets") or {}).items()
-                if "unbounded_sonnet_loop" in (p.get("rungs") or {})}
-        if held:
-            return {"presets": held}
-    sp = Path(summary_path or SUMMARY_PATH)
-    caps = (json.loads(sp.read_text(encoding="utf-8")).get("original_scripted_captures") or {}) if sp.is_file() else {}
-    return {"presets": {pid: {"rungs": {"unbounded_sonnet_loop": c}} for pid, c in caps.items()}}
-
-
 def load_golden(path: Path | str | None = None) -> dict[str, Any]:
     p = Path(path or GOLDEN_PATH)
     return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {"presets": {}}
@@ -775,10 +690,12 @@ def _reference_steps(arm: ArmSpec, preset: dict[str, Any], cal: Calibration) -> 
     if preset["id"] in by_preset:
         return [by_preset[preset["id"]]]
     if arm.escalate:
+        hard_stop = preset.get("analysis_tier") == "hard_stop"
         same = [
             s for pid, s in by_preset.items()
             if bool(CAT5_ABLATION_PRESETS_BY_ID[pid]["ground_truth"]["expected_escalation"])
             == bool(preset["ground_truth"]["expected_escalation"])
+            and (CAT5_ABLATION_PRESETS_BY_ID[pid].get("analysis_tier") == "hard_stop") == hard_stop
         ]
         if same:
             return same
@@ -914,6 +831,7 @@ def _all_tool_calls(record: dict[str, Any]) -> list[dict[str, Any]]:
 def score_record(record: dict[str, Any]) -> dict[str, Any]:
     """Per-run scorecard (re-evaluated from the recorded voucher and trajectory)."""
     preset = CAT5_ABLATION_PRESETS_BY_ID[str(record["preset_id"])]
+    esc_expected = bool(preset["ground_truth"].get("expected_escalation"))
     ev = evaluate_record(record, preset)
     fields = {fc["field"]: bool(fc["matched"]) for fc in ev["field_checks"]}
     turns = record.get("turns") or []
@@ -939,7 +857,7 @@ def score_record(record: dict[str, Any]) -> dict[str, Any]:
         "turns": len(turns),
         "cap_hit": bool(record.get("cap_hit")),
         "truncated_turns": sum(1 for t in turns if t.get("stop_reason") == "max_tokens"),
-        "escalation_expected": bool(preset["ground_truth"].get("expected_escalation")),
+        "escalation_expected": esc_expected,
         "escalation_fired": bool(record.get("escalation_fired")),
         "gate_escalation_flagged": bool(record.get("gate_escalation_flagged")),
         "tokens": {
@@ -1011,73 +929,6 @@ def group_metrics(scores: Sequence[dict[str, Any]], *, arm_id: str | None = None
     }
 
 
-def lever_table(arm_metrics: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    rows = []
-    for label, a, b in LEVERS:
-        ma, mb = arm_metrics.get(a), arm_metrics.get(b)
-        row: dict[str, Any] = {"lever": label, "from_arm": a, "to_arm": b, "changes": arm_differences(a, b)}
-        if not ma or not mb or not ma["runs"] or not mb["runs"]:
-            row.update({"available": False})
-            rows.append(row)
-            continue
-        row["available"] = True
-        row["runs"] = {"from": ma["runs"], "to": mb["runs"]}
-        for metric in ("exact", "decision_correct"):
-            ra, rb = ma[metric]["rate"], mb[metric]["rate"]
-            row[metric] = {"from": ra, "to": rb, "delta_pp": (rb - ra) * 100}
-        row["cost_per_1k_invoices_usd"] = {}
-        for v in ("billed", "cold", "warm"):
-            ca, cb = ma["cost_per_1k_invoices_usd"][v], mb["cost_per_1k_invoices_usd"][v]
-            row["cost_per_1k_invoices_usd"][v] = {
-                "from": ca,
-                "to": cb,
-                "delta": cb - ca,
-                "ratio": (cb / ca) if ca else None,
-            }
-        rows.append(row)
-    return rows
-
-
-def golden_baseline(golden: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """The stored scripted naive runs (unbounded_sonnet_loop, n=1 each) scored like ablation runs."""
-    golden = golden if golden is not None else original_scripted_golden()
-    out = []
-    for pid, pdata in sorted((golden.get("presets") or {}).items()):
-        rung = (pdata.get("rungs") or {}).get("unbounded_sonnet_loop")
-        if not rung or pid not in CAT5_ABLATION_PRESETS_BY_ID:
-            continue
-        steps = rung.get("steps") or []
-        pseudo = {
-            "arm_id": "raw_free_sonnet",
-            "preset_id": pid,
-            "repeat_index": 0,
-            "settings": {"step_budget": 10},
-            "arm": {"cached": False},
-            "committed_voucher": rung.get("committed_voucher"),
-            "tables_touched": rung.get("tables_touched") or [],
-            "total_tool_calls": rung.get("total_tool_calls") or 0,
-            "optimal_tool_calls": rung.get("optimal_tool_calls") or 0,
-            "turns_used": len(steps),
-            "turns": [
-                {
-                    "model_id": s.get("model_id"),
-                    "intended_model_id": SONNET_MODEL_ID,
-                    "input_tokens": s.get("input_tokens"),
-                    "output_tokens": s.get("output_tokens"),
-                    "cache_creation_tokens": s.get("cache_creation_tokens"),
-                    "cache_read_tokens": s.get("cache_read_tokens"),
-                    "stop_reason": s.get("stop_reason"),
-                    "tool_calls": [{"name": c.get("tool_name")} for c in s.get("tool_calls") or []],
-                }
-                for s in steps
-            ],
-        }
-        sc = score_record(pseudo)
-        sc.update({"label": "original scripted baseline (golden replay, n=1)", "run_id": None})
-        out.append(sc)
-    return out
-
-
 def _review_entry(record: dict[str, Any], score: dict[str, Any]) -> dict[str, Any]:
     preset = CAT5_ABLATION_PRESETS_BY_ID[str(record["preset_id"])]
     gt = preset["ground_truth"]
@@ -1099,58 +950,31 @@ def _review_entry(record: dict[str, Any], score: dict[str, Any]) -> dict[str, An
     }
 
 
-def data_quality(records: Sequence[dict[str, Any]], used: Sequence[dict[str, Any]]) -> dict[str, Any]:
-    def loc(r: dict[str, Any], **extra: Any) -> dict[str, Any]:
-        return {"run_id": r.get("run_id"), "arm_id": r.get("arm_id"), "preset_id": r.get("preset_id"),
-                "repeat_index": r.get("repeat_index"), "status": r.get("status"), **extra}
-
-    current = [r for r in records if is_current_settings(r)]
-    errors = [r for r in current if r.get("status") != "ok"]
-    truncations, mismatches, cache_anoms, disallowed, stop_mismatch = [], [], [], [], []
-    for r in current:
+def data_quality(used: Sequence[dict[str, Any]]) -> dict[str, int]:
+    """Counts over the records the tables use."""
+    truncated = mism = cache = disallowed = stop_other = 0
+    for r in used:
         cached = bool((r.get("arm") or {}).get("cached"))
         seen: set[str] = set()
         for t in r.get("turns") or []:
-            n = t.get("turn_number")
-            if t.get("stop_reason") == "max_tokens":
-                truncations.append(loc(r, turn_number=n, output_tokens=t.get("output_tokens"),
-                                       tool_calls_not_executed=len(t.get("tool_calls_not_executed") or [])))
-            if t.get("model_id") != t.get("intended_model_id"):
-                mismatches.append(loc(r, turn_number=n, intended_model_id=t.get("intended_model_id"), model_id=t.get("model_id")))
+            truncated += t.get("stop_reason") == "max_tokens"
+            mism += t.get("model_id") != t.get("intended_model_id")
             cw, cr = int(t.get("cache_creation_tokens") or 0), int(t.get("cache_read_tokens") or 0)
             mid = str(t.get("model_id"))
             first = mid not in seen
             seen.add(mid)
-            issue = None
-            if not cached and (cw or cr):
-                issue = "uncached arm reported cache tokens"
-            elif cached and cw + cr == 0:
-                issue = "cached arm turn with no cache write or read"
-            elif cached and first and cr > 0:
-                issue = "first turn on this model read the cache (nonce should force a write)"
-            elif cached and not first and cr == 0:
-                issue = "later turn on this model did not read the cache"
-            if issue:
-                cache_anoms.append(loc(r, turn_number=n, model_id=mid, cache_creation_tokens=cw, cache_read_tokens=cr, issue=issue))
-            for c in t.get("tool_calls") or []:
-                if c.get("rejected_reason"):
-                    disallowed.append(loc(r, turn_number=n, tool=c.get("name"), reason=c.get("rejected_reason")))
-            if t.get("tool_use_with_stop_reason"):
-                stop_mismatch.append(loc(r, turn_number=n, stop_reason=t.get("tool_use_with_stop_reason"),
-                                         tool_calls=len(t.get("tool_calls") or [])))
+            cache += bool((not cached and (cw or cr)) or (cached and cw + cr == 0) or (cached and first and cr > 0)
+                          or (cached and not first and cr == 0))
+            disallowed += sum(1 for c in t.get("tool_calls") or [] if c.get("rejected_reason"))
+            stop_other += bool(t.get("tool_use_with_stop_reason"))
     return {
-        "errors": [loc(r, error_message=r.get("error_message"), completed_turns=len(r.get("turns") or []),
-                       billed_usd=record_billed_usd(r)) for r in errors],
-        "truncated_turns": truncations,
-        "model_mismatches": mismatches,
-        "cache_anomalies": cache_anoms,
-        "cap_hits": [loc(r, turns=len(r.get("turns") or []), committed=bool(r.get("committed_voucher"))) for r in used if r.get("cap_hit")],
-        "no_voucher_committed": [loc(r) for r in used if not r.get("committed_voucher")],
+        "truncated_turns": truncated,
+        "model_mismatches": mism,
+        "cache_anomalies": cache,
+        "cap_hits": sum(1 for r in used if r.get("cap_hit")),
+        "no_voucher_committed": sum(1 for r in used if not r.get("committed_voucher")),
         "disallowed_tool_calls": disallowed,
-        "tool_use_blocks_with_other_stop_reason": stop_mismatch,
-        "superseded_records": superseded_records(records),
-        "error_spend_usd": sum(record_billed_usd(r) for r in errors),
-        "superseded_spend_usd": sum(record_billed_usd(r) for r in records if not is_current_settings(r)),
+        "tool_use_blocks_with_other_stop_reason": stop_other,
     }
 
 
@@ -1168,196 +992,43 @@ def fixture_table() -> list[dict[str, Any]]:
                 "fc_hub": p["fc_hub"],
                 "expected_decision": gt["decision"],
                 "expected_escalation": gt["expected_escalation"],
+                "escalation_derivation": p.get("escalation_derivation"),
                 "invoice_grand_total_inr": p["invoice_grand_total_inr"],
                 "source": p.get("source"),
                 "derivation_agrees_with_gate": cmp["agree"],
-                "derivation_agrees_with_recorded_gate": compare_with_gate(p["id"], GATE_VERSION_V1)["agree"],
                 "differences": cmp["differences"],
-                "in_default_matrix": p["id"] in CAT5_ABLATION_DEFAULT_INVOICE_IDS,
-                "group": "gate_disagreement" if p["id"] in CAT5_ABLATION_GATE_DISAGREEMENT else "default",
             }
         )
     return rows
 
 
-def _line1_rate(voucher: dict[str, Any] | None, dis: dict[str, Any]) -> str:
-    """Which rate a committed voucher paid on the disputed line, read from its net principal (only that line differs)."""
-    if not voucher:
-        return "no_commit"
-    try:
-        net = float(voucher.get("authorized_net_principal_inr"))
-    except (TypeError, ValueError):
-        return "other"
-    if abs(net - dis["net_principal_if_po_rate"]) <= 1.0:
-        return "po_rate"
-    if abs(net - dis["net_principal_if_billed_rate"]) <= 1.0:
-        return "billed_rate"
-    return "other"
-
-
-def _gate_truth(values: dict[str, Any], preset: dict[str, Any]) -> dict[str, Any]:
-    return {
-        **values,
-        "required_evidence_tables": preset["ground_truth"]["required_evidence_tables"],
-        "optimal_tool_calls": preset["ground_truth"]["optimal_tool_calls"],
-    }
-
-
-def _score_gate_group(
-    latest: dict[RunKey, dict[str, Any]],
-    arm_ids: Sequence[str],
-    pid: str,
-    dis: dict[str, Any],
-    gate_gt: dict[str, Any],
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Per-arm counts against both truths (manual first) for one set of records."""
-    per_arm: dict[str, Any] = {}
-    runs_out: list[dict[str, Any]] = []
-    for a in arm_ids:
-        recs = [r for (ka, kp, _), r in sorted(latest.items()) if ka == a and kp == pid]
-        counts = {"runs": len(recs), "matches_manual": 0, "matches_gate_output": 0, "neither": 0, "no_commit": 0}
-        decisions: Counter[str] = Counter()
-        line1: Counter[str] = Counter()
-        for r in recs:
-            v = r.get("committed_voucher")
-            manual_exact = score_record(r)["exact"]
-            gate_exact = evaluate_cat5_adjudication(
-                committed_voucher=v,
-                ground_truth=gate_gt,
-                tables_touched=r.get("tables_touched") or [],
-                total_tool_calls=int(r.get("total_tool_calls") or 0),
-                optimal_tool_calls=int(r.get("optimal_tool_calls") or 0),
-                steps_used=int(r.get("turns_used") or 0),
-                max_step_budget=int((r.get("settings") or {}).get("step_budget") or ARMS[a].step_budget),
-            ).exact_match
-            if not v:
-                cls = "no_commit"
-            elif manual_exact:
-                cls = "matches_manual"
-            elif gate_exact:
-                cls = "matches_gate_output"
-            else:
-                cls = "neither"
-            counts[cls] += 1
-            decisions[str((v or {}).get("decision") or "(no commit)")] += 1
-            rate = _line1_rate(v, dis)
-            line1[rate] += 1
-            runs_out.append({
-                "run_id": r.get("run_id"), "arm_id": a, "repeat_index": r.get("repeat_index"), "class": cls,
-                "gate_version": record_gate_version(r) if ARMS[a].gate else None,
-                "line1_rate": rate, "committed": ({f: v.get(f) for f in VOUCHER_FIELDS} if v else None),
-                "tools_called": [c.get("name") for c in _all_tool_calls(r)],
-                "final_message": r.get("final_message") or "",
-            })
-        per_arm[a] = {**counts, "decisions": dict(decisions), "line1_rate": dict(line1), "gate_arm": ARMS[a].gate}
-    return per_arm, runs_out
-
-
-def gate_disagreement_section(
-    records: Sequence[dict[str, Any]],
-    *,
-    arm_ids: Sequence[str] = ARM_IDS,
-    expected_repeats: int = 0,
-) -> dict[str, Any]:
-    """Runs on the invoice where the pre-fix gate was wrong (inv-06): scored against both truths, never pooled.
-
-    `per_arm` / `runs` / `missing_keys` are the recorded experiment: no-gate arms plus gate arms on the pre-fix
-    gate (v1). `after_fix` holds the gate arms re-run on the current gate (empty until they are run); no-gate arms do
-    not depend on the gate and are not re-run."""
-    current = [r for r in records if r.get("status") == "ok" and is_current_settings(r)]
-    before: dict[RunKey, dict[str, Any]] = {}
-    after: dict[RunKey, dict[str, Any]] = {}
-    for r in current:  # file order: later wins
-        gate_arm = ARMS[r["arm_id"]].gate if r.get("arm_id") in ARMS else False
-        gv = record_gate_version(r)
-        if not gate_arm or gv == GATE_VERSION_V1:
-            before[record_key(r)] = r
-        if gate_arm and gv == GATE_VERSION:
-            after[record_key(r)] = r
-    gate_arms = [a for a in arm_ids if ARMS[a].gate]
-    out: dict[str, Any] = {}
-    for pid, dis in CAT5_ABLATION_GATE_DISAGREEMENT.items():
-        preset = CAT5_ABLATION_PRESETS_BY_ID[pid]
-        per_arm, runs_out = _score_gate_group(before, arm_ids, pid, dis, _gate_truth(dis["gate_output_truth"], preset))
-        g2 = gate_output_for(pid, GATE_VERSION)
-        g2_truth = {"decision": g2.get("recommended_decision"), **{f: g2.get(f) for f in VOUCHER_FIELDS[1:]},
-                    "expected_escalation": bool(g2.get("escalation_required"))}
-        per_arm_after, runs_after = _score_gate_group(after, gate_arms, pid, dis, _gate_truth(g2_truth, preset))
-        expected = plan_matrix(list(arm_ids), [pid], expected_repeats)
-        expected_after = plan_matrix(gate_arms, [pid], expected_repeats)
-        out[pid] = {
-            "ruling": dis["ruling"],
-            "manual_text": CAT5_ABLATION_EXCLUDED_PENDING_REVIEW.get(pid, {}).get("manual_text", ""),
-            "manual_truth": {f: preset["ground_truth"][f] for f in (*VOUCHER_FIELDS, "expected_escalation")},
-            "manual_calculation": [*preset["derivation"]["lines"], preset["derivation"]["authorized_net_principal_inr"],
-                                   preset["derivation"]["debit_note_deduction_inr"], preset["derivation"]["gst"],
-                                   preset["derivation"]["decision"]],
-            "gate_output_truth": dict(dis["gate_output_truth"]),
-            "gate_output_note": dis.get("gate_output_note", ""),
-            "gate_calculation": list(dis["gate_calculation"]),
-            "line1": dict(dis["line1"]),
-            "bundle_note": dis.get("bundle_note", ""),
-            "gate_fix": {
-                "fixed_on": GATE_FIX_DATE,
-                "gate_version_recorded": GATE_VERSION_V1,
-                "gate_version_current": GATE_VERSION,
-                "current_gate_output": g2_truth,
-                "current_gate_matches_manual": all(
-                    (g2_truth[f] == preset["ground_truth"][f]) if f in ("decision", "expected_escalation")
-                    else abs(float(g2_truth[f]) - float(preset["ground_truth"][f])) <= 0.005
-                    for f in (*VOUCHER_FIELDS, "expected_escalation")
-                ),
-            },
-            "per_arm": per_arm,
-            "runs": runs_out,
-            "missing_keys": [list(k) for k in expected if k not in before],
-            "after_fix": {
-                "gate_version": GATE_VERSION,
-                "per_arm": per_arm_after,
-                "runs": runs_after,
-                "missing_keys": [list(k) for k in expected_after if k not in after],
-            },
-        }
-    return out
-
-
 ANALYSIS_NOTES: tuple[str, ...] = (
-    "The policy manual (SOP-AP-3WAY-2026.v4) is the system text of every arm, including the neutral ones. It names "
-    "fetch_3way_match_bundle and run_policy_tolerance_gate, the 4-step budget (max_step_budget = 4) and says the "
-    "commit is refused without the gate (5.2); raw and bundle arms do not have some of those tools.",
-    "The deterministic gate sets escalation_required whenever the debit note is above zero (or on 2+ discrepancies), "
-    "so single-factor debit notes (DOA only, freight only, one price hike) escalate in the Haiku -> Sonnet arm even "
-    "though manual 6.2 describes escalation for multi-factor disputes. expected_escalation follows the gate rule.",
+    "Without: the free-choice loop over the five raw SELECT * tools on Sonnet (no step budget beyond a 12-turn safety "
+    "cap, no policy tool, no prompt cache). With: a 4-step budget and the deterministic policy tool "
+    "(run_policy_tolerance_gate; the commit is refused until it has run), and the with-design also uses one narrow "
+    "query (fetch_3way_match_bundle) in place of the raw tables and sends the policy manual as a cached prefix, so the "
+    "difference is not the budget and the tool alone.",
+    "The policy manual (SOP-AP-3WAY-2026.v4) is the system text of every version. The without-version runs the "
+    "free-choice protocol; the with-versions run the app's rung-2 and rung-3 prompts unchanged.",
+    "Escalation (Haiku-first version): the run switches to Sonnet from the next turn when the policy tool sets "
+    "escalation_required, which it does only for a multi-factor commercial dispute (two or more of: partial DOA or "
+    "short receipt, signed contract amendment, unauthorized line price rise, disallowed freight; manual 6.2). "
+    "Expected escalations: inv-02 and inv-12.",
     "Thinking differs by model in the app's call function: Sonnet runs with thinking {type: between_tools}, Haiku "
-    "with thinking disabled. The model-swap levers therefore also change thinking.",
-    "Voucher ids in no-gate arms end in -UNB: those arms reuse the app session's unbounded_sonnet_loop rung id to "
-    "disable the gate requirement, and the app derives the voucher-id suffix from the rung id. The model sees this id.",
-    "Gate gaps not exercised by any recorded invoice, fixed on 2026-11-26 after the experiment: the gate ignored "
-    "approved_freight_waiver_inr (2.2/2.3 allow a freight-waiver amendment; it now raises the cap by the waivers on "
-    "signed, active amendments); it took the GST rate from the first invoice line only (it now applies each line's PO "
-    "GST rate when rates differ); it did not implement Trigger 3 (it now hard-blocks an invoice_id already posted in "
-    "reconciliation_vouchers or a vendor flagged PAYMENT_FREEZE). No recorded invoice has a waiver, mixed GST rates, "
-    "a prior voucher or a frozen vendor, so the gate returns byte-identical output for all 11 pooled invoices.",
-    "Gate fix (2026-11-26, after the experiment): the gate's 1.5% band now passes only when the PO's currency notes "
-    "(purchase_orders.currency) say the price is index-linked, as manual 2.1 requires; otherwise the line pays the PO "
-    "rate (price_rule WITHIN_1.5PCT_NOT_INDEX_LINKED_PO_RATE); the three gaps above were fixed at the same time "
-    "(gate v2-manual-aligned). fetch_3way_match_bundle (bundle v2-manual-aligned) now also returns "
-    "purchase_orders.currency, the vendor risk_flag, the invoice's posted vouchers and each line's PO GST rate, so a "
-    "bundle arm can check the same conditions as the gate. Records carry settings.gate_version / bundle_version (absent = v1, before the fix). "
-    "For the 11 pooled invoices the fixed gate returns byte-identical output and the added bundle fields do not "
-    "bear on them (none has a price rise inside the 1.5% band, a waiver, mixed rates, a prior voucher or a frozen "
-    "vendor), so their records stay current. On inv-06 the gate "
-    "arms are reported by gate version (before / after the fix).",
+    "with thinking disabled.",
+    "Each cached run starts with its own nonce line, so it writes the cache on its first turn and reads it after "
+    "(cold cache per run). Costs are derived from recorded tokens with app/core/pricing.py; cold/warm by the app's "
+    "_compute_step_cold_warm rule.",
+    "Loop rule: a turn cut off by max_tokens ends the run and its tool_use blocks are recorded but not executed; "
+    "tool_use blocks in any other turn are executed and the loop continues, whatever the stop_reason.",
+    "Voucher ids in the without-version end in -UNB: it reuses the app session's unbounded_sonnet_loop rung id, from "
+    "which the app derives the voucher-id suffix.",
+    "Tool precision (the app's metric) credits only the narrow query, the policy tool and the commit, so a raw "
+    "SELECT * call is never counted optimal; it is not comparable between the without- and with-versions.",
     "The Anthropic SDK client retries failed or timed-out calls (default max_retries=2) inside one recorded turn; a "
     "retried call is not visible in the records and may have been billed.",
-    "Tool precision (the app's metric, min(optimal, total) / total) counts only fetch_3way_match_bundle, "
-    "run_policy_tolerance_gate and commit_reconciliation_voucher as optimal. A raw SELECT * tool is never credited, "
-    "so a raw arm's precision is at most 1 / (number of calls) however few lookups it makes; it is not comparable "
-    "between raw and bundle arms. Use the per-tool call counts instead.",
-    "Loop rule (v2): a turn cut off by max_tokens ends the run and its tool_use blocks are recorded but not executed; "
-    "tool_use blocks in any other turn are executed and the loop continues, whatever the stop_reason (the API can "
-    "return end_turn together with tool_use). One v1 record that stopped on such a turn is superseded. The app's "
-    "live runner follows the same rule.",
+    "Limits: 12 invoices x 3 runs per version; every version committed exact vouchers on nearly every run, so the "
+    "data separates the versions on cost and turns, not on accuracy.",
 )
 
 
@@ -1367,13 +1038,10 @@ def summarise(
     arm_ids: Sequence[str] = ARM_IDS,
     preset_ids: Sequence[str] | None = None,
     expected_repeats: int | None = None,
-    golden: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Factual summary: latest ok record per key at current settings; errors/superseded counted separately."""
+    """Factual summary: latest current record per key (see `record_is_current`); keys without one are pending."""
     arm_ids = list(arm_ids)
-    requested = list(CAT5_ABLATION_DEFAULT_INVOICE_IDS if preset_ids is None else preset_ids)
-    # Gate-disagreement invoices never enter the pooled tables; they get their own section.
-    preset_ids = [p for p in requested if p not in CAT5_ABLATION_GATE_DISAGREEMENT]
+    preset_ids = list(CAT5_ABLATION_DEFAULT_INVOICE_IDS if preset_ids is None else preset_ids)
     latest = latest_ok_current(records)
     used = [r for k, r in sorted(latest.items()) if k[0] in arm_ids and k[1] in preset_ids]
     if expected_repeats is None:
@@ -1397,22 +1065,13 @@ def summarise(
         m = group_metrics(sel(a), arm_id=a)
         m["by_tier"] = {t: group_metrics(sel(a, tier=t), arm_id=a) for t in ANALYSIS_TIERS}
         m["by_invoice"] = {p: group_metrics(sel(a, pid=p), arm_id=a) for p in preset_ids}
+        pend = [k for k in missing if k[0] == a]
+        m["pending"] = {"runs": len(pend), "invoices": sorted({k[1] for k in pend})}
         arms_out[a] = m
 
     cell_counts = {f"{a}|{p}": len(sel(a, pid=p)) for a in arm_ids for p in preset_ids}
-    baseline_golden = golden_baseline(golden)
-    originals = [p for p in ("inv-01", "inv-02", "inv-03") if p in preset_ids]
-    baseline = {
-        "note": "Golden scripted naive runs (unbounded_sonnet_loop prompt, 7-step one-tool-per-step script, max_tokens 2048), n=1 each, beside raw_free_sonnet.",
-        "golden_scripted": [g for g in baseline_golden if g["preset_id"] in originals],
-        "raw_free_sonnet": {p: group_metrics(sel("raw_free_sonnet", pid=p), arm_id="raw_free_sonnet") for p in originals} if "raw_free_sonnet" in arm_ids else {},
-    }
-    gd_section = gate_disagreement_section(records, arm_ids=arm_ids, expected_repeats=expected_repeats)
-    review = [
-        _review_entry(r, scores[r["run_id"]])
-        for r in used
-        if not scores[r["run_id"]]["exact"]
-    ]
+    notes = list(ANALYSIS_NOTES)
+    review = [_review_entry(r, scores[r["run_id"]]) for r in used if not scores[r["run_id"]]["exact"]]
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": _utc_now_iso(),
@@ -1427,8 +1086,6 @@ def summarise(
         "arms_spec": {a: asdict(ARMS[a]) for a in arm_ids},
         "arm_ids": arm_ids,
         "preset_ids": preset_ids,
-        "pooled_excludes": list(CAT5_ABLATION_GATE_DISAGREEMENT_IDS),
-        "excluded_pending_review": CAT5_ABLATION_EXCLUDED_PENDING_REVIEW,
         "expected_repeats": expected_repeats,
         "record_count": len(records),
         "ok_runs_used": len(used),
@@ -1436,29 +1093,16 @@ def summarise(
             "expected_runs": len(expected),
             "complete": not missing,
             "balanced": len(set(cell_counts.values())) <= 1,
-            "missing_keys": [list(k) for k in missing],
+            "pending_keys": [list(k) for k in missing],
             "ok_runs_per_cell": cell_counts,
         },
         "arms": arms_out,
-        "levers": lever_table(arms_out),
-        "baseline": baseline,
-        "for_lead_review": review,
-        "data_quality": data_quality(records, used),
+        "non_exact_runs": review,
+        "data_quality": data_quality(used),
         "fixtures": fixture_table(),
-        "gate_disagreement": gd_section,
-        "notes": list(ANALYSIS_NOTES),
+        "notes": notes,
         # Which records the tables use, so a reader without the app (validate_deck_claims.py) can select them.
-        "run_ids": {
-            "pooled": {a: [r["run_id"] for r in used if r["arm_id"] == a] for a in arm_ids},
-            # the recorded experiment (no-gate arms + gate arms on the pre-fix gate) and the after-fix gate-arm runs
-            "gate_disagreement": {
-                a: [r["run_id"] for g in gd_section.values() for r in g["runs"] if r["arm_id"] == a] for a in arm_ids
-            },
-            "gate_disagreement_after_fix": {
-                a: [r["run_id"] for g in gd_section.values() for r in g["after_fix"]["runs"] if r["arm_id"] == a]
-                for a in arm_ids if ARMS[a].gate
-            },
-        },
+        "run_ids": {"pooled": {a: [r["run_id"] for r in used if r["arm_id"] == a] for a in arm_ids}},
     }
 
 
@@ -1503,6 +1147,8 @@ def _group_row(key: str, m: dict[str, Any]) -> str:
     tk = m["tokens_per_run_mean"]
     c = m["cost_per_1k_invoices_usd"]
     esc = m["escalation"]
+    if not m["runs"]:
+        return f"| {key} | 0 | pending |" + " |" * (_GROUP_HEADER.count("|") - 4)
     turns = "n/a" if t["mean"] is None else f"{t['mean']:.1f} ({t['min']:.0f}–{t['max']:.0f})"
     return (
         f"| {key} | {m['runs']} | {_rate_cell(m['exact'])} | {_rate_cell(m['decision_correct'])} | "
@@ -1520,290 +1166,116 @@ def _table(header: str, key: str, rows: list[str]) -> list[str]:
 
 def render_markdown(s: dict[str, Any]) -> str:
     L: list[str] = []
-    L.append("# Category 5 six-arm ablation — factual summary")
+    L.append("# Category 5: 4-step budget + deterministic policy tool, without and with")
     L.append("")
-    L.append(f"Generated {s['generated_at']}. Fixture version `{s['fixture_version']}`. Records read: {s['record_count']}; "
-             f"ok runs used (latest per key at current settings): {s['ok_runs_used']}; expected {s['matrix']['expected_runs']} "
-             f"({len(s['arm_ids'])} arms x {len(s['preset_ids'])} invoices x {s['expected_repeats']} repeats). "
-             f"Matrix complete: {s['matrix']['complete']}; balanced: {s['matrix']['balanced']}.")
+    L.append(f"Generated {s['generated_at']}. Fixture version `{s['fixture_version']}`. Runs used: {s['ok_runs_used']} of "
+             f"{s['matrix']['expected_runs']} ({len(s['arm_ids'])} versions x {len(s['preset_ids'])} invoices x "
+             f"{s['expected_repeats']} runs).")
+    pend = s["matrix"]["pending_keys"]
+    if pend:
+        by_arm: dict[str, list[str]] = {}
+        for a, p, _r in pend:
+            by_arm.setdefault(a, []).append(p)
+        L.append("")
+        L.append(f"Pending (not run yet): {len(pend)} runs — " + "; ".join(
+            f"{a}: {', '.join(sorted(set(ps)))} ({len(ps)} runs)" for a, ps in by_arm.items()) + ".")
     st = s["settings"]
     L.append("")
-    L.append(f"Settings: max_tokens {st['max_tokens_per_turn']} on every turn; gate arms step budget {st['gate_step_budget']} "
-             f"(hard cap {st['gate_turn_cap']} model turns, as the app); neutral arms cap {st['neutral_turn_cap']} model turns; "
-             f"call timeout {st['call_timeout_s']:.0f}s. Costs derived from recorded tokens with app/core/pricing.py; "
-             "cold/warm by the app's `_compute_step_cold_warm` rule.")
+    L.append(f"Settings: max_tokens {st['max_tokens_per_turn']} on every turn; with-versions step budget {st['gate_step_budget']} "
+             f"(hard cap {st['gate_turn_cap']} model turns, as the app); without-version safety cap {st['neutral_turn_cap']} model turns; "
+             f"call timeout {st['call_timeout_s']:.0f}s.")
     L.append("")
-    L.append("## Arms")
+    L.append("## Versions")
     L.append("")
-    L.append("| arm | tools | cached | model | escalation | gate | prompt | turn cap |")
+    L.append("| version | tools | cached | model | escalation | policy tool | prompt | turn cap |")
     L.append("|---|---|---|---|---|---|---|---|")
     for a, spec in s["arms_spec"].items():
         L.append(f"| {a} | {spec['tool_set']} | {spec['cached']} | {spec['start_model']} | {spec['escalate']} | {spec['gate']} | {spec['prompt']} | {spec['turn_cap']} |")
     L.append("")
-    L.append("## Per arm (pooled)")
+    L.append("## Without and with (all invoices)")
     L.append("")
-    L.extend(_table(_GROUP_HEADER, "arm", [_group_row(a, m) for a, m in s["arms"].items()]))
+    L.extend(_table(_GROUP_HEADER, "version", [_group_row(a, m) for a, m in s["arms"].items()]))
     L.append("")
-    L.append("## Tool use")
+    L.append("Field match rate per version:")
     L.append("")
-    L.append("Tool calls per run by tool name (each arm's own tools listed, including zero counts), and calls to tools "
-             "the arm does not have (rejected with an error result, not executed).")
-    L.append("")
-    L.append("| arm | n | tool calls per run by tool | calls to tools the arm does not have (total; per run; by name) |")
-    L.append("|---|---|---|---|")
-    for a, m in s["arms"].items():
-        calls = ", ".join(f"{k} {_num(v, 2)}" for k, v in m["tool_calls_per_run"].items()) or "none"
-        d = m["disallowed_tool_calls"]
-        by = ", ".join(f"{k} {v}" for k, v in d["by_name"].items()) or "-"
-        L.append(f"| {a} | {m['runs']} | {calls} | {d['total']}; {_num(d['per_run'], 2)}; {by} |")
-    raw_arms = [a for a in s["arms"] if s["arms_spec"][a]["tool_set"] == "raw"]
-    if raw_arms:
-        raw_tools = [t["name"] for t in tools_for(raw_arms[0]) if t["name"] != "commit_reconciliation_voucher"]
-        L.append("")
-        L.append("Raw arms: how often each raw SELECT * tool was called (calls per run; runs that called it at least once).")
-        L.append("")
-        L.append("| arm | n | " + " | ".join(raw_tools) + " |")
-        L.append("|---|---|" + "---|" * len(raw_tools))
-        for a in raw_arms:
-            m = s["arms"][a]
-            cells = [f"{_num(m['tool_calls_per_run'].get(t), 2)}; {m['runs_calling_tool'].get(t, 0)}/{m['runs']}" for t in raw_tools]
-            L.append(f"| {a} | {m['runs']} | " + " | ".join(cells) + " |")
-    L.append("")
-    L.append("Tool precision is not comparable between raw and bundle arms: the app's metric credits only the bundle, gate "
-             "and commit tools, so a raw SELECT * call is never counted optimal. Use the counts above for raw arms.")
-    L.append("")
-    L.append("Field match rate per arm:")
-    L.append("")
-    L.append("| arm | " + " | ".join(VOUCHER_FIELDS) + " |")
+    L.append("| version | " + " | ".join(VOUCHER_FIELDS) + " |")
     L.append("|---|" + "---|" * len(VOUCHER_FIELDS))
     for a, m in s["arms"].items():
         L.append(f"| {a} | " + " | ".join(_pct(m["field_match_rate"][f]) for f in VOUCHER_FIELDS) + " |")
     L.append("")
-    L.append("## Per arm x tier")
+    L.append("## By tier")
     for tier in ANALYSIS_TIERS:
         L.append("")
         L.append(f"### {tier}")
         L.append("")
-        L.extend(_table(_GROUP_HEADER, "arm", [_group_row(a, m["by_tier"][tier]) for a, m in s["arms"].items()]))
+        L.extend(_table(_GROUP_HEADER, "version", [_group_row(a, m["by_tier"][tier]) for a, m in s["arms"].items()]))
     L.append("")
-    L.append("## Per arm x invoice")
+    L.append("## By invoice")
     for a, m in s["arms"].items():
         L.append("")
         L.append(f"### {a}")
         L.append("")
         L.extend(_table(_GROUP_HEADER, "invoice", [_group_row(p, pm) for p, pm in m["by_invoice"].items()]))
     L.append("")
-    L.append("## Lever table (adjacent arms)")
+    L.append("## Invoices: hand derivation vs the deterministic policy tool")
     L.append("")
-    L.append("| lever | from -> to | what changes | exact from -> to (Δ pp) | decision Δ pp | $/1k billed from -> to (x) | $/1k cold Δ | $/1k warm Δ |")
+    L.append("| invoice | scenario | tier | hub | expected decision (manual) | escalation (manual 6.2) | grand total INR | policy tool agrees |")
     L.append("|---|---|---|---|---|---|---|---|")
-    for row in s["levers"]:
-        ch = "; ".join(row["changes"])
-        if not row.get("available"):
-            L.append(f"| {row['lever']} | {row['from_arm']} -> {row['to_arm']} | {ch} | n/a | n/a | n/a | n/a | n/a |")
-            continue
-        ex, de, cb = row["exact"], row["decision_correct"], row["cost_per_1k_invoices_usd"]
-        ratio = "n/a" if cb["billed"]["ratio"] is None else f"{cb['billed']['ratio']:.3f}x"
-        L.append(
-            f"| {row['lever']} | {row['from_arm']} -> {row['to_arm']} | {ch} | {_pct(ex['from'])} -> {_pct(ex['to'])} ({ex['delta_pp']:+.1f}) | "
-            f"{de['delta_pp']:+.1f} | {_usd(cb['billed']['from'])} -> {_usd(cb['billed']['to'])} ({ratio}) | "
-            f"{_usd(cb['cold']['delta'])} | {_usd(cb['warm']['delta'])} |"
-        )
-    L.append("")
-    L.append("## Baseline: original scripted naive runs vs raw_free_sonnet (inv-01..03)")
-    L.append("")
-    L.append(s["baseline"]["note"])
-    L.append("")
-    L.append("| invoice | source | n | exact | decision | turns | tool calls | prompt tokens | output | billed $/1k |")
-    L.append("|---|---|---|---|---|---|---|---|---|---|")
-    for g in s["baseline"]["golden_scripted"]:
-        tk = g["tokens"]
-        L.append(f"| {g['preset_id']} | original scripted baseline | 1 | {g['exact']} | {g['decision_correct']} | {g['turns']} | "
-                 f"{g['tool_calls_total']} | {tk['uncached_input'] + tk['cache_write'] + tk['cache_read']:,} | {tk['output']:,} | "
-                 f"{_usd(g['cost_usd']['billed'] * 1000)} |")
-        m = s["baseline"]["raw_free_sonnet"].get(g["preset_id"])
-        if m and m["runs"]:
-            tk2 = m["tokens_per_run_mean"]
-            prompt = (tk2["uncached_input"] or 0) + (tk2["cache_write"] or 0) + (tk2["cache_read"] or 0)
-            L.append(f"| {g['preset_id']} | raw_free_sonnet | {m['runs']} | {_rate_cell(m['exact'])} | {_rate_cell(m['decision_correct'])} | "
-                     f"{_num(m['turns']['mean'])} | {_num(m['tool_calls_total_per_run']['mean'])} | {prompt:,.0f} | {_num(tk2['output'], 0)} | "
-                     f"{_usd(m['cost_per_1k_invoices_usd']['billed'])} |")
-    L.append("")
-    L.append("## Fixtures: hand derivation vs deterministic gate")
-    L.append("")
-    L.append(f"| invoice | scenario | tier | hub | expected decision (manual) | escalation | grand total INR | agrees with the gate as recorded ({GATE_VERSION_V1}) | agrees with the current gate ({GATE_VERSION}) | group |")
-    L.append("|---|---|---|---|---|---|---|---|---|---|")
     for f in s["fixtures"]:
         L.append(f"| {f['preset_id']} | {f['scenario']} | {f['analysis_tier']} | {f['fc_hub']} | {f['expected_decision']} | "
-                 f"{f['expected_escalation']} | {f['invoice_grand_total_inr']:,.2f} | {f.get('derivation_agrees_with_recorded_gate')} | "
-                 f"{f['derivation_agrees_with_gate']} | {f['group']} |")
+                 f"{f['expected_escalation']} | {f['invoice_grand_total_inr']:,.2f} | {f['derivation_agrees_with_gate']} |")
     L.append("")
-    _render_gate_disagreement(L, s)
+    L.append("## Vouchers that did not match")
     L.append("")
-    L.append("## For lead review (every non-exact run)")
-    L.append("")
-    if not s["for_lead_review"]:
+    if not s["non_exact_runs"]:
         L.append("None.")
-    for e in s["for_lead_review"]:
-        L.append(f"- **{e['arm_id']} / {e['preset_id']} / r{e['repeat_index']}** (run {e['run_id']}): mismatched {', '.join(e['mismatched_fields']) or '-'}; "
-                 f"turns {e['turns']}, cap hit {e['cap_hit']}, truncated turns {e['truncated_turns']}")
+    for e in s["non_exact_runs"]:
+        L.append(f"- **{e['arm_id']} / {e['preset_id']} / r{e['repeat_index']}** (run {e['run_id']}): fields {', '.join(e['mismatched_fields']) or '-'}; "
+                 f"turns {e['turns']}")
         L.append(f"  - expected: {json.dumps(e['expected'])}")
         L.append(f"  - committed: {json.dumps(e['committed'])}")
-        if e["other_vouchers"]:
-            L.append(f"  - vouchers for other invoice ids: {json.dumps([{k: v.get(k) for k in ('invoice_id', 'decision')} for v in e['other_vouchers']])}")
         L.append(f"  - tools: {', '.join(e['tools_called']) or 'none'}")
-        fm = (e["final_message"] or "").replace("\n", " ")
-        L.append(f"  - final message: {fm[:1500]}{'…' if len(fm) > 1500 else ''}")
     dq = s["data_quality"]
     L.append("")
-    L.append("## Data quality")
+    L.append("## Data quality (runs used)")
     L.append("")
-    L.append(f"- error records (current settings): {len(dq['errors'])}; their billed spend {_usd(dq['error_spend_usd'], 4)}")
-    for e in dq["errors"]:
-        L.append(f"  - {e['arm_id']} / {e['preset_id']} / r{e['repeat_index']}: {e['error_message']} ({e['completed_turns']} turns)")
-    L.append(f"- truncated (max_tokens) turns: {len(dq['truncated_turns'])}")
-    for t in dq["truncated_turns"]:
-        L.append(f"  - {t['arm_id']} / {t['preset_id']} / r{t['repeat_index']} turn {t['turn_number']}: output {t['output_tokens']}, unexecuted tool calls {t['tool_calls_not_executed']}")
-    L.append(f"- model mismatches (returned != intended): {len(dq['model_mismatches'])}")
-    for t in dq["model_mismatches"]:
-        L.append(f"  - {t['arm_id']} / {t['preset_id']} / r{t['repeat_index']} turn {t['turn_number']}: {t['intended_model_id']} -> {t['model_id']}")
-    L.append(f"- cache anomalies: {len(dq['cache_anomalies'])}")
-    for t in dq["cache_anomalies"]:
-        L.append(f"  - {t['arm_id']} / {t['preset_id']} / r{t['repeat_index']} turn {t['turn_number']}: {t['issue']} (cw {t['cache_creation_tokens']}, cr {t['cache_read_tokens']})")
-    L.append(f"- cap hits: {len(dq['cap_hits'])}")
-    for t in dq["cap_hits"]:
-        L.append(f"  - {t['arm_id']} / {t['preset_id']} / r{t['repeat_index']}: {t['turns']} turns, voucher committed {t['committed']}")
-    L.append(f"- runs with no voucher committed for the invoice: {len(dq['no_voucher_committed'])}")
-    L.append(f"- tool calls outside the arm's tool set: {len(dq['disallowed_tool_calls'])}")
-    L.append(f"- superseded records (excluded; key re-run): {len(dq['superseded_records'])}; their billed spend {_usd(dq['superseded_spend_usd'], 4)}")
-    for t in dq["superseded_records"]:
-        L.append(f"  - superseded: {t['reason']} — {t['arm_id']} / {t['preset_id']} / r{t['repeat_index']} (run {t['run_id']})")
-    L.append(f"- turns with tool_use blocks but stop_reason other than tool_use (tools executed): {len(dq['tool_use_blocks_with_other_stop_reason'])}")
-    for t in dq["tool_use_blocks_with_other_stop_reason"]:
-        L.append(f"  - {t['arm_id']} / {t['preset_id']} / r{t['repeat_index']} turn {t['turn_number']}: stop_reason {t['stop_reason']}, {t['tool_calls']} tool calls")
-    if s["matrix"]["missing_keys"]:
-        L.append(f"- missing keys: {len(s['matrix']['missing_keys'])}")
+    L.append(", ".join(f"{k.replace('_', ' ')} {v}" for k, v in dq.items()) + ".")
     L.append("")
-    L.append("## Analysis notes")
+    L.append("## Method notes")
     L.append("")
     for note in s["notes"]:
         L.append(f"- {note}")
     return "\n".join(L) + "\n"
 
 
-def _render_gate_disagreement(L: list[str], s: dict[str, Any]) -> None:
-    for pid, g in (s.get("gate_disagreement") or {}).items():
-        fx = g.get("gate_fix") or {}
-        L.append(f"## When the deterministic gate is wrong ({pid})")
-        L.append("")
-        L.append(f"These runs never enter the pooled tables. {g['ruling']}")
-        if fx:
-            L.append("")
-            L.append(f"The gate was fixed on {fx['fixed_on']}, after the experiment ({fx['gate_version_recorded']} -> "
-                     f"{fx['gate_version_current']}). Every recorded run below used the pre-fix gate. The current gate "
-                     f"{'equals' if fx['current_gate_matches_manual'] else 'still differs from'} the manual derivation on {pid}.")
-        L.append("")
-        L.append(f"Manual {g['manual_text']}")
-        L.append("")
-        mt, gt = g["manual_truth"], g["gate_output_truth"]
-        L.append(f"Manual derivation (ground truth): {mt['decision']}, net {mt['authorized_net_principal_inr']:,.2f}, "
-                 f"GST payout {mt['authorized_gst_payout_inr']:,.2f}, escrow {mt['gst_escrow_holdback_inr']:,.2f}, "
-                 f"debit {mt['debit_note_deduction_inr']:,.2f}, escalation {mt['expected_escalation']}.")
-        for line in g["manual_calculation"]:
-            L.append(f"  - {line}")
-        L.append(f"Gate output{' as recorded, before the fix' if fx else ''}: {gt['decision']}, net {gt['authorized_net_principal_inr']:,.2f}, "
-                 f"GST payout {gt['authorized_gst_payout_inr']:,.2f}, escrow {gt['gst_escrow_holdback_inr']:,.2f}, "
-                 f"debit {gt['debit_note_deduction_inr']:,.2f}, escalation {gt['expected_escalation']}.")
-        for line in g["gate_calculation"]:
-            L.append(f"  - {line}")
-        L.append("")
-        L.append(g["bundle_note"])
-        L.append("")
-        ln = g["line1"]
-        if fx:
-            L.append(f"### Before the fix (recorded, gate {fx['gate_version_recorded']})")
-            L.append("")
-        L.append(f"| arm | n | matches manual | matches gate output | neither | no commit | decisions committed | line 1 {ln['sku']} rate paid (PO {ln['po_rate']:,.0f} / billed {ln['billed_rate']:,.0f} / other) |")
-        L.append("|---|---|---|---|---|---|---|---|")
-        for a, m in g["per_arm"].items():
-            dec = ", ".join(f"{k} {v}" for k, v in m["decisions"].items()) or "-"
-            if m["gate_arm"]:
-                rate = "gate computes (n/a)"
-            else:
-                lr = m["line1_rate"]
-                rate = f"{lr.get('po_rate', 0)} / {lr.get('billed_rate', 0)} / {lr.get('other', 0)}"
-            L.append(f"| {a} | {m['runs']} | {m['matches_manual']} | {m['matches_gate_output']} | {m['neither']} | {m['no_commit']} | {dec} | {rate} |")
-        L.append("")
-        L.append("Line-1 rate is read from the committed net principal (3,656,000 = PO rate, 3,678,800 = billed rate); "
-                 "line 2 and freight are the same under both truths.")
-        if g["missing_keys"]:
-            L.append(f"Missing keys: {len(g['missing_keys'])}.")
-        for r in g["runs"]:
-            if r["class"] == "matches_manual":
-                continue
-            fm = (r["final_message"] or "").replace("\n", " ")
-            L.append(f"- {r['arm_id']} / r{r['repeat_index']} ({r['class']}, line 1 {r['line1_rate']}): committed {json.dumps(r['committed'])}; "
-                     f"tools {', '.join(r['tools_called']) or 'none'}; final message: {fm[:600]}")
-        af = g.get("after_fix")
-        if af is not None:
-            L.append("")
-            L.append(f"### After the fix (gate {af['gate_version']}; gate arms only, no-gate arms are not re-run)")
-            L.append("")
-            cg = fx.get("current_gate_output") or {}
-            if cg:
-                L.append(f"Current gate output: {cg['decision']}, net {cg['authorized_net_principal_inr']:,.2f}, "
-                         f"GST payout {cg['authorized_gst_payout_inr']:,.2f}, escrow {cg['gst_escrow_holdback_inr']:,.2f}, "
-                         f"debit {cg['debit_note_deduction_inr']:,.2f}, escalation {cg['expected_escalation']}.")
-                L.append("")
-            L.append(f"| arm | n | matches manual | matches gate output | neither | no commit | decisions committed | line 1 {ln['sku']} rate paid (PO {ln['po_rate']:,.0f} / billed {ln['billed_rate']:,.0f} / other) |")
-            L.append("|---|---|---|---|---|---|---|---|")
-            for a, m in af["per_arm"].items():
-                if not m["runs"]:
-                    L.append(f"| {a} | 0 | - | - | - | - | not run yet | - |")
-                    continue
-                dec = ", ".join(f"{k} {v}" for k, v in m["decisions"].items()) or "-"
-                lr = m["line1_rate"]
-                L.append(f"| {a} | {m['runs']} | {m['matches_manual']} | {m['matches_gate_output']} | {m['neither']} | {m['no_commit']} | {dec} | "
-                         f"{lr.get('po_rate', 0)} / {lr.get('billed_rate', 0)} / {lr.get('other', 0)} |")
-            L.append("")
-            L.append("After the fix the gate output equals the manual derivation, so a run whose committed voucher carries its figures is counted under 'matches manual'.")
-            if af["missing_keys"]:
-                L.append(f"Missing keys (not run yet at {af['gate_version']}): {len(af['missing_keys'])}.")
-            for r in af["runs"]:
-                if r["class"] == "matches_manual":
-                    continue
-                fm = (r["final_message"] or "").replace("\n", " ")
-                L.append(f"- {r['arm_id']} / r{r['repeat_index']} ({r['class']}, line 1 {r['line1_rate']}): committed {json.dumps(r['committed'])}; "
-                         f"tools {', '.join(r['tools_called']) or 'none'}; final message: {fm[:600]}")
-
-
 # --------------------------------------------------------------------------------------------------
 # App-facing portfolio (replays/cat5_ablation_summary.json)
 # --------------------------------------------------------------------------------------------------
 
-PORTFOLIO_SCHEMA_VERSION = 1
+PORTFOLIO_SCHEMA_VERSION = 2
 GOLDEN_REPEAT_INDEX = 0
-# Fixed, pre-declared mapping arm -> app rung for the golden replays (never chosen by outcome).
+# Fixed, pre-declared mapping version -> app rung for the golden replays (never chosen by outcome).
 APP_RUNG_FOR_ARM: dict[str, str] = {
     "raw_free_sonnet": "unbounded_sonnet_loop",
     "bundle_gate_sonnet_cached": "bounded_sonnet_cached_gate",
     "bundle_gate_haiku_escalate": "hybrid_haiku_sonnet_governed",
 }
-ARM_PLAIN: dict[str, tuple[str, str]] = {
-    "raw_free_sonnet": ("Raw tables, large model", "Large model reads raw ERP tables and does the policy arithmetic itself"),
-    "raw_free_sonnet_cached": ("+ cached policy manual", "Policy manual sent as a cached prefix"),
-    "bundle_sonnet_cached": ("+ one narrow query", "One projected query replaces the raw table dumps"),
-    "bundle_gate_sonnet_cached": ("+ policy tool", "A deterministic policy tool computes the voucher; the committed voucher carries its figures"),
-    "bundle_haiku_cached": ("Small model, no policy tool", "Narrow query and cache on the small model, which does the arithmetic"),
-    "bundle_gate_haiku_escalate": ("Small model + policy tool + escalation", "Policy tool on the small model; large model takes over when the tool flags the invoice"),
-}
-LEVER_PLAIN: dict[str, str] = {
-    "caching alone": "Cache the policy manual",
-    "narrow query": "One narrow query instead of raw tables",
-    "deterministic gate": "Add the deterministic policy tool",
-    "model swap without gate": "Switch to the small model",
-    "gate + tiering": "Add the policy tool and escalation to the small model",
-    "gate Sonnet -> gate Haiku escalate": "Policy-tool version: small model first instead of the large model",
+ARM_PLAIN: dict[str, dict[str, str]] = {
+    "raw_free_sonnet": {
+        "design": "without", "model_column": "sonnet",
+        "label": "Without: free-choice loop over raw tables",
+        "adds": "Sonnet chooses among raw ERP table queries and does the policy arithmetic itself; no step budget, no policy tool",
+    },
+    "bundle_gate_sonnet_cached": {
+        "design": "with", "model_column": "sonnet",
+        "label": "With: 4-step budget + policy tool (Sonnet)",
+        "adds": "4-step budget and the deterministic policy tool, with one narrow query and the policy manual cached",
+    },
+    "bundle_gate_haiku_escalate": {
+        "design": "with", "model_column": "haiku_first",
+        "label": "With: 4-step budget + policy tool (Haiku-first)",
+        "adds": "The same on Haiku; Sonnet takes over when the policy tool flags a multi-factor dispute",
+    },
 }
 
 
@@ -1839,24 +1311,22 @@ def _cell(m: dict[str, Any]) -> dict[str, Any]:
 def build_ablation_portfolio(
     records: Sequence[dict[str, Any]],
     *,
-    original_scripted: dict[str, Any],
     source_file: str,
     golden_run_ids: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    """Compact app-facing summary built from `summarise()` (the path analyze_cat5_ablation.py uses).
-
-    `original_scripted` is {preset_id: raw scripted-naive capture}; it is kept verbatim (not a runnable rung)."""
-    golden_like = {"presets": {pid: {"rungs": {"unbounded_sonnet_loop": c}} for pid, c in original_scripted.items()}}
-    s = summarise(records, golden=golden_like)
+    """Compact app-facing summary built from `summarise()` (the path analyze_cat5_ablation.py uses)."""
+    s = summarise(records)
     arms = []
     for a in s["arm_ids"]:
         m = s["arms"][a]
         spec = ARMS[a]
-        short, adds = ARM_PLAIN[a]
+        plain = ARM_PLAIN[a]
         arms.append({
             "arm_id": a,
-            "label": short,
-            "adds": adds,
+            "label": plain["label"],
+            "adds": plain["adds"],
+            "design": plain["design"],
+            "model_column": plain["model_column"],
             "runnable_in_app": a in APP_RUNG_FOR_ARM,
             "app_rung_id": APP_RUNG_FOR_ARM.get(a),
             "tool_set": spec.tool_set,
@@ -1866,79 +1336,13 @@ def build_ablation_portfolio(
             "escalate": spec.escalate,
             "turn_cap": spec.turn_cap,
             **_cell(m),
-            "tool_calls_per_run": m["tool_calls_per_run"],
-            "runs_calling_tool": m["runs_calling_tool"],
-            "disallowed_tool_calls": m["disallowed_tool_calls"]["total"],
-            "disallowed_by_name": m["disallowed_tool_calls"]["by_name"],
+            "expected_runs": len(s["preset_ids"]) * s["expected_repeats"],
+            "pending_runs": m["pending"]["runs"],
+            "pending_invoices": m["pending"]["invoices"],
             "by_tier": {t: _cell(x) for t, x in m["by_tier"].items()},
             "by_invoice": {p: _cell(x) for p, x in m["by_invoice"].items()},
         })
-    levers = []
-    for row in s["levers"]:
-        out = {"lever": row["lever"], "label": LEVER_PLAIN.get(row["lever"], row["lever"]), "from_arm": row["from_arm"],
-               "to_arm": row["to_arm"], "changes": row["changes"], "available": row["available"]}
-        if row["available"]:
-            out.update({
-                "exact_from": row["exact"]["from"], "exact_to": row["exact"]["to"], "exact_delta_pp": row["exact"]["delta_pp"],
-                "decision_delta_pp": row["decision_correct"]["delta_pp"],
-                **{f"cost_{v}_{k}": row["cost_per_1k_invoices_usd"][v][k] for v in ("billed", "cold", "warm")
-                   for k in ("from", "to", "delta", "ratio")},
-            })
-        levers.append(out)
-    base = []
-    for g in s["baseline"]["golden_scripted"]:
-        tk = g["tokens"]
-        base.append({"preset_id": g["preset_id"], "source": "original_scripted", "runs": 1, "exact": int(g["exact"]),
-                     "decision_correct": int(g["decision_correct"]), "turns_mean": float(g["turns"]),
-                     "tool_calls_mean": float(g["tool_calls_total"]),
-                     "prompt_tokens_mean": float(tk["uncached_input"] + tk["cache_write"] + tk["cache_read"]),
-                     "output_tokens_mean": float(tk["output"]), "cost_per_1k_billed_usd": g["cost_usd"]["billed"] * 1000})
-        m = s["baseline"]["raw_free_sonnet"].get(g["preset_id"])
-        if m and m["runs"]:
-            tk2 = m["tokens_per_run_mean"]
-            base.append({"preset_id": g["preset_id"], "source": "free_choice", "runs": m["runs"], "exact": m["exact"]["k"],
-                         "decision_correct": m["decision_correct"]["k"], "turns_mean": m["turns"]["mean"],
-                         "tool_calls_mean": m["tool_calls_total_per_run"]["mean"],
-                         "prompt_tokens_mean": (tk2["uncached_input"] or 0) + (tk2["cache_write"] or 0) + (tk2["cache_read"] or 0),
-                         "output_tokens_mean": tk2["output"], "cost_per_1k_billed_usd": m["cost_per_1k_invoices_usd"]["billed"]})
-    gd = []
-    for pid, g in s["gate_disagreement"].items():
-        per_arm = [{"arm_id": a, **v} for a, v in g["per_arm"].items()]
-        after_arms = [{"arm_id": a, **v} for a, v in ((g.get("after_fix") or {}).get("per_arm") or {}).items()]
-        no_gate = [x for x in per_arm if not x["gate_arm"]]
-        gated = [x for x in per_arm if x["gate_arm"]]
-        gd.append({
-            "preset_id": pid,
-            "invoice_id": CAT5_ABLATION_PRESETS_BY_ID[pid]["invoice_id"],
-            "ruling": g["ruling"],
-            "manual_text": g["manual_text"],
-            "manual_truth": g["manual_truth"],
-            "manual_calculation": g["manual_calculation"],
-            "gate_output_truth": g["gate_output_truth"],
-            "gate_calculation": g["gate_calculation"],
-            "line1": g["line1"],
-            "bundle_note": g["bundle_note"],
-            "per_arm": per_arm,
-            "no_gate_runs": sum(x["runs"] for x in no_gate),
-            "no_gate_match_manual": sum(x["matches_manual"] for x in no_gate),
-            "gate_runs": sum(x["runs"] for x in gated),
-            "gate_match_gate_output": sum(x["matches_gate_output"] for x in gated),
-            "gate_match_manual": sum(x["matches_manual"] for x in gated),
-            "missing_keys": len(g["missing_keys"]),
-            "gate_output_note": g.get("gate_output_note", ""),
-            "gate_fixed_on": (g.get("gate_fix") or {}).get("fixed_on"),
-            "gate_version_recorded": (g.get("gate_fix") or {}).get("gate_version_recorded"),
-            "gate_version_current": (g.get("gate_fix") or {}).get("gate_version_current"),
-            "current_gate_output": (g.get("gate_fix") or {}).get("current_gate_output") or {},
-            "current_gate_matches_manual": (g.get("gate_fix") or {}).get("current_gate_matches_manual"),
-            "after_fix_per_arm": after_arms,
-            "after_fix_gate_runs": sum(x["runs"] for x in after_arms),
-            "after_fix_gate_match_manual": sum(x["matches_manual"] for x in after_arms),
-            "after_fix_missing_keys": len((g.get("after_fix") or {}).get("missing_keys") or []),
-        })
-    dq = s["data_quality"]
     pooled_ids = list(s["preset_ids"])
-    gd_runs = sum(x["no_gate_runs"] + x["gate_runs"] for x in gd)
     return {
         "schema_version": PORTFOLIO_SCHEMA_VERSION,
         "source": "cat5 ablation (ablation.summarise)",
@@ -1946,38 +1350,21 @@ def build_ablation_portfolio(
         "fixture_version": s["fixture_version"],
         "record_count": s["record_count"],
         "pooled_runs": s["ok_runs_used"],
-        "gate_disagreement_runs": gd_runs,
-        "live_runs_used": s["ok_runs_used"] + gd_runs,
-        "error_records": len(dq["errors"]),
-        "superseded_records": len(dq["superseded_records"]),
-        "superseded_reasons": sorted({x["reason"] for x in dq["superseded_records"]}),
+        "expected_runs": s["matrix"]["expected_runs"],
+        "pending_runs": len(s["matrix"]["pending_keys"]),
         "invoices_pooled": pooled_ids,
         "invoice_count_pooled": len(pooled_ids),
-        "invoice_count_total": len(pooled_ids) + len(gd),
+        "invoice_count_total": len(pooled_ids),
         "repeats": s["expected_repeats"],
         "matrix_complete": s["matrix"]["complete"],
-        "runs_per_arm": s["arms"][s["arm_ids"][0]]["runs"] if s["arm_ids"] else 0,
+        "runs_per_arm": len(pooled_ids) * s["expected_repeats"],
         "settings": s["settings"],
         "tiers": {p["id"]: p.get("analysis_tier") for p in CAT5_ABLATION_PRESETS},
         "arms": arms,
-        "levers": levers,
-        "baseline": base,
-        "baseline_note": s["baseline"]["note"],
-        "gate_disagreement": gd,
-        "data_quality": {
-            "errors": len(dq["errors"]),
-            "truncated_turns": len(dq["truncated_turns"]),
-            "model_mismatches": len(dq["model_mismatches"]),
-            "cache_anomalies": len(dq["cache_anomalies"]),
-            "cap_hits": len(dq["cap_hits"]),
-            "no_voucher_committed": len(dq["no_voucher_committed"]),
-            "disallowed_tool_calls": len(dq["disallowed_tool_calls"]),
-            "tool_use_blocks_with_other_stop_reason": len(dq["tool_use_blocks_with_other_stop_reason"]),
-            "superseded_records": len(dq["superseded_records"]),
-        },
+        "data_quality": s["data_quality"],
         "non_exact_runs": [
             {k: e[k] for k in ("arm_id", "preset_id", "repeat_index", "expected", "committed", "mismatched_fields")}
-            for e in s["for_lead_review"]
+            for e in s["non_exact_runs"]
         ],
         "notes": s["notes"],
         "run_ids": s["run_ids"],
@@ -1986,13 +1373,13 @@ def build_ablation_portfolio(
             "arm_to_rung": dict(APP_RUNG_FOR_ARM),
             "run_ids": golden_run_ids or {},
         },
-        "original_scripted_captures": original_scripted,
     }
 
 
 __all__ = [
     "ARMS",
     "ARM_IDS",
+    "OTHER_LEVER_ARM_IDS",
     "CAT5_ABLATION_ALL_INVOICE_IDS",
     "CAT5_ABLATION_DEFAULT_INVOICE_IDS",
     "NEUTRAL_PROTOCOL",

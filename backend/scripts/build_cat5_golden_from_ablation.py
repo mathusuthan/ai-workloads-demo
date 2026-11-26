@@ -12,12 +12,8 @@ and provenance. SQL text, tables touched, optimal-call flags and gate snapshots 
 recorded tool calls, in order, on a fresh ERP session of the same kind; every replayed tool output must hash to
 the recorded `result_sha256` and the replayed voucher must equal the recorded one, or the build fails.
 
-Summary — the six arms pooled (11 gate-agreed invoices x 3 repeats), by tier and by invoice, the lever table,
-tool use, the baseline comparison, the inv-06 gate-disagreement section and data quality, from the same
-`ablation.summarise()` path as scripts/analyze_cat5_ablation.py. The original scripted naive captures (the old
-7-step `unbounded_sonnet_loop` prompt) are kept verbatim in the summary as `original_scripted_captures` — shown
-as a baseline, not runnable. They are read from the golden file while it still holds them, afterwards from the
-existing summary, so the build is idempotent.
+Summary — the three versions (without / with on Sonnet / with on Haiku-first) on all 12 invoices, by tier and by
+invoice, from the same `ablation.summarise()` path as scripts/analyze_cat5_ablation.py.
 
 Inputs are only read. A file whose content is unchanged (ignoring `provenance.rebuilt_at`) is not rewritten.
 
@@ -42,14 +38,12 @@ from app.archetypes.cat5_orchestration.ablation import (  # noqa: E402
     APP_RUNG_FOR_ARM,
     ARMS,
     GOLDEN_REPEAT_INDEX,
+    AblationErpSession,
     _sha,
     build_ablation_portfolio,
     latest_ok_current,
     load_jsonl,
-    original_scripted_golden,
-    session_for_record,
 )
-from app.data.cat5_ablation_fixtures import CAT5_ABLATION_PRESETS_BY_ID  # noqa: E402
 
 DEFAULT_IN = BACKEND_DIR / "experiments" / "cat5_ablation" / "runs.jsonl"
 DEFAULT_OUT = BACKEND_DIR / "replays" / "cat5_golden_replays.json"
@@ -80,7 +74,7 @@ def convert_record(record: dict[str, Any]) -> dict[str, Any]:
     """One ablation run -> one golden rung, with tool traces rebuilt by deterministic replay."""
     arm = ARMS[record["arm_id"]]
     rung_id = APP_RUNG_FOR_ARM[record["arm_id"]]
-    session = session_for_record(record, rung_id=arm.session_rung_id)  # the tool versions the run used
+    session = AblationErpSession(rung_id=arm.session_rung_id)
     steps: list[dict[str, Any]] = []
     circuit = False
     try:
@@ -173,10 +167,8 @@ def build_golden(records: list[dict[str, Any]], *, source_file: str) -> tuple[di
             "selection_rule": (f"fixed pre-declared mapping: repeat_index {GOLDEN_REPEAT_INDEX} of "
                                + ", ".join(f"{a} -> {r}" for a, r in APP_RUNG_FOR_ARM.items())
                                + " on inv-01..03 (not selected by outcome)"),
-            "rung_1_note": ("unbounded_sonnet_loop now runs the free-choice protocol (the ablation's neutral text): the "
-                            "model chooses among the raw SELECT * tools, several per turn allowed; no cache; no gate. "
-                            "The original scripted 7-step captures are kept in replays/cat5_ablation_summary.json "
-                            "(original_scripted_captures) as a baseline, not as a runnable rung."),
+            "rung_1_note": ("unbounded_sonnet_loop runs the free-choice protocol: the model chooses among the raw "
+                            "SELECT * tools, several per turn allowed; no cache; no policy tool."),
             "trace_note": ("SQL text, tables touched, optimal-call flags and gate snapshots were rebuilt by replaying the "
                            "recorded tool calls on a fresh ERP session; every output matched the recorded sha256."),
             "settings_note": "Every turn ran with max_tokens 4096; stop_reason values are as returned by the API.",
@@ -224,15 +216,8 @@ def main(argv: list[str] | None = None) -> int:
     in_path, out_path, summary_path = Path(args.in_path), Path(args.out), Path(args.summary_out)
     records = load_jsonl(in_path)
 
-    scripted = original_scripted_golden(out_path, summary_path)
-    original = {pid: (scripted["presets"].get(pid) or {}).get("rungs", {}).get("unbounded_sonnet_loop") for pid in ORIGINAL_INVOICES}
-    missing = [pid for pid, c in original.items() if not c]
-    if missing:
-        raise SystemExit(f"original scripted captures not found for {missing} (neither in {out_path} nor in {summary_path})")
-
     golden, run_ids = build_golden(records, source_file=_rel(in_path))
-    portfolio = build_ablation_portfolio(records, original_scripted=original, source_file=_rel(in_path), golden_run_ids=run_ids)
-    # Write the summary first so the scripted captures are safe before the golden file stops holding them.
+    portfolio = build_ablation_portfolio(records, source_file=_rel(in_path), golden_run_ids=run_ids)
     changed_s = write_if_changed(portfolio, summary_path, stamp=False)
     changed_g = write_if_changed(golden, out_path, stamp=True)
     for pid, p in golden["presets"].items():

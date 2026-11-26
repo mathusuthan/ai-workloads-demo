@@ -1,8 +1,14 @@
-"""Category 6 "fair rerun" experiment harness: four arms, one record per run, pure analysis helpers.
+"""Category 6 fair-rerun experiment harness: three cells, one record per run, pure analysis helpers.
 
-This module is importable without an API key. Nothing here changes the behaviour of the existing rungs
-in `runner.py`; the orchestration for the governed arms is a copy of `_run_live_cat6_for_rung`'s control
-flow with uniform output caps, per-run cold caches, and full-text capture of every call.
+The design compared is the deck's lever (isolated agents + cached repo prefix) against the same swarm on one
+shared bus, all with the same role instructions, output caps, sandbox gate and one retry:
+
+                         Sonnet on every turn        Haiku agents + Sonnet patch author
+    without the lever    shared_bus_matched_gate     (not run)
+    with the lever       isolated_cached_gate        tiered_gate
+
+This module is importable without an API key. Each arm follows the same control flow as the matching app rung
+in `runner.py`, with per-run cold caches and full-text capture of every call.
 
 Records hold raw tokens only (never dollars) so they stay valid if prices change; cost is derived at
 analysis time from `app.core.pricing.compute_run_finops`.
@@ -24,11 +30,13 @@ from app.archetypes.cat6_swarms.caps import (
     CALL_TIMEOUT_S,
     GOVERNED_ROLE_MAX_TOKENS,
     PATCH_AUTHOR_MAX_TOKENS,
-    SHARED_BUS_MAX_TOKENS,
+    cat6_max_tokens,
 )
 from app.archetypes.cat6_swarms.prompts import (
     build_cat6_isolated_payload,
-    build_cat6_unisolated_turn_message,
+    build_cat6_shared_bus_retry_message,
+    build_cat6_shared_bus_turn_message,
+    format_cat6_failing_checks,
     get_cat6_agent_system_prompt,
 )
 from app.archetypes.cat6_swarms.sandbox_verifier import (
@@ -53,21 +61,8 @@ ROLE_SEQUENCE: tuple[str, ...] = (
 )
 
 # Output caps and timeout live in caps.py, shared with the app's live path (runner.py).
-SHARED_BUS_ORIGINAL_MAX_TOKENS = SHARED_BUS_MAX_TOKENS
 
 CHECK_CATEGORIES: tuple[str, ...] = ("ci_unit", "adversarial", "ast")
-
-# The ask line that ends today's unisolated turn-1 message, and the governed replacement.
-_UNISOLATED_TURN1_MARKER = "[TURN 1 — LEAD ORCHESTRATOR]:"
-_GOVERNED_PLAN_ASK = "Produce your concise 4-bullet remediation order."
-
-_BUS_TURN_LABELS: dict[str, str] = {
-    "orchestrator_plan": "[TURN 1 — LEAD ORCHESTRATOR]",
-    "ci_triager": "[TURN 2 — CI/CD & RUNTIME TRIAGER]",
-    "patch_author": "[TURN 3 — CODE & PATCH AUTHOR]",
-    "security_critic": "[TURN 4 — SECURITY & TEST CRITIC]",
-    "orchestrator_merge": "[TURN 5 — LEAD ORCHESTRATOR MERGE GATE]",
-}
 
 _FENCED_BLOCK_RE = re.compile(r"```(?:python|py)?\s*\n([\s\S]*?)```", flags=re.IGNORECASE)
 
@@ -97,23 +92,13 @@ ARMS: dict[str, ArmSpec] = {
     spec.arm_id: spec
     for spec in (
         ArmSpec(
-            arm_id="shared_bus_original",
+            arm_id="shared_bus_matched_gate",
             context="shared_bus",
             prompt_rung_id="unisolated_broadcast_swarm",
             tiered=False,
-            gate_enabled=False,
-            context_summary="Shared growing thread, repo manual + noise, uncached",
-            instructions_summary="Today's unisolated_broadcast_swarm prompts",
-            models_summary="Sonnet all turns",
-        ),
-        ArmSpec(
-            arm_id="shared_bus_matched_gate",
-            context="shared_bus",
-            prompt_rung_id="isolated_cached_sonnet_swarm",
-            tiered=False,
             gate_enabled=True,
             context_summary="Shared growing thread, repo manual + noise, uncached",
-            instructions_summary="Governed per-role prompts (same as arms 3-4)",
+            instructions_summary="Governed per-role prompts (same as the isolated arms)",
             models_summary="Sonnet all turns",
         ),
         ArmSpec(
@@ -140,6 +125,22 @@ ARMS: dict[str, ArmSpec] = {
 }
 ARM_IDS: tuple[str, ...] = tuple(ARMS)
 
+# The displayed design: the deck's lever (rows) x the models (columns); None = not run.
+DESIGN_ROWS: dict[str, str] = {
+    "without": "Without: shared bus, same instructions, sandbox check with one retry",
+    "with": "With: isolated agents + cached repo prefix, sandbox check with one retry",
+}
+DESIGN_COLUMNS: dict[str, str] = {
+    "sonnet": "Sonnet on every turn",
+    "tiered": "Haiku agents + Sonnet patch author",
+}
+DESIGN_CELLS: dict[tuple[str, str], str | None] = {
+    ("without", "sonnet"): "shared_bus_matched_gate",
+    ("without", "tiered"): None,
+    ("with", "sonnet"): "isolated_cached_gate",
+    ("with", "tiered"): "tiered_gate",
+}
+
 
 def _arm(arm_id: str) -> ArmSpec:
     try:
@@ -155,12 +156,9 @@ def intended_model_id(arm_id: str, role_key: str) -> str:
 
 
 def max_tokens_for(arm_id: str, role_key: str) -> int:
-    if role_key == "patch_author":
-        return PATCH_AUTHOR_MAX_TOKENS
-    if arm_id == "shared_bus_original":
-        return SHARED_BUS_ORIGINAL_MAX_TOKENS
+    """Same caps in every arm (and on every app rung)."""
     _arm(arm_id)
-    return GOVERNED_ROLE_MAX_TOKENS[role_key]
+    return cat6_max_tokens(role_key=role_key)
 
 
 def system_prompt_for(arm_id: str, role_key: str) -> str:
@@ -172,86 +170,10 @@ def build_cached_prefix(run_nonce: str) -> str:
     return f"<!-- run:{run_nonce} -->\n" + SHARED_REPO_PREFIX_MARKDOWN
 
 
-# --------------------------------------------------------------------------------------------------
-# Prompt builders for `shared_bus_matched_gate`
-# --------------------------------------------------------------------------------------------------
-
-
-def format_failing_checks(sandbox_report: dict[str, Any]) -> str:
-    """Failing-check lines, in the exact format the isolated flow's `retry_feedback` uses."""
-    return "\n".join(
-        f"- FAIL {c['check_id']} ({c['name']}): {c['detail']}"
-        for c in sandbox_report.get("checks") or []
-        if not c["passed"]
-    )
-
-
-def _critic_sandbox_block(sandbox_report: dict[str, Any]) -> str:
-    """Same per-check PASS/FAIL block `build_cat6_isolated_payload(role_key="security_critic")` sends."""
-    sbx = sandbox_report or {}
-    sbx_summary = "\n".join(
-        f"- {c['check_id']} [{'PASS' if c['passed'] else 'FAIL'}]: {c['name']} -> {c['detail']}"
-        for c in (sbx.get("checks") or [])
-    )
-    return (
-        f"#### Deterministic PR-SANDBOX-GATE-01 ({sbx.get('passed_checks', 0)}/{sbx.get('total_checks', 10)})\n"
-        f"{sbx_summary}"
-    )
-
-
-def _merge_sandbox_status_line(sandbox_report: dict[str, Any]) -> str:
-    """Same status line `build_cat6_isolated_payload(role_key="orchestrator_merge")` sends."""
-    sbx = sandbox_report or {}
-    return (
-        f"#### PR-SANDBOX-GATE-01 Status: `{sbx.get('passed_checks', 0)}/{sbx.get('total_checks', 10)}` "
-        f"(Verified Outcome: `{sbx.get('verified_outcome', False)}`)"
-    )
-
-
-def _patch_author_ask(preset: dict[str, Any]) -> str:
-    return (
-        f"Write the COMPLETE repaired `{preset['module_filename']}` strictly conforming to "
-        f"`{preset['standard_ref']}` in one fenced ```python block."
-    )
-
-
-def build_matched_bus_turn_message(
-    preset: dict[str, Any],
-    role_key: str,
-    *,
-    sandbox_report: dict[str, Any] | None = None,
-) -> str:
-    """User message for one `shared_bus_matched_gate` turn (governed asks on the shared noisy bus)."""
-    if role_key == "orchestrator_plan":
-        original = build_cat6_unisolated_turn_message(preset, "orchestrator_plan")
-        idx = original.rfind(_UNISOLATED_TURN1_MARKER)
-        if idx < 0:
-            raise RuntimeError("Unisolated turn-1 message no longer ends with the expected ask marker.")
-        return f"{original[:idx]}{_UNISOLATED_TURN1_MARKER} {_GOVERNED_PLAN_ASK}"
-    label = _BUS_TURN_LABELS[role_key]
-    if role_key == "ci_triager":
-        return f"{label}: Pinpoint the exact broken lines and mandatory contracts for the Patch Author."
-    if role_key == "patch_author":
-        return f"{label}: {_patch_author_ask(preset)}"
-    if sandbox_report is None:
-        raise ValueError(f"`{role_key}` turn requires the sandbox report.")
-    if role_key == "security_critic":
-        return (
-            f"{label}:\n\n{_critic_sandbox_block(sandbox_report)}\n\n"
-            f"Confirm `{preset['standard_ref']}` and all AST security/privacy invariants hold."
-        )
-    if role_key == "orchestrator_merge":
-        return f"{label}:\n\n{_merge_sandbox_status_line(sandbox_report)}\n\nEmit your final PR merge readiness sign-off."
-    raise ValueError(f"Unknown role_key `{role_key}`")
-
-
-def build_matched_bus_retry_message(preset: dict[str, Any], failing_lines: str) -> str:
-    """The single gate-retry user message appended to the shared bus after a failed sandbox run."""
-    return (
-        f"{_BUS_TURN_LABELS['patch_author']} — SANDBOX RETRY:\n\n"
-        f"#### SANDBOX RETRY FEEDBACK (Fix All Failing Checks Below)\n{failing_lines}\n\n"
-        f"{_patch_author_ask(preset)}"
-    )
+# The shared-bus prompts live in prompts.py, shared with the app's rung 1.
+build_matched_bus_turn_message = build_cat6_shared_bus_turn_message
+build_matched_bus_retry_message = build_cat6_shared_bus_retry_message
+format_failing_checks = format_cat6_failing_checks
 
 
 # --------------------------------------------------------------------------------------------------
@@ -400,16 +322,6 @@ async def _run_shared_bus(
         raw = await call(role_key, attempt, bus)
         bus.append({"role": "assistant", "content": raw.raw_text})
         return raw
-
-    if not arm.gate_enabled:
-        # shared_bus_original: today's unisolated prompts verbatim; sandbox scores the one patch, no retry.
-        for role_key in ROLE_SEQUENCE:
-            raw = await bus_turn(role_key, build_cat6_unisolated_turn_message(preset, role_key))
-            if role_key == "patch_author":
-                await _gate_patch(record, raw, judge, first=True)
-            if role_key == "orchestrator_merge":
-                record["final_signoff_memo"] = raw.raw_text
-        return
 
     await bus_turn("orchestrator_plan", build_matched_bus_turn_message(preset, "orchestrator_plan"))
     await bus_turn("ci_triager", build_matched_bus_turn_message(preset, "ci_triager"))
@@ -756,120 +668,12 @@ def compute_group_metrics(runs: Sequence[dict[str, Any]], *, cached_arm: bool) -
     }
 
 
-def rescore_record(
-    record: dict[str, Any],
-    sandbox: SandboxFn = evaluate_patch_in_sandbox,
-    _cache: dict[tuple[str, str], dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    """Copy of `record` with first/final sandbox verdicts re-computed by `sandbox` on the recorded code.
-
-    The input record is never mutated. Only the sandbox dicts change; turns, retries and control flow are
-    as recorded (a gated run's retry decision was made on the recorded verdict).
-    """
-    cache = _cache if _cache is not None else {}
-    out = dict(record)
-    preset_id = str(record["preset_id"])
-    for attempt_key, code_key in (("first_attempt", "patched_code_first"), ("final", "patched_code_final")):
-        attempt = record.get(attempt_key)
-        if not attempt:
-            continue
-        code = str(record.get(code_key) or "")
-        ck = (preset_id, code)
-        if ck not in cache:
-            cache[ck] = sandbox(preset_id, code)
-        out[attempt_key] = {**attempt, "sandbox": cache[ck]}
-    return out
-
-
-def _verdict_changes(original: dict[str, Any], rescored: dict[str, Any]) -> list[dict[str, Any]]:
-    changes: list[dict[str, Any]] = []
-    for attempt_key in ("first_attempt", "final"):
-        old = (original.get(attempt_key) or {}).get("sandbox") or {}
-        new = (rescored.get(attempt_key) or {}).get("sandbox") or {}
-        if not old and not new:
-            continue
-        old_checks = {c["check_id"]: bool(c["passed"]) for c in old.get("checks") or []}
-        new_checks = {c["check_id"]: bool(c["passed"]) for c in new.get("checks") or []}
-        flipped = sorted(
-            cid for cid in set(old_checks) | set(new_checks) if old_checks.get(cid) != new_checks.get(cid)
-        )
-        if (
-            old.get("passed_checks") == new.get("passed_checks")
-            and bool(old.get("verified_outcome")) == bool(new.get("verified_outcome"))
-            and not flipped
-        ):
-            continue
-        changes.append(
-            {
-                "run_id": original.get("run_id"),
-                "arm_id": original.get("arm_id"),
-                "preset_id": original.get("preset_id"),
-                "repeat_index": original.get("repeat_index"),
-                "attempt": attempt_key,
-                "recorded_passed_checks": old.get("passed_checks"),
-                "recorded_total_checks": old.get("total_checks"),
-                "recorded_verified": bool(old.get("verified_outcome")),
-                "rescored_passed_checks": new.get("passed_checks"),
-                "rescored_total_checks": new.get("total_checks"),
-                "rescored_verified": bool(new.get("verified_outcome")),
-                "flipped_checks": [
-                    {"check_id": cid, "recorded_passed": old_checks.get(cid), "rescored_passed": new_checks.get(cid)}
-                    for cid in flipped
-                ],
-            }
-        )
-    return changes
-
-
-def rescore_summary(
-    used_records: Sequence[dict[str, Any]],
-    *,
-    arm_ids: Sequence[str],
-    sandbox: SandboxFn = evaluate_patch_in_sandbox,
-) -> dict[str, Any]:
-    """Re-score the used (latest ok) records with the current sandbox; recorded data is left untouched."""
-    cache: dict[tuple[str, str], dict[str, Any]] = {}
-    pairs = [(r, rescore_record(r, sandbox, cache)) for r in used_records]
-    arms_out: dict[str, Any] = {}
-    for arm_id in arm_ids:
-        orig = [o for o, _ in pairs if o.get("arm_id") == arm_id]
-        new = [n for o, n in pairs if o.get("arm_id") == arm_id]
-        cached = ARMS[arm_id].cached
-        m_new = compute_group_metrics(new, cached_arm=cached)
-        arms_out[arm_id] = {
-            "runs": len(orig),
-            "first_attempt_verified_recorded": sum(1 for r in orig if _verified(r.get("first_attempt"))),
-            "first_attempt_verified_rescored": m_new["first_attempt_verified"],
-            "final_verified_recorded": sum(1 for r in orig if _verified(r.get("final"))),
-            "final_verified_rescored": m_new["final_verified"],
-            "first_attempt_verified_rate_rescored": m_new["first_attempt_verified_rate"],
-            "final_verified_rate_rescored": m_new["final_verified_rate"],
-            "final_verified_wilson95_rescored": m_new["final_verified_wilson95"],
-            "first_attempt_checks_passed_rescored": m_new["first_attempt_checks_passed"],
-            "final_checks_passed_rescored": m_new["final_checks_passed"],
-            "final_checks_total": m_new["final_checks_total"],
-            "cost_per_verified_outcome_usd_rescored": m_new["cost_per_verified_outcome_usd"],
-            "cost_per_first_attempt_verified_outcome_usd_rescored": m_new[
-                "cost_per_first_attempt_verified_outcome_usd"
-            ],
-        }
-    return {
-        "note": (
-            "Sandbox verdicts re-computed offline on each used record's recorded patched_code_first / "
-            "patched_code_final. Turns, tokens, spend and retry decisions are as recorded."
-        ),
-        "arms": arms_out,
-        "changes": [c for o, n in pairs for c in _verdict_changes(o, n)],
-    }
-
-
 def summarise(
     records: Sequence[dict[str, Any]],
     *,
     arm_ids: Sequence[str] = ARM_IDS,
     preset_ids: Sequence[str] | None = None,
     expected_repeats: int | None = None,
-    rescore_sandbox: SandboxFn | None = None,
 ) -> dict[str, Any]:
     """Summarise fair-rerun records: latest ok record per key, errors counted separately."""
     preset_ids = [p["id"] for p in CAT6_PRESETS] if preset_ids is None else list(preset_ids)
@@ -919,12 +723,14 @@ def summarise(
     balanced = len(set(cell_counts.values())) <= 1
 
     ok_list = [r for _, r in sorted(latest_ok.items())]
-    rescored = (
-        rescore_summary(ok_list, arm_ids=arm_ids, sandbox=rescore_sandbox) if rescore_sandbox is not None else None
-    )
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": _utc_now_iso(),
+        "design": {
+            "rows": DESIGN_ROWS,
+            "columns": DESIGN_COLUMNS,
+            "cells": {f"{r}|{c}": arm for (r, c), arm in DESIGN_CELLS.items()},
+        },
         "arm_ids": arm_ids,
         "preset_ids": preset_ids,
         "expected_repeats": expected_repeats,
@@ -955,5 +761,4 @@ def summarise(
         "model_fallbacks": model_fallbacks([*ok_list, *errors]),
         "max_tokens_stopped_turns": max_tokens_stopped_turns([*ok_list, *errors]),
         "arms": arms_out,
-        "rescored": rescored,
     }

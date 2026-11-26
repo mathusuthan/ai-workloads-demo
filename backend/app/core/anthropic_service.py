@@ -278,18 +278,25 @@ async def run_cat2_unbounded_sonnet(
     system_prompt: str,
     api_key: str,
     max_tokens: int = 8000,
+    *,
+    model_tier: str = "claude-sonnet-5-5",
 ) -> AnthropicRawResult:
-    """Category 2 Rung 1 Anti-Pattern: Unbounded longform synthesis on Sonnet 5.5."""
+    """Category 2 without the improvement: unbounded long-form draft (free text).
+
+    `model_tier` selects Sonnet 5.5 (default; thinking between tools) or Haiku 5.5 (thinking disabled), the same
+    per-model settings as the templated call."""
     settings = get_settings()
+    is_sonnet = "sonnet" in model_tier
     client = anthropic.AsyncAnthropic(api_key=api_key, timeout=120.0)
+    thinking_cfg: dict[str, str] = {"type": "between_tools"} if is_sonnet else {"type": "disabled"}
 
     t0 = time.perf_counter()
     used_model, resp = await _create_with_fallback(
         client,
-        settings.anthropic_sonnet_model,
-        ["claude-sonnet-5-5", "claude-sonnet-4-6"],
+        settings.anthropic_sonnet_model if is_sonnet else settings.anthropic_haiku_model,
+        ["claude-sonnet-5-5", "claude-sonnet-4-6"] if is_sonnet else ["claude-haiku-5-5", "claude-haiku-4-5"],
         max_tokens=max_tokens,
-        thinking={"type": "between_tools"},
+        thinking=thinking_cfg,
         system=system_prompt,
         messages=[{"role": "user", "content": payload_text}],
     )
@@ -313,7 +320,7 @@ async def run_cat2_unbounded_sonnet(
         request_params={
             "max_tokens": max_tokens,
             "endpoint": "messages.create",
-            "thinking": {"type": "between_tools"},
+            "thinking": thinking_cfg,
         },
         stop_reason=getattr(resp, "stop_reason", None),
         thinking_tokens=think_tok,

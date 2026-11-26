@@ -1,20 +1,19 @@
 """Rebuild replays/cat4_golden_replays.json and replays/cat4_quality_summary.json from the Category 4 quality rerun.
 
 Golden replays — fixed, pre-declared mapping (never chosen by outcome): repeat_index 0, corpus scale 1 (the app's
-7-document deal room), of each of the three rungs the app can run. The fourth rerun rung (cached full-corpus
-rerank) is not runnable in the app and is not mapped. Each rerun session asked all 8 questions in one session
-(audit-01 q1-q4, then audit-02 q1-q4); the session is split by audit preset here. Each question keeps the schema
-`runner._build_cat4_summary_from_replay` reads, plus: real `stop_reason`s for synthesis and rerank calls,
-`question_as_asked` (the rerun prefixed every question with a supplier-scope line; `question` is the original
-text), thinking tokens, the session question index and the blind grader's judgement of that exact answer.
-The BM25 funnel and the reranker payload are rebuilt deterministically from the recorded reranker output and
-checked against the recorded selection.
+7-document deal room), of both versions the app runs: without the improvement (`naive_full_corpus`) and with it
+(`cached_rerank_hybrid`). Each rerun session asked all 8 questions in one session (audit-01 q1-q4, then audit-02
+q1-q4); the session is split by audit preset here. Each question keeps the schema
+`runner._build_cat4_summary_from_replay` reads, plus: real `stop_reason`s for synthesis and clause-pick calls,
+`question_as_asked` (every question is prefixed with a supplier-scope line; `question` is the question text),
+thinking tokens, the session question index and the blind grader's judgement of that exact answer. The clauses Haiku
+picked are rebuilt from the recorded pick output and checked against the recorded selection.
 
-Billing note (also in provenance): the cached rung wrote its cache once per session, on audit-01 q1; audit-02 q1
-was billed as a cache READ. The app's cold-audit cost still models a fresh cache write per audit — that is a
-model, not what audit-02 was billed.
+Billing note (also in provenance): the paired version wrote its clause cache once per session, on audit-01 q1;
+audit-02 q1 was billed as a cache READ. The app's cold-audit cost still models a fresh cache write per audit — that
+is a model, not what audit-02 was billed.
 
-Quality summary — every rung x scale from the same `quality_rerun.summarise()` path as
+Quality summary — both versions x both corpus sizes from the same `quality_rerun.summarise()` path as
 scripts/analyze_cat4_quality.py. The app reads both files at runtime (analysis/ and experiments/ are not in the
 Docker image).
 
@@ -52,14 +51,8 @@ from app.archetypes.cat4_rag.quality_rerun import (  # noqa: E402
     _sha,
     answer_format_of,
 )
-from app.archetypes.cat4_rag.answer_formats import ADOPTED_ON, adopted_answer_format, instruction_changes  # noqa: E402
-from app.archetypes.cat4_rag.retriever import (  # noqa: E402
-    BM25_TOP_K,
-    RERANK_TOP_K,
-    build_reranker_payload,
-    merge_rerank_funnel,
-    rank_chunks_bm25,
-)
+from app.archetypes.cat4_rag.answer_formats import rung_answer_format  # noqa: E402
+from app.archetypes.cat4_rag.paired import PAIRED_RUNG, picked_funnel, select_picked_chunks  # noqa: E402
 from app.archetypes.cat4_rag.runner import build_rung3_chunk_blocks  # noqa: E402
 from app.data.cat4_fixtures import CAT4_PRESETS  # noqa: E402
 
@@ -70,25 +63,22 @@ DEFAULT_SUMMARY_OUT = BACKEND_DIR / "replays" / "cat4_quality_summary.json"
 USE_CASE = "supplier_msa_due_diligence"
 CITATION_FIELDS = ("cite_number", "doc_id", "document_title", "clause_ref", "cited_text", "start_char_index", "end_char_index")
 BILLING_NOTE = (
-    "Each rerun session asked all 8 questions in order (audit-01 q1-q4, then audit-02 q1-q4). The cached rung wrote "
-    "its cache once, on audit-01 q1; audit-02 q1 was billed as a cache read, not a write. The app's cold-audit cost "
-    "models a fresh cache write for each audit; for audit-02 that is a model, not what was billed."
+    "Each rerun session asked all 8 questions in order (audit-01 q1-q4, then audit-02 q1-q4). The paired version wrote "
+    "its clause cache once, on audit-01 q1; audit-02 q1 was billed as a cache read, not a write. The app's cold-audit "
+    "cost models a fresh cache write for each audit; for audit-02 that is a model, not what was billed."
 )
 
 
 def select_session(records: Iterable[dict[str, Any]], rung_id: str) -> dict[str, Any]:
-    """Latest ok record at the current settings for (rung, scale 1, repeat 0) in the rung's adopted answer format
-    (answer_formats.ADOPTED_ANSWER_FORMAT: retrieval rung = scoped_absence, full-corpus rungs = original) — the
-    analysis' rule. Fixed in advance, never chosen by outcome."""
-    fmt = adopted_answer_format(rung_id)
+    """Latest ok record at the current settings for (rung, scale 1, repeat 0) — the analysis' rule. Fixed in advance,
+    never chosen by outcome."""
     chosen = None
     for r in records:
         if (r.get("status") == "ok" and is_current_settings(r) and r.get("rung_id") == rung_id
-                and answer_format_of(r) == fmt
                 and int(r.get("scale", -1)) == GOLDEN_SCALE and int(r.get("repeat_index", -1)) == GOLDEN_REPEAT_INDEX):
             chosen = r
     if chosen is None:
-        raise ValueError(f"No ok rerun record for {rung_id} / scale {GOLDEN_SCALE} / repeat {GOLDEN_REPEAT_INDEX} / {fmt}")
+        raise ValueError(f"No ok rerun record for {rung_id} / scale {GOLDEN_SCALE} / repeat {GOLDEN_REPEAT_INDEX}")
     return chosen
 
 
@@ -125,22 +115,17 @@ def convert_answer(answer: dict[str, Any], *, rung_id: str, run_id: str, q_spec:
     rerank = next((c for c in answer["calls"] if c["role"] == "rerank"), None)
     funnel: list[dict[str, Any]] = []
     payload = None
-    bm25_recall = rerank_recall = None
+    rerank_recall = None
     ctx_chars = total_chars
-    if rung_id == "hybrid_rag_rerank_citations":
+    if rung_id == PAIRED_RUNG:
         ret = answer["retrieval"]
-        ranked = rank_chunks_bm25(answer["question_as_asked"], corpus.flat_chunks, top_k=BM25_TOP_K)
-        candidates = [c for c in ranked if c["is_bm25_candidate"]]
-        if [c["chunk_id"] for c in candidates] != [x["chunk_id"] for x in ret["bm25_top"]]:
-            raise ValueError(f"BM25 candidates do not reproduce for {run_id} {answer['preset_id']}/{answer['question_id']}")
-        payload = build_reranker_payload(answer["question_as_asked"], candidates)
-        selected, funnel, bm25_recall, rerank_recall = merge_rerank_funnel(
-            bm25_ranked=ranked, reranker_structured=ret["reranker_raw"],
-            expected_chunk_ids=list(q_spec.get("expected_chunk_ids") or []), top_k_rerank=RERANK_TOP_K)
+        selected, _invalid = select_picked_chunks(corpus.chunk_by_id, ret["reranker_raw"])
         if [c["chunk_id"] for c in selected] != ret["selected_chunk_ids"]:
-            raise ValueError(f"Reranker selection does not reproduce for {run_id} {answer['question_id']}")
+            raise ValueError(f"Clause picks do not reproduce for {run_id} {answer['preset_id']}/{answer['question_id']}")
+        funnel, rerank_recall = picked_funnel(selected, ret["reranker_raw"], list(q_spec.get("expected_chunk_ids") or []))
+        payload = answer["question_as_asked"]
         ctx_chars = sum(len(b["data"]) for b in build_rung3_chunk_blocks(selected))
-    reduction = round(((total_chars - ctx_chars) / total_chars) * 100, 1) if rung_id == "hybrid_rag_rerank_citations" else 0.0
+    reduction = round(((total_chars - ctx_chars) / total_chars) * 100, 1) if rung_id == PAIRED_RUNG else 0.0
     return {
         "question_id": q_spec["question_id"],
         "question_number": int(q_spec["question_number"]),
@@ -167,10 +152,11 @@ def convert_answer(answer: dict[str, Any], *, rung_id: str, run_id: str, q_spec:
         "reranker_latency_ms": int(rerank["latency_ms"]) if rerank else 0,
         "reranker_input_tokens": int(rerank["input_tokens"]) if rerank else 0,
         "reranker_output_tokens": int(rerank["output_tokens"]) if rerank else 0,
+        "reranker_cache_creation_tokens": int(rerank.get("cache_creation_tokens") or 0) if rerank else 0,
+        "reranker_cache_read_tokens": int(rerank.get("cache_read_tokens") or 0) if rerank else 0,
         "reranker_payload": payload,
         "reranker_structured": (answer.get("retrieval") or {}).get("reranker_raw") if rerank else None,
         "retrieval_funnel": funnel,
-        "bm25_recall_pct": bm25_recall,
         "reranker_recall_pct": rerank_recall,
         "judgement": _judgement_for(jidx, run_id, answer["answer_markdown"]),
     }
@@ -212,18 +198,13 @@ def build_golden(records: list[dict[str, Any]], judgements: list[dict[str, Any]]
             "source_file": source_file,
             "judgements_file": judgements_file,
             "selection_rule": (f"fixed pre-declared mapping: repeat_index {GOLDEN_REPEAT_INDEX}, corpus scale {GOLDEN_SCALE}, "
-                               "each of the three app rungs in its adopted answer format; the session's 8 questions split "
-                               "by audit preset (not selected by outcome)"),
-            "answer_formats": {rid: adopted_answer_format(rid) for rid in APP_RUNG_IDS},
-            "answer_format_note": (f"Since {ADOPTED_ON} the retrieval rung (hybrid_rag_rerank_citations) is recorded from its "
-                                   "scoped_absence sessions — the synthesis prompt that reports a missing term as 'not in the "
-                                   "text provided'; the full-corpus rungs stay on the original prompt (not changed or "
-                                   "re-measured). Instruction lines added: " + " | ".join(instruction_changes()["added"])),
+                               "both versions the app runs; the session's 8 questions split by audit preset (not selected "
+                               "by outcome)"),
+            "answer_formats": {rid: rung_answer_format(rid) for rid in APP_RUNG_IDS},
             "keys_version": keys_version,
             "question_scope_line": scope_line(),
-            "question_note": "`question` is the original text shown in the app; `question_as_asked` is what the model received.",
+            "question_note": "`question` is the text shown in the app; `question_as_asked` is what the model received.",
             "billing_note": BILLING_NOTE,
-            "not_mapped": "cached_rerank_hybrid (measured in the rerun; not runnable in the app)",
         },
         "presets": presets,
     }
@@ -277,7 +258,7 @@ def main(argv: list[str] | None = None) -> int:
             prov = p["provenance"][rid]
             print(f"{pid} {rid:<30} <- r{prov['repeat_index']} s{prov['scale']} {prov['run_id'][:8]} | questions={len(qs)} "
                   f"stops={sorted({q['stop_reason'] for q in qs})} judged={sum(1 for q in qs if q['judgement'])} "
-                  f"cache w/r={[ (q['cache_creation_tokens'] > 0, q['cache_read_tokens'] > 0) for q in qs] if rid.startswith('cached') else '-'}")
+                  f"clause cache w/r={[(q['reranker_cache_creation_tokens'] > 0, q['reranker_cache_read_tokens'] > 0) for q in qs] if rid == PAIRED_RUNG else '-'}")
     print(f"{'Wrote' if changed else 'Unchanged:'} {args.out}")
 
     portfolio = build_quality_portfolio(records, judgements, keys=keys, source_file=_rel(in_path), judgements_file=_rel(j_path))

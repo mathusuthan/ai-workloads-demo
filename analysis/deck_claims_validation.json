@@ -1,104 +1,81 @@
 {
   "dedup": {
     "totals": {
-      "raw_traces": 1074,
-      "distinct_fingerprints": 478,
-      "canonical_runs": 244,
+      "raw_traces": 208,
+      "distinct_fingerprints": 208,
+      "canonical_runs": 208,
       "raw_by_mode": {
-        "replay": 624,
-        "live_captured_seed": 438,
-        "live": 12
+        "live_captured_seed": 208
       },
       "classes": {
-        "canonical golden-replay run": 247,
-        "superseded capture (older golden-replay version)": 207,
-        "rollup of canonical runs (session/audit sum)": 12,
-        "error (live, no tokens)": 6,
-        "ad-hoc live run": 6
+        "canonical golden-replay run": 208
       },
-      "max_duplicates_of_one_run": 30
+      "max_duplicates_of_one_run": 1
     },
     "by_category": {
       "cat1_classification_routing": {
-        "raw_traces": 547,
-        "distinct_fingerprints": 129,
+        "raw_traces": 48,
+        "distinct_fingerprints": 48,
         "classes": {
-          "canonical golden-replay run": 51,
-          "superseded capture (older golden-replay version)": 66,
-          "error (live, no tokens)": 6,
-          "ad-hoc live run": 6
+          "canonical golden-replay run": 48
         },
         "raw_by_mode": {
-          "replay": 439,
-          "live_captured_seed": 96,
-          "live": 12
+          "live_captured_seed": 48
         },
         "canonical_runs": 48
       },
       "cat2_synthesis_drafting": {
-        "raw_traces": 110,
-        "distinct_fingerprints": 47,
+        "raw_traces": 48,
+        "distinct_fingerprints": 48,
         "classes": {
-          "canonical golden-replay run": 44,
-          "superseded capture (older golden-replay version)": 3
+          "canonical golden-replay run": 48
         },
         "raw_by_mode": {
-          "replay": 66,
-          "live_captured_seed": 44
+          "live_captured_seed": 48
         },
-        "canonical_runs": 44
+        "canonical_runs": 48
       },
       "cat3_conversational_assistants": {
-        "raw_traces": 199,
-        "distinct_fingerprints": 172,
+        "raw_traces": 70,
+        "distinct_fingerprints": 70,
         "classes": {
-          "superseded capture (older golden-replay version)": 64,
-          "canonical golden-replay run": 102,
-          "rollup of canonical runs (session/audit sum)": 6
+          "canonical golden-replay run": 70
         },
         "raw_by_mode": {
-          "live_captured_seed": 166,
-          "replay": 33
+          "live_captured_seed": 70
         },
-        "canonical_runs": 102
+        "canonical_runs": 70
       },
       "cat4_multidoc_rag": {
-        "raw_traces": 152,
-        "distinct_fingerprints": 94,
+        "raw_traces": 24,
+        "distinct_fingerprints": 24,
         "classes": {
-          "superseded capture (older golden-replay version)": 56,
-          "canonical golden-replay run": 32,
-          "rollup of canonical runs (session/audit sum)": 6
+          "canonical golden-replay run": 24
         },
         "raw_by_mode": {
-          "replay": 56,
-          "live_captured_seed": 96
+          "live_captured_seed": 24
         },
-        "canonical_runs": 32
+        "canonical_runs": 24
       },
       "cat5_process_orchestration": {
-        "raw_traces": 39,
-        "distinct_fingerprints": 18,
+        "raw_traces": 9,
+        "distinct_fingerprints": 9,
         "classes": {
-          "superseded capture (older golden-replay version)": 9,
           "canonical golden-replay run": 9
         },
         "raw_by_mode": {
-          "replay": 21,
-          "live_captured_seed": 18
+          "live_captured_seed": 9
         },
         "canonical_runs": 9
       },
       "cat6_multi_agent_swarms": {
-        "raw_traces": 27,
-        "distinct_fingerprints": 18,
+        "raw_traces": 9,
+        "distinct_fingerprints": 9,
         "classes": {
-          "canonical golden-replay run": 9,
-          "superseded capture (older golden-replay version)": 9
+          "canonical golden-replay run": 9
         },
         "raw_by_mode": {
-          "live_captured_seed": 18,
-          "replay": 9
+          "live_captured_seed": 9
         },
         "canonical_runs": 9
       }
@@ -129,27 +106,6 @@
           "io_ratio_median": 0.23747438137221044,
           "output_cost_share_median": 0.95483032464235,
           "max_call_prompt": 1468
-        },
-        "sonnet_classify_text": {
-          "n": 36,
-          "cost_per_1k_billed": 2.8873333333333333,
-          "cost_per_1k_warm": 2.8873333333333333,
-          "cost_per_1k_cold": 2.8873333333333333,
-          "cost_per_1k_billed_repo_card": 2.8873333333333333,
-          "prompt_tokens_median": 979.5,
-          "prompt_tokens_range": [
-            450,
-            1657
-          ],
-          "output_tokens_median": 88.0,
-          "output_tokens_range": [
-            62,
-            114
-          ],
-          "total_tokens_median": 1080.5,
-          "io_ratio_median": 9.918505942275043,
-          "output_cost_share_median": 0.34616293728332803,
-          "max_call_prompt": 1657
         },
         "sonnet_schema": {
           "n": 36,
@@ -193,27 +149,6 @@
           "output_cost_share_median": 0.9466769117194613,
           "max_call_prompt": 1468
         },
-        "haiku_classify_text": {
-          "n": 36,
-          "cost_per_1k_billed": 0.14513055555555557,
-          "cost_per_1k_warm": 0.14513055555555557,
-          "cost_per_1k_cold": 0.14513055555555557,
-          "cost_per_1k_billed_repo_card": 0.14513055555555557,
-          "prompt_tokens_median": 979.5,
-          "prompt_tokens_range": [
-            450,
-            1657
-          ],
-          "output_tokens_median": 88.0,
-          "output_tokens_range": [
-            62,
-            140
-          ],
-          "total_tokens_median": 1080.5,
-          "io_ratio_median": 8.750460829493086,
-          "output_cost_share_median": 0.3679586149065259,
-          "max_call_prompt": 1657
-        },
         "haiku_schema": {
           "n": 36,
           "cost_per_1k_billed": 0.18840833333333334,
@@ -234,27 +169,6 @@
           "io_ratio_median": 13.421295774647888,
           "output_cost_share_median": 0.2728316186895725,
           "max_call_prompt": 2066
-        },
-        "gemini_decision": {
-          "n": 36,
-          "cost_per_1k_billed": 0.0989,
-          "cost_per_1k_warm": 0.0989,
-          "cost_per_1k_cold": 0.0989,
-          "cost_per_1k_billed_repo_card": 0.0989,
-          "prompt_tokens_median": 972.5,
-          "prompt_tokens_range": [
-            581,
-            1472
-          ],
-          "output_tokens_median": 0.0,
-          "output_tokens_range": [
-            0,
-            0
-          ],
-          "total_tokens_median": 972.5,
-          "io_ratio_median": null,
-          "output_cost_share_median": 0.0,
-          "max_call_prompt": 1472
         },
         "sonnet_schema_batch": {
           "cost_per_1k_billed": 1.8828333333333334,
@@ -279,7 +193,6 @@
           "items": 6,
           "items_total": 36,
           "given_labels": false,
-          "keyword_fields": 90,
           "reader_counts": {
             "stated": 72,
             "not_stated": 10,
@@ -314,57 +227,8 @@
               "items": 18
             }
           },
+          "latency_ms_median": 22134.5,
           "summary_cost_per_1k": 29.49777777777778
-        },
-        "sonnet_classify_text": {
-          "label": "Sonnet classification, plain text",
-          "task": "classify_text",
-          "runs": 36,
-          "fields": 126,
-          "fields_total": 126,
-          "wilson": [
-            97.04142355178014,
-            99.99999999999997
-          ],
-          "items": 36,
-          "items_total": 36,
-          "given_labels": true,
-          "keyword_fields": 108,
-          "reader_counts": {
-            "stated": 126,
-            "not_stated": 0,
-            "ambiguous": 0
-          },
-          "truncated": 0,
-          "stop_reasons": {
-            "end_turn": 36
-          },
-          "thinking_total": 0,
-          "by_sub_task": {
-            "support_triage": {
-              "fields_correct": 72,
-              "fields_total": 72,
-              "field_accuracy_pct": 100.0,
-              "wilson95": [
-                94.93488274035423,
-                100.0
-              ],
-              "items_fully_correct": 18,
-              "items": 18
-            },
-            "sku_tagging": {
-              "fields_correct": 54,
-              "fields_total": 54,
-              "field_accuracy_pct": 100.0,
-              "wilson95": [
-                93.35864119091038,
-                100.0
-              ],
-              "items_fully_correct": 18,
-              "items": 18
-            }
-          },
-          "summary_cost_per_1k": 2.8873333333333333
         },
         "sonnet_schema": {
           "label": "Sonnet classification, JSON schema",
@@ -379,7 +243,6 @@
           "items": 36,
           "items_total": 36,
           "given_labels": true,
-          "keyword_fields": null,
           "reader_counts": null,
           "truncated": 0,
           "stop_reasons": {
@@ -410,6 +273,7 @@
               "items": 18
             }
           },
+          "latency_ms_median": 1983.5,
           "summary_cost_per_1k": 3.7656666666666663
         },
         "haiku_report": {
@@ -425,7 +289,6 @@
           "items": 3,
           "items_total": 36,
           "given_labels": false,
-          "keyword_fields": 74,
           "reader_counts": {
             "stated": 73,
             "not_stated": 9,
@@ -460,57 +323,8 @@
               "items": 18
             }
           },
+          "latency_ms_median": 11171.5,
           "summary_cost_per_1k": 1.2481805555555556
-        },
-        "haiku_classify_text": {
-          "label": "Haiku classification, plain text",
-          "task": "classify_text",
-          "runs": 36,
-          "fields": 120,
-          "fields_total": 126,
-          "wilson": [
-            89.99983205231048,
-            97.79955116120489
-          ],
-          "items": 33,
-          "items_total": 36,
-          "given_labels": true,
-          "keyword_fields": 102,
-          "reader_counts": {
-            "stated": 126,
-            "not_stated": 0,
-            "ambiguous": 0
-          },
-          "truncated": 0,
-          "stop_reasons": {
-            "end_turn": 36
-          },
-          "thinking_total": 0,
-          "by_sub_task": {
-            "support_triage": {
-              "fields_correct": 66,
-              "fields_total": 72,
-              "field_accuracy_pct": 91.66666666666666,
-              "wilson95": [
-                82.98764477932347,
-                96.12475750430502
-              ],
-              "items_fully_correct": 15,
-              "items": 18
-            },
-            "sku_tagging": {
-              "fields_correct": 54,
-              "fields_total": 54,
-              "field_accuracy_pct": 100.0,
-              "wilson95": [
-                93.35864119091038,
-                100.0
-              ],
-              "items_fully_correct": 18,
-              "items": 18
-            }
-          },
-          "summary_cost_per_1k": 0.14513055555555557
         },
         "haiku_schema": {
           "label": "Haiku classification, JSON schema",
@@ -525,7 +339,6 @@
           "items": 33,
           "items_total": 36,
           "given_labels": true,
-          "keyword_fields": null,
           "reader_counts": null,
           "truncated": 0,
           "stop_reasons": {
@@ -556,115 +369,42 @@
               "items": 18
             }
           },
+          "latency_ms_median": 1417.5,
           "summary_cost_per_1k": 0.18840833333333334
-        },
-        "gemini_decision": {
-          "label": "Gemini decision",
-          "task": "decision",
-          "runs": 36,
-          "fields": 123,
-          "fields_total": 126,
-          "wilson": [
-            93.23339858507347,
-            99.18700479757426
-          ],
-          "items": 33,
-          "items_total": 36,
-          "given_labels": true,
-          "keyword_fields": null,
-          "reader_counts": null,
-          "truncated": 0,
-          "stop_reasons": {
-            "None": 36
-          },
-          "thinking_total": 0,
-          "by_sub_task": {
-            "support_triage": {
-              "fields_correct": 69,
-              "fields_total": 72,
-              "field_accuracy_pct": 95.83333333333334,
-              "wilson95": [
-                88.4507232586839,
-                98.57291925330748
-              ],
-              "items_fully_correct": 15,
-              "items": 18
-            },
-            "sku_tagging": {
-              "fields_correct": 54,
-              "fields_total": 54,
-              "field_accuracy_pct": 100.0,
-              "wilson95": [
-                93.35864119091038,
-                100.0
-              ],
-              "items_fully_correct": 18,
-              "items": 18
-            }
-          },
-          "summary_cost_per_1k": 0.0989
         }
       },
       "levers": [
         {
-          "lever": "write-up \u2192 classification-only text (sonnet)",
-          "label": "Ask for the classification instead of a write-up (Sonnet)",
+          "lever": "write-up \u2192 schema (sonnet)",
+          "label": "Write-up \u2192 classification with JSON schema (Sonnet)",
           "from": "sonnet_report",
-          "to": "sonnet_classify_text",
+          "to": "sonnet_schema",
           "comparable": false,
           "accuracy_change_pp": 45.238095238095234,
           "cost_from": 29.497777777777777,
-          "cost_to": 2.8873333333333333,
-          "cost_change_pct": -90.2116920295314,
+          "cost_to": 3.7656666666666667,
+          "cost_change_pct": -87.23406659635377,
           "fields_from": 69,
           "fields_to": 126,
           "fields_total": 126
         },
         {
-          "lever": "text \u2192 schema (sonnet)",
-          "label": "Enforce a JSON schema instead of plain-text lines (Sonnet)",
-          "from": "sonnet_classify_text",
-          "to": "sonnet_schema",
-          "comparable": true,
-          "accuracy_change_pp": 0.0,
-          "cost_from": 2.8873333333333333,
-          "cost_to": 3.7656666666666667,
-          "cost_change_pct": 30.4202262756869,
-          "fields_from": 126,
-          "fields_to": 126,
-          "fields_total": 126
-        },
-        {
-          "lever": "write-up \u2192 classification-only text (haiku)",
-          "label": "Ask for the classification instead of a write-up (Haiku)",
+          "lever": "write-up \u2192 schema (haiku)",
+          "label": "Write-up \u2192 classification with JSON schema (Haiku)",
           "from": "haiku_report",
-          "to": "haiku_classify_text",
+          "to": "haiku_schema",
           "comparable": false,
           "accuracy_change_pp": 40.47619047619047,
           "cost_from": 1.2481805555555556,
-          "cost_to": 0.14513055555555557,
-          "cost_change_pct": -88.37263127441052,
-          "fields_from": 69,
-          "fields_to": 120,
-          "fields_total": 126
-        },
-        {
-          "lever": "text \u2192 schema (haiku)",
-          "label": "Enforce a JSON schema instead of plain-text lines (Haiku)",
-          "from": "haiku_classify_text",
-          "to": "haiku_schema",
-          "comparable": true,
-          "accuracy_change_pp": 0.0,
-          "cost_from": 0.14513055555555557,
           "cost_to": 0.18840833333333334,
-          "cost_change_pct": 29.819893965203747,
-          "fields_from": 120,
+          "cost_change_pct": -84.90536224949649,
+          "fields_from": 69,
           "fields_to": 120,
           "fields_total": 126
         },
         {
           "lever": "Sonnet \u2192 Haiku (report)",
-          "label": "Switch Sonnet \u2192 Haiku (write-up)",
+          "label": "Sonnet \u2192 Haiku (write-up)",
           "from": "sonnet_report",
           "to": "haiku_report",
           "comparable": false,
@@ -677,22 +417,8 @@
           "fields_total": 126
         },
         {
-          "lever": "Sonnet \u2192 Haiku (classify_text)",
-          "label": "Switch Sonnet \u2192 Haiku (classification, plain text)",
-          "from": "sonnet_classify_text",
-          "to": "haiku_classify_text",
-          "comparable": true,
-          "accuracy_change_pp": -4.761904761904767,
-          "cost_from": 2.8873333333333333,
-          "cost_to": 0.14513055555555557,
-          "cost_change_pct": -94.97354344647118,
-          "fields_from": 126,
-          "fields_to": 120,
-          "fields_total": 126
-        },
-        {
           "lever": "Sonnet \u2192 Haiku (schema)",
-          "label": "Switch Sonnet \u2192 Haiku (classification, JSON schema)",
+          "label": "Sonnet \u2192 Haiku (classification with JSON schema)",
           "from": "sonnet_schema",
           "to": "haiku_schema",
           "comparable": true,
@@ -705,22 +431,8 @@
           "fields_total": 126
         },
         {
-          "lever": "Haiku schema \u2192 Gemini decision",
-          "label": "Switch Haiku JSON schema \u2192 Gemini decision",
-          "from": "haiku_schema",
-          "to": "gemini_decision",
-          "comparable": true,
-          "accuracy_change_pp": 2.3809523809523836,
-          "cost_from": 0.18840833333333334,
-          "cost_to": 0.0989,
-          "cost_change_pct": -47.507629704984744,
-          "fields_from": 120,
-          "fields_to": 123,
-          "fields_total": 126
-        },
-        {
           "lever": "whole stack: Sonnet write-up \u2192 Haiku schema",
-          "label": "All of it: Sonnet write-up \u2192 Haiku JSON schema",
+          "label": "Sonnet write-up \u2192 Haiku classification with JSON schema",
           "from": "sonnet_report",
           "to": "haiku_schema",
           "comparable": false,
@@ -733,237 +445,11 @@
           "fields_total": 126
         }
       ],
-      "records": 252,
+      "records": 144,
       "n_items": 12,
       "repeats": 3,
       "fields_per_arm": 126,
-      "scoring": [
-        {
-          "arm_id": "sonnet_report",
-          "label": "Sonnet write-up",
-          "fields_total": 126,
-          "keyword_fields_correct": 90,
-          "keyword_field_accuracy_pct": 71.42857142857143,
-          "reader_fields_correct": 69,
-          "reader_field_accuracy_pct": 54.761904761904766,
-          "difference_pp": 16.666666666666664,
-          "extractor_agreement": {
-            "fields": 126,
-            "agree": 75,
-            "same_value": 63,
-            "different_value": 7,
-            "regex_only": 42,
-            "judge_only": 2,
-            "neither": 12
-          },
-          "reader_value_counts": {
-            "stated": 72,
-            "not_stated": 10,
-            "ambiguous": 44
-          }
-        },
-        {
-          "arm_id": "sonnet_classify_text",
-          "label": "Sonnet classification, plain text",
-          "fields_total": 126,
-          "keyword_fields_correct": 108,
-          "keyword_field_accuracy_pct": 85.71428571428571,
-          "reader_fields_correct": 126,
-          "reader_field_accuracy_pct": 100.0,
-          "difference_pp": -14.285714285714292,
-          "extractor_agreement": {
-            "fields": 126,
-            "agree": 108,
-            "same_value": 108,
-            "different_value": 0,
-            "regex_only": 0,
-            "judge_only": 18,
-            "neither": 0
-          },
-          "reader_value_counts": {
-            "stated": 126,
-            "not_stated": 0,
-            "ambiguous": 0
-          }
-        },
-        {
-          "arm_id": "haiku_report",
-          "label": "Haiku write-up",
-          "fields_total": 126,
-          "keyword_fields_correct": 74,
-          "keyword_field_accuracy_pct": 58.730158730158735,
-          "reader_fields_correct": 69,
-          "reader_field_accuracy_pct": 54.761904761904766,
-          "difference_pp": 3.9682539682539684,
-          "extractor_agreement": {
-            "fields": 126,
-            "agree": 73,
-            "same_value": 62,
-            "different_value": 11,
-            "regex_only": 42,
-            "judge_only": 0,
-            "neither": 11
-          },
-          "reader_value_counts": {
-            "stated": 73,
-            "not_stated": 9,
-            "ambiguous": 44
-          }
-        },
-        {
-          "arm_id": "haiku_classify_text",
-          "label": "Haiku classification, plain text",
-          "fields_total": 126,
-          "keyword_fields_correct": 102,
-          "keyword_field_accuracy_pct": 80.95238095238095,
-          "reader_fields_correct": 120,
-          "reader_field_accuracy_pct": 95.23809523809523,
-          "difference_pp": -14.285714285714278,
-          "extractor_agreement": {
-            "fields": 126,
-            "agree": 108,
-            "same_value": 108,
-            "different_value": 0,
-            "regex_only": 0,
-            "judge_only": 18,
-            "neither": 0
-          },
-          "reader_value_counts": {
-            "stated": 126,
-            "not_stated": 0,
-            "ambiguous": 0
-          }
-        }
-      ],
-      "original_capture": {
-        "sonnet_report": {
-          "arm_id": "sonnet_report",
-          "app_rung_id": "sonnet_naive",
-          "responses": 12,
-          "truncated_at_cap": 11,
-          "cap": 2048,
-          "output_tokens_median": 2048.0,
-          "cost_per_1k_items_usd": 22.035,
-          "keyword_fields_correct": 27,
-          "fields_total": 42,
-          "keyword_field_accuracy_pct": 64.28571428571429,
-          "reader_fields_correct": 23,
-          "reader_field_accuracy_pct": 54.761904761904766,
-          "reader_status": "complete",
-          "extractor_agreement": {
-            "fields": 42,
-            "agree": 24,
-            "same_value": 20,
-            "different_value": 3,
-            "regex_only": 15,
-            "judge_only": 0,
-            "neither": 4
-          }
-        },
-        "haiku_report": {
-          "arm_id": "haiku_report",
-          "app_rung_id": "haiku_naive",
-          "responses": 12,
-          "truncated_at_cap": 8,
-          "cap": 2048,
-          "output_tokens_median": 2048.0,
-          "cost_per_1k_items_usd": 1.0235833333333333,
-          "keyword_fields_correct": 24,
-          "fields_total": 42,
-          "keyword_field_accuracy_pct": 57.14285714285714,
-          "reader_fields_correct": 22,
-          "reader_field_accuracy_pct": 52.38095238095239,
-          "reader_status": "complete",
-          "extractor_agreement": {
-            "fields": 42,
-            "agree": 25,
-            "same_value": 20,
-            "different_value": 4,
-            "regex_only": 13,
-            "judge_only": 0,
-            "neither": 5
-          }
-        },
-        "haiku_schema": {
-          "arm_id": "haiku_schema",
-          "app_rung_id": "haiku_calibrated",
-          "responses": 12,
-          "truncated_at_cap": null,
-          "cap": 256,
-          "output_tokens_median": 99.5,
-          "output_tokens_max": 135,
-          "cost_per_1k_items_usd": 0.18886666666666665,
-          "fields_correct": 40,
-          "fields_total": 42,
-          "field_accuracy_pct": 95.23809523809523
-        },
-        "gemini_decision": {
-          "arm_id": "gemini_decision",
-          "app_rung_id": "gemini_decision",
-          "responses": 12,
-          "truncated_at_cap": null,
-          "cap": null,
-          "output_tokens_median": 0.0,
-          "output_tokens_max": 0,
-          "cost_per_1k_items_usd": 0.0989,
-          "fields_correct": 41,
-          "fields_total": 42,
-          "field_accuracy_pct": 97.61904761904762
-        }
-      },
-      "pending": {
-        "original_capture_reader": {
-          "planned": 24,
-          "done": 24,
-          "pending": 0,
-          "status": "complete",
-          "what": "reader-model scoring of the 24 stored write-ups of the original capture"
-        },
-        "schema_as_text_check": {
-          "planned": 20,
-          "done": 20,
-          "pending": 0,
-          "status": "complete",
-          "what": "reader-model check on 20 JSON-schema answers rendered as plain text",
-          "fields_agree": 100,
-          "fields": 100
-        }
-      },
       "misses": [
-        {
-          "arm_id": "haiku_classify_text",
-          "item_id": "tkt-01",
-          "item_title": "Damaged Ceramic Dinnerware + Exposed Payment Card & Phone",
-          "sub_task": "support_triage",
-          "field": "auto_action",
-          "field_label": "action",
-          "expected": "auto_replace",
-          "returned": "route_specialist",
-          "repeats": [
-            0,
-            1,
-            2
-          ],
-          "runs_missed": 3,
-          "runs_total": 3
-        },
-        {
-          "arm_id": "haiku_classify_text",
-          "item_id": "tkt-01",
-          "item_title": "Damaged Ceramic Dinnerware + Exposed Payment Card & Phone",
-          "sub_task": "support_triage",
-          "field": "queue",
-          "field_label": "queue",
-          "expected": "replacements",
-          "returned": "billing_payouts",
-          "repeats": [
-            0,
-            1,
-            2
-          ],
-          "runs_missed": 3,
-          "runs_total": 3
-        },
         {
           "arm_id": "haiku_schema",
           "item_id": "tkt-01",
@@ -1025,23 +511,6 @@
           ],
           "runs_missed": 2,
           "runs_total": 3
-        },
-        {
-          "arm_id": "gemini_decision",
-          "item_id": "tkt-05",
-          "item_title": "Invoice GST/VAT Credit Correction Request on B2B Order",
-          "sub_task": "support_triage",
-          "field": "contains_pii",
-          "field_label": "contains personal data",
-          "expected": true,
-          "returned": false,
-          "repeats": [
-            0,
-            1,
-            2
-          ],
-          "runs_missed": 3,
-          "runs_total": 3
         }
       ],
       "write_up_note": {
@@ -1055,38 +524,25 @@
         },
         "example_ambiguous": "Status: HOLD / DO NOT PUBLISH. Route to Compliance Audit."
       },
-      "readable": {
-        "answers": 72,
-        "every_field_stated": 72
-      },
       "data_quality": {
-        "run_records": 252,
-        "ok_current_runs": 252,
-        "error_records": 0,
-        "superseded_records": 0,
+        "ok_current_runs": 144,
+        "planned_runs": 144,
         "truncated": 0,
         "model_mismatches": 0,
-        "gemini_ok": 36,
-        "gemini_planned": 36,
-        "gemini_input_tokens_possibly_estimated": 0,
-        "extraction_records": 231,
-        "extraction_ok_current": 188,
-        "extractions_planned": 188,
-        "extraction_errors": 43,
-        "evidence_not_verbatim": 0,
-        "missing_runs": 0
+        "extractions": 72,
+        "extractions_planned": 72,
+        "evidence_not_verbatim": 0
       },
       "reader_model": "claude-opus-5-5",
       "reader_passes": 1,
+      "reader_check_note": "The reader model was checked on 100 known fields (20 JSON answers rewritten as plain text) and read all of them correctly.",
       "settings": {
         "caps": {
           "report": 8192,
-          "classify_text": 1024,
           "schema": 512
         },
         "timeouts_s": {
           "report": 300.0,
-          "classify_text": 120.0,
           "schema": 60.0
         },
         "max_retries": 0,
@@ -1097,349 +553,267 @@
           "haiku": {
             "type": "disabled"
           }
-        },
-        "app_caps_before": {
-          "prose": 2048,
-          "schema": 256
         }
-      },
-      "extraction_history": {
-        "error_records": 43,
-        "error_reasons": [
-          "API usage limit reached on 2026-11-26"
-        ],
-        "retried_to_ok": 43
       },
       "truncated_runs": {
         "sonnet_report": 0,
-        "sonnet_classify_text": 0,
         "sonnet_schema": 0,
         "haiku_report": 0,
-        "haiku_classify_text": 0,
-        "haiku_schema": 0,
-        "gemini_decision": 0
+        "haiku_schema": 0
       },
       "thinking_tokens_total": {
         "sonnet_report": 0,
-        "sonnet_classify_text": 0,
         "sonnet_schema": 0,
         "haiku_report": 0,
-        "haiku_classify_text": 0,
-        "haiku_schema": 0,
-        "gemini_decision": 0
+        "haiku_schema": 0
       },
       "max_cost_diff_vs_summary_per_1k": 3.552713678800501e-15
     },
     "cat2": {
       "rungs": {
         "sonnet_unbounded": {
-          "n": 4,
-          "cost_per_1k_billed": 58.923,
-          "cost_per_1k_warm": 58.923,
-          "cost_per_1k_cold": 58.923,
-          "cost_per_1k_billed_repo_card": 58.923,
+          "n": 12,
+          "cost_per_1k_billed": 57.42883333333333,
+          "cost_per_1k_warm": 57.42883333333333,
+          "cost_per_1k_cold": 57.42883333333333,
+          "cost_per_1k_billed_repo_card": 57.42883333333333,
           "prompt_tokens_median": 3639.5,
           "prompt_tokens_range": [
             3458,
             3874
           ],
-          "output_tokens_median": 4974.5,
+          "output_tokens_median": 4833.0,
           "output_tokens_range": [
-            4698,
-            6000
+            4370,
+            5885
           ],
-          "total_tokens_median": 8489.0,
-          "io_ratio_median": 0.6967646486870775,
-          "output_cost_share_median": 0.8776912844579272,
+          "total_tokens_median": 8464.5,
+          "io_ratio_median": 0.7375391211558391,
+          "output_cost_share_median": 0.8714539127374914,
+          "max_call_prompt": 3874
+        },
+        "haiku_unbounded": {
+          "n": 12,
+          "cost_per_1k_billed": 3.108941666666667,
+          "cost_per_1k_warm": 3.108941666666667,
+          "cost_per_1k_cold": 3.108941666666667,
+          "cost_per_1k_billed_repo_card": 3.108941666666667,
+          "prompt_tokens_median": 3639.5,
+          "prompt_tokens_range": [
+            3458,
+            3874
+          ],
+          "output_tokens_median": 5542.5,
+          "output_tokens_range": [
+            4703,
+            6521
+          ],
+          "total_tokens_median": 9148.5,
+          "io_ratio_median": 0.6680814658931482,
+          "output_cost_share_median": 0.8821568519983061,
           "max_call_prompt": 3874
         },
         "sonnet_templated": {
-          "n": 4,
-          "cost_per_1k_billed": 27.246,
-          "cost_per_1k_warm": 27.246,
-          "cost_per_1k_cold": 27.246,
-          "cost_per_1k_billed_repo_card": 27.246,
-          "prompt_tokens_median": 4843.5,
+          "n": 12,
+          "cost_per_1k_billed": 26.816333333333333,
+          "cost_per_1k_warm": 26.816333333333333,
+          "cost_per_1k_cold": 26.816333333333333,
+          "cost_per_1k_billed_repo_card": 26.816333333333333,
+          "prompt_tokens_median": 4924.5,
           "prompt_tokens_range": [
-            4667,
-            5073
+            4748,
+            5154
           ],
-          "output_tokens_median": 1732.5,
+          "output_tokens_median": 1673.0,
           "output_tokens_range": [
-            1695,
-            1853
+            1586,
+            1839
           ],
-          "total_tokens_median": 6569.5,
-          "io_ratio_median": 2.750277235193826,
-          "output_cost_share_median": 0.6451399051382565,
-          "max_call_prompt": 5073
+          "total_tokens_median": 6597.5,
+          "io_ratio_median": 2.9071360677200095,
+          "output_cost_share_median": 0.6323410792942696,
+          "max_call_prompt": 5154
         },
         "haiku_templated": {
-          "n": 4,
-          "cost_per_1k_billed": 1.3943,
-          "cost_per_1k_warm": 1.3943,
-          "cost_per_1k_cold": 1.3943,
-          "cost_per_1k_billed_repo_card": 1.3943,
-          "prompt_tokens_median": 4843.5,
+          "n": 12,
+          "cost_per_1k_billed": 1.3552333333333333,
+          "cost_per_1k_warm": 1.3552333333333333,
+          "cost_per_1k_cold": 1.3552333333333333,
+          "cost_per_1k_billed_repo_card": 1.3552333333333333,
+          "prompt_tokens_median": 4924.5,
           "prompt_tokens_range": [
-            4667,
-            5073
+            4748,
+            5154
           ],
-          "output_tokens_median": 1819.5,
+          "output_tokens_median": 1720.0,
           "output_tokens_range": [
-            1728,
-            1902
+            1569,
+            1892
           ],
-          "total_tokens_median": 6663.0,
-          "io_ratio_median": 2.670068817250767,
-          "output_cost_share_median": 0.6518847251975828,
-          "max_call_prompt": 5073
+          "total_tokens_median": 6636.5,
+          "io_ratio_median": 2.8650702062276183,
+          "output_cost_share_median": 0.6357229368034092,
+          "max_call_prompt": 5154
         }
       },
-      "section_regen": {
-        "claude-sonnet-5-5": {
-          "n": 16,
-          "cost_per_1k": 13.805125,
-          "output_median": 522.5,
-          "input_median": 4481.0
-        },
-        "claude-haiku-5-5": {
-          "n": 16,
-          "cost_per_1k": 0.7426625,
-          "output_median": 642.0,
-          "input_median": 4481.0
-        }
+      "pending_rungs": [],
+      "records": 48,
+      "planned": 48,
+      "drafts_per_cell": 12,
+      "documents": [
+        "brief-01",
+        "brief-02",
+        "reg-01",
+        "reg-02"
+      ],
+      "truncated": {
+        "sonnet_unbounded": 0,
+        "haiku_unbounded": 0,
+        "sonnet_templated": 0,
+        "haiku_templated": 0
       },
-      "haiku_draft_plus_1_sonnet_section_regen_per_1k": 15.199425,
-      "quality": {
-        "sonnet_unbounded": {
-          "drafts": 4,
-          "core": {
-            "hits": 32,
-            "total": 32
-          },
-          "detail": {
-            "hits": 40,
-            "total": 40
-          },
-          "rubric": {
-            "factual_accuracy": 3.9166666666666665,
-            "coverage": 4.916666666666667,
-            "clarity": 4.0,
-            "actionability": 3.75,
-            "concision": 2.8333333333333335
-          },
-          "serious": 1,
-          "minor": 21,
-          "not_in_source": 46,
-          "verdicts": {
-            "derived_correct": 44,
-            "derived_incorrect": 1,
-            "not_in_source_unverifiable": 0,
-            "not_a_claim": 1,
-            "no_majority": 0
-          },
-          "h2h": {
-            "sonnet_templated": {
-              "wins": 8,
-              "losses": 0,
-              "ties": 0
-            },
-            "haiku_templated": {
-              "wins": 8,
-              "losses": 0,
-              "ties": 0
-            }
-          },
-          "action_items": null,
-          "cost_per_1k": 58.923
-        },
-        "sonnet_templated": {
-          "drafts": 4,
-          "core": {
-            "hits": 32,
-            "total": 32
-          },
-          "detail": {
-            "hits": 37,
-            "total": 40
-          },
-          "rubric": {
-            "factual_accuracy": 3.0833333333333335,
-            "coverage": 4.0,
-            "clarity": 4.916666666666667,
-            "actionability": 3.75,
-            "concision": 4.166666666666667
-          },
-          "serious": 6,
-          "minor": 18,
-          "not_in_source": 6,
-          "verdicts": {
-            "derived_correct": 1,
-            "derived_incorrect": 0,
-            "not_in_source_unverifiable": 5,
-            "not_a_claim": 0,
-            "no_majority": 0
-          },
-          "h2h": {
-            "sonnet_unbounded": {
-              "wins": 0,
-              "losses": 8,
-              "ties": 0
-            },
-            "haiku_templated": {
-              "wins": 7,
-              "losses": 1,
-              "ties": 0
-            }
-          },
-          "action_items": {
-            "total": 12,
-            "flagged": 8,
-            "flagged_serious": 6
-          },
-          "cost_per_1k": 27.246
-        },
-        "haiku_templated": {
-          "drafts": 4,
-          "core": {
-            "hits": 32,
-            "total": 32
-          },
-          "detail": {
-            "hits": 36,
-            "total": 40
-          },
-          "rubric": {
-            "factual_accuracy": 2.5833333333333335,
-            "coverage": 3.5,
-            "clarity": 4.416666666666667,
-            "actionability": 3.25,
-            "concision": 4.083333333333333
-          },
-          "serious": 10,
-          "minor": 18,
-          "not_in_source": 8,
-          "verdicts": {
-            "derived_correct": 2,
-            "derived_incorrect": 0,
-            "not_in_source_unverifiable": 6,
-            "not_a_claim": 0,
-            "no_majority": 0
-          },
-          "h2h": {
-            "sonnet_unbounded": {
-              "wins": 0,
-              "losses": 8,
-              "ties": 0
-            },
-            "sonnet_templated": {
-              "wins": 1,
-              "losses": 7,
-              "ties": 0
-            }
-          },
-          "action_items": {
-            "total": 12,
-            "flagged": 8,
-            "flagged_serious": 6
-          },
-          "cost_per_1k": 1.3942999999999999
-        }
-      },
-      "quality_source": {
-        "file": "backend/replays/cat2_quality_summary.json",
-        "keys_version": "2026-11-25.3",
-        "judge_model": "claude-opus-5-5",
-        "passes": 3,
-        "drafts_per_cell": 1,
-        "documents": 4,
-        "calls": {
-          "rubric_ok": 36,
-          "pairwise_ok": 24,
-          "error_records": 0
-        },
-        "position_consistency": [
-          11,
-          12
+      "max_tokens": {
+        "sonnet_unbounded": [
+          8000
+        ],
+        "haiku_unbounded": [
+          8000
+        ],
+        "sonnet_templated": [
+          3000
+        ],
+        "haiku_templated": [
+          3000
         ]
       },
-      "template_fix": {
+      "max_cost_diff_vs_summary_per_1k": 4.440892098500626e-16,
+      "draft_count_mismatch_vs_summary": [],
+      "section_regen": {
+        "claude-haiku-5-5": {
+          "n": 16,
+          "cost_per_1k": 0.73168125,
+          "base_draft_cost_per_1k": 1.375525,
+          "base_drafts": 4,
+          "truncated": 0,
+          "output_median": 615.5,
+          "input_median": 4491.0
+        },
+        "claude-sonnet-5-5": {
+          "n": 16,
+          "cost_per_1k": 13.865374999999998,
+          "base_draft_cost_per_1k": 26.9405,
+          "base_drafts": 4,
+          "truncated": 0,
+          "output_median": 529.0,
+          "input_median": 4467.0
+        }
+      },
+      "section_regen_planned": 32,
+      "quality": {
         "cells": {
-          "template_original|sonnet": {
-            "arm": "template_original",
-            "model": "sonnet",
+          "sonnet_unbounded": {
+            "arm": "unbounded",
+            "model_key": "sonnet",
+            "rung_id": "sonnet_unbounded",
+            "label": "Without: unbounded long-form draft \u00b7 Sonnet 5.5",
+            "status": "ok",
             "drafts": 12,
-            "items": 36,
-            "owner": {
-              "supported": 14,
-              "not_stated": 0,
-              "unsupported": 22
-            },
-            "window": {
-              "supported": 23,
-              "not_stated": 0,
-              "unsupported": 13
-            },
-            "serious": 1.25,
+            "drafts_planned": 12,
+            "judged_drafts": 12,
+            "passes_per_draft": 1,
+            "truncated": 0,
             "rubric": {
-              "factual_accuracy": 3.25,
-              "coverage": 3.75,
-              "clarity": 5.0,
-              "actionability": 3.6666666666666665,
-              "concision": 4.333333333333333
+              "factual_accuracy": 3.9166666666666665,
+              "coverage": 5.0,
+              "clarity": 3.8333333333333335,
+              "actionability": 3.4166666666666665,
+              "concision": 2.75
             },
-            "cost_per_1k": 27.191833333333335,
-            "detail": {
-              "hits": 110,
+            "serious_per_draft": 0.4166666666666667,
+            "minor_per_draft": 3.5833333333333335,
+            "serious_total": 5,
+            "core_facts": {
+              "hits": 95,
+              "total": 96
+            },
+            "detail_facts": {
+              "hits": 120,
               "total": 120
-            }
+            },
+            "not_in_source_numbers": 120,
+            "number_verdicts": {
+              "derived_correct": 110,
+              "derived_incorrect": 4,
+              "not_in_source_unverifiable": 0,
+              "not_a_claim": 6
+            },
+            "action_items": null,
+            "owner": null,
+            "time_window": null,
+            "flagged_items_total": null,
+            "cost_per_1k_docs_usd": 57.42883333333333,
+            "input_tokens_mean": 3652.75,
+            "output_tokens_mean": 5012.333333333333,
+            "output_tokens_min": 4370,
+            "output_tokens_max": 5885
           },
-          "template_original|haiku": {
-            "arm": "template_original",
-            "model": "haiku",
+          "haiku_unbounded": {
+            "arm": "unbounded",
+            "model_key": "haiku",
+            "rung_id": "haiku_unbounded",
+            "label": "Without: unbounded long-form draft \u00b7 Haiku 5.5",
+            "status": "ok",
             "drafts": 12,
-            "items": 36,
-            "owner": {
-              "supported": 10,
-              "not_stated": 0,
-              "unsupported": 26
-            },
-            "window": {
-              "supported": 17,
-              "not_stated": 0,
-              "unsupported": 19
-            },
-            "serious": 2.25,
+            "drafts_planned": 12,
+            "judged_drafts": 12,
+            "passes_per_draft": 1,
+            "truncated": 0,
             "rubric": {
-              "factual_accuracy": 2.6666666666666665,
-              "coverage": 3.5833333333333335,
-              "clarity": 4.416666666666667,
-              "actionability": 3.25,
-              "concision": 4.083333333333333
+              "factual_accuracy": 2.9166666666666665,
+              "coverage": 4.333333333333333,
+              "clarity": 3.4166666666666665,
+              "actionability": 3.4166666666666665,
+              "concision": 2.5833333333333335
             },
-            "cost_per_1k": 1.3897166666666667,
-            "detail": {
-              "hits": 104,
+            "serious_per_draft": 1.8333333333333333,
+            "minor_per_draft": 6.833333333333333,
+            "serious_total": 22,
+            "core_facts": {
+              "hits": 94,
+              "total": 96
+            },
+            "detail_facts": {
+              "hits": 119,
               "total": 120
-            }
+            },
+            "not_in_source_numbers": 81,
+            "number_verdicts": {
+              "derived_correct": 56,
+              "derived_incorrect": 7,
+              "not_in_source_unverifiable": 2,
+              "not_a_claim": 16
+            },
+            "action_items": null,
+            "owner": null,
+            "time_window": null,
+            "flagged_items_total": null,
+            "cost_per_1k_docs_usd": 3.1089416666666665,
+            "input_tokens_mean": 3652.75,
+            "output_tokens_mean": 5487.333333333333,
+            "output_tokens_min": 4703,
+            "output_tokens_max": 6521
           },
-          "template_not_stated|sonnet": {
+          "sonnet_templated": {
             "arm": "template_not_stated",
-            "model": "sonnet",
+            "model_key": "sonnet",
+            "rung_id": "sonnet_templated",
+            "label": "With: section template with length caps \u00b7 Sonnet 5.5",
+            "status": "ok",
             "drafts": 12,
-            "items": 36,
-            "owner": {
-              "supported": 8,
-              "not_stated": 28,
-              "unsupported": 0
-            },
-            "window": {
-              "supported": 21,
-              "not_stated": 15,
-              "unsupported": 0
-            },
-            "serious": 0.0,
+            "drafts_planned": 12,
+            "judged_drafts": 12,
+            "passes_per_draft": 1,
+            "truncated": 0,
             "rubric": {
               "factual_accuracy": 4.166666666666667,
               "coverage": 3.4166666666666665,
@@ -1447,28 +821,53 @@
               "actionability": 3.0833333333333335,
               "concision": 4.0
             },
-            "cost_per_1k": 26.816333333333333,
-            "detail": {
+            "serious_per_draft": 0.0,
+            "minor_per_draft": 1.9166666666666667,
+            "serious_total": 0,
+            "core_facts": {
+              "hits": 94,
+              "total": 96
+            },
+            "detail_facts": {
               "hits": 94,
               "total": 120
-            }
-          },
-          "template_not_stated|haiku": {
-            "arm": "template_not_stated",
-            "model": "haiku",
-            "drafts": 12,
-            "items": 36,
+            },
+            "not_in_source_numbers": 2,
+            "number_verdicts": {
+              "derived_correct": 2,
+              "derived_incorrect": 0,
+              "not_in_source_unverifiable": 0,
+              "not_a_claim": 0
+            },
+            "action_items": 36,
             "owner": {
-              "supported": 0,
-              "not_stated": 36,
+              "supported": 8,
+              "not_stated": 28,
               "unsupported": 0
             },
-            "window": {
-              "supported": 22,
-              "not_stated": 14,
+            "time_window": {
+              "supported": 21,
+              "not_stated": 15,
               "unsupported": 0
             },
-            "serious": 0.25,
+            "flagged_items_total": 4,
+            "cost_per_1k_docs_usd": 26.816333333333333,
+            "input_tokens_mean": 4937.75,
+            "output_tokens_mean": 1694.0833333333333,
+            "output_tokens_min": 1586,
+            "output_tokens_max": 1839
+          },
+          "haiku_templated": {
+            "arm": "template_not_stated",
+            "model_key": "haiku",
+            "rung_id": "haiku_templated",
+            "label": "With: section template with length caps \u00b7 Haiku 5.5",
+            "status": "ok",
+            "drafts": 12,
+            "drafts_planned": 12,
+            "judged_drafts": 12,
+            "passes_per_draft": 1,
+            "truncated": 0,
             "rubric": {
               "factual_accuracy": 3.8333333333333335,
               "coverage": 3.5833333333333335,
@@ -1476,60 +875,141 @@
               "actionability": 2.6666666666666665,
               "concision": 4.083333333333333
             },
-            "cost_per_1k": 1.3552333333333333,
-            "detail": {
+            "serious_per_draft": 0.25,
+            "minor_per_draft": 2.5833333333333335,
+            "serious_total": 3,
+            "core_facts": {
+              "hits": 92,
+              "total": 96
+            },
+            "detail_facts": {
               "hits": 92,
               "total": 120
-            }
+            },
+            "not_in_source_numbers": 9,
+            "number_verdicts": {
+              "derived_correct": 7,
+              "derived_incorrect": 1,
+              "not_in_source_unverifiable": 0,
+              "not_a_claim": 1
+            },
+            "action_items": 36,
+            "owner": {
+              "supported": 0,
+              "not_stated": 36,
+              "unsupported": 0
+            },
+            "time_window": {
+              "supported": 22,
+              "not_stated": 14,
+              "unsupported": 0
+            },
+            "flagged_items_total": 6,
+            "cost_per_1k_docs_usd": 1.3552333333333333,
+            "input_tokens_mean": 4937.75,
+            "output_tokens_mean": 1722.9166666666667,
+            "output_tokens_min": 1569,
+            "output_tokens_max": 1892
           }
         },
         "h2h": {
-          "vs_original": {
+          "status": "ok",
+          "all": {
             "overall": {
-              "wins": 47,
-              "losses": 1,
+              "template_wins": 21,
+              "unbounded_wins": 27,
               "ties": 0
             },
             "accuracy": {
-              "wins": 47,
-              "losses": 1,
-              "ties": 0
+              "template_wins": 25,
+              "unbounded_wins": 18,
+              "ties": 5
             },
             "usefulness_to_reader": {
-              "wins": 40,
-              "losses": 8,
+              "template_wins": 9,
+              "unbounded_wins": 39,
               "ties": 0
             },
-            "calls": 48
+            "calls": 48,
+            "position_consistency": {
+              "pairs": 24,
+              "consistent": 19
+            }
           },
-          "vs_unbounded": {
-            "overall": {
-              "wins": 1,
-              "losses": 15,
-              "ties": 0
+          "by_model": {
+            "sonnet": {
+              "overall": {
+                "template_wins": 6,
+                "unbounded_wins": 18,
+                "ties": 0
+              },
+              "accuracy": {
+                "template_wins": 9,
+                "unbounded_wins": 13,
+                "ties": 2
+              },
+              "usefulness_to_reader": {
+                "template_wins": 2,
+                "unbounded_wins": 22,
+                "ties": 0
+              },
+              "calls": 24,
+              "position_consistency": {
+                "pairs": 12,
+                "consistent": 10
+              }
             },
-            "accuracy": {
-              "wins": 1,
-              "losses": 11,
-              "ties": 4
-            },
-            "usefulness_to_reader": {
-              "wins": 0,
-              "losses": 16,
-              "ties": 0
-            },
-            "calls": 16
+            "haiku": {
+              "overall": {
+                "template_wins": 15,
+                "unbounded_wins": 9,
+                "ties": 0
+              },
+              "accuracy": {
+                "template_wins": 16,
+                "unbounded_wins": 5,
+                "ties": 3
+              },
+              "usefulness_to_reader": {
+                "template_wins": 7,
+                "unbounded_wins": 17,
+                "ties": 0
+              },
+              "calls": 24,
+              "position_consistency": {
+                "pairs": 12,
+                "consistent": 9
+              }
+            }
           }
         },
-        "added_instruction": "For each action-plan item, give the owner and the time window only if the source states them. If the source does not name an owner, or gives no date or time window, write exactly `Not stated in source` in that field. Never supply an owner, team, date or deadline the source does not give."
+        "counts": {
+          "drafts": 48,
+          "drafts_planned": 48,
+          "truncated": 0,
+          "judge_ok_calls": 96,
+          "judge_error_records": 0,
+          "rubric_calls": 48,
+          "pairwise_calls": 48,
+          "pairwise_planned": 48
+        }
       },
-      "template_fix_source": {
-        "file": "backend/replays/cat2_not_stated_summary.json",
-        "drafts": 48,
-        "per_cell": 3,
-        "judge_calls": 112,
+      "quality_source": {
+        "file": "backend/replays/cat2_quality_summary.json",
+        "keys_version": "2026-11-25.3",
         "judge_model": "claude-opus-5-5",
-        "passes": 1
+        "passes": 1,
+        "drafts_per_cell": 12,
+        "documents": [
+          "brief-01",
+          "brief-02",
+          "reg-01",
+          "reg-02"
+        ],
+        "max_tokens": {
+          "unbounded": 8000,
+          "template_not_stated": 3000
+        }
       }
     },
     "cat3": {
@@ -1554,27 +1034,6 @@
           "io_ratio_median": 25.485223945715525,
           "output_cost_share_median": 0.1640450335133078,
           "max_call_prompt": 22626
-        },
-        "prefix_cached_history": {
-          "n": 6,
-          "cost_per_1k_billed": 239.6565,
-          "cost_per_1k_warm": 215.9985,
-          "cost_per_1k_cold": 239.6565,
-          "cost_per_1k_billed_repo_card": 248.52825,
-          "prompt_tokens_median": 160582.0,
-          "prompt_tokens_range": [
-            157957,
-            164307
-          ],
-          "output_tokens_median": 7492.5,
-          "output_tokens_range": [
-            5274,
-            12679
-          ],
-          "total_tokens_median": 169908.0,
-          "io_ratio_median": 22.029891590588853,
-          "output_cost_share_median": 0.3159612728513479,
-          "max_call_prompt": 21982
         },
         "prefix_cached_summarized": {
           "n": 6,
@@ -1614,21 +1073,6 @@
           "compactor_calls": 0,
           "compactor_calls_per_session": 0
         },
-        "prefix_cached_history": {
-          "slope_tokens_per_turn": 1197.0656565656566,
-          "turn1": 10626,
-          "turn3": 13156.833333333334,
-          "turn6": 16803.166666666668,
-          "turn10": 21495.5,
-          "peak_context": 21982,
-          "output_per_turn_range": [
-            377,
-            3118
-          ],
-          "output_per_turn_median": 556.5,
-          "compactor_calls": 0,
-          "compactor_calls_per_session": 0
-        },
         "prefix_cached_summarized": {
           "slope_tokens_per_turn": 288.2080808080808,
           "turn1": 10632.666666666666,
@@ -1646,16 +1090,16 @@
         }
       },
       "source": "quality rerun",
-      "records": 18,
+      "records": 12,
       "call_stats": {
-        "records": 18,
-        "turn_and_probe_calls": 288,
-        "turn_and_probe_calls_with_thinking": 72,
+        "records": 12,
+        "turn_and_probe_calls": 192,
+        "turn_and_probe_calls_with_thinking": 57,
         "max_thinking_tokens": 3454,
         "compaction_calls": 18,
         "compaction_calls_with_thinking": 0,
         "stop_reasons": {
-          "end_turn": 306
+          "end_turn": 210
         }
       },
       "quality": {
@@ -1696,53 +1140,6 @@
               "rate": 0.6444444444444445,
               "ci_low": 0.4983581419637687,
               "ci_high": 0.7678091739578413
-            }
-          },
-          "probe_accuracy": {
-            "hits": 36,
-            "total": 36,
-            "rate": 1.0,
-            "ci_low": 0.9035813714055363,
-            "ci_high": 1.0
-          }
-        },
-        "prefix_cached_history": {
-          "runs": 6,
-          "turn_recall": {
-            "hits": 203,
-            "total": 207,
-            "rate": 0.9806763285024155,
-            "ci_low": 0.9513767684768528,
-            "ci_high": 0.9924603739574325
-          },
-          "ledger_recall": {
-            "hits": 110,
-            "total": 147,
-            "rate": 0.7482993197278912,
-            "ci_low": 0.6724302164752695,
-            "ci_high": 0.8115216132851112
-          },
-          "ledger_by_origin": {
-            "1-3": {
-              "hits": 39,
-              "total": 51,
-              "rate": 0.7647058823529411,
-              "ci_low": 0.632377748398347,
-              "ci_high": 0.8599505116553716
-            },
-            "4-6": {
-              "hits": 41,
-              "total": 51,
-              "rate": 0.803921568627451,
-              "ci_low": 0.6754192051863439,
-              "ci_high": 0.889846574875333
-            },
-            "7-9": {
-              "hits": 30,
-              "total": 45,
-              "rate": 0.6666666666666666,
-              "ci_low": 0.5207048830990042,
-              "ci_high": 0.7864112506566996
             }
           },
           "probe_accuracy": {
@@ -1804,18 +1201,18 @@
       "quality_source": {
         "file": "backend/replays/cat3_quality_summary.json",
         "keys_version": "2026-11-25.2",
-        "runs": 18
+        "runs": 12
       },
-      "handbook_prefix_tokens": 9857.0,
+      "handbook_prefix_tokens": 9864.0,
       "turn_output": {
-        "turns": 180,
-        "in_150_600": 103,
-        "median": 576.5,
+        "turns": 120,
+        "in_150_600": 68,
+        "median": 586.0,
         "range": [
           342,
           3983
         ],
-        "turns_with_thinking": 38
+        "turns_with_thinking": 23
       }
     },
     "cat4": {
@@ -1861,90 +1258,6 @@
           "io_ratio_median": 61.13582660777504,
           "output_cost_share_median": 0.0756192654292113,
           "max_call_prompt": 54240
-        },
-        "cached_full_corpus_citations|1": {
-          "n": 6,
-          "cost_per_1k_billed": 101.02126666666666,
-          "cost_per_1k_warm": 75.24606666666666,
-          "cost_per_1k_cold": 126.79646666666666,
-          "cost_per_1k_billed_repo_card": 108.53903333333332,
-          "prompt_tokens_median": 86661.0,
-          "prompt_tokens_range": [
-            86627,
-            86695
-          ],
-          "output_tokens_median": 6692.0,
-          "output_tokens_range": [
-            5247,
-            7804
-          ],
-          "total_tokens_median": 93321.0,
-          "io_ratio_median": 12.947300517327925,
-          "output_cost_share_median": 0.6810279061251868,
-          "max_call_prompt": 21685
-        },
-        "cached_full_corpus_citations|3": {
-          "n": 6,
-          "cost_per_1k_billed": 151.57226666666668,
-          "cost_per_1k_warm": 77.04506666666666,
-          "cost_per_1k_cold": 226.09946666666667,
-          "cost_per_1k_billed_repo_card": 173.30936666666665,
-          "prompt_tokens_median": 249167.0,
-          "prompt_tokens_range": [
-            249131,
-            249203
-          ],
-          "output_tokens_median": 5233.0,
-          "output_tokens_range": [
-            4084,
-            6031
-          ],
-          "total_tokens_median": 254396.0,
-          "io_ratio_median": 47.665689966791405,
-          "output_cost_share_median": 0.42877829716518523,
-          "max_call_prompt": 62312
-        },
-        "hybrid_rag_rerank_citations|1": {
-          "n": 6,
-          "cost_per_1k_billed": 93.7234,
-          "cost_per_1k_warm": 93.7234,
-          "cost_per_1k_cold": 93.7234,
-          "cost_per_1k_billed_repo_card": 93.7234,
-          "prompt_tokens_median": 60789.0,
-          "prompt_tokens_range": [
-            60690,
-            61461
-          ],
-          "output_tokens_median": 5372.0,
-          "output_tokens_range": [
-            5142,
-            5714
-          ],
-          "total_tokens_median": 66162.5,
-          "io_ratio_median": 11.38776033928336,
-          "output_cost_share_median": 0.4273863651713286,
-          "max_call_prompt": 9573
-        },
-        "hybrid_rag_rerank_citations|3": {
-          "n": 6,
-          "cost_per_1k_billed": 104.92066666666666,
-          "cost_per_1k_warm": 104.92066666666666,
-          "cost_per_1k_cold": 104.92066666666666,
-          "cost_per_1k_billed_repo_card": 104.92066666666666,
-          "prompt_tokens_median": 58904.5,
-          "prompt_tokens_range": [
-            55641,
-            62849
-          ],
-          "output_tokens_median": 6657.0,
-          "output_tokens_range": [
-            5490,
-            7662
-          ],
-          "total_tokens_median": 65589.0,
-          "io_ratio_median": 9.38293740371363,
-          "output_cost_share_median": 0.49032593442198424,
-          "max_call_prompt": 9712
         },
         "cached_rerank_hybrid|1": {
           "n": 6,
@@ -2088,202 +1401,6 @@
             "end_turn": 24
           }
         },
-        "cached_full_corpus_citations|1": {
-          "answers": 24,
-          "synth_prompt_range": [
-            21637,
-            21685
-          ],
-          "synth_prompt_median": 21669.0,
-          "synth_output_range": [
-            991,
-            2992
-          ],
-          "synth_output_median": 1734.0,
-          "synth_outputs": [
-            2312,
-            1052,
-            1800,
-            1442,
-            1759,
-            2003,
-            1050,
-            2992,
-            2010,
-            1829,
-            1151,
-            1788,
-            1874,
-            1973,
-            1052,
-            2269,
-            1089,
-            1642,
-            1058,
-            1709,
-            991,
-            1206,
-            1032,
-            2018
-          ],
-          "io_ratio_median": 12.493871690887723,
-          "cost_per_1k_q_billed": 25.255316666666666,
-          "cost_per_1k_q_warm": 18.811516666666666,
-          "cost_per_1k_q_cold": 31.699116666666665,
-          "cost_per_1k_q_billed_repo_card": 27.13475833333333,
-          "citations_median": 11.0,
-          "questions_with_zero_citations": 0,
-          "stop_reasons": {
-            "end_turn": 24
-          }
-        },
-        "cached_full_corpus_citations|3": {
-          "answers": 24,
-          "synth_prompt_range": [
-            62263,
-            62312
-          ],
-          "synth_prompt_median": 62295.5,
-          "synth_output_range": [
-            949,
-            2282
-          ],
-          "synth_output_median": 1049.5,
-          "synth_outputs": [
-            976,
-            1810,
-            1844,
-            1029,
-            1011,
-            1162,
-            1057,
-            960,
-            1050,
-            1049,
-            971,
-            1014,
-            949,
-            1896,
-            1033,
-            2153,
-            1010,
-            1077,
-            1915,
-            1058,
-            2282,
-            1163,
-            986,
-            975
-          ],
-          "io_ratio_median": 59.33684461391802,
-          "cost_per_1k_q_billed": 37.89306666666667,
-          "cost_per_1k_q_warm": 19.261266666666664,
-          "cost_per_1k_q_cold": 56.52486666666667,
-          "cost_per_1k_q_billed_repo_card": 43.32734166666666,
-          "citations_median": 11.0,
-          "questions_with_zero_citations": 0,
-          "stop_reasons": {
-            "end_turn": 24
-          }
-        },
-        "hybrid_rag_rerank_citations|1": {
-          "answers": 24,
-          "synth_prompt_range": [
-            5924,
-            6922
-          ],
-          "synth_prompt_median": 6214.5,
-          "synth_output_range": [
-            789,
-            1394
-          ],
-          "synth_output_median": 975.5,
-          "synth_outputs": [
-            1021,
-            946,
-            1000,
-            846,
-            875,
-            1109,
-            1009,
-            1058,
-            951,
-            926,
-            1059,
-            1394,
-            789,
-            1077,
-            889,
-            1009,
-            1082,
-            947,
-            1072,
-            922,
-            899,
-            1124,
-            939,
-            946
-          ],
-          "io_ratio_median": 6.3272825457890605,
-          "cost_per_1k_q_billed": 23.43085,
-          "cost_per_1k_q_warm": 23.43085,
-          "cost_per_1k_q_cold": 23.43085,
-          "cost_per_1k_q_billed_repo_card": 23.43085,
-          "citations_median": 10.0,
-          "questions_with_zero_citations": 0,
-          "stop_reasons": {
-            "end_turn": 24
-          }
-        },
-        "hybrid_rag_rerank_citations|3": {
-          "answers": 24,
-          "synth_prompt_range": [
-            5434,
-            7140
-          ],
-          "synth_prompt_median": 6320.0,
-          "synth_output_range": [
-            908,
-            1756
-          ],
-          "synth_output_median": 1271.5,
-          "synth_outputs": [
-            941,
-            1182,
-            1078,
-            934,
-            1331,
-            1282,
-            949,
-            1756,
-            1058,
-            1279,
-            1083,
-            908,
-            1046,
-            1144,
-            1386,
-            1665,
-            1488,
-            1264,
-            1145,
-            1535,
-            1412,
-            1714,
-            1487,
-            1687
-          ],
-          "io_ratio_median": 4.749737636101273,
-          "cost_per_1k_q_billed": 26.230166666666666,
-          "cost_per_1k_q_warm": 26.230166666666666,
-          "cost_per_1k_q_cold": 26.230166666666666,
-          "cost_per_1k_q_billed_repo_card": 26.230166666666666,
-          "citations_median": 8.0,
-          "questions_with_zero_citations": 0,
-          "stop_reasons": {
-            "end_turn": 24
-          }
-        },
         "cached_rerank_hybrid|1": {
           "answers": 24,
           "synth_prompt_range": [
@@ -2383,230 +1500,16 @@
           }
         }
       },
-      "per_question_before": {
-        "hybrid_rag_rerank_citations|1|original": {
-          "answers": 24,
-          "synth_prompt_range": [
-            5815,
-            6240
-          ],
-          "synth_prompt_median": 6094.0,
-          "synth_output_range": [
-            894,
-            2420
-          ],
-          "synth_output_median": 1045.5,
-          "synth_outputs": [
-            1134,
-            1610,
-            1065,
-            1004,
-            912,
-            1093,
-            972,
-            2420,
-            952,
-            1078,
-            1864,
-            968,
-            897,
-            1054,
-            958,
-            1072,
-            1410,
-            1037,
-            1023,
-            1003,
-            894,
-            1097,
-            1063,
-            1031
-          ],
-          "io_ratio_median": 5.7947375071959115,
-          "cost_per_1k_q_billed": 24.721954166666666,
-          "cost_per_1k_q_warm": 24.721954166666666,
-          "cost_per_1k_q_cold": 24.721954166666666,
-          "cost_per_1k_q_billed_repo_card": 24.721954166666666,
-          "citations_median": 11.0,
-          "questions_with_zero_citations": 0,
-          "stop_reasons": {
-            "end_turn": 24
-          }
-        },
-        "hybrid_rag_rerank_citations|3|original": {
-          "answers": 24,
-          "synth_prompt_range": [
-            5325,
-            7031
-          ],
-          "synth_prompt_median": 6223.0,
-          "synth_output_range": [
-            954,
-            2099
-          ],
-          "synth_output_median": 1395.0,
-          "synth_outputs": [
-            963,
-            1313,
-            1741,
-            1453,
-            1655,
-            2051,
-            1686,
-            1917,
-            1015,
-            1903,
-            1065,
-            998,
-            1221,
-            1840,
-            1152,
-            1955,
-            956,
-            1792,
-            1238,
-            1337,
-            1105,
-            954,
-            1500,
-            2099
-          ],
-          "io_ratio_median": 4.056968716836012,
-          "cost_per_1k_q_billed": 27.761625000000002,
-          "cost_per_1k_q_warm": 27.761625000000002,
-          "cost_per_1k_q_cold": 27.761625000000002,
-          "cost_per_1k_q_billed_repo_card": 27.761625000000002,
-          "citations_median": 9.0,
-          "questions_with_zero_citations": 0,
-          "stop_reasons": {
-            "end_turn": 24
-          }
-        },
-        "cached_rerank_hybrid|1|original": {
-          "answers": 24,
-          "synth_prompt_range": [
-            5461,
-            6813
-          ],
-          "synth_prompt_median": 6079.0,
-          "synth_output_range": [
-            941,
-            1646
-          ],
-          "synth_output_median": 1047.5,
-          "synth_outputs": [
-            1646,
-            1060,
-            1177,
-            1516,
-            968,
-            1034,
-            1376,
-            1018,
-            1031,
-            984,
-            1071,
-            941,
-            963,
-            1035,
-            1027,
-            1168,
-            1408,
-            1129,
-            1102,
-            959,
-            984,
-            1150,
-            1538,
-            976
-          ],
-          "io_ratio_median": 5.876270101570749,
-          "cost_per_1k_q_billed": 24.444297708333334,
-          "cost_per_1k_q_warm": 24.136428333333335,
-          "cost_per_1k_q_cold": 24.752167083333333,
-          "cost_per_1k_q_billed_repo_card": 24.444297708333334,
-          "citations_median": 10.0,
-          "questions_with_zero_citations": 0,
-          "stop_reasons": {
-            "end_turn": 24
-          }
-        },
-        "cached_rerank_hybrid|3|original": {
-          "answers": 24,
-          "synth_prompt_range": [
-            5435,
-            6813
-          ],
-          "synth_prompt_median": 6079.0,
-          "synth_output_range": [
-            935,
-            2125
-          ],
-          "synth_output_median": 1103.5,
-          "synth_outputs": [
-            1613,
-            1038,
-            1099,
-            935,
-            963,
-            1179,
-            1036,
-            1031,
-            1334,
-            1060,
-            1146,
-            1760,
-            1998,
-            1099,
-            987,
-            2125,
-            1617,
-            1034,
-            1139,
-            947,
-            938,
-            1142,
-            1560,
-            1108
-          ],
-          "io_ratio_median": 5.556262125087987,
-          "cost_per_1k_q_billed": 26.351633749999998,
-          "cost_per_1k_q_warm": 25.4430475,
-          "cost_per_1k_q_cold": 27.26022,
-          "cost_per_1k_q_billed_repo_card": 26.351633749999998,
-          "citations_median": 10.0,
-          "questions_with_zero_citations": 0,
-          "stop_reasons": {
-            "end_turn": 24
-          }
-        }
-      },
       "source": "quality rerun",
       "call_stats": {
-        "records": 24,
-        "answers": 192,
-        "synthesis_stop_reasons": {
-          "end_turn": 192
-        },
-        "synthesis_outputs_above_app_cap_before": 5,
-        "synthesis_calls_with_thinking": 39,
-        "max_synthesis_output": 2992
-      },
-      "call_stats_before": {
         "records": 12,
         "answers": 96,
         "synthesis_stop_reasons": {
           "end_turn": 96
         },
-        "synthesis_outputs_above_app_cap_before": 4,
-        "synthesis_calls_with_thinking": 33,
-        "max_synthesis_output": 2420
-      },
-      "adopted_formats": {
-        "naive_full_corpus": "original",
-        "cached_full_corpus_citations": "original",
-        "hybrid_rag_rerank_citations": "scoped_absence",
-        "cached_rerank_hybrid": "scoped_absence"
+        "synthesis_outputs_above_app_cap_before": 0,
+        "synthesis_calls_with_thinking": 3,
+        "max_synthesis_output": 1584
       },
       "quality": {
         "naive_full_corpus|1": {
@@ -2651,7 +1554,6 @@
             "ci_low": 1.3877787807814457e-17,
             "ci_high": 0.13797620467498017
           },
-          "recall_after_bm25": null,
           "recall_after_rerank": null,
           "distractors_selected": null,
           "judged": 24,
@@ -2664,21 +1566,6 @@
             "rate": 0.041666666666666664,
             "ci_low": 0.007393456165505782,
             "ci_high": 0.20241806478655938
-          },
-          "answer_format": "original",
-          "answers_with_documents_lack_claim": {
-            "hits": 7,
-            "total": 24,
-            "rate": 0.2916666666666667,
-            "ci_low": 0.14914648196960875,
-            "ci_high": 0.49167693664496637
-          },
-          "answers_with_not_in_text_provided_claim": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
           }
         },
         "naive_full_corpus|3": {
@@ -2723,7 +1610,6 @@
             "ci_low": 0.8620237953250198,
             "ci_high": 1.0
           },
-          "recall_after_bm25": null,
           "recall_after_rerank": null,
           "distractors_selected": null,
           "judged": 24,
@@ -2736,669 +1622,6 @@
             "rate": 0.125,
             "ci_low": 0.04344334080123444,
             "ci_high": 0.31003881270500067
-          },
-          "answer_format": "original",
-          "answers_with_documents_lack_claim": {
-            "hits": 1,
-            "total": 24,
-            "rate": 0.041666666666666664,
-            "ci_low": 0.007393456165505782,
-            "ci_high": 0.20241806478655938
-          },
-          "answers_with_not_in_text_provided_claim": {
-            "hits": 1,
-            "total": 24,
-            "rate": 0.041666666666666664,
-            "ci_low": 0.007393456165505782,
-            "ci_high": 0.20241806478655938
-          }
-        },
-        "cached_full_corpus_citations|1": {
-          "answers": 24,
-          "fact_recall": {
-            "hits": 150,
-            "total": 159,
-            "rate": 0.9433962264150944,
-            "ci_low": 0.8959348401114677,
-            "ci_high": 0.9699380218803675
-          },
-          "fact_recall_supplier_specific": {
-            "hits": 106,
-            "total": 111,
-            "rate": 0.954954954954955,
-            "ci_low": 0.8988650882440173,
-            "ci_high": 0.980608239917851
-          },
-          "citations_per_answer_mean": 11.708333333333334,
-          "zero_citation_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "expected_chunk_recall": {
-            "hits": 87,
-            "total": 90,
-            "rate": 0.9666666666666667,
-            "ci_low": 0.9065271396961013,
-            "ci_high": 0.9885996097771937
-          },
-          "citations_at_expected": {
-            "hits": 207,
-            "total": 281,
-            "rate": 0.7366548042704626,
-            "ci_low": 0.6822142505731414,
-            "ci_high": 0.7847121601770668
-          },
-          "cited_support": {
-            "hits": 148,
-            "total": 150,
-            "rate": 0.9866666666666667,
-            "ci_low": 0.9526930912996325,
-            "ci_high": 0.9963358708487731
-          },
-          "contaminated_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "value_contaminated_unattributed_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "exposure_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "recall_after_bm25": null,
-          "recall_after_rerank": null,
-          "distractors_selected": null,
-          "judged": 24,
-          "correctness_mean": 4.958333333333333,
-          "completeness_mean": 4.583333333333333,
-          "material_errors": 0,
-          "answers_with_material_error": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "answer_format": "original",
-          "answers_with_documents_lack_claim": {
-            "hits": 4,
-            "total": 24,
-            "rate": 0.16666666666666666,
-            "ci_low": 0.06678676328632951,
-            "ci_high": 0.3585307064969906
-          },
-          "answers_with_not_in_text_provided_claim": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          }
-        },
-        "cached_full_corpus_citations|3": {
-          "answers": 24,
-          "fact_recall": {
-            "hits": 149,
-            "total": 159,
-            "rate": 0.9371069182389937,
-            "ci_low": 0.888108635369929,
-            "ci_high": 0.9654823420546463
-          },
-          "fact_recall_supplier_specific": {
-            "hits": 107,
-            "total": 111,
-            "rate": 0.963963963963964,
-            "ci_low": 0.910989944100048,
-            "ci_high": 0.9858986974907682
-          },
-          "citations_per_answer_mean": 11.375,
-          "zero_citation_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "expected_chunk_recall": {
-            "hits": 86,
-            "total": 90,
-            "rate": 0.9555555555555556,
-            "ci_low": 0.8912314496718777,
-            "ci_high": 0.9825827581472913
-          },
-          "citations_at_expected": {
-            "hits": 204,
-            "total": 273,
-            "rate": 0.7472527472527473,
-            "ci_low": 0.6925141503977174,
-            "ci_high": 0.7951295738301535
-          },
-          "cited_support": {
-            "hits": 146,
-            "total": 149,
-            "rate": 0.9798657718120806,
-            "ci_low": 0.9424807289353295,
-            "ci_high": 0.9931292888135875
-          },
-          "contaminated_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "value_contaminated_unattributed_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "exposure_answers": {
-            "hits": 24,
-            "total": 24,
-            "rate": 1.0,
-            "ci_low": 0.8620237953250198,
-            "ci_high": 1.0
-          },
-          "recall_after_bm25": null,
-          "recall_after_rerank": null,
-          "distractors_selected": null,
-          "judged": 24,
-          "correctness_mean": 4.833333333333333,
-          "completeness_mean": 4.666666666666667,
-          "material_errors": 0,
-          "answers_with_material_error": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "answer_format": "original",
-          "answers_with_documents_lack_claim": {
-            "hits": 3,
-            "total": 24,
-            "rate": 0.125,
-            "ci_low": 0.04344334080123444,
-            "ci_high": 0.31003881270500067
-          },
-          "answers_with_not_in_text_provided_claim": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          }
-        },
-        "hybrid_rag_rerank_citations|1": {
-          "answers": 24,
-          "fact_recall": {
-            "hits": 150,
-            "total": 159,
-            "rate": 0.9433962264150944,
-            "ci_low": 0.8959348401114677,
-            "ci_high": 0.9699380218803675
-          },
-          "fact_recall_supplier_specific": {
-            "hits": 107,
-            "total": 111,
-            "rate": 0.963963963963964,
-            "ci_low": 0.910989944100048,
-            "ci_high": 0.9858986974907682
-          },
-          "citations_per_answer_mean": 10.291666666666666,
-          "zero_citation_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "expected_chunk_recall": {
-            "hits": 84,
-            "total": 90,
-            "rate": 0.9333333333333333,
-            "ci_low": 0.8620990522567448,
-            "ci_high": 0.9690900722541721
-          },
-          "citations_at_expected": {
-            "hits": 200,
-            "total": 247,
-            "rate": 0.8097165991902834,
-            "ci_low": 0.7561672010169466,
-            "ci_high": 0.8537798177865402
-          },
-          "cited_support": {
-            "hits": 147,
-            "total": 150,
-            "rate": 0.98,
-            "ci_low": 0.9428533167296139,
-            "ci_high": 0.9931752486770326
-          },
-          "contaminated_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "value_contaminated_unattributed_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "exposure_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "recall_after_bm25": {
-            "hits": 90,
-            "total": 90,
-            "rate": 1.0,
-            "ci_low": 0.9590643744356734,
-            "ci_high": 1.0
-          },
-          "recall_after_rerank": {
-            "hits": 90,
-            "total": 90,
-            "rate": 1.0,
-            "ci_low": 0.9590643744356734,
-            "ci_high": 1.0
-          },
-          "distractors_selected": {
-            "hits": 0,
-            "total": 120,
-            "rate": 0.0,
-            "ci_low": 0.0,
-            "ci_high": 0.031019166418703486
-          },
-          "judged": 24,
-          "correctness_mean": 4.541666666666667,
-          "completeness_mean": 4.583333333333333,
-          "material_errors": 2,
-          "answers_with_material_error": {
-            "hits": 2,
-            "total": 24,
-            "rate": 0.08333333333333333,
-            "ci_low": 0.02315881529704332,
-            "ci_high": 0.2584880219321068
-          },
-          "answer_format": "scoped_absence",
-          "answers_with_documents_lack_claim": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "answers_with_not_in_text_provided_claim": {
-            "hits": 21,
-            "total": 24,
-            "rate": 0.875,
-            "ci_low": 0.6899611872949993,
-            "ci_high": 0.9565566591987655
-          }
-        },
-        "hybrid_rag_rerank_citations|1|original": {
-          "answers": 24,
-          "fact_recall": {
-            "hits": 152,
-            "total": 159,
-            "rate": 0.9559748427672956,
-            "ci_low": 0.9119235516718516,
-            "ci_high": 0.9785130794545038
-          },
-          "fact_recall_supplier_specific": {
-            "hits": 108,
-            "total": 111,
-            "rate": 0.972972972972973,
-            "ci_low": 0.9235375935169964,
-            "ci_high": 0.9907663615027679
-          },
-          "citations_per_answer_mean": 10.916666666666666,
-          "zero_citation_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "expected_chunk_recall": {
-            "hits": 87,
-            "total": 90,
-            "rate": 0.9666666666666667,
-            "ci_low": 0.9065271396961013,
-            "ci_high": 0.9885996097771937
-          },
-          "citations_at_expected": {
-            "hits": 212,
-            "total": 262,
-            "rate": 0.8091603053435115,
-            "ci_low": 0.7572444416122368,
-            "ci_high": 0.8521413205583901
-          },
-          "cited_support": {
-            "hits": 149,
-            "total": 152,
-            "rate": 0.9802631578947368,
-            "ci_low": 0.9435841982454212,
-            "ci_high": 0.9932653481129881
-          },
-          "contaminated_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "value_contaminated_unattributed_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "exposure_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "recall_after_bm25": {
-            "hits": 90,
-            "total": 90,
-            "rate": 1.0,
-            "ci_low": 0.9590643744356734,
-            "ci_high": 1.0
-          },
-          "recall_after_rerank": {
-            "hits": 89,
-            "total": 90,
-            "rate": 0.9888888888888889,
-            "ci_low": 0.9397159168824657,
-            "ci_high": 0.9980359158990818
-          },
-          "distractors_selected": {
-            "hits": 0,
-            "total": 120,
-            "rate": 0.0,
-            "ci_low": 0.0,
-            "ci_high": 0.031019166418703486
-          },
-          "judged": 24,
-          "correctness_mean": 4.708333333333333,
-          "completeness_mean": 4.666666666666667,
-          "material_errors": 0,
-          "answers_with_material_error": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "answer_format": "original",
-          "answers_with_documents_lack_claim": {
-            "hits": 9,
-            "total": 24,
-            "rate": 0.375,
-            "ci_low": 0.21159367559548778,
-            "ci_high": 0.5729003755732572
-          },
-          "answers_with_not_in_text_provided_claim": {
-            "hits": 2,
-            "total": 24,
-            "rate": 0.08333333333333333,
-            "ci_low": 0.02315881529704332,
-            "ci_high": 0.2584880219321068
-          }
-        },
-        "hybrid_rag_rerank_citations|3": {
-          "answers": 24,
-          "fact_recall": {
-            "hits": 144,
-            "total": 159,
-            "rate": 0.9056603773584906,
-            "ci_low": 0.8501874669797129,
-            "ci_high": 0.941994087608562
-          },
-          "fact_recall_supplier_specific": {
-            "hits": 103,
-            "total": 111,
-            "rate": 0.9279279279279279,
-            "ci_low": 0.8641974721405519,
-            "ci_high": 0.9630299157344726
-          },
-          "citations_per_answer_mean": 8.916666666666666,
-          "zero_citation_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "expected_chunk_recall": {
-            "hits": 72,
-            "total": 90,
-            "rate": 0.8,
-            "ci_low": 0.7058626364885746,
-            "ci_high": 0.8695759881728294
-          },
-          "citations_at_expected": {
-            "hits": 183,
-            "total": 214,
-            "rate": 0.8551401869158879,
-            "ci_low": 0.8017218321405751,
-            "ci_high": 0.896033318889292
-          },
-          "cited_support": {
-            "hits": 141,
-            "total": 144,
-            "rate": 0.9791666666666666,
-            "ci_low": 0.9405424671304959,
-            "ci_high": 0.992889880607427
-          },
-          "contaminated_answers": {
-            "hits": 2,
-            "total": 24,
-            "rate": 0.08333333333333333,
-            "ci_low": 0.02315881529704332,
-            "ci_high": 0.2584880219321068
-          },
-          "value_contaminated_unattributed_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "exposure_answers": {
-            "hits": 24,
-            "total": 24,
-            "rate": 1.0,
-            "ci_low": 0.8620237953250198,
-            "ci_high": 1.0
-          },
-          "recall_after_bm25": {
-            "hits": 78,
-            "total": 90,
-            "rate": 0.8666666666666667,
-            "ci_low": 0.7812606949930235,
-            "ci_high": 0.9220531795931369
-          },
-          "recall_after_rerank": {
-            "hits": 78,
-            "total": 90,
-            "rate": 0.8666666666666667,
-            "ci_low": 0.7812606949930235,
-            "ci_high": 0.9220531795931369
-          },
-          "distractors_selected": {
-            "hits": 24,
-            "total": 120,
-            "rate": 0.2,
-            "ci_low": 0.13824476478840259,
-            "ci_high": 0.28036673506281956
-          },
-          "judged": 24,
-          "correctness_mean": 4.333333333333333,
-          "completeness_mean": 4.0,
-          "material_errors": 4,
-          "answers_with_material_error": {
-            "hits": 3,
-            "total": 24,
-            "rate": 0.125,
-            "ci_low": 0.04344334080123444,
-            "ci_high": 0.31003881270500067
-          },
-          "answer_format": "scoped_absence",
-          "answers_with_documents_lack_claim": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "answers_with_not_in_text_provided_claim": {
-            "hits": 22,
-            "total": 24,
-            "rate": 0.9166666666666666,
-            "ci_low": 0.7415119780678932,
-            "ci_high": 0.9768411847029566
-          }
-        },
-        "hybrid_rag_rerank_citations|3|original": {
-          "answers": 24,
-          "fact_recall": {
-            "hits": 145,
-            "total": 159,
-            "rate": 0.9119496855345912,
-            "ci_low": 0.8576372124261619,
-            "ci_high": 0.9468262267293731
-          },
-          "fact_recall_supplier_specific": {
-            "hits": 103,
-            "total": 111,
-            "rate": 0.9279279279279279,
-            "ci_low": 0.8641974721405519,
-            "ci_high": 0.9630299157344726
-          },
-          "citations_per_answer_mean": 9.0,
-          "zero_citation_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "expected_chunk_recall": {
-            "hits": 74,
-            "total": 90,
-            "rate": 0.8222222222222222,
-            "ci_low": 0.7305610795529596,
-            "ci_high": 0.8875026284166965
-          },
-          "citations_at_expected": {
-            "hits": 184,
-            "total": 216,
-            "rate": 0.8518518518518519,
-            "ci_low": 0.798343411002721,
-            "ci_high": 0.8930639368896227
-          },
-          "cited_support": {
-            "hits": 142,
-            "total": 145,
-            "rate": 0.9793103448275862,
-            "ci_low": 0.9409404986135681,
-            "ci_high": 0.9929390877686783
-          },
-          "contaminated_answers": {
-            "hits": 1,
-            "total": 24,
-            "rate": 0.041666666666666664,
-            "ci_low": 0.007393456165505782,
-            "ci_high": 0.20241806478655938
-          },
-          "value_contaminated_unattributed_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "exposure_answers": {
-            "hits": 24,
-            "total": 24,
-            "rate": 1.0,
-            "ci_low": 0.8620237953250198,
-            "ci_high": 1.0
-          },
-          "recall_after_bm25": {
-            "hits": 78,
-            "total": 90,
-            "rate": 0.8666666666666667,
-            "ci_low": 0.7812606949930235,
-            "ci_high": 0.9220531795931369
-          },
-          "recall_after_rerank": {
-            "hits": 77,
-            "total": 90,
-            "rate": 0.8555555555555555,
-            "ci_low": 0.7684012207986421,
-            "ci_high": 0.9136001121333921
-          },
-          "distractors_selected": {
-            "hits": 25,
-            "total": 120,
-            "rate": 0.20833333333333334,
-            "ci_low": 0.14528439608109694,
-            "ci_high": 0.2894767843298135
-          },
-          "judged": 24,
-          "correctness_mean": 3.9583333333333335,
-          "completeness_mean": 4.208333333333333,
-          "material_errors": 11,
-          "answers_with_material_error": {
-            "hits": 8,
-            "total": 24,
-            "rate": 0.3333333333333333,
-            "ci_low": 0.17972190327297752,
-            "ci_high": 0.5329368316186824
-          },
-          "answer_format": "original",
-          "answers_with_documents_lack_claim": {
-            "hits": 12,
-            "total": 24,
-            "rate": 0.5,
-            "ci_low": 0.31427425819573357,
-            "ci_high": 0.6857257418042664
-          },
-          "answers_with_not_in_text_provided_claim": {
-            "hits": 10,
-            "total": 24,
-            "rate": 0.4166666666666667,
-            "ci_low": 0.24467602609811764,
-            "ci_high": 0.6116533413477124
           }
         },
         "cached_rerank_hybrid|1": {
@@ -3467,7 +1690,6 @@
             "ci_low": 1.3877787807814457e-17,
             "ci_high": 0.13797620467498017
           },
-          "recall_after_bm25": null,
           "recall_after_rerank": {
             "hits": 89,
             "total": 90,
@@ -3492,129 +1714,6 @@
             "rate": 0.0,
             "ci_low": 1.3877787807814457e-17,
             "ci_high": 0.13797620467498017
-          },
-          "answer_format": "scoped_absence",
-          "answers_with_documents_lack_claim": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "answers_with_not_in_text_provided_claim": {
-            "hits": 21,
-            "total": 24,
-            "rate": 0.875,
-            "ci_low": 0.6899611872949993,
-            "ci_high": 0.9565566591987655
-          }
-        },
-        "cached_rerank_hybrid|1|original": {
-          "answers": 24,
-          "fact_recall": {
-            "hits": 154,
-            "total": 159,
-            "rate": 0.9685534591194969,
-            "ci_low": 0.9285057864250715,
-            "ci_high": 0.9864946138358041
-          },
-          "fact_recall_supplier_specific": {
-            "hits": 109,
-            "total": 111,
-            "rate": 0.9819819819819819,
-            "ci_low": 0.9366744471572399,
-            "ci_high": 0.995044821291472
-          },
-          "citations_per_answer_mean": 10.916666666666666,
-          "zero_citation_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "expected_chunk_recall": {
-            "hits": 87,
-            "total": 90,
-            "rate": 0.9666666666666667,
-            "ci_low": 0.9065271396961013,
-            "ci_high": 0.9885996097771937
-          },
-          "citations_at_expected": {
-            "hits": 217,
-            "total": 262,
-            "rate": 0.8282442748091603,
-            "ci_low": 0.7779146899535845,
-            "ci_high": 0.8690874772893034
-          },
-          "cited_support": {
-            "hits": 151,
-            "total": 154,
-            "rate": 0.9805194805194806,
-            "ci_low": 0.9442966225491077,
-            "ci_high": 0.9933530995567056
-          },
-          "contaminated_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "value_contaminated_unattributed_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "exposure_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "recall_after_bm25": null,
-          "recall_after_rerank": {
-            "hits": 90,
-            "total": 90,
-            "rate": 1.0,
-            "ci_low": 0.9590643744356734,
-            "ci_high": 1.0
-          },
-          "distractors_selected": {
-            "hits": 0,
-            "total": 120,
-            "rate": 0.0,
-            "ci_low": 0.0,
-            "ci_high": 0.031019166418703486
-          },
-          "judged": 24,
-          "correctness_mean": 4.541666666666667,
-          "completeness_mean": 4.708333333333333,
-          "material_errors": 1,
-          "answers_with_material_error": {
-            "hits": 1,
-            "total": 24,
-            "rate": 0.041666666666666664,
-            "ci_low": 0.007393456165505782,
-            "ci_high": 0.20241806478655938
-          },
-          "answer_format": "original",
-          "answers_with_documents_lack_claim": {
-            "hits": 12,
-            "total": 24,
-            "rate": 0.5,
-            "ci_low": 0.31427425819573357,
-            "ci_high": 0.6857257418042664
-          },
-          "answers_with_not_in_text_provided_claim": {
-            "hits": 1,
-            "total": 24,
-            "rate": 0.041666666666666664,
-            "ci_low": 0.007393456165505782,
-            "ci_high": 0.20241806478655938
           }
         },
         "cached_rerank_hybrid|3": {
@@ -3683,7 +1782,6 @@
             "ci_low": 1.3877787807814457e-17,
             "ci_high": 0.13797620467498017
           },
-          "recall_after_bm25": null,
           "recall_after_rerank": {
             "hits": 89,
             "total": 90,
@@ -3708,211 +1806,16 @@
             "rate": 0.08333333333333333,
             "ci_low": 0.02315881529704332,
             "ci_high": 0.2584880219321068
-          },
-          "answer_format": "scoped_absence",
-          "answers_with_documents_lack_claim": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "answers_with_not_in_text_provided_claim": {
-            "hits": 20,
-            "total": 24,
-            "rate": 0.8333333333333334,
-            "ci_low": 0.6414692935030095,
-            "ci_high": 0.9332132367136705
-          }
-        },
-        "cached_rerank_hybrid|3|original": {
-          "answers": 24,
-          "fact_recall": {
-            "hits": 153,
-            "total": 159,
-            "rate": 0.9622641509433962,
-            "ci_low": 0.9201259459710065,
-            "ci_high": 0.982592569722609
-          },
-          "fact_recall_supplier_specific": {
-            "hits": 108,
-            "total": 111,
-            "rate": 0.972972972972973,
-            "ci_low": 0.9235375935169964,
-            "ci_high": 0.9907663615027679
-          },
-          "citations_per_answer_mean": 10.708333333333334,
-          "zero_citation_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "expected_chunk_recall": {
-            "hits": 88,
-            "total": 90,
-            "rate": 0.9777777777777777,
-            "ci_low": 0.9225547331137463,
-            "ci_high": 0.9938845580136748
-          },
-          "citations_at_expected": {
-            "hits": 216,
-            "total": 257,
-            "rate": 0.8404669260700389,
-            "ci_low": 0.7907337414613915,
-            "ci_high": 0.8801718760397639
-          },
-          "cited_support": {
-            "hits": 150,
-            "total": 153,
-            "rate": 0.9803921568627451,
-            "ci_low": 0.9439426735787184,
-            "ci_high": 0.9933095115597457
-          },
-          "contaminated_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "value_contaminated_unattributed_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "exposure_answers": {
-            "hits": 0,
-            "total": 24,
-            "rate": 0.0,
-            "ci_low": 1.3877787807814457e-17,
-            "ci_high": 0.13797620467498017
-          },
-          "recall_after_bm25": null,
-          "recall_after_rerank": {
-            "hits": 90,
-            "total": 90,
-            "rate": 1.0,
-            "ci_low": 0.9590643744356734,
-            "ci_high": 1.0
-          },
-          "distractors_selected": {
-            "hits": 0,
-            "total": 120,
-            "rate": 0.0,
-            "ci_low": 0.0,
-            "ci_high": 0.031019166418703486
-          },
-          "judged": 24,
-          "correctness_mean": 4.375,
-          "completeness_mean": 4.5,
-          "material_errors": 6,
-          "answers_with_material_error": {
-            "hits": 6,
-            "total": 24,
-            "rate": 0.25,
-            "ci_low": 0.11999366228595004,
-            "ci_high": 0.44899444005154004
-          },
-          "answer_format": "original",
-          "answers_with_documents_lack_claim": {
-            "hits": 13,
-            "total": 24,
-            "rate": 0.5416666666666666,
-            "ci_low": 0.3507486535891948,
-            "ci_high": 0.72108666268789
-          },
-          "answers_with_not_in_text_provided_claim": {
-            "hits": 6,
-            "total": 24,
-            "rate": 0.25,
-            "ci_low": 0.11999366228595004,
-            "ci_high": 0.44899444005154004
           }
         }
-      },
-      "break_even": {
-        "1": [
-          {
-            "a": "cached_full_corpus_citations",
-            "b": "hybrid_rag_rerank_citations",
-            "premium_a_usd": 0.051550399999999996,
-            "per_question_a_usd": 0.018811516666666667,
-            "premium_b_usd": 0.0,
-            "per_question_b_usd": 0.02343085,
-            "n_star": 11.159705585221532,
-            "questions": 12,
-            "verdict": "A cheaper from question 12"
-          },
-          {
-            "a": "cached_rerank_hybrid",
-            "b": "hybrid_rag_rerank_citations",
-            "premium_a_usd": 0.0024633766666666665,
-            "per_question_a_usd": 0.022675694166666666,
-            "premium_b_usd": 0.0,
-            "per_question_b_usd": 0.02343085,
-            "n_star": 3.262077253370441,
-            "questions": 4,
-            "verdict": "A cheaper from question 4"
-          },
-          {
-            "a": "cached_full_corpus_citations",
-            "b": "cached_rerank_hybrid",
-            "premium_a_usd": 0.051550399999999996,
-            "per_question_a_usd": 0.018811516666666667,
-            "premium_b_usd": 0.0024633766666666665,
-            "per_question_b_usd": 0.022675694166666666,
-            "n_star": 12.703097446567433,
-            "questions": 13,
-            "verdict": "A cheaper from question 13"
-          }
-        ],
-        "3": [
-          {
-            "a": "cached_full_corpus_citations",
-            "b": "hybrid_rag_rerank_citations",
-            "premium_a_usd": 0.1490544,
-            "per_question_a_usd": 0.019261266666666665,
-            "premium_b_usd": 0.0,
-            "per_question_b_usd": 0.026230166666666666,
-            "n_star": 21.388511816786007,
-            "questions": 22,
-            "verdict": "A cheaper from question 22"
-          },
-          {
-            "a": "cached_rerank_hybrid",
-            "b": "hybrid_rag_rerank_citations",
-            "premium_a_usd": 0.007268651666666667,
-            "per_question_a_usd": 0.024064440000000003,
-            "premium_b_usd": 0.0,
-            "per_question_b_usd": 0.026230166666666666,
-            "n_star": 3.356218390132341,
-            "questions": 4,
-            "verdict": "A cheaper from question 4"
-          },
-          {
-            "a": "cached_full_corpus_citations",
-            "b": "cached_rerank_hybrid",
-            "premium_a_usd": 0.1490544,
-            "per_question_a_usd": 0.019261266666666665,
-            "premium_b_usd": 0.007268651666666667,
-            "per_question_b_usd": 0.024064440000000003,
-            "n_star": 29.519182110160482,
-            "questions": 30,
-            "verdict": "A cheaper from question 30"
-          }
-        ]
       },
       "quality_source": {
         "file": "backend/replays/cat4_quality_summary.json",
         "keys_version": "2026-11-25.1",
         "judge_model": "claude-opus-5-5",
         "judge_passes": 1,
-        "answers": 288,
-        "judged": 288,
+        "answers": 96,
+        "judged": 96,
         "sessions_per_cell": 3,
         "corpus": {
           "1": {
@@ -3925,213 +1828,101 @@
             "chunks": 84,
             "chars": 116511
           }
-        },
-        "format_change": {
-          "adopted_on": "2026-11-26",
-          "answer_format": "scoped_absence",
-          "rungs": [
-            "hybrid_rag_rerank_citations",
-            "cached_rerank_hybrid"
-          ],
-          "removed": [
-            "- **Required Sign-Off Gate**: Concrete operational, banking NOC, escrow, or delisting gate before execution."
-          ],
-          "added": [
-            "- **Required Sign-Off Gate**: Concrete operational, banking NOC, escrow, or delisting gate before execution, as stated in the text provided to you. If that text states none, write \"None stated in the text provided\" \u2014 never state that the deal room or the contracts contain no such gate, because you may not have been given every clause.",
-            "- You may have been given only part of the deal room. When something is not in the text provided, say it is not in the text provided; do not say the documents or the deal room lack it."
-          ],
-          "note": "Retrieval versions only: their answers now say a term is not in the text provided instead of saying the documents lack it. Before and after are separate session sets (3 sessions of 8 questions per version and corpus size each). The full-corpus versions were not changed or re-measured."
-        },
-        "break_even_basis": "Each version's adopted answer format: the retrieval versions' scoped_absence sessions, the full-corpus versions' original sessions (measured warm cost per question + one-off cache-write premium)."
+        }
       }
     },
     "cat5": {
       "rungs": {
         "raw_free_sonnet": {
-          "n": 33,
-          "cost_per_1k_billed": 153.722,
-          "cost_per_1k_warm": 153.722,
-          "cost_per_1k_cold": 153.722,
-          "cost_per_1k_billed_repo_card": 153.722,
-          "prompt_tokens_median": 74528,
+          "n": 36,
+          "cost_per_1k_billed": 153.4128888888889,
+          "cost_per_1k_warm": 153.4128888888889,
+          "cost_per_1k_cold": 153.4128888888889,
+          "cost_per_1k_billed_repo_card": 153.4128888888889,
+          "prompt_tokens_median": 74512.5,
           "prompt_tokens_range": [
             44500,
             76567
           ],
-          "output_tokens_median": 1660,
+          "output_tokens_median": 1661.0,
           "output_tokens_range": [
             1356,
             2071
           ],
-          "total_tokens_median": 76074,
-          "io_ratio_median": 41.155795148247975,
-          "output_cost_share_median": 0.1083287588035366,
+          "total_tokens_median": 75931.0,
+          "io_ratio_median": 40.9441911064623,
+          "output_cost_share_median": 0.10882999445792974,
           "max_call_prompt": 24295
         },
-        "raw_free_sonnet_cached": {
-          "n": 33,
-          "cost_per_1k_billed": 110.99458484848485,
-          "cost_per_1k_warm": 90.25102121212122,
-          "cost_per_1k_cold": 110.99458484848485,
-          "cost_per_1k_billed_repo_card": 113.45656363636364,
-          "prompt_tokens_median": 74644,
-          "prompt_tokens_range": [
-            44537,
-            76744
-          ],
-          "output_tokens_median": 1616,
-          "output_tokens_range": [
-            1381,
-            2227
-          ],
-          "total_tokens_median": 76170,
-          "io_ratio_median": 41.04141689373297,
-          "output_cost_share_median": 0.15002234207926088,
-          "max_call_prompt": 24372
-        },
-        "bundle_sonnet_cached": {
-          "n": 33,
-          "cost_per_1k_billed": 43.09759696969697,
-          "cost_per_1k_warm": 23.215342424242422,
-          "cost_per_1k_cold": 43.09759696969697,
-          "cost_per_1k_billed_repo_card": 44.754451515151516,
-          "prompt_tokens_median": 28684,
-          "prompt_tokens_range": [
-            28214,
-            30189
-          ],
-          "output_tokens_median": 1245,
-          "output_tokens_range": [
-            984,
-            1760
-          ],
-          "total_tokens_median": 29791,
-          "io_ratio_median": 23.109236947791164,
-          "output_cost_share_median": 0.29397944553548844,
-          "max_call_prompt": 11569
-        },
         "bundle_gate_sonnet_cached": {
-          "n": 33,
-          "cost_per_1k_billed": 50.84498181818182,
-          "cost_per_1k_warm": 30.114945454545452,
-          "cost_per_1k_cold": 50.84498181818182,
-          "cost_per_1k_billed_repo_card": 53.43623636363636,
-          "prompt_tokens_median": 41506,
+          "n": 36,
+          "cost_per_1k_billed": 51.22195555555555,
+          "cost_per_1k_warm": 30.493088888888888,
+          "cost_per_1k_cold": 51.22195555555555,
+          "cost_per_1k_billed_repo_card": 53.813063888888884,
+          "prompt_tokens_median": 41626.5,
           "prompt_tokens_range": [
-            40424,
-            43299
+            40702,
+            43528
           ],
-          "output_tokens_median": 1268,
+          "output_tokens_median": 1270.5,
           "output_tokens_range": [
-            1029,
-            1515
+            1050,
+            1532
           ],
-          "total_tokens_median": 42608,
-          "io_ratio_median": 32.27511961722488,
-          "output_cost_share_median": 0.2523125240248959,
-          "max_call_prompt": 12492
-        },
-        "bundle_haiku_cached": {
-          "n": 33,
-          "cost_per_1k_billed": 2.4036125757575757,
-          "cost_per_1k_warm": 1.4509003030303032,
-          "cost_per_1k_cold": 2.4036125757575757,
-          "cost_per_1k_billed_repo_card": 2.4036125757575757,
-          "prompt_tokens_median": 28936,
-          "prompt_tokens_range": [
-            28535,
-            30801
-          ],
-          "output_tokens_median": 1461,
-          "output_tokens_range": [
-            1204,
-            2307
-          ],
-          "total_tokens_median": 30297,
-          "io_ratio_median": 19.58590006844627,
-          "output_cost_share_median": 0.31651054168580317,
-          "max_call_prompt": 12175
+          "total_tokens_median": 42811.5,
+          "io_ratio_median": 32.336204268005766,
+          "output_cost_share_median": 0.25159032060033026,
+          "max_call_prompt": 12519
         },
         "bundle_gate_haiku_escalate": {
-          "n": 33,
-          "cost_per_1k_billed": 22.61975409090909,
-          "cost_per_1k_warm": 12.139114545454545,
-          "cost_per_1k_cold": 22.61975409090909,
-          "cost_per_1k_billed_repo_card": 23.014799545454544,
-          "prompt_tokens_median": 42000,
+          "n": 36,
+          "cost_per_1k_billed": 10.418964166666665,
+          "cost_per_1k_warm": 5.942462777777778,
+          "cost_per_1k_cold": 10.418964166666665,
+          "cost_per_1k_billed_repo_card": 10.563830833333332,
+          "prompt_tokens_median": 42057.5,
           "prompt_tokens_range": [
-            40895,
-            43648
+            41144,
+            43990
           ],
-          "output_tokens_median": 1339,
+          "output_tokens_median": 1353.5,
           "output_tokens_range": [
-            1180,
-            1549
+            1182,
+            1583
           ],
-          "total_tokens_median": 43226,
-          "io_ratio_median": 31.448842419716208,
-          "output_cost_share_median": 0.24423008750489766,
-          "max_call_prompt": 12634
+          "total_tokens_median": 43392.5,
+          "io_ratio_median": 31.45627346587576,
+          "output_cost_share_median": 0.2439883883464607,
+          "max_call_prompt": 12791
         }
       },
       "quality": {
         "raw_free_sonnet": {
-          "runs": 33,
-          "exact": 33,
-          "decision_correct": 33,
+          "runs": 36,
+          "exact": 36,
+          "decision_correct": 36,
           "exact_ci": [
-            0.8957265699643882,
+            0.9035781695514236,
             1.0
           ],
-          "turns_mean": 3.8484848484848486,
+          "turns_mean": 3.861111111111111,
           "turns_max": 4,
           "turn_cap": 12,
           "cap_hits": 0,
           "escalations": 0,
-          "escalation_expected": 15,
+          "escalation_expected": 6,
           "truncated_turns": 0,
-          "summary_cost_billed": 153.722
-        },
-        "raw_free_sonnet_cached": {
-          "runs": 33,
-          "exact": 32,
-          "decision_correct": 33,
-          "exact_ci": [
-            0.8468093832683193,
-            0.9946307279103482
-          ],
-          "turns_mean": 3.8484848484848486,
-          "turns_max": 4,
-          "turn_cap": 12,
-          "cap_hits": 0,
-          "escalations": 0,
-          "escalation_expected": 15,
-          "truncated_turns": 0,
-          "summary_cost_billed": 110.99458484848485
-        },
-        "bundle_sonnet_cached": {
-          "runs": 33,
-          "exact": 33,
-          "decision_correct": 33,
-          "exact_ci": [
-            0.8957265699643882,
-            1.0
-          ],
-          "turns_mean": 3,
-          "turns_max": 3,
-          "turn_cap": 12,
-          "cap_hits": 0,
-          "escalations": 0,
-          "escalation_expected": 15,
-          "truncated_turns": 0,
-          "summary_cost_billed": 43.09759696969697
+          "expected_runs": 36,
+          "pending_runs": 0,
+          "summary_cost_billed": 153.41288888888892
         },
         "bundle_gate_sonnet_cached": {
-          "runs": 33,
-          "exact": 33,
-          "decision_correct": 33,
+          "runs": 36,
+          "exact": 36,
+          "decision_correct": 36,
           "exact_ci": [
-            0.8957265699643882,
+            0.9035781695514236,
             1.0
           ],
           "turns_mean": 4,
@@ -4139,364 +1930,36 @@
           "turn_cap": 5,
           "cap_hits": 0,
           "escalations": 0,
-          "escalation_expected": 15,
+          "escalation_expected": 6,
           "truncated_turns": 0,
-          "summary_cost_billed": 50.84498181818182
-        },
-        "bundle_haiku_cached": {
-          "runs": 33,
-          "exact": 33,
-          "decision_correct": 33,
-          "exact_ci": [
-            0.8957265699643882,
-            1.0
-          ],
-          "turns_mean": 3,
-          "turns_max": 3,
-          "turn_cap": 12,
-          "cap_hits": 0,
-          "escalations": 0,
-          "escalation_expected": 15,
-          "truncated_turns": 0,
-          "summary_cost_billed": 2.4036130303030303
+          "expected_runs": 36,
+          "pending_runs": 0,
+          "summary_cost_billed": 51.22195555555556
         },
         "bundle_gate_haiku_escalate": {
-          "runs": 33,
-          "exact": 33,
-          "decision_correct": 33,
+          "runs": 36,
+          "exact": 36,
+          "decision_correct": 36,
           "exact_ci": [
-            0.8957265699643882,
+            0.9035781695514236,
             1.0
           ],
           "turns_mean": 4,
           "turns_max": 4,
           "turn_cap": 5,
           "cap_hits": 0,
-          "escalations": 15,
-          "escalation_expected": 15,
+          "escalations": 6,
+          "escalation_expected": 6,
           "truncated_turns": 0,
-          "summary_cost_billed": 22.61975484848485
+          "expected_runs": 36,
+          "pending_runs": 0,
+          "summary_cost_billed": 10.418963333333332
         }
       },
-      "levers": [
-        {
-          "lever": "caching alone",
-          "label": "Cache the policy manual",
-          "from": "raw_free_sonnet",
-          "to": "raw_free_sonnet_cached",
-          "changes": [
-            "cached: False -> True"
-          ],
-          "exact_from": 33,
-          "exact_to": 32,
-          "runs": 33,
-          "exact_delta_pp": -3.0303030303030276,
-          "turns_from": 3.8484848484848486,
-          "turns_to": 3.8484848484848486,
-          "billed_from": 153.722,
-          "billed_to": 110.99458484848485,
-          "billed_change_pct": -27.79525061573175,
-          "warm_from": 153.722,
-          "warm_to": 90.25102121212122,
-          "warm_change_pct": -41.28945680376185,
-          "cold_from": 153.722,
-          "cold_to": 110.99458484848485,
-          "cold_change_pct": -27.79525061573175
-        },
-        {
-          "lever": "narrow query",
-          "label": "One narrow query instead of raw tables",
-          "from": "raw_free_sonnet_cached",
-          "to": "bundle_sonnet_cached",
-          "changes": [
-            "tool_set: raw -> bundle"
-          ],
-          "exact_from": 32,
-          "exact_to": 33,
-          "runs": 33,
-          "exact_delta_pp": 3.0303030303030276,
-          "turns_from": 3.8484848484848486,
-          "turns_to": 3,
-          "billed_from": 110.99458484848485,
-          "billed_to": 43.09759696969697,
-          "billed_change_pct": -61.171441806347474,
-          "warm_from": 90.25102121212122,
-          "warm_to": 23.215342424242422,
-          "warm_change_pct": -74.27691995896832,
-          "cold_from": 110.99458484848485,
-          "cold_to": 43.09759696969697,
-          "cold_change_pct": -61.171441806347474
-        },
-        {
-          "lever": "deterministic gate",
-          "label": "Add the deterministic policy tool",
-          "from": "bundle_sonnet_cached",
-          "to": "bundle_gate_sonnet_cached",
-          "changes": [
-            "tool_set: bundle -> governed",
-            "gate: False -> True",
-            "prompt: neutral -> bounded_sonnet_cached_gate",
-            "turn_cap: 12 -> 5"
-          ],
-          "exact_from": 33,
-          "exact_to": 33,
-          "runs": 33,
-          "exact_delta_pp": 0.0,
-          "turns_from": 3,
-          "turns_to": 4,
-          "billed_from": 43.09759696969697,
-          "billed_to": 50.84498181818182,
-          "billed_change_pct": 17.976373146586887,
-          "warm_from": 23.215342424242422,
-          "warm_to": 30.114945454545452,
-          "warm_change_pct": 29.720014050269516,
-          "cold_from": 43.09759696969697,
-          "cold_to": 50.84498181818182,
-          "cold_change_pct": 17.976373146586887
-        },
-        {
-          "lever": "model swap without gate",
-          "label": "Switch to the small model",
-          "from": "bundle_sonnet_cached",
-          "to": "bundle_haiku_cached",
-          "changes": [
-            "start_model: claude-sonnet-5-5 -> claude-haiku-5-5"
-          ],
-          "exact_from": 33,
-          "exact_to": 33,
-          "runs": 33,
-          "exact_delta_pp": 0.0,
-          "turns_from": 3,
-          "turns_to": 3,
-          "billed_from": 43.09759696969697,
-          "billed_to": 2.4036125757575757,
-          "billed_change_pct": -94.4228617260317,
-          "warm_from": 23.215342424242422,
-          "warm_to": 1.4509003030303032,
-          "warm_change_pct": -93.75025241275264,
-          "cold_from": 43.09759696969697,
-          "cold_to": 2.4036125757575757,
-          "cold_change_pct": -94.4228617260317
-        },
-        {
-          "lever": "gate + tiering",
-          "label": "Add the policy tool and escalation to the small model",
-          "from": "bundle_haiku_cached",
-          "to": "bundle_gate_haiku_escalate",
-          "changes": [
-            "tool_set: bundle -> governed",
-            "escalate: False -> True",
-            "gate: False -> True",
-            "prompt: neutral -> hybrid_haiku_sonnet_governed",
-            "turn_cap: 12 -> 5"
-          ],
-          "exact_from": 33,
-          "exact_to": 33,
-          "runs": 33,
-          "exact_delta_pp": 0.0,
-          "turns_from": 3,
-          "turns_to": 4,
-          "billed_from": 2.4036125757575757,
-          "billed_to": 22.61975409090909,
-          "billed_change_pct": 841.0732128400414,
-          "warm_from": 1.4509003030303032,
-          "warm_to": 12.139114545454545,
-          "warm_change_pct": 736.6608319056234,
-          "cold_from": 2.4036125757575757,
-          "cold_to": 22.61975409090909,
-          "cold_change_pct": 841.0732128400414
-        },
-        {
-          "lever": "gate Sonnet -> gate Haiku escalate",
-          "label": "Policy-tool version: small model first instead of the large model",
-          "from": "bundle_gate_sonnet_cached",
-          "to": "bundle_gate_haiku_escalate",
-          "changes": [
-            "start_model: claude-sonnet-5-5 -> claude-haiku-5-5",
-            "escalate: False -> True",
-            "prompt: bounded_sonnet_cached_gate -> hybrid_haiku_sonnet_governed"
-          ],
-          "exact_from": 33,
-          "exact_to": 33,
-          "runs": 33,
-          "exact_delta_pp": 0.0,
-          "turns_from": 4,
-          "turns_to": 4,
-          "billed_from": 50.84498181818182,
-          "billed_to": 22.61975409090909,
-          "billed_change_pct": -55.51231747550667,
-          "warm_from": 30.114945454545452,
-          "warm_to": 12.139114545454545,
-          "warm_change_pct": -59.69073042560564,
-          "cold_from": 50.84498181818182,
-          "cold_to": 22.61975409090909,
-          "cold_change_pct": -55.51231747550667
-        }
-      ],
-      "gate_disagreement": {
-        "preset_id": "inv-06",
-        "invoice_id": "INV-DL-2026-4157",
-        "manual_truth": {
-          "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
-          "authorized_net_principal_inr": 3656000.0,
-          "authorized_gst_payout_inr": 658080.0,
-          "gst_escrow_holdback_inr": 0.0,
-          "debit_note_deduction_inr": 22800.0,
-          "expected_escalation": true
-        },
-        "gate_output_truth": {
-          "decision": "APPROVE_CLEAN",
-          "authorized_net_principal_inr": 3678800.0,
-          "authorized_gst_payout_inr": 662184.0,
-          "gst_escrow_holdback_inr": 0.0,
-          "debit_note_deduction_inr": 0.0,
-          "expected_escalation": false
-        },
-        "line1": {
-          "sku": "NM-CBL-1.5SQ-90M",
-          "qty": 1200,
-          "po_rate": 1480.0,
-          "billed_rate": 1499.0
-        },
-        "no_gate_runs": 12,
-        "no_gate_match_manual": 12,
-        "gate_runs": 6,
-        "gate_match_gate_output": 6,
-        "gate_match_manual": 0,
-        "per_arm": {
-          "raw_free_sonnet": {
-            "runs": 3,
-            "matches_manual": 3,
-            "matches_gate_output": 0,
-            "gate_arm": false,
-            "line1_rate": {
-              "po_rate": 3
-            }
-          },
-          "raw_free_sonnet_cached": {
-            "runs": 3,
-            "matches_manual": 3,
-            "matches_gate_output": 0,
-            "gate_arm": false,
-            "line1_rate": {
-              "po_rate": 3
-            }
-          },
-          "bundle_sonnet_cached": {
-            "runs": 3,
-            "matches_manual": 3,
-            "matches_gate_output": 0,
-            "gate_arm": false,
-            "line1_rate": {
-              "po_rate": 3
-            }
-          },
-          "bundle_gate_sonnet_cached": {
-            "runs": 3,
-            "matches_manual": 0,
-            "matches_gate_output": 3,
-            "gate_arm": true,
-            "line1_rate": {
-              "billed_rate": 3
-            }
-          },
-          "bundle_haiku_cached": {
-            "runs": 3,
-            "matches_manual": 3,
-            "matches_gate_output": 0,
-            "gate_arm": false,
-            "line1_rate": {
-              "po_rate": 3
-            }
-          },
-          "bundle_gate_haiku_escalate": {
-            "runs": 3,
-            "matches_manual": 0,
-            "matches_gate_output": 3,
-            "gate_arm": true,
-            "line1_rate": {
-              "billed_rate": 3
-            }
-          }
-        },
-        "fixed_on": "2026-11-26",
-        "gate_version_current": "v2-manual-aligned",
-        "current_gate_matches_manual": true,
-        "current_gate_output": {
-          "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
-          "authorized_net_principal_inr": 3656000.0,
-          "authorized_gst_payout_inr": 658080.0,
-          "gst_escrow_holdback_inr": 0.0,
-          "debit_note_deduction_inr": 22800.0,
-          "expected_escalation": true
-        },
-        "after_fix_runs": 6,
-        "after_fix_match_manual": 6,
-        "cost_per_1k_billed": {
-          "raw_free_sonnet": 150.01266666666666,
-          "raw_free_sonnet_cached": 105.6876,
-          "bundle_sonnet_cached": 41.9877,
-          "bundle_gate_sonnet_cached": 47.688,
-          "bundle_haiku_cached": 2.3985549999999995,
-          "bundle_gate_haiku_escalate": 2.69782
-        }
-      },
-      "baseline": [
-        {
-          "preset_id": "inv-01",
-          "scripted": {
-            "runs": 1,
-            "exact": 1,
-            "turns": 7.0,
-            "prompt_tokens": 115246,
-            "cost_per_1k_billed": 247.482
-          },
-          "free_choice": {
-            "runs": 3,
-            "turns": 4,
-            "prompt_tokens": 74614.66666666667,
-            "cost_per_1k_billed": 164.04933333333332
-          }
-        },
-        {
-          "preset_id": "inv-02",
-          "scripted": {
-            "runs": 1,
-            "exact": 1,
-            "turns": 7.0,
-            "prompt_tokens": 115766,
-            "cost_per_1k_billed": 255.09199999999998
-          },
-          "free_choice": {
-            "runs": 3,
-            "turns": 4,
-            "prompt_tokens": 75346,
-            "cost_per_1k_billed": 170.412
-          }
-        },
-        {
-          "preset_id": "inv-03",
-          "scripted": {
-            "runs": 1,
-            "exact": 1,
-            "turns": 3.0,
-            "prompt_tokens": 29371,
-            "cost_per_1k_billed": 71.812
-          },
-          "free_choice": {
-            "runs": 3,
-            "turns": 3,
-            "prompt_tokens": 44516,
-            "cost_per_1k_billed": 104.72200000000001
-          }
-        }
-      ],
       "source": "ablation",
       "summary_source": "backend/replays/cat5_ablation_summary.json",
-      "records": 198,
-      "gate_disagreement_records": 18,
-      "invoices_pooled": 11,
-      "invoices_total": 12,
+      "records": 108,
+      "invoices_pooled": 12,
       "repeats": 3,
       "settings": {
         "max_tokens_per_turn": 4096,
@@ -4506,44 +1969,72 @@
         "call_timeout_s": 180.0
       },
       "data_quality": {
-        "errors": 0,
         "truncated_turns": 0,
         "model_mismatches": 0,
         "cache_anomalies": 0,
         "cap_hits": 0,
         "no_voucher_committed": 0,
         "disallowed_tool_calls": 0,
-        "tool_use_blocks_with_other_stop_reason": 1,
-        "superseded_records": 1
+        "tool_use_blocks_with_other_stop_reason": 1
       },
-      "non_exact_runs": [
-        {
-          "arm_id": "raw_free_sonnet_cached",
-          "preset_id": "inv-12",
-          "repeat_index": 2,
-          "expected": {
-            "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
-            "authorized_net_principal_inr": 4862520.0,
-            "authorized_gst_payout_inr": 0.0,
-            "gst_escrow_holdback_inr": 875253.6,
-            "debit_note_deduction_inr": 206480.0
-          },
-          "committed": {
-            "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
-            "authorized_net_principal_inr": 3862520.0,
-            "authorized_gst_payout_inr": 0.0,
-            "gst_escrow_holdback_inr": 695253.6,
-            "debit_note_deduction_inr": 1206480.0
-          },
-          "mismatched_fields": [
-            "authorized_net_principal_inr",
-            "gst_escrow_holdback_inr",
-            "debit_note_deduction_inr"
-          ]
-        }
+      "non_exact_runs": [],
+      "pending_runs": 0,
+      "pending_invoices": [],
+      "common_invoices": [
+        "inv-01",
+        "inv-02",
+        "inv-03",
+        "inv-04",
+        "inv-05",
+        "inv-06",
+        "inv-07",
+        "inv-08",
+        "inv-09",
+        "inv-10",
+        "inv-11",
+        "inv-12"
       ],
-      "superseded_records": 1,
-      "max_cost_diff_vs_summary_per_1k": 7.575757585698284e-07,
+      "with_vs_without": {
+        "from": "raw_free_sonnet",
+        "to": "bundle_gate_sonnet_cached",
+        "exact_from": 36,
+        "exact_to": 36,
+        "runs": 36,
+        "turns_from": 3.861111111111111,
+        "turns_to": 4,
+        "clear_loss": false,
+        "not_lower": true,
+        "billed_from": 153.4128888888889,
+        "billed_to": 51.22195555555555,
+        "billed_change_pct": -66.61170001651317,
+        "warm_from": 153.4128888888889,
+        "warm_to": 30.493088888888888,
+        "warm_change_pct": -80.12351562522633,
+        "cold_from": 153.4128888888889,
+        "cold_to": 51.22195555555555,
+        "cold_change_pct": -66.61170001651317
+      },
+      "haiku_first_vs_sonnet": {
+        "from": "bundle_gate_sonnet_cached",
+        "to": "bundle_gate_haiku_escalate",
+        "exact_from": 36,
+        "exact_to": 36,
+        "runs": 36,
+        "turns_from": 4,
+        "turns_to": 4,
+        "clear_loss": false,
+        "not_lower": true,
+        "billed_from": 51.22195555555555,
+        "billed_to": 10.418964166666665,
+        "billed_change_pct": -79.65918314976044,
+        "warm_from": 30.493088888888888,
+        "warm_to": 5.942462777777778,
+        "warm_change_pct": -80.5120996451655,
+        "cold_from": 51.22195555555555,
+        "cold_to": 10.418964166666665,
+        "cold_change_pct": -79.65918314976044
+      },
+      "max_cost_diff_vs_summary_per_1k": 8.333333330057258e-07,
       "app_rungs": {
         "unbounded_sonnet_loop": "raw_free_sonnet",
         "bounded_sonnet_cached_gate": "bundle_gate_sonnet_cached",
@@ -4551,33 +2042,12 @@
       },
       "lever_parts": {
         "max_step_budgets": "NOT SHOWN",
-        "deterministic_guardrails": "NOT SUPPORTED",
+        "deterministic_guardrails": "SUPPORTED",
         "small_model_routing": "SUPPORTED"
       }
     },
     "cat6": {
       "rungs": {
-        "shared_bus_original": {
-          "n": 15,
-          "cost_per_1k_billed": 696.1010666666667,
-          "cost_per_1k_warm": 696.1010666666667,
-          "cost_per_1k_cold": 696.1010666666667,
-          "cost_per_1k_billed_repo_card": 696.1010666666667,
-          "prompt_tokens_median": 247119,
-          "prompt_tokens_range": [
-            228556,
-            257785
-          ],
-          "output_tokens_median": 19566,
-          "output_tokens_range": [
-            12035,
-            25663
-          ],
-          "total_tokens_median": 267324,
-          "io_ratio_median": 12.477749229188078,
-          "output_cost_share_median": 0.2860780260910216,
-          "max_call_prompt": 63034
-        },
         "shared_bus_matched_gate": {
           "n": 15,
           "cost_per_1k_billed": 469.01533333333333,
@@ -4643,21 +2113,6 @@
         }
       },
       "cpo": {
-        "shared_bus_original": {
-          "verified": 15,
-          "first_attempt_verified": 15,
-          "runs": 15,
-          "checks_passed": 150,
-          "checks_total": 150,
-          "cost_per_run": 0.6961010666666667,
-          "cpo": 0.6961010666666667,
-          "cpo_warm": 0.6961010666666667,
-          "cpo_cold": 0.6961010666666667,
-          "turns_at_max_tokens": 0,
-          "turns_total": 75,
-          "retries_triggered": 0,
-          "mean_total_tokens": 266916.6666666667
-        },
         "shared_bus_matched_gate": {
           "verified": 15,
           "first_attempt_verified": 15,
@@ -4671,6 +2126,9 @@
           "turns_at_max_tokens": 0,
           "turns_total": 75,
           "retries_triggered": 0,
+          "cost_per_run_warm": 0.46901533333333334,
+          "cost_per_run_cold": 0.46901533333333334,
+          "model_s_mean": 30.758733333333332,
           "mean_total_tokens": 218191.4
         },
         "isolated_cached_gate": {
@@ -4686,6 +2144,9 @@
           "turns_at_max_tokens": 0,
           "turns_total": 75,
           "retries_triggered": 0,
+          "cost_per_run_warm": 0.0775027,
+          "cost_per_run_cold": 0.09991246000000001,
+          "model_s_mean": 38.84513333333333,
           "mean_total_tokens": 61803.73333333333
         },
         "tiered_gate": {
@@ -4701,12 +2162,14 @@
           "turns_at_max_tokens": 0,
           "turns_total": 75,
           "retries_triggered": 0,
+          "cost_per_run_warm": 0.03271382933333333,
+          "cost_per_run_cold": 0.05619822866666667,
+          "model_s_mean": 28.434066666666666,
           "mean_total_tokens": 62191.6
         }
       },
       "source": "fair rerun",
-      "verdict_source": "rescored",
-      "records": 60,
+      "records": 45,
       "repo_prefix_tokens": 9337
     }
   },
@@ -4714,58 +2177,58 @@
     {
       "category": "Cat 1",
       "claim": "Input 500\u20131,500 tokens",
-      "measured": "payload 581\u20131,472 (Gemini input, payload only; median 972); Haiku schema prompt 859\u20132,066; write-up prompt 261\u20131,468 (n=36 runs each)",
+      "measured": "prompt sent with the improvement (schema) 859\u20132,066 (median 1,388); without (write-up) 261\u20131,468 (median 790); payload alone \u2248122\u20131,388 (median 598; estimated from a linear fit of the write-up runs' input tokens on payload length) (n=36 runs per cell)",
       "verdict": "PARTLY SUPPORTED",
-      "note": "Raw payloads sit in the band; the system prompt and the JSON schema push the real Haiku schema prompt to ~0.9\u20132.1k."
+      "note": "Both medians are in the band; the ranges spill on both sides: the six batch items are short (write-up prompts from 261 tokens), and the system prompt plus the JSON schema add ~600 tokens, so the longest schema prompts reach 2,066. Band rule: SUPPORTED when the whole range is in the band, PARTLY when the median is, NOT SUPPORTED otherwise."
     },
     {
       "category": "Cat 1",
       "claim": "Output 10\u2013100 tokens",
-      "measured": "Haiku schema output 71\u2013125 (median 98); Sonnet schema 71\u2013125; plain-text classification 62\u2013140 (n=36 each)",
+      "measured": "with the improvement: Haiku 71\u2013125 (median 98), Sonnet 71\u2013125 (median 96); without: write-ups 1,227\u20134,046 (n=36 runs per cell)",
       "verdict": "PARTLY SUPPORTED",
-      "note": "The median is inside the band and the longest answers run just over it; a write-up is 1.2k\u20134.0k tokens."
+      "note": "The medians are inside the band and the longest classification answers run just over it. Band rule: SUPPORTED when the whole range is in the band, PARTLY when the median is, NOT SUPPORTED otherwise."
     },
     {
       "category": "Cat 1",
       "claim": "Input:output \u2248 20:1 to 50:1",
-      "measured": "Haiku schema median 13:1 (Sonnet schema 13:1)",
+      "measured": "with the improvement: Haiku median 13:1, Sonnet 13:1; without: 0.24:1 (Sonnet write-up)",
       "verdict": "PARTLY SUPPORTED",
-      "note": "Input-heavy as claimed, but below the 20:1 floor because the schema answer is ~100 tokens and the prompt carries the schema."
+      "note": "Input-heavy as claimed, but below the 20:1 floor because the classification answer is ~100 tokens and the prompt carries the schema."
     },
     {
       "category": "Cat 1",
       "claim": "Small model + strict JSON schema + batching cuts unit cost by >80%",
-      "measured": "Sonnet write-up \u2192 Haiku schema -99.4%. Where it comes from: asking for the classification instead of a write-up -90.2% (Sonnet) / -88.4% (Haiku); Sonnet \u2192 Haiku -95.0% (same JSON task); the JSON schema itself +30.4% / +29.8% over the same classification asked as plain text; Batch API \u221250% (computed, not run: $0.094/1k)",
-      "verdict": "PARTLY SUPPORTED",
-      "note": "The >80% holds for the bundle, but not for the reason the claim gives: the saving comes from asking for the classification instead of a write-up and from the smaller model; the schema raises cost and changes no answer. What it buys is a guaranteed format (all 72 plain-text classification answers were readable here; the reader model read 100/100 fields of JSON answers rewritten as text back correctly). Batching was priced, not run. Write-ups now run at max_tokens 8,192 and none was cut off, so the baseline is no longer a lower bound."
+      "measured": "Sonnet write-up \u2192 Haiku schema -99.4% (Batch API price of the Haiku schema version: $0.094/1k, computed, not run). The four cells: without / Sonnet 5.5 $29.50/1k; without / Haiku 5.5 $1.25/1k; with / Sonnet 5.5 $3.77/1k; with / Haiku 5.5 $0.188/1k. Write-up \u2192 schema on the same model -87.2% (Sonnet) / -84.9% (Haiku); Sonnet \u2192 Haiku with the schema -95.0%",
+      "verdict": "SUPPORTED",
+      "note": "The cut clears 80% before any batch discount; each step clears it on its own (write-up \u2192 schema on either model, and Sonnet \u2192 Haiku). Batching was priced at 50%, not run. No write-up reached its 8,192-token cap (0 of 144 runs truncated)."
     },
     {
       "category": "Cat 1",
       "claim": "\u2026without losing accuracy (implicit)",
-      "measured": "same classification task, fields correct of 126: Sonnet schema 126, Haiku schema 120 (90\u201398%), Gemini 123; items fully correct of 36: 36 / 33 / 33. Write-ups, reported separately as usability: 69 / 69 of 126 fields usable as a classification (Sonnet / Haiku)",
+      "measured": "fields correct of 126 (items fully correct of 36). With vs without, same model: Sonnet 126 (36) vs 69 (6); Haiku 120 (33) vs 69 (3). With the improvement, Haiku vs Sonnet: 120 (90\u201398%) vs 126 (97\u2013100%), items 33 vs 36",
       "verdict": "PARTLY SUPPORTED",
-      "note": "Like for like (the same fields asked of both versions), the Haiku schema version matched 6 fewer of 126 fields than the Sonnet schema version (\u22124.8 points), all on 2 tickets (tkt-01, tkt-02); the 95% Wilson intervals overlap. The Gemini version's contains_pii did not match on tkt-05 in 3 of 3 runs. The write-up prompt never lists the allowed labels, so a write-up's score measures whether one allowed label can be read off it, not the rest of the write-up's content; it is not compared with the classification scores. Free text was read by a blind reader model (`claude-opus-5-5`, one pass). Implicit-row rule: no clear loss is detected (the intervals overlap), but the point estimates are lower and 36 runs cannot exclude a loss."
+      "note": "With the improvement every field and item count is at least the write-up's on the same model. The write-up prompt never lists the allowed labels, so a write-up's score counts the fields where one allowed label can be read off it (usable as a classification), read by a blind reader model (`claude-opus-5-5`, one pass). On the \"with\" row the Haiku version matched 6 fewer of 126 fields than the Sonnet version (\u22124.8 points), all on 2 tickets (tkt-01, tkt-02); the 95% Wilson intervals overlap. Implicit-row rule: no clear loss is detected (the intervals overlap), but the Haiku point estimates are lower and 36 runs cannot exclude a loss."
     },
     {
       "category": "Cat 2",
       "claim": "Input 1,500\u20134,000 tokens",
-      "measured": "unbounded 3,458\u20133,874; templated 4,667\u20135,073",
+      "measured": "prompt tokens: without, Sonnet 3,458\u20133,874 (median 3,640); without, Haiku 3,458\u20133,874 (median 3,640); with, Sonnet 4,748\u20135,154 (median 4,924); with, Haiku 4,748\u20135,154 (median 4,924)",
       "verdict": "PARTLY SUPPORTED",
-      "note": "In band without the template; the section template adds ~1.2k prompt tokens."
+      "note": "The section template and JSON schema add about 1,285 prompt tokens (median, Sonnet). Band rule (all four cells): SUPPORTED when every cell's whole range is in the band, PARTLY when at least one cell's median is, NOT SUPPORTED otherwise; NOT TESTABLE while a cell is pending."
     },
     {
       "category": "Cat 2",
       "claim": "Output 800\u20133,000+ tokens",
-      "measured": "unbounded 4,698\u20136,000; templated 1,695\u20131,853",
+      "measured": "output tokens: without, Sonnet 4,370\u20135,885 (median 4,833); without, Haiku 4,703\u20136,521 (median 5,542); with, Sonnet 1,586\u20131,839 (median 1,673); with, Haiku 1,569\u20131,892 (median 1,720)",
       "verdict": "SUPPORTED",
-      "note": ""
+      "note": "The band is open at the top (3,000+), so only the 800 floor is tested. Band rule (all four cells): SUPPORTED when every cell's whole range is in the band, PARTLY when at least one cell's median is, NOT SUPPORTED otherwise; NOT TESTABLE while a cell is pending."
     },
     {
       "category": "Cat 2",
       "claim": "Input:output \u2248 1:1 to 1:2 and output-dominated cost",
-      "measured": "unbounded in:out \u2248 1:1.44, output = 88% of cost; templated 65%",
-      "verdict": "SUPPORTED",
-      "note": ""
+      "measured": "without, Sonnet in:out \u2248 0.74:1, output 87% of cost; without, Haiku in:out \u2248 0.67:1, output 88% of cost; with, Sonnet in:out \u2248 2.91:1, output 63% of cost; with, Haiku in:out \u2248 2.87:1, output 64% of cost",
+      "verdict": "PARTLY SUPPORTED",
+      "note": "SUPPORTED when every cell's median ratio is 1:1 to 1:2 and output is more than half the cost; PARTLY when only the cost is output-dominated."
     },
     {
       "category": "Cat 2",
@@ -4777,72 +2240,72 @@
     {
       "category": "Cat 2",
       "claim": "Section templates + length bounds control output cost",
-      "measured": "same model (Sonnet): \u221254%; + Haiku: \u221298%; 1-section regen vs full re-draft: \u221249%",
+      "measured": "with vs without on the same model: Sonnet \u221253% ($57.43 \u2192 $26.82/1k), Haiku \u221256% ($3.11 \u2192 $1.36/1k); median output 4,833 \u2192 1,673 (Sonnet), 5,542 \u2192 1,720 (Haiku); one-section regeneration vs the full template draft it was made on, same model: Sonnet \u221249% ($26.94 \u2192 $13.87/1k), Haiku \u221247% ($1.38 \u2192 $0.732/1k) (n=16 regenerations per model on the 4 repeat-0 template drafts)",
       "verdict": "SUPPORTED",
-      "note": "The cost claim holds, but the saving is not free: graded blind, the templated drafts score lower on accuracy (3.92 \u2192 3.08 / 2.58) and have more serious errors (1 \u2192 6 / 10); see the quality table and the implicit-claim row."
+      "note": "SUPPORTED when the template lowers cost and median output on both models. Quality is tested in the next row."
     },
     {
       "category": "Cat 2",
       "claim": "\u2026without losing draft quality (implicit)",
-      "measured": "head-to-head: templated drafts preferred over the unbounded draft in 0/16 comparisons (0 ties; 95% Wilson 0\u201319%); accuracy 3.92 unbounded vs 3.08 / 2.58 (Sonnet / Haiku template), coverage 4.92 vs 4.00 / 3.50; serious errors 1 vs 6 / 10. Not worse: core facts 32/32 vs 32/32 / 32/32. Better: clarity 4.00 vs 4.92 / 4.42, concision 2.83 vs 4.17 / 4.08",
+      "measured": "head-to-head, template vs unbounded on the same document, model and repeat: template 21 \u2013 unbounded 27 \u2013 ties 0 (48 calls); template share of decisive comparisons 31\u201358% (95% Wilson). Sonnet with vs without: accuracy 4.17, coverage 3.42, actionability 3.08; serious errors 0.00/draft; core facts 94/96, detail facts 94/120 vs accuracy 3.92, coverage 5.00, actionability 3.42; serious errors 0.42/draft; core facts 95/96, detail facts 120/120. Haiku with vs without: accuracy 3.83, coverage 3.58, actionability 2.67; serious errors 0.25/draft; core facts 92/96, detail facts 92/120 vs accuracy 2.92, coverage 4.33, actionability 3.42; serious errors 1.83/draft; core facts 94/96, detail facts 119/120. With the template, Haiku vs Sonnet: accuracy 3.83, coverage 3.58, actionability 2.67; serious errors 0.25/draft; core facts 92/96, detail facts 92/120 vs accuracy 4.17, coverage 3.42, actionability 3.08; serious errors 0.00/draft; core facts 94/96, detail facts 94/120",
       "verdict": "NOT SUPPORTED",
-      "note": "Blind LLM judge (`claude-opus-5-5`, not one of the models under test; 3 rubric passes per draft; every pair shown in both orders, position-consistent in 11/12 pairs), one draft per rung \u00d7 4 documents; the lead verified the serious errors against the source payloads. Shorter drafts keep every core fact and read better, but they are less accurate and less complete and lose every head-to-head comparison. The template requires an owner and a time window for every action item; the grader flagged an owner or deadline the source does not support in 16 of 24 templated action items (12 with a serious error). A single judge may favour longer drafts (its prompt tells it to ignore length and layout), but the serious errors were verified against the sources, so they do not rest on the judge's taste. Follow-up (not the app's template): one added sentence letting the template write \"Not stated in source\" cut serious errors per draft from 1.25 / 2.25 to 0.00 / 0.25 (Sonnet / Haiku, 12 fresh drafts each) and raised accuracy from 3.25 / 2.67 to 4.17 / 3.83, but actionability fell (3.67 / 3.25 \u2192 3.08 / 2.67) and the long draft is still preferred in 15 of 16 comparisons. This row grades the template as the app ships it. Implicit-row rule: a clear loss (the head-to-head record is one-sided)."
+      "note": "Blind judge (`claude-opus-5-5`, not one of the models under test; 1 rubric pass per draft; each pair shown in both orders, position-consistent in 19/24 pairs); 12 drafts per cell over 4 documents; key facts from a fixed answer key. Compared under the written rule: the template against the unbounded draft on the same model, and Haiku against Sonnet on the row with the template; ties are left out of the head-to-head share. Implicit-row rule: a clear loss (detail facts, Sonnet with vs without; detail facts, Haiku with vs without)."
     },
     {
       "category": "Tiers 1\u20132 rule",
       "claim": "60\u201380% lower unit inference cost (Cat 1 & 2)",
-      "measured": "Cat 1 \u221299% (Sonnet write-up \u2192 Haiku schema; asking for the classification alone \u221290% / \u221288% on the same model, the model swap alone \u221295%), Cat 2 \u221254% (template only) to \u221298% (template + Haiku)",
+      "measured": "Cat 1 \u221299% (Sonnet write-up \u2192 Haiku schema; write-up \u2192 schema on the same model \u221287% (Sonnet) / \u221285% (Haiku), Sonnet \u2192 Haiku with the schema \u221295%); Cat 2 \u221253% (Sonnet) / \u221256% (Haiku), section template vs unbounded draft on the same model",
       "verdict": "PARTLY SUPPORTED",
-      "note": "Outside the range on both sides: in Category 1 each of the two levers that save money clears 80% on its own (asking for the classification \u221288% or more, the smaller model \u221295%), and together they give \u221299%; templating alone on the same model in Category 2 gives 54% (less)."
+      "note": "SUPPORTED when every measured saving is within 60\u201380%; PARTLY when the costs fall but a saving lies outside the range. Outside the range: 99%, 53%, 56%."
     },
     {
       "category": "Cat 3",
       "claim": "Per-turn context grows 1.2k \u2192 6.5k \u2192 14k \u2192 25k+ (turns 1/3/6/10)",
-      "measured": "naive (mean of n=6): 10.6k \u2192 13.2k \u2192 17.1k \u2192 21.9k",
+      "measured": "without the improvement (mean of n=6): 10.6k \u2192 13.2k \u2192 17.1k \u2192 21.9k",
       "verdict": "PARTLY SUPPORTED",
       "note": "Starts much higher (a ~9.9k-token handbook is sent on every turn) and grows more slowly: +1.2k/turn vs the ~2.6k/turn the chart implies."
     },
     {
       "category": "Cat 3",
       "claim": "Session 10,000\u201340,000+ tokens",
-      "measured": "peak context 22.6k; cumulative billed prompt per session 163k (median, n=6)",
+      "measured": "peak context 22.6k; cumulative billed prompt per session 163k (median, n=6; without the improvement)",
       "verdict": "PARTLY SUPPORTED",
       "note": "Holds for context-window size. Billed tokens per 10-turn session are ~4\u00d7 the top of the range, because every turn re-sends the history."
     },
     {
       "category": "Cat 3",
       "claim": "Output 150\u2013600 tokens per turn",
-      "measured": "all rungs: median 576, range 342\u20133,983; 103/180 turns in 150\u2013600",
+      "measured": "both versions: median 586, range 342\u20133,983; 68/120 turns in 150\u2013600",
       "verdict": "PARTLY SUPPORTED",
-      "note": "Output tokens include extended thinking, which was non-zero on 38/180 turns, so the same turn varies a lot between repeats. The typical turn is in range; the longest replies are several times the top of it."
+      "note": "Output tokens include extended thinking, which was non-zero on 23/120 turns, so the same turn varies a lot between repeats. The typical turn is in range; the longest replies are several times the top of it."
     },
     {
       "category": "Cat 3",
       "claim": "Prefix caching + sliding-window summary prevents quadratic session cost",
-      "measured": "context slope: naive +1247 tok/turn \u2192 summarized +288 tok/turn (peak 15.6k); cost \u221247% billed (n=6 sessions per rung); quality trade-off: recall questions 2/36 vs 36/36 with cached full history, turn 1\u20133 details kept in the final summary 24/51 vs 39/51",
+      "measured": "context slope: without +1247 tok/turn (turn 10 21.9k) \u2192 with +288 tok/turn (turn 10 14.8k, peak 15.6k); cost $398.68 \u2192 $212.45 per 1k sessions billed (\u221247%; n=6 sessions per version); quality: recall questions 2/36 with vs 36/36 without, turn 1\u20133 details kept in the final summary 24/51 vs 37/51",
       "verdict": "SUPPORTED",
-      "note": "Caching alone cuts cost \u221240% but context still grows +1197 tok/turn (quadratic session total). Only summarization bounds the growth. The cost claim holds, but the saving is not free: after compaction the early-turn specifics are no longer in the context, and replies to recall questions about them stated that the detail was not available (see the quality table and the implicit-claim row)."
+      "note": "Rule: holds if the version with the improvement grows its context more slowly per turn and costs less per session billed. Both hold: the summaries bound the growth from turn 6 on, and the cached handbook prefix cuts the price of each turn. The cost claim holds, but the saving is not free: after compaction the early-turn specifics are no longer in the context, and replies to recall questions about them stated that the detail was not available (see the quality table and the implicit-claim row)."
     },
     {
       "category": "Cat 3",
       "claim": "\u2026without losing answer quality (implicit)",
-      "measured": "answers grounded (turns 1\u20139): 205/207 summarized vs 203/207 cached full history; recall questions 2/36 vs 36/36; turn 1\u20133 details in final summary 24/51 vs 39/51",
+      "measured": "with vs without the improvement (n=6 sessions each): answers grounded (turns 1\u20139) 205/207 vs 205/207; recall questions 2/36 vs 36/36; turn 1\u20133 details in the final summary 24/51 vs 37/51",
       "verdict": "NOT SUPPORTED",
-      "note": "Answer key, deterministic string matching, 95% Wilson intervals. Replies on turns 1\u20139 stay grounded on every rung, but once early turns are compacted, replies to recall questions about them did not give their specifics and the final summary kept fewer of them. Caching alone changes no quality measure. Implicit-row rule: a clear loss (the recall-question intervals do not overlap)."
+      "note": "Answer key, deterministic string matching, 95% Wilson intervals; the reference is the version without the improvement. Replies on turns 1\u20139 stay grounded in both versions, but once early turns are compacted, replies to recall questions about them did not give their specifics and the final summary kept fewer of them. Implicit-row rule: a clear loss (recall questions: the intervals do not overlap)."
     },
     {
       "category": "Cat 4",
       "claim": "Input 15k\u2013100k+ tokens",
-      "measured": "full corpus 18.5k\u201362.3k per question (7 documents \u2192 21 documents); retrieval 5.9k\u20136.9k synthesis prompt",
+      "measured": "without the improvement (full corpus) 18.5k\u201354.2k per question (7 documents \u2192 21 documents); with the improvement, Sonnet's prompt 5.5k\u20136.9k (the 5 picked clauses)",
       "verdict": "SUPPORTED",
-      "note": "n=192 answers. Every full-corpus prompt is in the band at both corpus sizes; retrieval cuts the answering model's prompt below it by design."
+      "note": "n=96 answers. Every full-corpus prompt is in the band at both corpus sizes; the version with the improvement cuts the answering model's prompt below it by design (its Haiku step reads the whole corpus from a cached block)."
     },
     {
       "category": "Cat 4",
       "claim": "Output 400\u20131,500 tokens",
-      "measured": "all 192 answers: median 1010, range 760\u20132,992; 165/192 in 400\u20131,500",
+      "measured": "all 96 answers: median 938, range 760\u20131,584; 94/96 in 400\u20131,500",
       "verdict": "PARTLY SUPPORTED",
-      "note": "Output tokens include extended thinking. Each version in its current answer format (retrieval versions: the 2026-11-26 instructions). 5 answers used more than the app's former 2,048-token cap (now 4,096). "
+      "note": "Output tokens include extended thinking. 0 answers used more than 2,048 output tokens (the synthesis cap is 4,096). "
     },
     {
       "category": "Cat 4",
@@ -4854,146 +2317,97 @@
     {
       "category": "Cat 4",
       "claim": "Pair hybrid retrieval (reranking + chunk filtering) with context caching",
-      "measured": "paired rung (Haiku picks 5 clauses from the cached full corpus, Sonnet answers over them; current answer format; n=24 per corpus size): expected clauses kept 99% / 99% (7 / 21 documents) vs BM25+rerank 100% / 87%; other suppliers' clauses selected 0/120 vs 24/120; $/question billed $0.0230 / $0.0250 vs BM25+rerank $0.0234 / $0.0262 and cached full corpus $0.0253 / $0.0379; grader correctness 4.75 / 4.54 vs cached full corpus 4.96 / 4.83; answers with a serious error 0/24 / 2/24 vs 0/24 / 0/24; before the 2026-11-26 answer-format change (original instructions, separate sessions): correctness 4.54 / 4.38, answers with a serious error 1/24 / 6/24",
+      "measured": "with the improvement (Haiku picks 5 clauses from the cached full corpus, Sonnet answers over them with citations; n=24 per corpus size) vs without (full corpus, no cache, no citations): expected clauses among the picks 99% / 99% (7 / 21 documents); other suppliers' clauses picked 0/120 / 0/120; $/question billed $0.0230 / $0.0250 vs $0.0459 / $0.1173 (\u221250% / \u221279%); answers with a serious error 0/24 / 2/24 vs 1/24 / 3/24",
       "verdict": "SUPPORTED",
-      "note": "Rule (current answer format, both corpus sizes; \"clearly\" = 95% Wilson intervals do not overlap): retrieval holds if the paired rung's share of expected clauses kept is not clearly lower, and its share of other-supplier clauses selected not clearly higher, than BM25+rerank's; cost holds if it is cheaper per question billed than BM25+rerank in 8-question sessions; quality holds if its share of answers with a serious error is not clearly higher (95% Wilson intervals do not overlap) than the cached full corpus at the same size. Retrieval holds; cost holds; quality holds, although grader correctness is still below the cached full corpus (4.75 / 4.54 vs 4.96 / 4.83). Warm, the cached full corpus is cheaper per question; it overtakes the paired rung once 13 (7 documents) / 30 (21 documents) questions share one cache write. The same rule applied to the original-format sessions gives SUPPORTED (serious errors 1/24 / 6/24 vs 0/24 / 0/24). So the move from this row's earlier PARTLY verdict, which was set by hand on the lower correctness and the claims that the documents lack terms they contain, comes from applying the written rule, not from the answer-format change; the change removed those claims and cut the serious errors. "
+      "note": "Rule (both corpus sizes, with vs without the improvement at the same size; \"clearly\" = 95% Wilson intervals do not overlap): retrieval holds if the picked clauses' share of expected clauses is not clearly below the full corpus's (which holds every clause) and no other supplier's clause is picked; cost holds if it is cheaper per question billed in 8-question sessions; quality holds if its share of answers with a serious error is not clearly higher. Retrieval holds; cost holds; quality holds."
     },
     {
       "category": "Cat 4",
       "claim": "\u2026without losing answer quality (implicit)",
-      "measured": "answers with a serious error (7 / 21 documents, n=24 each; current answer formats): naive 1/24 / 3/24, cached full corpus 0/24 / 0/24, BM25+rerank 2/24 / 3/24 (before: 0/24 / 8/24, correctness 4.71 / 3.96), paired 0/24 / 2/24 (before: 1/24 / 6/24, correctness 4.54 / 4.38); grader correctness naive 4.50 / 4.50, cached 4.96 / 4.83, BM25+rerank 4.54 / 4.33, paired 4.75 / 4.54; key facts BM25+rerank 150/159 / 144/159 vs cached 150/159 / 149/159",
+      "measured": "with vs without the improvement (7 / 21 documents, n=24 answers each): answers with a serious error 0/24 / 2/24 vs 1/24 / 3/24; grader correctness 4.75 / 4.54 vs 4.50 / 4.50; key facts 153/159 / 154/159 vs 156/159 / 150/159",
       "verdict": "PARTLY SUPPORTED",
-      "note": "Clear loss: a version's share of answers with a serious error is clearly higher (95% Wilson intervals do not overlap) than the version it replaces at the same corpus size (retrieval vs the cached full corpus; caching vs the naive full corpus); each version in its current answer format. Caching the full corpus loses nothing (it has the fewest serious errors at both sizes). Retrieval loses nothing by this rule at either size. Before the retrieval versions' 2026-11-26 answer-format change it did: BM25+rerank at 21 docs (8/24) vs the cached full corpus's 0/24. Grader correctness on the retrieval versions is still below the cached full corpus at 21 documents (4.33 and 4.54 vs 4.83). Implicit-row rule: no clear loss is detected, but point estimates are lower (the cached full corpus vs naive at 7 docs: key facts 150/159 vs 156/159; the cached full corpus vs naive at 21 docs: key facts 149/159 vs 150/159; BM25+rerank vs the cached full corpus at 7 docs: serious errors 2/24 vs 0/24, correctness 4.54 vs 4.96; BM25+rerank vs the cached full corpus at 21 docs: serious errors 3/24 vs 0/24, correctness 4.33 vs 4.83, key facts 144/159 vs 149/159; the paired rung vs the cached full corpus at 7 docs: correctness 4.75 vs 4.96; the paired rung vs the cached full corpus at 21 docs: serious errors 2/24 vs 0/24, correctness 4.54 vs 4.83), and 24 answers per cell cannot show the versions are equal, so the row is PARTLY. Before and after are separate session sets; the change was measured on the retrieval versions only. Blind grader, one pass per answer; the deterministic key facts move less than the grader's error count."
+      "note": "Reference: the version without the improvement (full corpus, no cache, no citations) at the same corpus size. Clear loss: the share of answers with a serious error is clearly higher (95% Wilson intervals do not overlap). No clear loss at either size. Implicit-row rule: no clear loss is detected, but point estimates are lower (7 docs: key facts 153/159 vs 156/159), and 24 answers per cell cannot show the versions are equal, so the row is PARTLY. Blind grader, one pass per answer; the deterministic key facts move less than the grader's error count."
     },
     {
       "category": "Cat 5",
       "claim": "Input 25k\u2013150k+ tokens per task",
-      "measured": "n=33 runs per version: raw tables 44k\u201377k (cached manual 45k\u201377k); narrow query 28k\u201330k (Sonnet), 29k\u201331k (Haiku); with the policy tool 40k\u201343k",
+      "measured": "n=36/36/36 runs: Without the lever, Sonnet (app rung 1) 44k\u201377k; With the lever, Sonnet (app rung 2) 41k\u201344k; With the lever, Haiku-first (app rung 3) 41k\u201344k",
       "verdict": "SUPPORTED",
-      "note": "Every version is in the band. For the cached versions most of it is cache reads of the policy manual resent each turn: uncached input per invoice (median) is Raw tables, Sonnet, no cache 74.5k; Raw tables, Sonnet, cached manual 40.1k; Narrow query, Sonnet, cached 3.8k; Narrow query + policy gate, Sonnet 7.0k; Narrow query, Haiku, cached 4.1k; Narrow query + policy gate, Haiku \u2192 Sonnet on escalation 7.2k."
+      "note": "Every cell is in the band. With the lever, most of it is cache reads of the policy manual resent each turn: uncached input per invoice (median) is Without the lever, Sonnet 74.5k; With the lever, Sonnet 7.1k; With the lever, Haiku-first 7.3k."
     },
     {
       "category": "Cat 5",
       "claim": "Output 1,500\u20138,000 tokens per task",
-      "measured": "Raw tables, Sonnet, no cache (app rung 1) 1,356\u20132,071; Raw tables, Sonnet, cached manual 1,381\u20132,227; Narrow query, Sonnet, cached 984\u20131,760; Narrow query + policy gate, Sonnet (app rung 2) 1,029\u20131,515; Narrow query, Haiku, cached 1,204\u20132,307; Narrow query + policy gate, Haiku \u2192 Sonnet on escalation (app rung 3) 1,180\u20131,549; 77/198 runs in band",
+      "measured": "Without the lever, Sonnet (app rung 1) 1,356\u20132,071; With the lever, Sonnet (app rung 2) 1,050\u20131,532; With the lever, Haiku-first (app rung 3) 1,182\u20131,583; 32/108 runs in band",
       "verdict": "PARTLY SUPPORTED",
-      "note": "Median 1,426 output tokens per invoice; output includes extended thinking (Sonnet only). These are short 3\u20134-turn loops."
+      "note": "Median 1,388 output tokens per invoice; output includes extended thinking (Sonnet only). These are short 3\u20134-turn loops."
     },
     {
       "category": "Cat 5",
       "claim": "Max-step budgets + deterministic guardrails + small-model routing for routine tool calls",
-      "measured": "max-step budgets: never bound \u2014 0 of 198 runs hit a cap; versions with a 12-turn safety cap finished in at most 4 turns, the policy-tool versions in 4 of 5; deterministic guardrails (policy tool on the narrow-query Sonnet version): cost +18% billed ($43.10 \u2192 $50.84/1k), turns 3.0 \u2192 4.0, exact vouchers 33/33 \u2192 33/33; on inv-06, where the tool is wrong, 6/6 gated runs committed its figures and 0/6 matched the manual, vs 12/12 without it; small-model routing: Haiku instead of Sonnet on the narrow query -94% billed ($43.10 \u2192 $2.40/1k), exact 33/33 \u2192 33/33; with the policy tool, Haiku-first + escalation -56% vs gated Sonnet (escalated 15/33)",
+      "measured": "max-step budgets: 0 of 108 runs hit a cap; without the lever (12-turn safety cap) runs finished in at most 4 turns, with it in 4 of 5; with vs without the lever (Sonnet): cost -67% billed ($153 \u2192 $51.22/1k; warm $153 \u2192 $30.49), turns 3.9 \u2192 4.0, exact vouchers 36/36 \u2192 36/36; Haiku-first vs Sonnet (with the lever): cost -80% billed ($51.22 \u2192 $10.42/1k; warm $30.49 \u2192 $5.94), exact vouchers 36/36 \u2192 36/36, switched to Sonnet in 6 of 36 runs",
       "verdict": "PARTLY SUPPORTED",
-      "note": "Judged in three parts. (1) Step budgets: not shown \u2014 no loop ran long on these invoices, so a budget saved nothing here; whether it prevents runaway cost is untested. (2) Deterministic guardrails: not supported \u2014 the policy gate changed cost +18% and turns 3.0 \u2192 4.0, exact vouchers 33 \u2192 33 of 33; on the invoice where its rule is wrong the committed voucher carried the tool's figures in 6 of 6 gated runs, as that version's instructions require, while 12 of 12 runs without it matched the manual. (3) Small-model routing: supported \u2014 switching to the small model changed cost -94% with exact vouchers 33 \u2192 33 of 33. The saving across the ladder comes from the narrow query (-61%) and the model choice. As a whole: 1 of 3 levers supported, 1 contradicted, 1 never came into play."
+      "note": "Judged as a whole, without \u2192 with, in three parts. (1) Step budgets: not shown \u2014 no loop ran long on these invoices, so a budget saved nothing here; whether it prevents runaway cost is untested. (2) Deterministic guardrails (the with-design): supported \u2014 with the lever, cost changed -67% and exact vouchers 36 \u2192 36 of 36. The with-design also replaces the raw tables with one narrow query and sends the policy manual as a cached prefix, so the saving belongs to the design as a whole and these cells cannot split it between the guardrail and those changes. (3) Small-model routing: supported \u2014 starting on Haiku changed cost -80% against Sonnet on the same design, with exact vouchers 36 \u2192 36 of 36; it switched to Sonnet in 6 of 36 runs, the runs where the policy tool flags a multi-factor dispute (manual 6.2). As a whole: 2 of 3 parts supported, 0 contradicted, 1 never came into play."
     },
     {
       "category": "Cat 5",
       "claim": "\u2026without losing accuracy (implicit)",
-      "measured": "exact vouchers (n=33 each): Raw tables, Sonnet, no cache (app rung 1) 33/33; Raw tables, Sonnet, cached manual 32/33; Narrow query, Sonnet, cached 33/33; Narrow query + policy gate, Sonnet (app rung 2) 33/33; Narrow query, Haiku, cached 33/33; Narrow query + policy gate, Haiku \u2192 Sonnet on escalation (app rung 3) 33/33; on inv-06 (policy tool wrong): without the tool 12/12 correct, with it 0/6",
+      "measured": "exact vouchers: with vs without the lever (Sonnet) 36/36 vs 36/36; Haiku-first vs Sonnet (with the lever) 36/36 vs 36/36",
       "verdict": "PARTLY SUPPORTED",
-      "note": "Rule: a lever loses accuracy when its exact-voucher rate is clearly lower (95% Wilson intervals do not overlap). Pooled, every version scored 32/33 or better and no interval separates, so no loss is detected; at this ceiling small differences cannot be detected either. The policy tool does lose accuracy where its rule disagrees with the manual: its intervals on that invoice do not overlap with the no-tool runs'. The invoices test simple arithmetic. Implicit-row rule: no clear loss pooled; the reference version is at the ceiling, so a loss cannot be detected; and the loss on that one invoice keeps the row at PARTLY."
+      "note": "Compared under the written rule: the lever against the same task without it, and Haiku-first against Sonnet on the row with the lever. Every compared run committed the exact voucher, so a loss could not be detected (ceiling); the invoices test simple arithmetic (quantities \u00d7 rates, a GST split, a debit note). All recorded runs: Without the lever, Sonnet 36/36; With the lever, Sonnet 36/36; With the lever, Haiku-first 36/36."
     },
     {
       "category": "Cat 6",
       "claim": "Input 100k\u20131M+ tokens per run",
-      "measured": "n=15 runs per arm: shared bus 229k\u2013258k (matched instructions 213k\u2013216k); isolated + cached 56k\u201357k; tiered 56k\u201358k",
+      "measured": "n=15 runs per cell: without the lever (shared bus, Sonnet) 213k\u2013216k; with the lever, Sonnet 56k\u201357k; with the lever, Haiku agents + Sonnet patch author 56k\u201358k",
       "verdict": "PARTLY SUPPORTED",
-      "note": "Only the shared-bus arms reach the band, all of it uncached. The isolated swarms send ~56k per run, mostly cache reads of a ~9.3k-token repo prefix."
+      "note": "Without the lever every run is in the band, all of it uncached. With it, each run sends ~56k, mostly cache reads of a ~9.3k-token repo prefix, below the band."
     },
     {
       "category": "Cat 6",
       "claim": "Output 10k\u201350k+ tokens per run",
-      "measured": "shared bus, original instructions 12.0k\u201325.7k; matched instructions 3.9k\u20134.4k; isolated + cached 4.7k\u20136.0k; tiered 4.3k\u20136.6k",
-      "verdict": "PARTLY SUPPORTED",
-      "note": "Only the shared bus with its original \"exhaustive\" instructions writes 10k+. With the governed word limits every arm writes ~4\u20137k, below the band, so output length follows the instructions, not the context design. 0 of 300 turns stopped on max_tokens. All runs are 5 turns on a single-file fix."
+      "measured": "without the lever 3.9k\u20134.4k; with the lever, Sonnet 4.7k\u20136.0k; with the lever, Haiku agents + Sonnet patch author 4.3k\u20136.6k; 0/45 runs in band",
+      "verdict": "NOT SUPPORTED",
+      "note": "Every cell writes ~4\u20137k per run, below the band; the role prompts' word limits, the same in every cell, set the length. 0 of 225 turns stopped on max_tokens. All runs are 5 turns on a single-file fix."
     },
     {
       "category": "Cat 6",
       "claim": "1.5M\u201310M+ tokens per developer per day",
-      "measured": "not measurable: 60 single runs, no per-developer daily traffic",
+      "measured": "not measurable: 45 single runs, no per-developer daily traffic",
       "verdict": "NOT TESTABLE",
-      "note": "Would take ~6\u201337 shared-bus runs/dev/day (mean 267k tokens/run), or ~24\u2013161 tiered runs (mean 62k)."
+      "note": "Would take ~7\u201346 runs/dev/day without the lever (mean 218k tokens/run), or ~24\u2013161 with it on Haiku agents + Sonnet patch author (mean 62k)."
     },
     {
       "category": "Cat 6",
       "claim": "Isolate sub-agent contexts, cache the shared repo prefix, measure cost per verified outcome (CpO)",
-      "measured": "CpO per verified fix: Shared bus, original instructions $0.696 (15/15 verified); Shared bus, matched instructions + gate $0.469 (15/15 verified); Isolated + cached repo prefix + gate $0.100 (15/15 verified); Tiered: Haiku agents + Sonnet patch author $0.056 (15/15 verified)",
+      "measured": "CpO per verified fix (billed): Without the lever: shared bus, Sonnet $0.469 (15/15 verified); With the lever: isolated + cached, Sonnet $0.100 (15/15 verified); With the lever: isolated + cached, Haiku agents + Sonnet patch author $0.056 (15/15 verified)",
       "verdict": "PARTLY SUPPORTED",
-      "note": "Cost per verified fix falls ~12\u00d7 from the shared bus to the tiered swarm (isolation + caching alone, same instructions: $0.469 \u2192 $0.100), while the verified rate is the same in every arm. The tasks are too easy to show a quality effect (ceiling): every saving is cost per run, and CpO adds nothing over it here, so the outcome side of the claim is untested."
+      "note": "On Sonnet, the lever cuts cost per verified fix ~4.7\u00d7 ($0.469 \u2192 $0.100; warm $0.469 \u2192 $0.078); with Haiku agents + a Sonnet patch author it is $0.056 (~8.3\u00d7 below the shared bus). The verified rate is the same in every cell, so every saving is cost per run and CpO adds nothing over it here (ceiling): the outcome side of the claim is untested."
+    },
+    {
+      "category": "Cat 6",
+      "claim": "\u2026without losing verified fixes (implicit)",
+      "measured": "with vs without the lever (Sonnet): 15/15 vs 15/15; Haiku agents + Sonnet patch author vs Sonnet (with the lever): 15/15 vs 15/15 verified final patches",
+      "verdict": "PARTLY SUPPORTED",
+      "note": "Every cell verified every run, so a loss could not be detected (ceiling) on these single-file incidents. Compared under the written rule: the lever against the same swarm without it, and the cheaper models against Sonnet on the row with the lever."
     },
     {
       "category": "Matrix",
       "claim": "Monotonic token scale: Cat 1 < Cat 2 < Cat 3 < Cat 4 < Cat 5 << Cat 6",
-      "measured": "Cat 1 (item) 1.5k; Cat 2 (document) 8.5k; Cat 3 (10-turn session) 169.6k; Cat 4 (4-question audit) 77.5k; Cat 4 (single question) 19.4k; Cat 4 (single question, 3\u00d7 corpus) 55.1k; Cat 5 (invoice, raw tables) 76.1k; Cat 6 (incident run, shared bus) 267.3k",
+      "measured": "Cat 1 (item) 1.5k; Cat 2 (document) 8.5k; Cat 3 (10-turn session) 169.6k; Cat 4 (4-question audit) 77.5k; Cat 4 (single question) 19.4k; Cat 4 (single question, 3\u00d7 corpus) 55.1k; Cat 5 (invoice, raw tables) 75.9k; Cat 6 (incident run, shared bus) 217.8k",
       "verdict": "PARTLY SUPPORTED",
       "note": "1 < 2 < {3,4,5} < 6 holds. The order of 3, 4 and 5 depends on the unit: a 10-turn session bills more than a single RAG question or a whole invoice."
     }
   ],
-  "pricing_notes": [
-    {
-      "category": "cat3",
-      "rung": "prefix_cached_history",
-      "repo_card": 248.52825,
-      "official": 239.6565
-    },
-    {
-      "category": "cat3",
-      "rung": "prefix_cached_summarized",
-      "repo_card": 221.33258333333333,
-      "official": 212.45483333333334
-    },
-    {
-      "category": "cat4",
-      "rung": "cached_full_corpus_citations|1",
-      "repo_card": 108.53903333333332,
-      "official": 101.02126666666666
-    },
-    {
-      "category": "cat4",
-      "rung": "cached_full_corpus_citations|3",
-      "repo_card": 173.30936666666665,
-      "official": 151.57226666666668
-    },
-    {
-      "category": "cat5",
-      "rung": "raw_free_sonnet_cached",
-      "repo_card": 113.45656363636364,
-      "official": 110.99458484848485
-    },
-    {
-      "category": "cat5",
-      "rung": "bundle_sonnet_cached",
-      "repo_card": 44.754451515151516,
-      "official": 43.09759696969697
-    },
-    {
-      "category": "cat5",
-      "rung": "bundle_gate_sonnet_cached",
-      "repo_card": 53.43623636363636,
-      "official": 50.84498181818182
-    },
-    {
-      "category": "cat5",
-      "rung": "bundle_gate_haiku_escalate",
-      "repo_card": 23.014799545454544,
-      "official": 22.61975409090909
-    },
-    {
-      "category": "cat6",
-      "rung": "isolated_cached_gate",
-      "repo_card": 103.64742000000001,
-      "official": 99.91246
-    }
-  ],
   "scale": {
     "Cat 1 (item)": 1490.0,
-    "Cat 2 (document)": 8489.0,
+    "Cat 2 (document)": 8464.5,
     "Cat 3 (10-turn session)": 169614.5,
     "Cat 4 (4-question audit)": 77528.5,
     "Cat 4 (single question)": 19382.0,
     "Cat 4 (single question, 3\u00d7 corpus)": 55095.5,
-    "Cat 5 (invoice, raw tables)": 76074,
-    "Cat 6 (incident run, shared bus)": 267324
+    "Cat 5 (invoice, raw tables)": 75931.0,
+    "Cat 6 (incident run, shared bus)": 217817
   },
   "haiku_calls_over_100k_prompt": 0
 }

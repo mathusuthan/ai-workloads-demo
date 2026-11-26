@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sys
 import textwrap
 from pathlib import Path
@@ -16,7 +15,6 @@ sys.path.insert(0, str(BACKEND_DIR))
 from app.archetypes.cat6_swarms import sandbox_verifier as sv  # noqa: E402
 from app.data.cat6_fixtures import CAT6_PRESETS  # noqa: E402
 
-RUNS_JSONL = BACKEND_DIR / "experiments" / "cat6_fair_rerun" / "runs.jsonl"
 INC02 = next(p for p in CAT6_PRESETS if p["id"] == "inc-02")
 
 
@@ -78,41 +76,12 @@ def test_unsafe_comparisons_still_fail(body: str) -> None:
     assert c["detail"] == "Violation (compare_digest=True, non_const_sig_eq=True)."
 
 
-def test_buggy_baseline_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_buggy_baseline_unaffected_by_constant_exemption(monkeypatch: pytest.MonkeyPatch) -> None:
     new = sv.evaluate_patch_in_sandbox("inc-02", INC02["buggy_code"])
-    monkeypatch.setattr(sv, "_module_literal_constant_names", lambda tree: set())  # == previous behaviour
+    monkeypatch.setattr(sv, "_module_literal_constant_names", lambda tree: set())  # no constant exemption
     old = sv.evaluate_patch_in_sandbox("inc-02", INC02["buggy_code"])
     assert new["verified_outcome"] is False
     strip = lambda d: {k: v for k, v in d.items() if k != "execution_ms"}  # noqa: E731
     assert strip(new) == strip(old)
     sec = next(c for c in new["checks"] if c["check_id"] == "AST-SEC-01")
     assert sec["passed"] is False
-
-
-def _recorded_flagged_patches() -> list[tuple[int, str]]:
-    if not RUNS_JSONL.is_file():
-        return []
-    out: list[tuple[int, str]] = []
-    for line in RUNS_JSONL.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        r = json.loads(line)
-        if (
-            r.get("status") == "ok"
-            and r.get("arm_id") == "shared_bus_original"
-            and r.get("preset_id") == "inc-02"
-            and r.get("repeat_index") in (0, 2, 4)
-        ):
-            out.append((int(r["repeat_index"]), str(r["patched_code_final"])))
-    return out
-
-
-@pytest.mark.skipif(not RUNS_JSONL.is_file(), reason="fair-rerun records not present")
-def test_recorded_false_positive_patches_now_pass() -> None:
-    patches = _recorded_flagged_patches()
-    assert sorted(rep for rep, _ in patches) == [0, 2, 4]
-    for rep, code in patches:
-        res = sv.evaluate_patch_in_sandbox("inc-02", code)
-        sec = next(c for c in res["checks"] if c["check_id"] == "AST-SEC-01")
-        assert sec["passed"] is True, (rep, sec["detail"])
-        assert res["passed_checks"] == 10 and res["verified_outcome"] is True, rep

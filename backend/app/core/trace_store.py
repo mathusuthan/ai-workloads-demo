@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -74,16 +75,33 @@ def partition_directory(traces_dir: Path, partition: TracePartition) -> Path:
     )
 
 
+# Directory inside the trace store that holds backup tarballs; never scanned as traces.
+BACKUPS_DIRNAME = "_backups"
+# Replay requests do not write traces: the seed trace (`live_captured_seed`, scripts/seed_traces_from_replays.py) is
+# the record of a recorded run, and a copy per page view would weight averages by views. Set this to 1 to record
+# replay traces anyway (tests that inspect what a replay request would write).
+RECORD_REPLAY_ENV = "NOVAMART_RECORD_REPLAY_TRACES"
+
+
+def replay_traces_enabled() -> bool:
+    return os.getenv(RECORD_REPLAY_ENV, "").strip().lower() in {"1", "true", "yes"}
+
+
 def record_trace(record: TraceRecord, traces_dir: Path | None = None) -> Path:
-    """Persist one trace JSON file into category/use_case/model/pattern partition + index.jsonl."""
+    """Persist one trace JSON file into category/use_case/model/pattern partition + index.jsonl.
+
+    Replay-mode records are not written unless NOVAMART_RECORD_REPLAY_TRACES=1; the path they would have had is
+    returned either way."""
     root = traces_dir or get_settings().traces_dir
     part_dir = partition_directory(root, record.partition)
-    part_dir.mkdir(parents=True, exist_ok=True)
 
     compact_ts = re.sub(r"[^0-9TZ]", "", record.timestamp_utc)
     safe_item = _sanitize_segment(record.item_id)
     filename = f"{compact_ts}_{safe_item}_{record.trace_id[:8]}.json"
     file_path = part_dir / filename
+    if record.source_mode == "replay" and not replay_traces_enabled():
+        return file_path
+    part_dir.mkdir(parents=True, exist_ok=True)
 
     payload = record.model_dump()
     payload["partition_relative_path"] = str(file_path.relative_to(root))
@@ -122,6 +140,8 @@ def load_all_traces(traces_dir: Path | None = None) -> list[dict[str, Any]]:
 
     records: list[dict[str, Any]] = []
     for json_file in root.rglob("*.json"):
+        if BACKUPS_DIRNAME in json_file.relative_to(root).parts:
+            continue
         try:
             data = json.loads(json_file.read_text(encoding="utf-8"))
             if isinstance(data, dict) and "partition" in data and "request" in data:

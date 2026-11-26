@@ -23,9 +23,11 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def isolated_traces_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Keep test runs out of the real backend/traces directory."""
+    """Keep test runs out of the real backend/traces directory. These tests inspect what a replay request would
+    write, so replay traces are switched on here (the app default writes none)."""
     test_traces = tmp_path / "traces"
     monkeypatch.setenv("NOVAMART_TRACES_DIR", str(test_traces))
+    monkeypatch.setenv("NOVAMART_RECORD_REPLAY_TRACES", "1")
     return test_traces
 
 
@@ -62,7 +64,7 @@ def test_cat1_run_replay_support_triage_and_pii_masking() -> None:
         json={
             "preset_id": "tkt-02",
             "sub_task": "support_triage",
-            "rungs": ["sonnet_naive", "haiku_naive", "haiku_calibrated", "gemini_decision"],
+            "rungs": ["sonnet_naive", "haiku_naive", "sonnet_calibrated", "haiku_calibrated"],
             "mode": "replay",
         },
     )
@@ -74,7 +76,7 @@ def test_cat1_run_replay_support_triage_and_pii_masking() -> None:
     sonnet = by_rung["sonnet_naive"]
     haiku_naive = by_rung["haiku_naive"]
     haiku = by_rung["haiku_calibrated"]
-    gemini = by_rung["gemini_decision"]
+    sonnet_schema = by_rung["sonnet_calibrated"]
 
     assert sonnet["finops"]["output_tokens"] > 200
     assert haiku_naive["finops"]["output_tokens"] > 200
@@ -82,9 +84,9 @@ def test_cat1_run_replay_support_triage_and_pii_masking() -> None:
     assert haiku["finops"]["cost_per_1k_usd"] < haiku_naive["finops"]["cost_per_1k_usd"]
     assert haiku["finops"]["io_ratio"] >= 12.0
     assert haiku["savings_vs_naive_pct"] > 80.0
-    assert gemini["finops"]["output_tokens"] == 0
-    assert gemini["finops"]["output_cost_usd"] == 0.0
-    assert gemini["decision_probabilities"]["contains_sensitive_pii"]["type"] == "noul"
+    assert sonnet_schema["model_id"] == "claude-sonnet-5-5"
+    assert sonnet_schema["finops"]["cost_per_1k_usd"] < sonnet["finops"]["cost_per_1k_usd"]
+    assert haiku["finops"]["cost_per_1k_usd"] < sonnet_schema["finops"]["cost_per_1k_usd"]
 
     # PII scrubbing assertions
     pii = data["pii_redaction"]
@@ -115,7 +117,7 @@ def test_cat1_run_replay_sku_tagging() -> None:
         json={
             "preset_id": "sku-01",
             "sub_task": "sku_tagging",
-            "rungs": ["sonnet_naive", "haiku_calibrated", "gemini_decision"],
+            "rungs": ["sonnet_naive", "sonnet_calibrated", "haiku_calibrated"],
             "mode": "replay",
         },
     )
@@ -123,37 +125,31 @@ def test_cat1_run_replay_sku_tagging() -> None:
     data = resp.json()
     by_rung = {r["rung_id"]: r for r in data["results"]}
     assert by_rung["haiku_calibrated"]["structured_output"]["contradiction_detected"] is True
-    assert by_rung["gemini_decision"]["structured_output"]["has_factual_contradiction"] is True
-    assert by_rung["gemini_decision"]["finops"]["output_tokens"] == 0
-    assert data["jev_comparator"]["input_rate_per_1m_usd"] == 0.042
+    assert by_rung["sonnet_calibrated"]["structured_output"]["contradiction_detected"] is True
+    assert "jev_comparator" not in data
+    assert data["sonnet_batch_comparator"]["cost_per_1k_usd"] < by_rung["sonnet_calibrated"]["finops"]["cost_per_1k_usd"]
     assert data["ground_truth"]["leaf_category"] == "apparel_ethnic_kurtas"
     assert by_rung["sonnet_naive"]["accuracy"]["schema_valid"] is False
     assert by_rung["haiku_calibrated"]["accuracy"]["schema_valid"] is True
-    assert by_rung["gemini_decision"]["accuracy"]["exact_match"] is True
+    assert by_rung["sonnet_calibrated"]["accuracy"]["exact_match"] is True
 
 
-def test_cat1_batch_returns_12_items_and_5_tier_cfo_table() -> None:
+def test_cat1_batch_returns_12_items_and_4_cell_cfo_table() -> None:
     resp = client.post("/api/cat1/batch", json={"sub_task": "mixed", "mode": "replay"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["total_items"] == 12
     assert len(data["items"]) == 12
     cfo_ids = [r["tier_id"] for r in data["cfo_comparison"]]
-    assert cfo_ids == [
-        "sonnet_naive",
-        "haiku_naive",
-        "haiku_realtime",
-        "haiku_batch",
-        "gemini_decision",
-        "typesafe_jev",
-    ]
-    assert data["cfo_comparison"][2]["cost_per_1k_usd"] < data["cfo_comparison"][1]["cost_per_1k_usd"]
-    assert data["cfo_comparison"][3]["cost_per_1k_usd"] < data["cfo_comparison"][2]["cost_per_1k_usd"]
-    assert data["cfo_comparison"][5]["cost_per_1k_usd"] < data["cfo_comparison"][4]["cost_per_1k_usd"]
-    assert data["cfo_comparison"][0]["avg_output_tokens"] != data["cfo_comparison"][1]["avg_output_tokens"]
-    assert data["cfo_comparison"][0]["avg_input_tokens"] < data["cfo_comparison"][2]["avg_input_tokens"]
-    assert data["cfo_comparison"][4]["avg_input_tokens"] < data["cfo_comparison"][2]["avg_input_tokens"]
-    assert data["cfo_comparison"][5]["field_accuracy_pct"] is None
+    assert cfo_ids == ["sonnet_naive", "haiku_naive", "sonnet_calibrated", "haiku_calibrated"]
+    rows = data["cfo_comparison"]
+    assert rows[1]["cost_per_1k_usd"] < rows[0]["cost_per_1k_usd"]  # same write-up, smaller model
+    assert rows[2]["cost_per_1k_usd"] < rows[0]["cost_per_1k_usd"]  # with vs without on Sonnet
+    assert rows[3]["cost_per_1k_usd"] < rows[1]["cost_per_1k_usd"]  # with vs without on Haiku
+    assert rows[0]["avg_output_tokens"] != rows[1]["avg_output_tokens"]
+    assert rows[0]["avg_input_tokens"] < rows[2]["avg_input_tokens"]  # the schema prompt is longer
+    for r in rows:
+        assert (r["batch_cost_per_1k_usd"] is not None) == r["tier_id"].endswith("_calibrated")
     assert len(data["accuracy_rollup"]) == 4
     for row in data["accuracy_rollup"]:
         assert 0.0 < row["field_accuracy_pct"] <= 100.0
@@ -165,7 +161,6 @@ def test_credit_shield_blocks_missing_keys_cleanly_with_402(
 ) -> None:
     # Ensure missing keys return clean 402 rather than 500
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
-    monkeypatch.setenv("GEMINI_API_KEY", "")
     from app import config
 
     monkeypatch.setattr(
@@ -173,12 +168,10 @@ def test_credit_shield_blocks_missing_keys_cleanly_with_402(
         "get_settings",
         lambda: config.Settings(
             anthropic_api_key="",
-            gemini_api_key="",
             author_passcode="",
             daily_live_budget_usd=2.0,
             anthropic_sonnet_model="claude-sonnet-5-5",
             anthropic_haiku_model="claude-haiku-5-5",
-            gemini_decision_model="gemini-decision-1",
             frontend_dist_dir=Path("/nonexistent"),
             replays_dir=BACKEND_DIR / "replays",
             traces_dir=isolated_traces_dir,
@@ -192,7 +185,7 @@ def test_credit_shield_blocks_missing_keys_cleanly_with_402(
         json={
             "preset_id": "tkt-01",
             "sub_task": "support_triage",
-            "rungs": ["haiku_calibrated", "gemini_decision"],
+            "rungs": ["sonnet_calibrated", "haiku_calibrated"],
             "mode": "live",
         },
     )
@@ -238,7 +231,7 @@ def test_trace_capture_partitions_by_category_use_case_model_pattern(
         json={
             "preset_id": "tkt-01",
             "sub_task": "support_triage",
-            "rungs": ["sonnet_naive", "haiku_naive", "haiku_calibrated", "gemini_decision"],
+            "rungs": ["sonnet_naive", "haiku_naive", "sonnet_calibrated", "haiku_calibrated"],
             "mode": "replay",
         },
     )
@@ -263,8 +256,8 @@ def test_trace_capture_partitions_by_category_use_case_model_pattern(
         isolated_traces_dir
         / "category=cat1_classification_routing"
         / "use_case=support_triage"
-        / "model=gemini-decision-1"
-        / "pattern=system1_decisions_api",
+        / "model=claude-sonnet-5-5"
+        / "pattern=strict_json_schema",
     ]
     for d in expected_dirs:
         files = list(d.glob("*.json"))
@@ -293,47 +286,32 @@ def test_cat2_presets_match_slide4_input_token_band() -> None:
     assert "executive_summary" in body["reviewer_presets"]
 
 
-def test_cat2_run_replay_proves_output_dominated_cost_and_template_savings() -> None:
-    distinct_unbounded_out: set[int] = set()
+def test_cat2_run_replay_serves_four_versions_with_output_dominated_cost() -> None:
     for pid, sub_task in (
         ("brief-01", "exec_synthesis"),
         ("brief-02", "exec_synthesis"),
         ("reg-01", "regulatory_filing"),
         ("reg-02", "regulatory_filing"),
     ):
-        resp = client.post(
-            "/api/cat2/run",
-            json={
-                "preset_id": pid,
-                "sub_task": sub_task,
-                "rungs": ["sonnet_unbounded", "sonnet_templated", "haiku_templated"],
-                "mode": "replay",
-            },
-        )
+        resp = client.post("/api/cat2/run", json={"preset_id": pid, "sub_task": sub_task, "mode": "replay"})
         assert resp.status_code == 200
         data = resp.json()
         assert data["mode_used"] == "replay"
         by_rung = {r["rung_id"]: r for r in data["results"]}
-
-        unbounded = by_rung["sonnet_unbounded"]
-        templated = by_rung["sonnet_templated"]
-        haiku = by_rung["haiku_templated"]
-
-        assert len(unbounded["raw_markdown"] or "") >= 3000
-        assert unbounded["finops"]["input_tokens"] >= 1500
-        assert unbounded["finops"]["output_tokens"] != 4500
-        assert unbounded["finops"]["output_tokens"] < 8000
-        assert unbounded["finops"]["input_tokens"] < templated["finops"]["input_tokens"]
-        assert unbounded["finops"]["output_cost_share_pct"] >= 75.0
-        assert templated["finops"]["output_tokens"] >= 800
-        assert templated["finops"]["output_tokens"] != haiku["finops"]["output_tokens"]
-        assert templated["savings_vs_unbounded_pct"] >= 30.0
-        assert haiku["savings_vs_unbounded_pct"] >= 95.0
-        assert "executive_summary" in templated["structured_draft"]
-        assert len(templated["structured_draft"]["key_findings"]) == 3
-        distinct_unbounded_out.add(unbounded["finops"]["output_tokens"])
-
-    assert len(distinct_unbounded_out) >= 3
+        assert list(by_rung) == ["sonnet_unbounded", "haiku_unbounded", "sonnet_templated", "haiku_templated"]
+        for m in ("sonnet", "haiku"):
+            templated, unbounded = by_rung[f"{m}_templated"], by_rung[f"{m}_unbounded"]
+            assert templated["status"] == "ok"
+            assert templated["finops"]["output_tokens"] >= 800 and templated["finops"]["output_cost_share_pct"] > 50.0
+            assert "executive_summary" in templated["structured_draft"] and len(templated["structured_draft"]["key_findings"]) == 3
+            assert unbounded["status"] in ("ok", "pending")
+            if unbounded["status"] == "pending":
+                assert unbounded["finops"]["total_cost_usd"] == 0 and templated["savings_vs_unbounded_pct"] == 0
+            else:
+                assert len(unbounded["raw_markdown"] or "") >= 3000 and unbounded["finops"]["output_tokens"] <= 8000
+                assert unbounded["finops"]["input_tokens"] < templated["finops"]["input_tokens"]
+                assert templated["savings_vs_unbounded_pct"] > 0
+        assert by_rung["sonnet_templated"]["finops"]["output_tokens"] != by_rung["haiku_templated"]["finops"]["output_tokens"]
 
 
 def test_cat2_hitl_section_regeneration_and_partitioned_traces(
@@ -353,7 +331,12 @@ def test_cat2_hitl_section_regeneration_and_partitioned_traces(
     assert resp.status_code == 200
     body = resp.json()
     assert body["section_key"] == "executive_summary"
-    assert body["finops_comparison"]["revision_savings_pct"] >= 65.0
+    full = body["finops_comparison"]["naive_full_reprompt_finops"]
+    golden_full = json.loads((Path(__file__).resolve().parents[1] / "replays" / "cat2_golden_replays.json").read_text(encoding="utf-8"))[
+        "presets"]["brief-01"]["rungs"]["sonnet_templated"]
+    assert full["model_id"] == "claude-sonnet-5-5"  # compared with the same model's full template draft
+    assert (full["input_tokens"], full["output_tokens"]) == (golden_full["input_tokens"], golden_full["output_tokens"])
+    assert 0 < body["finops_comparison"]["revision_savings_pct"] < 100
     assert "headline" in body["updated_section"]
 
     bad_custom = client.post(
@@ -400,46 +383,38 @@ def test_cat3_run_replay_proves_prefix_caching_and_sliding_summary_savings(
     isolated_traces_dir: Path,
 ) -> None:
     for pid in ("desk-01", "desk-02"):
-        resp = client.post(
-            "/api/cat3/run",
-            json={
-                "preset_id": pid,
-                "use_case": "it_hr_service_desk",
-                "rungs": [
-                    "naive_full_history",
-                    "prefix_cached_history",
-                    "prefix_cached_summarized",
-                ],
-                "mode": "replay",
-            },
-        )
+        resp = client.post("/api/cat3/run", json={"preset_id": pid, "use_case": "it_hr_service_desk", "mode": "replay"})
         assert resp.status_code == 200
         body = resp.json()
         assert body["mode_used"] == "replay"
         assert body["use_case"] == "it_hr_service_desk"
         by_rung = {r["rung_id"]: r for r in body["results"]}
+        assert set(by_rung) == {"naive_full_history", "prefix_cached_summarized"}
 
         naive = by_rung["naive_full_history"]
-        cached = by_rung["prefix_cached_history"]
         compacted = by_rung["prefix_cached_summarized"]
 
-        for r in (naive, cached, compacted):
+        for r in (naive, compacted):
             assert r["model_id"] == "claude-sonnet-5-5"
             assert len(r["turns"]) == 10
 
         # Turns 2..10 must read >= 4,096 cached handbook tokens
-        for r in (cached, compacted):
-            assert r["turns"][0]["finops"]["cache_creation_tokens"] + r["turns"][0]["finops"]["cache_read_tokens"] >= 4096
-            for t in r["turns"][1:]:
-                assert t["finops"]["cache_read_tokens"] >= 4096
+        assert compacted["turns"][0]["finops"]["cache_creation_tokens"] + compacted["turns"][0]["finops"]["cache_read_tokens"] >= 4096
+        for t in compacted["turns"][1:]:
+            assert t["finops"]["cache_read_tokens"] >= 4096
+        assert all(t["finops"]["cache_read_tokens"] == 0 for t in naive["turns"])
 
         assert compacted["summarizer_calls"] == 2
         assert compacted["summarizer_cost_usd"] > 0.0
         assert compacted["turns"][4]["compaction_triggered_before_turn"] is True
         assert compacted["turns"][7]["compaction_triggered_before_turn"] is True
 
-        assert compacted["total_session_cost_usd"] < cached["total_session_cost_usd"] < naive["total_session_cost_usd"]
-        assert compacted["warm_fleet_session_cost_usd"] < cached["warm_fleet_session_cost_usd"] < naive["warm_fleet_session_cost_usd"]
+        assert compacted["total_session_cost_usd"] < naive["total_session_cost_usd"]
+        assert compacted["warm_fleet_session_cost_usd"] < naive["warm_fleet_session_cost_usd"]
+
+    # an old request naming the removed caching-only version is rejected
+    old = client.post("/api/cat3/run", json={"preset_id": "desk-01", "rungs": ["prefix_cached_history"], "mode": "replay"})
+    assert old.status_code == 422
 
     cat3_dir = (
         isolated_traces_dir
@@ -521,37 +496,37 @@ def test_cat4_run_replay_proves_prefix_cache_and_hybrid_rag_savings_with_citatio
         assert data["total_chunks"] == 28
 
         by_rung = {r["rung_id"]: r for r in data["results"]}
+        assert set(by_rung) == {"naive_full_corpus", "cached_rerank_hybrid"}
         naive = by_rung["naive_full_corpus"]
-        cached = by_rung["cached_full_corpus_citations"]
-        hybrid = by_rung["hybrid_rag_rerank_citations"]
+        paired = by_rung["cached_rerank_hybrid"]
 
         assert len(naive["queries"]) == 4
-        assert len(cached["queries"]) == 4
-        assert len(hybrid["queries"]) == 4
+        assert len(paired["queries"]) == 4
 
         assert naive["avg_citations_per_query"] == 0.0
-        assert cached["avg_citations_per_query"] >= 5.0
-        assert hybrid["avg_citations_per_query"] >= 5.0
+        assert paired["avg_citations_per_query"] >= 5.0
 
-        for q in cached["queries"][1:]:
-            assert q["finops"]["cache_read_tokens"] >= 14_000
-
-        assert hybrid["reranker_calls"] == 4
-        assert hybrid["reranker_cost_usd"] > 0.0
-        assert hybrid["avg_reranker_recall_pct"] >= 90.0
-        for q in hybrid["queries"]:
-            assert len(q["retrieval_funnel"]) == 28
+        assert paired["reranker_calls"] == 4
+        assert paired["reranker_cost_usd"] > 0.0
+        assert paired["avg_reranker_recall_pct"] >= 90.0
+        for i, q in enumerate(paired["queries"]):
+            picks = [f for f in q["retrieval_funnel"] if f["stage"] == "selected_by_reranker"]
+            assert len(picks) == 5 and [f["pick_rank"] for f in picks] == [1, 2, 3, 4, 5]
             assert q["context_reduction_pct"] >= 65.0
+            rf = q["reranker_finops"]
+            assert rf["cache_creation_tokens"] + rf["cache_read_tokens"] >= 14_000  # the cached clause block
+            if i > 0:
+                assert rf["cache_read_tokens"] >= 14_000
 
-        assert hybrid["single_query_cold_per_1k_usd"] < naive["single_query_cold_per_1k_usd"] * 0.65
-        assert cached["cost_per_1k_audits_warm_usd"] < naive["cost_per_1k_audits_warm_usd"] * 0.50
+        assert paired["single_query_cold_per_1k_usd"] < naive["single_query_cold_per_1k_usd"] * 0.65
+        assert paired["cost_per_1k_audits_warm_usd"] < naive["cost_per_1k_audits_warm_usd"] * 0.65
 
     cat4_dir = (
         isolated_traces_dir
         / "category=cat4_multidoc_rag"
         / "use_case=supplier_msa_due_diligence"
         / "model=claude-sonnet-5-5"
-        / "pattern=hybrid_bm25_haiku_rerank_citations"
+        / "pattern=cached_corpus_haiku_pick_citations"
     )
     files = list(cat4_dir.glob("*.json"))
     assert len(files) == 2

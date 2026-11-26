@@ -1,7 +1,10 @@
 import { ShieldCheck } from 'lucide-react'
 import type {
+  Cat2Arm,
+  Cat2Cell,
   Cat2Count,
   Cat2Dimension,
+  Cat2HeadToHeadBlock,
   Cat2QualityPortfolio,
   Cat2RungId,
   Cat2RungQuality,
@@ -13,23 +16,28 @@ interface Cat2QualityPanelProps {
   portfolio: Cat2QualityPortfolio | null | undefined
 }
 
-const RUNG_SHORT: Record<Cat2RungId, string> = {
-  sonnet_unbounded: 'Rung 1 · Unbounded Sonnet 5.5',
-  sonnet_templated: 'Rung 2 · Sonnet 5.5 + template',
-  haiku_templated: 'Rung 3 · Haiku 5.5 + template',
-}
-
 const RUNG_NAME: Record<Cat2RungId, string> = {
-  sonnet_unbounded: 'Unbounded',
+  sonnet_unbounded: 'Sonnet unbounded',
+  haiku_unbounded: 'Haiku unbounded',
   sonnet_templated: 'Sonnet template',
   haiku_templated: 'Haiku template',
 }
 
 const RUNG_BAR: Record<Cat2RungId, string> = {
   sonnet_unbounded: 'bg-rose-500',
+  haiku_unbounded: 'bg-rose-400',
   sonnet_templated: 'bg-amber-500',
   haiku_templated: 'bg-emerald-600',
 }
+
+const ROWS: { arm: Cat2Arm; label: string }[] = [
+  { arm: 'unbounded', label: 'Without: unbounded long-form draft' },
+  { arm: 'template_not_stated', label: 'With: section template with length caps' },
+]
+const COLS: { key: 'sonnet' | 'haiku'; label: string }[] = [
+  { key: 'sonnet', label: 'Sonnet 5.5' },
+  { key: 'haiku', label: 'Haiku 5.5' },
+]
 
 const DIMENSIONS: { key: Cat2Dimension; label: string }[] = [
   { key: 'factual_accuracy', label: 'Accuracy' },
@@ -37,12 +45,6 @@ const DIMENSIONS: { key: Cat2Dimension; label: string }[] = [
   { key: 'clarity', label: 'Clarity' },
   { key: 'actionability', label: 'Actionability' },
   { key: 'concision', label: 'Concision' },
-]
-
-const PAIRS: [Cat2RungId, Cat2RungId][] = [
-  ['sonnet_unbounded', 'sonnet_templated'],
-  ['sonnet_unbounded', 'haiku_templated'],
-  ['sonnet_templated', 'haiku_templated'],
 ]
 
 function frac(m: Cat2Count | null | undefined): string {
@@ -114,7 +116,7 @@ function SeriousErrors({ q }: { q: Cat2RungQuality }) {
               )}
             </div>
             <div className="text-slate-400">
-              Reported in {e.passes_reporting} of {q.passes ?? 3} grading passes
+              Reported in {e.passes_reporting} of {q.passes ?? 1} grading passes
             </div>
           </li>
         ))}
@@ -123,15 +125,64 @@ function SeriousErrors({ q }: { q: Cat2RungQuality }) {
   )
 }
 
+function CellBox({ c }: { c: Cat2Cell | undefined }) {
+  if (!c) return <td className="p-2.5 align-top text-[11px] text-slate-500">not available</td>
+  if (c.status === 'pending') {
+    return (
+      <td className="p-2.5 align-top">
+        <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500 ring-1 ring-slate-200">run pending</span>
+        <div className="mt-1 text-[10px] text-slate-500">{c.drafts_planned} drafts planned (3 per document)</div>
+      </td>
+    )
+  }
+  const r = c.rubric ?? {}
+  return (
+    <td className="space-y-1 p-2.5 align-top text-[11px] text-slate-700">
+      <div className="font-bold text-slate-900">
+        {c.drafts} drafts · {c.judged_drafts} graded ({c.passes_per_draft} pass each)
+        {c.status === 'partial' && ` · ${c.drafts} of ${c.drafts_planned}`}
+      </div>
+      <div>
+        {c.cost_per_1k_docs_usd != null && `$${c.cost_per_1k_docs_usd.toFixed(2)} / 1k docs · `}
+        output {c.output_tokens_mean != null ? Math.round(c.output_tokens_mean).toLocaleString() : '—'} tok
+        {c.output_tokens_min != null &&
+          c.output_tokens_max != null &&
+          ` (${c.output_tokens_min.toLocaleString()}–${c.output_tokens_max.toLocaleString()})`}
+      </div>
+      <div>
+        accuracy {r.factual_accuracy?.toFixed(2) ?? '—'} · coverage {r.coverage?.toFixed(2) ?? '—'} · clarity{' '}
+        {r.clarity?.toFixed(2) ?? '—'} · actionability {r.actionability?.toFixed(2) ?? '—'} · concision{' '}
+        {r.concision?.toFixed(2) ?? '—'} <span className="text-slate-400">(1–5)</span>
+      </div>
+      <div>
+        serious errors {c.serious_per_draft?.toFixed(2) ?? '—'} / draft · minor {c.minor_per_draft?.toFixed(2) ?? '—'} / draft
+      </div>
+      <div>
+        core facts {frac(c.core_facts)} · detail facts {frac(c.detail_facts)} · numbers not in source {c.not_in_source_numbers}
+      </div>
+      {c.owner && c.time_window && (
+        <div className="text-[10px] text-slate-600">
+          Action-plan owners: {c.owner.supported} in source / {c.owner.not_stated} “not stated” / {c.owner.unsupported} not in
+          source; time windows: {c.time_window.supported} / {c.time_window.not_stated} / {c.time_window.unsupported}
+        </div>
+      )}
+      {c.truncated > 0 && <div className="text-rose-700">{c.truncated} truncated</div>}
+    </td>
+  )
+}
+
+function h2hText(b: Cat2HeadToHeadBlock | undefined | null): string {
+  if (!b) return 'run pending'
+  const o = b.overall
+  const pc = b.position_consistency
+  return `template ${o.template_wins} – unbounded ${o.unbounded_wins} (ties ${o.ties}; ${b.calls} calls; position-consistent ${pc.consistent ?? 0}/${pc.pairs ?? 0})`
+}
+
 export function Cat2QualityPanel({ results, portfolio }: Cat2QualityPanelProps) {
   const ok = results.filter((r) => r.status === 'ok')
   const scored = ok.filter((r) => r.quality)
-  const graded = scored.filter((r) => r.quality?.rubric)
-  const maxCost = Math.max(0, ...ok.map((r) => r.finops.cost_per_1k_usd))
-  const reason = scored.find((r) => r.quality?.judge_unavailable_reason)?.quality?.judge_unavailable_reason
-  const byId = Object.fromEntries(ok.map((r) => [r.rung_id, r])) as Partial<Record<Cat2RungId, Cat2RungResult>>
-  const pooledWins = portfolio?.pairwise?.overall?.wins
-  const nDocs = portfolio?.documents.length ?? 0
+  const cell = (arm: Cat2Arm, m: 'sonnet' | 'haiku') => portfolio?.cells.find((c) => c.arm === arm && c.model_key === m)
+  const h2h = portfolio?.head_to_head
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -140,133 +191,104 @@ export function Cat2QualityPanel({ results, portfolio }: Cat2QualityPanelProps) 
           <ShieldCheck className="h-4 w-4" />
           Draft Quality vs Cost · Graded Blind
         </div>
-        <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">Where the Cheaper Drafts Scored Differently</h2>
+        <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">Without and With the Section Template, on Both Models</h2>
         <p className="mt-1 max-w-4xl text-xs leading-relaxed text-slate-600">
-          Graded blind by a model that was not one of those under test (Claude Opus 5.5), three passes per draft; one
-          draft per version per source document. Key facts are checked against a fixed answer key.
+          Three drafts per version, model and source document ({portfolio?.documents.length ?? 4} documents), graded blind
+          by a model that was not one of those under test ({portfolio?.judge_model ?? 'claude-opus-5-5'}), one pass per
+          draft. Key facts are checked against a fixed answer key.
         </p>
       </div>
 
-      {scored.length === 0 ? (
-        <p className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-500 ring-1 ring-slate-200">
-          Quality scores are not available for this run.
-        </p>
-      ) : (
-        <div className="mt-4 grid gap-4 lg:grid-cols-3">
-          {ok.map((r) => {
-            const q = r.quality
-            const pf = portfolio?.rungs.find((x) => x.rung_id === r.rung_id)
-            return (
-              <div key={r.rung_id} className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50/60 p-3.5">
-                <div className="text-xs font-extrabold text-slate-900">{RUNG_SHORT[r.rung_id]}</div>
-                <div>
-                  <Stat label="Cost / 1k docs" value={`$${r.finops.cost_per_1k_usd.toFixed(2)}`} />
-                  <div className="mt-1 h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className="h-full rounded-full bg-slate-500"
-                      style={{ width: `${maxCost > 0 ? (r.finops.cost_per_1k_usd / maxCost) * 100 : 0}%` }}
-                    />
-                  </div>
-                </div>
-                {q ? (
-                  <>
-                    <div className="space-y-1">
-                      {q.rubric ? (
-                        DIMENSIONS.map((d) => (
-                          <GradeBar
-                            key={d.key}
-                            label={d.label}
-                            value={q.rubric?.[d.key]?.mean}
-                            barClass={RUNG_BAR[r.rung_id]}
-                          />
-                        ))
-                      ) : (
-                        <div className="rounded bg-slate-100 px-2 py-1 text-[10px] text-slate-500">
-                          Grades (1–5): {q.judge_unavailable_reason ?? 'not graded'}
-                        </div>
-                      )}
-                      {q.rubric && <div className="text-right text-[9px] text-slate-400">grade out of 5</div>}
-                    </div>
-                    <Stat
-                      label="Core facts"
-                      value={q.core_facts ? frac(q.core_facts) : 'no answer key'}
-                      tone={q.core_facts && q.core_facts.hits < q.core_facts.total ? 'text-rose-700' : undefined}
-                    />
-                    <Stat
-                      label="Serious errors"
-                      value={q.serious_errors == null ? 'not graded' : String(q.serious_errors)}
-                      tone={q.serious_errors ? 'text-rose-700' : undefined}
-                    />
-                    {q.numbers && (
-                      <Stat label="Numbers not found in the source" value={String(q.numbers.not_in_source)} />
-                    )}
-                    {q.action_items && q.action_items.total > 0 && (
-                      <p className="rounded bg-amber-50 px-2 py-1 text-[10px] leading-snug text-amber-900 ring-1 ring-amber-200">
-                        The template requires an owner and a time window for every action item. Here the grader flagged
-                        an owner or deadline the source does not support in {q.action_items.flagged} of{' '}
-                        {q.action_items.total} action items.
-                      </p>
-                    )}
-                    <SeriousErrors q={q} />
-                  </>
-                ) : (
-                  <p className="text-[11px] text-slate-500">Not scored for this version.</p>
-                )}
-                <div className="border-t border-slate-200 pt-2 text-[10px] leading-snug text-slate-600">
-                  {pf && nDocs ? (
-                    <>
-                      <strong className="text-slate-700">Across all {nDocs} documents:</strong> accuracy{' '}
-                      {pf.rubric.factual_accuracy?.mean?.toFixed(2) ?? '—'} · coverage{' '}
-                      {pf.rubric.coverage?.mean?.toFixed(2) ?? '—'} · serious errors {pf.serious_errors} · core facts{' '}
-                      {frac(pf.core_facts)}
-                      {pf.cost_per_1k_docs_usd != null && ` · $${pf.cost_per_1k_docs_usd.toFixed(2)}/1k docs`}
-                    </>
-                  ) : (
-                    'Results across all documents are not available.'
-                  )}
-                </div>
-              </div>
-            )
-          })}
+      {portfolio ? (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[640px] border-collapse text-left">
+            <thead>
+              <tr className="border-b border-slate-200 text-[10px] font-bold uppercase text-slate-500">
+                <th className="p-2.5" />
+                {COLS.map((c) => (
+                  <th key={c.key} className="p-2.5">
+                    {c.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ROWS.map((row) => (
+                <tr key={row.arm} className="border-b border-slate-100">
+                  <th className="w-48 p-2.5 align-top text-xs font-extrabold text-slate-900">{row.label}</th>
+                  {COLS.map((c) => (
+                    <CellBox key={c.key} c={cell(row.arm, c.key)} />
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="mt-3 rounded-lg bg-slate-50 p-2.5 text-[11px] text-slate-700 ring-1 ring-slate-200">
+            <strong className="text-slate-900">Head-to-head (same document, model and repeat, both orders):</strong>{' '}
+            {h2h?.status === 'pending' || !h2h?.all ? (
+              'run pending'
+            ) : (
+              <>
+                all {h2hText(h2h.all)}
+                {COLS.map((c) => (
+                  <span key={c.key}>
+                    {' '}
+                    · {c.label}: {h2hText(h2h.by_model[c.key])}
+                  </span>
+                ))}
+              </>
+            )}
+          </div>
         </div>
+      ) : (
+        <p className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-slate-500 ring-1 ring-slate-200">
+          The experiment summary is not available.
+        </p>
       )}
 
       {scored.length > 0 && (
         <div className="mt-5">
-          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700">
-            Head-to-Head: Which Draft the Grader Preferred
-          </h3>
-          <p className="mt-1 text-[10px] text-slate-500">
-            Each pair was shown twice, once in each order, so a preference for whichever draft comes first shows up.
-          </p>
-          <div className="mt-2 grid gap-2 md:grid-cols-3">
-            {PAIRS.filter(([x, y]) => byId[x] || byId[y]).map(([x, y]) => {
-              const h = (byId[x]?.quality?.head_to_head ?? []).find((e) => e.opponent === y)
-                ?? (byId[y]?.quality?.head_to_head ?? []).find((e) => e.opponent === x)
-              const xWins = pooledWins?.[x]?.[y]
-              const yWins = pooledWins?.[y]?.[x]
+          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700">This Document</h3>
+          <div className="mt-2 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+            {scored.map((r) => {
+              const q = r.quality as Cat2RungQuality
               return (
-                <div key={`${x}-${y}`} className="rounded-lg bg-slate-50 p-2.5 text-[11px] ring-1 ring-slate-200">
-                  <div className="font-extrabold text-slate-900">
-                    {RUNG_NAME[x]} vs {RUNG_NAME[y]}
+                <div key={r.rung_id} className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50/60 p-3.5">
+                  <div className="text-xs font-extrabold text-slate-900">{RUNG_NAME[r.rung_id]}</div>
+                  <Stat label="Cost / 1k docs" value={`$${r.finops.cost_per_1k_usd.toFixed(2)}`} />
+                  <div className="space-y-1">
+                    {q.rubric ? (
+                      DIMENSIONS.map((d) => (
+                        <GradeBar key={d.key} label={d.label} value={q.rubric?.[d.key]?.mean} barClass={RUNG_BAR[r.rung_id]} />
+                      ))
+                    ) : (
+                      <div className="rounded bg-slate-100 px-2 py-1 text-[10px] text-slate-500">
+                        Grades (1–5): {q.judge_unavailable_reason ?? 'not graded'}
+                      </div>
+                    )}
                   </div>
-                  {h && graded.length > 0 ? (
-                    <ul className="mt-1 space-y-0.5 text-slate-700">
+                  <Stat
+                    label="Core facts"
+                    value={q.core_facts ? frac(q.core_facts) : 'no answer key'}
+                    tone={q.core_facts && q.core_facts.hits < q.core_facts.total ? 'text-rose-700' : undefined}
+                  />
+                  <Stat
+                    label="Serious errors"
+                    value={q.serious_errors == null ? 'not graded' : String(q.serious_errors)}
+                    tone={q.serious_errors ? 'text-rose-700' : undefined}
+                  />
+                  {q.numbers && <Stat label="Numbers not found in the source" value={String(q.numbers.not_in_source)} />}
+                  {(q.head_to_head ?? []).map((h) => (
+                    <ul key={h.opponent} className="space-y-0.5 text-[10px] text-slate-700">
                       {h.results.map((o, i) => (
                         <li key={i}>
-                          {RUNG_NAME[o.shown_first]} shown first →{' '}
+                          vs {RUNG_NAME[h.opponent]}, {RUNG_NAME[o.shown_first]} shown first →{' '}
                           <strong className="text-slate-900">{winnerName(o.winner)}</strong>
                         </li>
                       ))}
                     </ul>
-                  ) : (
-                    <p className="mt-1 text-slate-500">{reason ?? 'Not compared on this run.'}</p>
-                  )}
-                  {xWins != null && yWins != null && (
-                    <div className="mt-1.5 border-t border-slate-200 pt-1 text-[10px] text-slate-600">
-                      All {nDocs} documents: {RUNG_NAME[x]} {xWins} – {yWins} {RUNG_NAME[y]}
-                    </div>
-                  )}
+                  ))}
+                  <SeriousErrors q={q} />
                 </div>
               )
             })}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import importlib.util
 import inspect
 import json
@@ -18,7 +19,6 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 from app.archetypes.cat4_rag import quality_rerun as qr  # noqa: E402
 from app.archetypes.cat4_rag import scaled_corpus as sc  # noqa: E402
-from app.archetypes.cat4_rag.prompts import get_cat4_haiku_reranker_system_prompt  # noqa: E402
 from app.archetypes.cat4_rag.runner import build_rung2_doc_blocks  # noqa: E402
 from app.archetypes.cat6_swarms.fair_rerun import wilson_interval  # noqa: E402
 from app.core import anthropic_service  # noqa: E402
@@ -77,13 +77,9 @@ class Fakes:
     async def rerank(self, **kw: Any) -> AnthropicRawResult:
         self.calls.append(("rerank", kw))
         await asyncio.sleep(0)
-        if kw.get("user_content"):
-            ids = self.rerank_ids or ["DOC-01#c03", "DOC-07#c02", "DOC-02#c01", "DOC-03#c04", "DOC-05#c02"]
-            cw, cr = self._cache_tokens(kw["user_content"][0]["text"], 20000)
-            inp = 150
-        else:
-            ids = re.findall(r"CHUNK_ID: (\S+)", kw["rerank_payload"])[:5]
-            cw, cr, inp = 0, 0, 9000
+        ids = self.rerank_ids or ["DOC-01#c03", "DOC-07#c02", "DOC-02#c01", "DOC-03#c04", "DOC-05#c02"]
+        cw, cr = self._cache_tokens(kw["user_content"][0]["text"], 20000)
+        inp = 150
         return AnthropicRawResult(model_id=qr.HAIKU_MODEL_ID, latency_ms=10, input_tokens=inp, output_tokens=300,
                                   cache_creation_tokens=cw, cache_read_tokens=cr, raw_text="{}",
                                   structured={"selected_chunks": [{"chunk_id": i, "relevance_score": 0.9, "rationale": "x"} for i in ids]},
@@ -288,7 +284,7 @@ def test_contamination_detector_flags_value_cited_and_sent() -> None:
     assert not clean["contamination"]["contaminated"]
     dirty = qr.score_answer(_answer("Cap INR 3,60,00,000.", citations=[{"chunk_id": "DOC-08#c03", "supplier": "kaveri", "cited_text": "x"}],
                                     sent=["DOC-15#c01", "DOC-01#c03"]),
-                            rung_id="hybrid_rag_rerank_citations", corpus=C3, keys=KEYS, contamination=idx)
+                            rung_id=qr.NEW_RUNG, corpus=C3, keys=KEYS, contamination=idx)
     c = dirty["contamination"]
     assert c["contaminated"] and c["distractor_values"][0]["supplier"] == "kaveri"
     assert c["distractor_chunks_cited"] == ["DOC-08#c03"] and c["distractor_chunks_sent"] == ["DOC-15#c01"]
@@ -347,23 +343,6 @@ def test_nonce_same_within_session_and_different_across_sessions() -> None:
     assert a["session_nonce"] in texts[0] and b["session_nonce"] in texts[8]
 
 
-def test_rung3_hybrid_sequence_bm25_over_session_corpus() -> None:
-    rec, f = _session("hybrid_rag_rerank_citations", scale=3)
-    assert [r for r, _ in f.calls] == ["rerank", "synthesis"] * 8
-    rr = f.calls[0][1]
-    assert rr["system_prompt"] == get_cat4_haiku_reranker_system_prompt() and "user_content" not in rr
-    assert rr["max_tokens"] == 800 and rr["timeout_s"] == qr.RERANK_TIMEOUT_S
-    ans = rec["answers"][0]
-    assert len(ans["retrieval"]["bm25_top"]) == 10
-    assert ans["retrieval"]["recall_after_bm25"]["total"] == len(ans["expected_chunk_ids"])
-    syn = f.calls[1][1]
-    assert syn["use_prefix_cache"] is False and len(syn["documents_for_blocks"]) == 5
-    assert [b["doc_id"] + "#" for b in syn["documents_for_blocks"]]
-    assert ans["chunks_sent"]["chunk_ids"] == ans["retrieval"]["selected_chunk_ids"]
-    assert ans["citations"][0]["chunk_id"] == ans["chunks_sent"]["chunk_ids"][0]
-    assert all(not c["cache_control"] for c in ans["calls"])
-
-
 def test_rung4_cached_rerank_sequence() -> None:
     picks = ["DOC-01#c03", "DOC-99#c01", "DOC-08#c03", "DOC-01#c03", "DOC-03#c04"]
     rec, f = _session(qr.NEW_RUNG, scale=3, fakes=Fakes(rerank_ids=picks))
@@ -384,11 +363,11 @@ def test_rung4_cached_rerank_sequence() -> None:
     assert rerank_calls[0]["cache_creation_tokens"] > 0 and all(c["cache_read_tokens"] > 0 for c in rerank_calls[1:])
 
 
-def test_full_corpus_reranker_prompt_changes_only_candidate_sentence() -> None:
-    a = get_cat4_haiku_reranker_system_prompt().splitlines()
-    b = qr.get_full_corpus_reranker_system_prompt().splitlines()
-    diff = [(x, y) for x, y in zip(a, b) if x != y]
-    assert len(a) == len(b) and len(diff) == 1 and "10 BM25" in diff[0][0] and "all deal-room" in diff[0][1]
+def test_full_corpus_reranker_prompt_is_the_recorded_one() -> None:
+    # sha256 of the clause-pick system prompt the rerun sessions were recorded with
+    sha = hashlib.sha256(qr.get_full_corpus_reranker_system_prompt().encode()).hexdigest()
+    assert sha == "afefea44b097d92c1e07779ee8b72a704a49d58e72879149f604c11d1a9a12c3"
+    assert "all deal-room contract chunks provided above the query" in qr.get_full_corpus_reranker_system_prompt()
 
 
 def test_questions_run_sequentially_in_session_order() -> None:
@@ -444,11 +423,15 @@ def test_resolve_chunk_by_max_overlap() -> None:
     assert out[0]["chunk_id"] == "DOC-15#c01" and out[0]["supplier"] == "narmada"
 
 
+def _golden_questions() -> list[dict[str, Any]]:
+    """Every recorded question in the app's golden replays (both versions, both audits)."""
+    return [q for p in GOLDEN["presets"].values() for qs in p["rungs"].values() for q in qs]
+
+
 def test_golden_citations_resolve_to_chunks_containing_cited_text() -> None:
-    ga = qr.golden_answers(GOLDEN)
     n = 0
-    for a in ga:
-        for c in a["citations"]:
+    for q in _golden_questions():
+        for c in qr.resolve_citations(C1, q.get("citations") or []):
             assert c["chunk_id"], c
             ch = C1.chunk_by_id[c["chunk_id"]]
             head = c["cited_text"].strip()[:30]
@@ -457,7 +440,7 @@ def test_golden_citations_resolve_to_chunks_containing_cited_text() -> None:
                 assert doc[c["start_char_index"]:c["end_char_index"]].strip()[:30] == head
                 assert ch["doc_char_start"] <= c["start_char_index"] < ch["doc_char_end"] or head in ch["text"]
             n += 1
-    assert n > 100
+    assert n > 50
 
 
 # --------------------------------------------------------------------------------------------------
@@ -527,14 +510,15 @@ def test_break_even_hand_case() -> None:
 
 
 def test_plan_order_and_resume() -> None:
+    assert qr.RUNG_IDS == ("naive_full_corpus", "cached_rerank_hybrid")
     plan = qr.plan_matrix(qr.RUNG_IDS, (1, 3), 3)
-    assert len(plan) == 24 and plan[:5] == [(r, 1, 0, "original") for r in qr.RUNG_IDS] + [("naive_full_corpus", 3, 0, "original")]
+    assert len(plan) == 12 and plan[:3] == [(r, 1, 0) for r in qr.RUNG_IDS] + [("naive_full_corpus", 3, 0)]
     cur = {"settings": {"synth_max_tokens": qr.SYNTH_MAX_TOKENS}}
     existing = [{"rung_id": "naive_full_corpus", "scale": 1, "repeat_index": 0, "status": "ok", **cur},
-                {"rung_id": "cached_full_corpus_citations", "scale": 1, "repeat_index": 0, "status": "error", **cur}]
+                {"rung_id": "cached_rerank_hybrid", "scale": 1, "repeat_index": 0, "status": "error", **cur}]
     pending = qr.select_pending(plan, existing)
-    assert ("naive_full_corpus", 1, 0, "original") not in pending and ("cached_full_corpus_citations", 1, 0, "original") in pending
-    assert len(pending) == 23
+    assert ("naive_full_corpus", 1, 0) not in pending and ("cached_rerank_hybrid", 1, 0) in pending
+    assert len(pending) == 11
 
 
 def test_budget_guard_counts_error_spend_and_refuses() -> None:
@@ -570,7 +554,7 @@ def test_rerun_cli_dry_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -
     out = tmp_path / "runs.jsonl"
     rc = run(mod.main(mod.parse_args(["--dry-run", "--out", str(out)])))
     text = capsys.readouterr().out
-    assert rc == 0 and "24 sessions" in text and "worst case" in text and not out.exists()
+    assert rc == 0 and "12 sessions" in text and "worst case" in text and not out.exists()
     out.write_text(json.dumps({"rung_id": "naive_full_corpus", "scale": 1, "repeat_index": 0, "status": "ok", "answers": [],
                                "settings": {"synth_max_tokens": qr.SYNTH_MAX_TOKENS}}) + "\n")
     run(mod.main(mod.parse_args(["--dry-run", "--out", str(out), "--rungs", "naive_full_corpus", "--scales", "1"])))
@@ -597,14 +581,15 @@ def test_strip_citation_markup() -> None:
     assert qr.strip_citation_markup("No markers here.") == "No markers here."
     nested = "- **A**:\n  - (i) one\n    - deep"
     assert qr.strip_citation_markup(nested) == nested
-    for a in qr.golden_answers(GOLDEN):  # golden answers carry no inline markers: stripping is a no-op
-        assert qr.strip_citation_markup(a["answer_markdown"]) == a["answer_markdown"].strip()
+    for q in _golden_questions():  # recorded answers carry no inline markers: stripping is a no-op
+        assert qr.strip_citation_markup(q["answer_markdown"]) == q["answer_markdown"].strip()
 
 
 def test_judge_prompt_blind_over_every_planned_prompt() -> None:
     rec, _ = _session(qr.NEW_RUNG, scale=3)
-    items = qr.judge_items("all", golden=GOLDEN, records=[rec])
-    assert len(items) == 24 + 8
+    naive, _ = _session("naive_full_corpus", scale=1)
+    items = qr.judge_items([rec, naive])
+    assert len(items) == 16
     plan = qr.plan_judge_calls(items)
     docs = qr.judge_documents_text()
     for d in C1.hydrated_docs:
@@ -655,7 +640,8 @@ def _judge_fake(order: list[str], *, fail: bool = False, stop: str = "end_turn")
 
 
 def test_judge_warm_first_then_fan_out_and_resume() -> None:
-    plan = qr.plan_judge_calls(qr.judge_items("golden", golden=GOLDEN))[:6]
+    rec, _ = _session("naive_full_corpus")
+    plan = qr.plan_judge_calls(qr.judge_items([rec]))[:6]
     order: list[str] = []
     recs: list[dict[str, Any]] = []
     res = run(qr.run_judge_plan(plan, judge_call=_judge_fake(order), guard=qr.JudgeBudgetGuard(100), on_record=recs.append, concurrency=4))
@@ -667,7 +653,8 @@ def test_judge_warm_first_then_fan_out_and_resume() -> None:
 
 
 def test_judge_errors_and_budget() -> None:
-    plan = qr.plan_judge_calls(qr.judge_items("golden", golden=GOLDEN))[:3]
+    rec, _ = _session("naive_full_corpus")
+    plan = qr.plan_judge_calls(qr.judge_items([rec]))[:3]
     recs: list[dict[str, Any]] = []
     run(qr.run_judge_plan(plan, judge_call=_judge_fake([], fail=True), guard=qr.JudgeBudgetGuard(100), on_record=recs.append))
     assert all(r["status"] == "error" and r["error_type"] == "api_error" for r in recs)
@@ -683,10 +670,12 @@ def test_judge_errors_and_budget() -> None:
 
 def test_judge_cli_dry_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     mod = _load_script("cat4_quality_judge")
-    rc = run(mod.main(mod.parse_args(["--scope", "golden", "--dry-run", "--runs", str(tmp_path / "r.jsonl"),
-                                      "--out", str(tmp_path / "j.jsonl")])))
+    runs = tmp_path / "r.jsonl"
+    recs = [_session(r, scale=sc)[0] for r in qr.RUNG_IDS for sc in (1, 3)]
+    runs.write_text("".join(json.dumps(r) + "\n" for r in recs))
+    rc = run(mod.main(mod.parse_args(["--dry-run", "--runs", str(runs), "--out", str(tmp_path / "j.jsonl")])))
     text = capsys.readouterr().out
-    assert rc == 0 and "Blinding check passed on all 24 prompts" in text and "typical" in text
+    assert rc == 0 and "Blinding check passed on all 32 prompts" in text and "typical" in text
 
 
 # --------------------------------------------------------------------------------------------------
@@ -694,20 +683,15 @@ def test_judge_cli_dry_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -
 # --------------------------------------------------------------------------------------------------
 
 
-def test_golden_answers_shape_and_scores() -> None:
-    ga = qr.golden_answers(GOLDEN)
-    assert len(ga) == 24
-    assert {a["rung_id"] for a in ga} == set(qr.APP_RUNG_IDS)
-    hyb = [a for a in ga if a["rung_id"] == "hybrid_rag_rerank_citations"]
-    assert all(len(a["retrieval"]["selected_chunk_ids"]) == 5 and a["calls"][0]["role"] == "rerank" for a in hyb)
-    s = qr.summarise([], keys=KEYS, golden=GOLDEN)
-    g = s["original_capture"]["groups"]
-    assert g["naive_full_corpus"]["fact_recall"]["total"] == len(KEYS["facts"])
-    assert g["naive_full_corpus"]["citations_requested"] is False
-    assert g["cached_full_corpus_citations"]["zero_citation_answers"]["hits"] == 0
-    assert g["cached_full_corpus_citations"]["cache_write_premium_usd"] > 0
-    assert s["original_capture"]["break_even"][0]["a"] == "cached_full_corpus_citations"
-    assert s["rerun"]["groups"] == {}
+def test_golden_replays_hold_both_versions() -> None:
+    for p in GOLDEN["presets"].values():
+        assert set(p["rungs"]) == set(qr.APP_RUNG_IDS) == {"naive_full_corpus", "cached_rerank_hybrid"}
+        for q in p["rungs"]["cached_rerank_hybrid"]:
+            picks = [f for f in q["retrieval_funnel"] if f["stage"] == "selected_by_reranker"]
+            assert len(picks) == 5 and q["reranker_cache_creation_tokens"] + q["reranker_cache_read_tokens"] > 14_000
+            assert q["judgement"] is not None
+    s = qr.summarise([], keys=KEYS)
+    assert s["rerun"]["groups"] == {} and "original_capture" not in s and "break_even" not in s["rerun"]
 
 
 def _write_runs(path: Path) -> list[dict[str, Any]]:
@@ -727,12 +711,12 @@ def test_analysis_without_and_with_rerun_and_judgements(tmp_path: Path) -> None:
     md = tmp_path / "out.md"
     assert mod.main(["--runs", str(tmp_path / "none.jsonl"), "--judgements", str(tmp_path / "none2.jsonl"), "--out-md", str(md)]) == 0
     text = md.read_text()
-    assert "Original capture" in text and "No ok rerun sessions yet" in text and "For lead review" in text and "Data quality" in text
+    assert "Original capture" not in text and "No ok rerun sessions yet" in text and "For lead review" in text and "Data quality" in text
     assert json.loads(md.with_suffix(".json").read_text())["rerun"]["ok_sessions_used"] == 0
 
     runs = tmp_path / "runs.jsonl"
     recs = _write_runs(runs)
-    items = qr.judge_items("all", golden=GOLDEN, records=recs)
+    items = qr.judge_items(recs)
     plan = qr.plan_judge_calls(items)
     jrecs: list[dict[str, Any]] = []
     run(qr.run_judge_plan(plan, judge_call=_judge_fake([]), guard=qr.JudgeBudgetGuard(1000), on_record=jrecs.append))
@@ -740,16 +724,14 @@ def test_analysis_without_and_with_rerun_and_judgements(tmp_path: Path) -> None:
     jpath.write_text("".join(json.dumps(r) + "\n" for r in jrecs))
     assert mod.main(["--runs", str(runs), "--judgements", str(jpath), "--out-md", str(md)]) == 0
     s = json.loads(md.with_suffix(".json").read_text())
-    assert s["rerun"]["ok_sessions_used"] == 8 and len(s["rerun"]["groups"]) == 8
+    assert s["rerun"]["ok_sessions_used"] == 4 and len(s["rerun"]["groups"]) == 4
     assert len(s["rerun"]["data_quality"]["error_sessions"]) == 1
     g = s["rerun"]["groups"]["cached_rerank_hybrid|3"]
     assert g["judge"]["judgements"] == 8 and g["judge"]["correctness_mean"] == 4
     assert g["cost_per_question"]["billed"]["haiku"] > 0 and g["cost_per_question"]["billed"]["sonnet"] > 0
-    assert {r["a"] for r in s["rerun"]["break_even"]["3"]} == {"cached_full_corpus_citations", "cached_rerank_hybrid"}
-    assert len(s["rerun"]["break_even"]["3"]) == 3
-    assert s["original_capture"]["groups"]["naive_full_corpus"]["judge"]["judgements"] == 8
+    assert "break_even" not in s["rerun"] and "original_capture" not in s
     text = md.read_text()
-    assert "R4 cached-rerank · s3" in text and "Break-even" in text
+    assert "With · corpus 3× (21 docs)" in text and "Without · corpus 1× (7 docs)" in text and "Break-even" not in text
     assert not re.search(r'"[a-z_]*(usd|cost)[a-z_]*":', json.dumps(recs))  # records hold tokens, never dollars
 
 
@@ -772,17 +754,9 @@ def test_scope_line_built_from_profile() -> None:
         assert not qr.text_matches(qr.scope_line(), qr.fact_alternatives(f)), f["id"]
 
 
-@pytest.mark.parametrize("rung", qr.RUNG_IDS)
+@pytest.mark.parametrize("rung", qr.HARNESS_RUNG_IDS)
 @pytest.mark.parametrize("scale", qr.SCALES)
-def test_scoped_question_in_every_input(rung: str, scale: int, monkeypatch: pytest.MonkeyPatch) -> None:
-    bm25_queries: list[str] = []
-    real_bm25 = qr.rank_chunks_bm25
-
-    def spy(query: str, chunks: Any, top_k: int):
-        bm25_queries.append(query)
-        return real_bm25(query, chunks, top_k=top_k)
-
-    monkeypatch.setattr(qr, "rank_chunks_bm25", spy)
+def test_scoped_question_in_every_input(rung: str, scale: int) -> None:
     rec, f = _session(rung, scale=scale)
     order = [(p["id"], q) for p in CAT4_PRESETS for q in p["questions"]]
     expected = [EXPECTED_SCOPE + "\n\n" + q["question"] for _, q in order]
@@ -791,35 +765,24 @@ def test_scoped_question_in_every_input(rung: str, scale: int, monkeypatch: pyte
     assert [a["question_as_asked"] for a in rec["answers"]] == expected
     assert [kw["user_question"] for r, kw in f.calls if r == "synthesis"] == expected
     reranks = [kw for r, kw in f.calls if r == "rerank"]
-    if rung == "hybrid_rag_rerank_citations":
-        assert bm25_queries == expected
-        assert all(kw["rerank_payload"].count(e) == 1 for kw, e in zip(reranks, expected))
-    elif rung == qr.NEW_RUNG:
-        assert bm25_queries == []
-        assert all(e in kw["user_content"][1]["text"] and EXPECTED_SCOPE not in kw["user_content"][0]["text"]
-                   for kw, e in zip(reranks, expected))
+    if rung == qr.NEW_RUNG:
+        assert len(reranks) == 8 and all(e in kw["user_content"][1]["text"] and EXPECTED_SCOPE not in kw["user_content"][0]["text"]
+                                         for kw, e in zip(reranks, expected))
     else:
-        assert bm25_queries == [] and reranks == []
+        assert reranks == []
 
 
-def test_golden_path_unscoped_and_judge_question_as_asked() -> None:
-    ga = qr.golden_answers(GOLDEN)
-    assert all(EXPECTED_SCOPE not in a["question"] and "question_as_asked" not in a for a in ga)
-    rec, _ = _session("hybrid_rag_rerank_citations", scale=3)
-    plan = qr.plan_judge_calls(qr.judge_items("all", golden=GOLDEN, records=[rec]))
-    gold = [p for p in plan if p["source"] == "golden"]
-    rer = [p for p in plan if p["source"] == "rerun"]
-    assert len(gold) == 24 and len(rer) == 8
-    assert all(EXPECTED_SCOPE not in p["user"] and p["question"] == Q_SPECS[(p["preset_id"], p["question_id"])]["question"] for p in gold)
-    assert all(p["user"].startswith("<question>\n" + EXPECTED_SCOPE + "\n\n") for p in rer)
+def test_golden_question_and_judge_question_as_asked() -> None:
+    for q in _golden_questions():
+        assert EXPECTED_SCOPE not in q["question"] and q["question_as_asked"] == EXPECTED_SCOPE + "\n\n" + q["question"]
+    rec, _ = _session("cached_rerank_hybrid", scale=3)
+    plan = qr.plan_judge_calls(qr.judge_items([rec]))
+    assert len(plan) == 8 and all(p["source"] == "rerun" for p in plan)
+    assert all(p["user"].startswith("<question>\n" + EXPECTED_SCOPE + "\n\n") for p in plan)
     for p in plan:
         assert qr.blinding_violations(p["system"], p["user"], [p["question"], p["answer_for_judge"]]) == []
     # the scope line adds no forbidden term even when not cut out
     assert qr.blinding_violations([{"text": ""}], EXPECTED_SCOPE, []) == []
-    # golden scoring unchanged by the scope line
-    s = qr.summarise([], keys=KEYS, golden=GOLDEN)["original_capture"]["groups"]
-    # (rung 3's recording is its scoped_absence session since 2026-11-26: 49 hits; the original-format one had 51)
-    assert s["naive_full_corpus"]["fact_recall"]["hits"] == 52 and s["hybrid_rag_rerank_citations"]["fact_recall"]["hits"] == 49
 
 
 def test_judge_cli_default_cap_16() -> None:
@@ -841,7 +804,7 @@ def _at_cap(rec: dict[str, Any], cap: int) -> dict[str, Any]:
     return out
 
 
-@pytest.mark.parametrize("rung", qr.RUNG_IDS)
+@pytest.mark.parametrize("rung", qr.HARNESS_RUNG_IDS)
 @pytest.mark.parametrize("scale", qr.SCALES)
 def test_synthesis_cap_4096_every_rung_and_scale_rerank_unchanged(rung: str, scale: int) -> None:
     assert qr.SYNTH_MAX_TOKENS == 4096 and qr.RERANK_MAX_TOKENS == 800
@@ -861,7 +824,7 @@ def test_superseded_cap_key_is_pending_again() -> None:
     assert qr.select_pending([key], [old, rec]) == []
     assert qr.select_pending([key], [{k: v for k, v in rec.items() if k != "settings"}]) == [key]  # no settings = superseded
     assert qr.latest_ok_sessions([rec, old]) == [rec]  # a later superseded record never replaces a current one
-    assert qr.judge_items("rerun", golden=GOLDEN, records=[old]) == []
+    assert qr.judge_items([old]) == []
 
 
 def test_rerun_cli_treats_superseded_as_pending(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -871,12 +834,12 @@ def test_rerun_cli_treats_superseded_as_pending(tmp_path: Path, capsys: pytest.C
     mod = _load_script("cat4_quality_rerun")
     run(mod.main(mod.parse_args(["--dry-run", "--out", str(out), "--rungs", "naive_full_corpus", "--scales", "1", "--repeats", "1"])))
     text = capsys.readouterr().out
-    assert "0 already ok, 1 pending" in text and "Superseded records" in text
+    assert "0 already ok, 1 pending" in text and "Records not at the current settings" in text
 
 
 def test_analysis_excludes_superseded_and_lists_them(tmp_path: Path) -> None:
     runs = tmp_path / "runs.jsonl"
-    cur, _ = _session("cached_full_corpus_citations")
+    cur, _ = _session("cached_rerank_hybrid")
     old = _at_cap(cur, 2048)
     for a in old["answers"]:  # make the superseded one distinguishable: truncated answers
         for c in a["calls"]:
@@ -890,13 +853,13 @@ def test_analysis_excludes_superseded_and_lists_them(tmp_path: Path) -> None:
     s = json.loads(md.with_suffix(".json").read_text())
     rr = s["rerun"]
     assert rr["ok_sessions_used"] == 1 and rr["superseded_record_count"] == 2
-    assert set(rr["groups"]) == {"cached_full_corpus_citations|1"}
+    assert set(rr["groups"]) == {"cached_rerank_hybrid|1"}
     assert all(not k.startswith("naive_full_corpus|3") for k in rr["per_question"])
     assert rr["data_quality"]["non_end_turn_calls"] == []  # the superseded truncations are not counted as current data
     sup = rr["data_quality"]["superseded_sessions"]
-    assert {(x["rung_id"], x["scale"], x["synth_max_tokens"]) for x in sup} == {("cached_full_corpus_citations", 1, 2048), ("naive_full_corpus", 3, 2048)}
+    assert {(x["rung_id"], x["scale"], x["synth_max_tokens"]) for x in sup} == {("cached_rerank_hybrid", 1, 2048), ("naive_full_corpus", 3, 2048)}
     text = md.read_text()
-    assert "superseded: recorded at a different output cap" in text and "superseded 2" in text
+    assert "superseded sessions 2" in text
 
 
 def test_worst_case_estimate_uses_new_cap() -> None:
@@ -929,17 +892,17 @@ class ContaminatingFakes(Fakes):
 
 def test_summarise_with_contamination_from_real_scorer(tmp_path: Path) -> None:
     text = "Liability cap: **INR 3,60,00,000** per the MSA (Clause 9.1)."
-    rec, _ = _session("cached_full_corpus_citations", scale=3, fakes=ContaminatingFakes(text))
+    rec, _ = _session("naive_full_corpus", scale=3, fakes=ContaminatingFakes(text))
     # the real scorer produces the hits; nothing here is hand-built
     s = qr.score_answer(rec["answers"][0], rung_id=rec["rung_id"], corpus=C3, keys=KEYS, contamination=qr.build_contamination_index(KEYS))
     hit = s["contamination"]["distractor_values"][0]
     assert set(hit) == {"fact_id", "supplier", "value", "attributed_to_distractor"} and hit["supplier"] == "kaveri"
     assert hit["attributed_to_distractor"] is False
-    summary = qr.summarise([rec], keys=KEYS, golden=GOLDEN)
+    summary = qr.summarise([rec], keys=KEYS)
     rv = summary["for_lead_review"]["contaminated_answers"]
     assert rv and rv[0]["question"] == "audit-01/q1"
     assert "3,60,00,000" in rv[0]["distractor_values"][0]["answer_excerpt"]
-    g = summary["rerun"]["groups"]["cached_full_corpus_citations|3"]
+    g = summary["rerun"]["groups"]["naive_full_corpus|3"]
     assert g["value_contaminated_answers"]["hits"] >= 1 and g["value_contaminated_unattributed_answers"]["hits"] >= 1
     assert g["answers_whose_synthesis_saw_distractor_text"]["hits"] == 8
     runs = tmp_path / "runs.jsonl"
@@ -971,18 +934,18 @@ def test_answer_excerpt_tolerates_markdown_and_spacing() -> None:
 
 def test_judgements_attach_only_to_the_same_answer() -> None:
     rec, _ = _session("naive_full_corpus")
-    plan = qr.plan_judge_calls(qr.judge_items("rerun", golden=GOLDEN, records=[rec]))
+    plan = qr.plan_judge_calls(qr.judge_items([rec]))
     jrecs: list[dict[str, Any]] = []
     run(qr.run_judge_plan(plan, judge_call=_judge_fake([]), guard=qr.JudgeBudgetGuard(100), on_record=jrecs.append))
     rerun_of_same_key = json.loads(json.dumps(rec))
     rerun_of_same_key["run_id"] = "another-run"
     for a in rerun_of_same_key["answers"]:
         a["answer_markdown"] = "a different answer"
-    s = qr.summarise([rerun_of_same_key], keys=KEYS, golden=GOLDEN, judgements=jrecs)
+    s = qr.summarise([rerun_of_same_key], keys=KEYS, judgements=jrecs)
     assert s["rerun"]["groups"]["naive_full_corpus|1"]["judge"] is None
     dq = s["rerun"]["data_quality"]
-    assert len(dq["judgements_not_matching_a_scored_answer"]) == 8 and dq["scored_answers_without_judgement"] == 32
-    s2 = qr.summarise([rec], keys=KEYS, golden=GOLDEN, judgements=jrecs)
+    assert len(dq["judgements_not_matching_a_scored_answer"]) == 8 and dq["scored_answers_without_judgement"] == 8
+    s2 = qr.summarise([rec], keys=KEYS, judgements=jrecs)
     assert s2["rerun"]["groups"]["naive_full_corpus|1"]["judge"]["judgements"] == 8
     assert s2["rerun"]["data_quality"]["judgements_not_matching_a_scored_answer"] == []
 
@@ -990,8 +953,10 @@ def test_judgements_attach_only_to_the_same_answer() -> None:
 def test_not_requested_citation_columns_render_as_dash(tmp_path: Path) -> None:
     mod = _load_script("analyze_cat4_quality")
     md = tmp_path / "a.md"
-    mod.main(["--runs", str(tmp_path / "none.jsonl"), "--judgements", str(tmp_path / "none.jsonl"), "--out-md", str(md)])
-    row = next(line for line in md.read_text().splitlines() if line.startswith("| R1 naive | 8 |"))
+    runs = tmp_path / "runs.jsonl"
+    runs.write_text(json.dumps(_session("naive_full_corpus")[0]) + "\n")
+    mod.main(["--runs", str(runs), "--judgements", str(tmp_path / "none.jsonl"), "--out-md", str(md)])
+    row = next(line for line in md.read_text().splitlines() if line.startswith("| Without · corpus 1× (7 docs) | 8 |"))
     assert "n/a" not in row and row.count("—") >= 4
 
 
@@ -1012,5 +977,6 @@ def test_smoke_analysis_on_real_data(tmp_path: Path) -> None:
     cells = [c.strip() for line in text.splitlines() if line.startswith("|") for c in line.split("|")]
     assert not {"None", "nan", "$nan", "None/None"} & set(cells)
     assert not any(c.startswith("None") for c in cells)
-    assert "## Data quality" in text and "Break-even" in text
+    assert "## Data quality" in text and "Break-even" not in text and "Original capture" not in text
+    assert set(s["rung_ids"]) == {"naive_full_corpus", "cached_rerank_hybrid"} and len(s["rerun"]["groups"]) == 4
     assert {p: p.stat().st_mtime_ns for p in before} == before  # inputs are read-only

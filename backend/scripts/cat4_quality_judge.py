@@ -1,10 +1,10 @@
-"""Blind Opus 5.5 judge for Category 4 answers (golden capture and/or the quality rerun).
+"""Blind Opus 5.5 judge for the Category 4 quality-rerun answers.
 
 Usage (from backend/):
-    .venv/bin/python scripts/cat4_quality_judge.py --scope golden --dry-run
-    .venv/bin/python scripts/cat4_quality_judge.py --scope all --max-usd 16
+    .venv/bin/python scripts/cat4_quality_judge.py --dry-run
+    .venv/bin/python scripts/cat4_quality_judge.py --max-usd 16
 
-The judge sees the question as it was asked (scoped question for rerun answers, original for golden ones), Deccan's seven documents (cached system prefix) and the answer with citation
+The judge sees the question as it was asked (with the scope line), Deccan's seven documents (cached system prefix) and the answer with citation
 markers stripped; never the rung, model, scale, cost or citations. The first call runs alone to write the
 cache, then the rest fan out. Append-only; deterministic call ids; ok judgements of an unchanged answer are
 skipped on resume.
@@ -34,7 +34,6 @@ from app.archetypes.cat4_rag.quality_rerun import (  # noqa: E402
     estimate_judge_plan,
     judge_items,
     judgement_cost_usd,
-    load_golden,
     load_jsonl,
     make_anthropic_judge_call,
     plan_judge_calls,
@@ -47,7 +46,7 @@ BUDGET_EXIT_CODE = 2
 
 async def main(args: argparse.Namespace) -> int:
     records = load_jsonl(args.runs)
-    items = judge_items(args.scope, golden=load_golden(), records=records)
+    items = judge_items(records)
     plan = plan_judge_calls(items, repeats=args.judge_repeats)
     violations = {p["call_id"]: v for p in plan
                   if (v := blinding_violations(p["system"], p["user"], [p["question"], p["answer_for_judge"]]))}
@@ -58,7 +57,7 @@ async def main(args: argparse.Namespace) -> int:
     pending = select_pending_judgements(plan, existing)
     guard = JudgeBudgetGuard(args.max_usd, existing)
     est = estimate_judge_plan(pending)
-    print(f"Judge {JUDGE_MODEL} · scope={args.scope} · {len(items)} answers x {args.judge_repeats} = {len(plan)} calls; "
+    print(f"Judge {JUDGE_MODEL} · {len(items)} answers x {args.judge_repeats} = {len(plan)} calls; "
           f"{len(plan) - len(pending)} already ok, {len(pending)} pending. Blinding check passed on all {len(plan)} prompts.")
     print(f"Existing judgements {len(existing)}; spent ${guard.spent_usd:.4f} of ${args.max_usd:.2f} cap.")
     print(f"Estimate for pending: cached prefix ≈{est.get('prefix_tokens_est', 0):,} tok, user ≈{est.get('user_tokens_est', 0):,} tok total; "
@@ -104,7 +103,6 @@ async def main(args: argparse.Namespace) -> int:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--scope", choices=["golden", "rerun", "all"], default="all")
     ap.add_argument("--judge-repeats", type=int, default=1)
     ap.add_argument("--concurrency", type=int, default=4)
     ap.add_argument("--max-usd", type=float, default=16.0, help="judge spend cap incl. existing judgements (default 16)")

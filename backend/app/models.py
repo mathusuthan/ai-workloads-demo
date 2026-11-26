@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 SubTaskType = Literal["support_triage", "sku_tagging"]
-RungId = Literal["sonnet_naive", "haiku_naive", "haiku_calibrated", "gemini_decision"]
+RungId = Literal["sonnet_naive", "haiku_naive", "sonnet_calibrated", "haiku_calibrated"]
 ExecutionMode = Literal["replay", "live"]
 
 
@@ -46,9 +46,9 @@ class RungAccuracyEvaluation(BaseModel):
     field_accuracy_pct: float
     exact_match: bool
     field_checks: list[FieldCheckResult] = Field(default_factory=list)
-    # How the fields were read: "structured_output" (schema / decisions API), "reader_model" (a write-up read by the
-    # ablation's blind extraction model, replay only) or "keyword_match" (the regex extractor; kept for comparison).
-    method: Literal["structured_output", "reader_model", "keyword_match"] = "structured_output"
+    # How the fields were read: "structured_output" (JSON schema) or "reader_model" (a write-up read by the
+    # experiment's blind reader model, replay only).
+    method: Literal["structured_output", "reader_model"] = "structured_output"
     method_note: str | None = None
 
 
@@ -99,25 +99,12 @@ class PiiRedactionResult(BaseModel):
     masked_preview: str
 
 
-class JevReferenceComparison(BaseModel):
-    model_id: str
-    model_label: str
-    input_rate_per_1m_usd: float
-    output_rate_per_1m_usd: float
-    estimated_input_tokens: int
-    estimated_cost_usd: float
-    cost_per_1k_usd: float
-    monthly_cost_at_100k_usd: float
-    savings_vs_naive_pct: float
-    note: str
-
-
 class Cat1RunRequest(BaseModel):
     preset_id: str | None = None
     custom_input: str | None = None
     sub_task: SubTaskType = "support_triage"
     rungs: list[RungId] = Field(
-        default_factory=lambda: ["sonnet_naive", "haiku_naive", "haiku_calibrated", "gemini_decision"]
+        default_factory=lambda: ["sonnet_naive", "haiku_naive", "sonnet_calibrated", "haiku_calibrated"]
     )
     mode: ExecutionMode = "replay"
 
@@ -129,8 +116,9 @@ class Cat1RunResponse(BaseModel):
     input_char_count: int
     estimated_input_tokens: int
     results: list[RungExecutionResult]
+    # The two "with" rungs priced at the 50% Batch API rate (computed, not run).
     haiku_batch_comparator: FinOpsBreakdown | None = None
-    jev_comparator: JevReferenceComparison | None = None
+    sonnet_batch_comparator: FinOpsBreakdown | None = None
     pii_redaction: PiiRedactionResult
     system1_boundary_note: str
     ground_truth: dict[str, Any] | None = None
@@ -149,20 +137,20 @@ class BatchItemResult(BaseModel):
     input_tokens: int
     haiku_output_tokens: int
     haiku_decision: dict[str, Any]
-    gemini_decision: dict[str, Any]
-    gemini_confidence: float
+    sonnet_schema_output_tokens: int = 0
+    sonnet_schema_decision: dict[str, Any] = Field(default_factory=dict)
     pii_redactions: int
     haiku_latency_ms: int
-    gemini_latency_ms: int
+    sonnet_schema_latency_ms: int = 0
     ground_truth: dict[str, Any] = Field(default_factory=dict)
-    sonnet_accuracy_pct: float | None = 0.0
-    haiku_naive_accuracy_pct: float | None = 0.0
-    haiku_accuracy_pct: float = 0.0
-    gemini_accuracy_pct: float = 0.0
-    sonnet_exact: bool | None = False
-    haiku_naive_exact: bool | None = False
-    haiku_exact: bool = False
-    gemini_exact: bool = False
+    sonnet_accuracy_pct: float | None = None
+    haiku_naive_accuracy_pct: float | None = None
+    sonnet_schema_accuracy_pct: float | None = None
+    haiku_accuracy_pct: float | None = None
+    sonnet_exact: bool | None = None
+    haiku_naive_exact: bool | None = None
+    sonnet_schema_exact: bool | None = None
+    haiku_exact: bool | None = None
 
 
 class CfoScaleRow(BaseModel):
@@ -180,6 +168,9 @@ class CfoScaleRow(BaseModel):
     field_accuracy_pct: float | None = None
     exact_match_pct: float | None = None
     schema_compliance_label: str = ""
+    # "With" rows only: the same calls priced at the 50% Batch API rate (computed, not run).
+    batch_cost_per_1k_usd: float | None = None
+    batch_monthly_1m_usd: float | None = None
 
 
 class Cat1BatchResponse(BaseModel):
@@ -193,7 +184,7 @@ class Cat1BatchResponse(BaseModel):
     ablation_portfolio: Cat1AblationPortfolio | None = None
 
 
-# --- Category 1 seven-version ablation (replays/cat1_ablation_summary.json) ---
+# --- Category 1 four-cell experiment (replays/cat1_ablation_summary.json) ---
 
 
 class Cat1AblationAccuracyCell(BaseModel):
@@ -245,10 +236,7 @@ class Cat1AblationArm(BaseModel):
     stop_reasons: dict[str, int] = Field(default_factory=dict)
     model_mismatches: int = 0
     schema_parse_failures: int | None = None
-    keyword_fields_correct: int | None = None
-    keyword_field_accuracy_pct: float | None = None
     reader_value_counts: dict[str, int] | None = None
-    extractor_agreement: dict[str, int] | None = None
 
 
 class Cat1AblationLever(BaseModel):
@@ -267,19 +255,6 @@ class Cat1AblationLever(BaseModel):
     comparable_accuracy: bool = True
 
 
-class Cat1AblationScoringRow(BaseModel):
-    arm_id: str
-    label: str
-    fields_total: int | None = None
-    keyword_fields_correct: int | None = None
-    keyword_field_accuracy_pct: float | None = None
-    reader_fields_correct: int | None = None
-    reader_field_accuracy_pct: float | None = None
-    difference_pp: float | None = None
-    extractor_agreement: dict[str, int] | None = None
-    reader_value_counts: dict[str, int] | None = None
-
-
 class Cat1AblationMiss(BaseModel):
     arm_id: str
     item_id: str
@@ -292,36 +267,6 @@ class Cat1AblationMiss(BaseModel):
     repeats: list[int] = Field(default_factory=list)
     runs_missed: int
     runs_total: int
-
-
-class Cat1AblationOriginalRow(BaseModel):
-    arm_id: str
-    app_rung_id: str
-    responses: int
-    truncated_at_cap: int | None = None
-    cap: int | None = None
-    output_tokens_median: float | None = None
-    output_tokens_max: float | None = None
-    cost_per_1k_items_usd: float | None = None
-    keyword_fields_correct: int | None = None
-    keyword_field_accuracy_pct: float | None = None
-    reader_fields_correct: int | None = None
-    reader_field_accuracy_pct: float | None = None
-    reader_status: str | None = None
-    extractor_agreement: dict[str, int] | None = None
-    fields_correct: int | None = None
-    fields_total: int | None = None
-    field_accuracy_pct: float | None = None
-
-
-class Cat1AblationPending(BaseModel):
-    planned: int
-    done: int
-    pending: int
-    status: str
-    what: str
-    fields_agree: int | None = None
-    fields: int | None = None
 
 
 class Cat1AblationPortfolio(BaseModel):
@@ -340,26 +285,22 @@ class Cat1AblationPortfolio(BaseModel):
     reader_model: str
     reader_passes: int
     settings: dict[str, Any] = Field(default_factory=dict)
+    reader_check_note: str = ""
     arms: list[Cat1AblationArm] = Field(default_factory=list)
     levers: list[Cat1AblationLever] = Field(default_factory=list)
-    scoring_comparison: list[Cat1AblationScoringRow] = Field(default_factory=list)
     write_up_note: dict[str, Any] = Field(default_factory=dict)
-    classification_text_readable: dict[str, int] = Field(default_factory=dict)
     misses: list[Cat1AblationMiss] = Field(default_factory=list)
-    original_capture: list[Cat1AblationOriginalRow] = Field(default_factory=list)
-    original_capture_note: str = ""
-    pending: dict[str, Cat1AblationPending] = Field(default_factory=dict)
     deck_profile: dict[str, Any] = Field(default_factory=dict)
     data_quality: dict[str, Any] = Field(default_factory=dict)
     run_ids: dict[str, list[str]] = Field(default_factory=dict)
-    extraction_history: dict[str, Any] = Field(default_factory=dict)
     golden_mapping: dict[str, Any] = Field(default_factory=dict)
 
 
 # --- Category 2: Generative Synthesis & Drafting ---
 
 Cat2SubTaskType = Literal["exec_synthesis", "regulatory_filing"]
-Cat2RungId = Literal["sonnet_unbounded", "sonnet_templated", "haiku_templated"]
+# Without (unbounded long-form draft) and with (section template with length caps) the deck's improvement, per model.
+Cat2RungId = Literal["sonnet_unbounded", "haiku_unbounded", "sonnet_templated", "haiku_templated"]
 Cat2SectionKey = Literal[
     "executive_summary",
     "key_findings",
@@ -444,41 +385,67 @@ class Cat2RungQuality(BaseModel):
     judge_unavailable_reason: str | None = None
 
 
-class Cat2PooledDimension(BaseModel):
-    mean: float | None = None
-    min: float | None = None
-    max: float | None = None
-    n: int = 0
+class Cat2FieldClasses(BaseModel):
+    supported: int
+    not_stated: int
+    unsupported: int
 
 
-class Cat2WinRecord(BaseModel):
-    wins: int
-    losses: int
+class Cat2Cell(BaseModel):
+    """One cell of the experiment (version x model): pooled over its drafts; status "pending" when none exist yet."""
+
+    arm: Literal["unbounded", "template_not_stated"]
+    model_key: Literal["sonnet", "haiku"]
+    rung_id: Cat2RungId
+    label: str
+    status: Literal["ok", "partial", "pending"]
+    drafts: int
+    drafts_planned: int
+    judged_drafts: int
+    passes_per_draft: int
+    truncated: int = 0
+    rubric: dict[str, float | None] | None = None
+    serious_per_draft: float | None = None
+    minor_per_draft: float | None = None
+    serious_total: int | None = None
+    core_facts: Cat2Count
+    detail_facts: Cat2Count
+    not_in_source_numbers: int = 0
+    number_verdicts: dict[str, int] | None = None
+    action_items: int | None = None
+    owner: Cat2FieldClasses | None = None
+    time_window: Cat2FieldClasses | None = None
+    flagged_items_total: int | None = None
+    cost_per_1k_docs_usd: float | None = None
+    input_tokens_mean: float | None = None
+    output_tokens_mean: float | None = None
+    output_tokens_min: float | None = None
+    output_tokens_max: float | None = None
+
+
+class Cat2WinShare(BaseModel):
+    template_wins: int
+    unbounded_wins: int
     ties: int
 
 
-class Cat2PortfolioRung(BaseModel):
-    rung_id: Cat2RungId
-    drafts: int
-    core_facts: Cat2Count
-    detail_facts: Cat2Count
-    rubric: dict[str, Cat2PooledDimension]
-    serious_errors: int
-    minor_errors: int
-    numbers: Cat2Numbers
-    action_items: Cat2ActionItemCheck | None = None
-    cost_per_1k_docs_usd: float | None = None
-    output_tokens_mean: float | None = None
-    head_to_head: dict[str, Cat2WinRecord] = Field(default_factory=dict)
+class Cat2HeadToHeadBlock(BaseModel):
+    overall: Cat2WinShare
+    accuracy: Cat2WinShare
+    usefulness_to_reader: Cat2WinShare
+    calls: int
+    position_consistency: dict[str, int] = Field(default_factory=dict)
 
 
-class Cat2PairwiseBlock(BaseModel):
-    wins: dict[str, dict[str, int]]
-    ties: dict[str, int]
-    position_consistency: dict[str, int]
+class Cat2HeadToHeadSummary(BaseModel):
+    status: Literal["ok", "partial", "pending"]
+    all: Cat2HeadToHeadBlock | None = None
+    by_model: dict[str, Cat2HeadToHeadBlock] = Field(default_factory=dict)
 
 
 class Cat2QualityPortfolio(BaseModel):
+    """replays/cat2_quality_summary.json: the four cells and the template-vs-unbounded head-to-head."""
+
     schema_version: int
     source: str
     keys_version: str | None = None
@@ -486,97 +453,13 @@ class Cat2QualityPortfolio(BaseModel):
     passes_per_draft: int
     drafts_per_cell: int
     documents: list[str]
-    calls: dict[str, int]
     dimensions: list[str]
-    rungs: list[Cat2PortfolioRung]
-    pairwise: dict[str, Cat2PairwiseBlock]
-
-
-class Cat2FieldClasses(BaseModel):
-    supported: int
-    not_stated: int
-    unsupported: int
-
-
-class Cat2TemplateFixCell(BaseModel):
-    arm: Literal["template_original", "template_not_stated"]
-    model_key: Literal["sonnet", "haiku"]
-    drafts: int
-    action_items: int
-    owner: Cat2FieldClasses
-    time_window: Cat2FieldClasses
-    owner_not_stated_by_preset: dict[str, int] = Field(default_factory=dict)
-    owner_supported_by_preset: dict[str, int] = Field(default_factory=dict)
-    serious_per_draft: float | None = None
-    minor_per_draft: float | None = None
-    serious_total: int | None = None
-    flagged_items_total: int | None = None
-    rubric: dict[str, float | None] = Field(default_factory=dict)
-    core_facts: Cat2Count
-    detail_facts: Cat2Count
-    cost_per_1k_docs_usd: float | None = None
-    output_tokens_mean: float | None = None
-    truncated: int = 0
-
-
-class Cat2FixRecord(BaseModel):
-    wins: int
-    losses: int
-    ties: int
-
-
-class Cat2FixHeadToHead(BaseModel):
-    overall: Cat2FixRecord
-    accuracy: Cat2FixRecord
-    usefulness_to_reader: Cat2FixRecord
-    calls: int
-    position_consistency: dict[str, int] = Field(default_factory=dict)
-
-
-class Cat2FixComparison(BaseModel):
-    all: Cat2FixHeadToHead | None = None
-    by_model: dict[str, Cat2FixHeadToHead] = Field(default_factory=dict)
-
-
-class Cat2FixActionItem(BaseModel):
-    milestone: str | None = None
-    owner: str | None = None
-    time_window: str | None = None
-    owner_class: str
-    window_class: str
-
-
-class Cat2FixExampleSlot(BaseModel):
-    slot: int
-    original: Cat2FixActionItem
-    not_stated: Cat2FixActionItem
-
-
-class Cat2FixExample(BaseModel):
-    rule: str
-    preset_id: str
-    model_key: str
-    repeat_index: int
-    items: list[Cat2FixExampleSlot] = Field(default_factory=list)
-
-
-class Cat2TemplateFix(BaseModel):
-    """Measured follow-up (replays/cat2_not_stated_summary.json): the template plus one sentence permitting
-    "Not stated in source". Shown beside the app's rungs; the app itself still uses the original template."""
-
-    schema_version: int
-    source: str
-    app_template: str
-    added_instruction: str
-    not_stated_literal: str
-    keys_version: str | None = None
-    judge_model: str
-    judge_passes_per_draft: int
-    counts: dict[str, int]
+    arm_labels: dict[str, str] = Field(default_factory=dict)
+    max_tokens: dict[str, int] = Field(default_factory=dict)
+    counts: dict[str, int] = Field(default_factory=dict)
     field_rules: list[str] = Field(default_factory=list)
-    cells: list[Cat2TemplateFixCell]
-    head_to_head: dict[str, Cat2FixComparison]
-    example: Cat2FixExample | None = None
+    cells: list[Cat2Cell]
+    head_to_head: Cat2HeadToHeadSummary
 
 
 class Cat2RungResult(BaseModel):
@@ -585,7 +468,8 @@ class Cat2RungResult(BaseModel):
     badge_text: str
     model_id: str
     provider: str
-    status: Literal["ok", "error"] = "ok"
+    # "pending": replay of a cell whose experiment drafts do not exist yet (no stored draft to play back).
+    status: Literal["ok", "error", "pending"] = "ok"
     error_message: str | None = None
     latency_ms: int
     structured_draft: dict[str, Any] = Field(default_factory=dict)
@@ -603,7 +487,7 @@ class Cat2RunRequest(BaseModel):
     custom_input: str | None = None
     sub_task: Cat2SubTaskType = "exec_synthesis"
     rungs: list[Cat2RungId] = Field(
-        default_factory=lambda: ["sonnet_unbounded", "sonnet_templated", "haiku_templated"]
+        default_factory=lambda: ["sonnet_unbounded", "haiku_unbounded", "sonnet_templated", "haiku_templated"]
     )
     mode: ExecutionMode = "replay"
 
@@ -618,7 +502,6 @@ class Cat2RunResponse(BaseModel):
     haiku_batch_comparator: FinOpsBreakdown | None = None
     output_tax_callout: str
     quality_portfolio: Cat2QualityPortfolio | None = None
-    template_fix: Cat2TemplateFix | None = None
 
 
 class Cat2SectionRegenRequest(BaseModel):
@@ -653,7 +536,8 @@ class Cat2SectionRegenResponse(BaseModel):
 # --- Category 3: Multi-Turn Conversational Assistants (IT & HR Service Desk) ---
 
 Cat3UseCaseType = Literal["it_hr_service_desk"]
-Cat3RungId = Literal["naive_full_history", "prefix_cached_history", "prefix_cached_summarized"]
+# Without and with the deck improvement (prefix caching + sliding-window summaries).
+Cat3RungId = Literal["naive_full_history", "prefix_cached_summarized"]
 
 
 class Cat3TurnResult(BaseModel):
@@ -764,8 +648,6 @@ class Cat3RungSummary(BaseModel):
     warm_cost_per_1k_sessions_usd: float
     savings_vs_naive_pct: float = 0.0
     warm_savings_vs_naive_pct: float = 0.0
-    savings_vs_cached_history_pct: float = 0.0
-    warm_savings_vs_cached_history_pct: float = 0.0
     total_latency_ms: int = 0
     architectural_notes: list[str] = Field(default_factory=list)
     quality: Cat3RungQuality | None = None
@@ -777,7 +659,6 @@ class Cat3RunRequest(BaseModel):
     rungs: list[Cat3RungId] = Field(
         default_factory=lambda: [
             "naive_full_history",
-            "prefix_cached_history",
             "prefix_cached_summarized",
         ]
     )
@@ -824,10 +705,10 @@ class Cat3ChatTurnResponse(BaseModel):
 # --- Category 4: Multi-Doc RAG & Deep Ingestion (Supplier Deal-Room Due Diligence) ---
 
 Cat4UseCaseType = Literal["supplier_msa_due_diligence"]
+# Without and with the deck improvement (hybrid retrieval paired with context caching).
 Cat4RungId = Literal[
     "naive_full_corpus",
-    "cached_full_corpus_citations",
-    "hybrid_rag_rerank_citations",
+    "cached_rerank_hybrid",
 ]
 
 
@@ -854,9 +735,8 @@ class Cat4RetrievalChunkTrace(BaseModel):
     section_heading: str
     char_count: int
     approx_tokens: int
-    bm25_score: float
-    bm25_rank: int
-    stage: Literal["selected_by_reranker", "pruned_by_reranker", "pruned_by_bm25"]
+    pick_rank: int | None = None
+    stage: Literal["selected_by_reranker"]
     reranker_score: int | None = None
     reranker_rationale: str | None = None
     is_expected_gold: bool = False
@@ -934,8 +814,6 @@ class Cat4RungQuality(BaseModel):
 class Cat4PortfolioCell(BaseModel):
     rung_id: str
     runnable_in_app: bool
-    answer_format: str = "original"
-    adopted: bool = True  # the rung's current format; False = the retrieval versions' "before" (original) cells
     scale: int
     sessions: int
     answers: int
@@ -953,7 +831,6 @@ class Cat4PortfolioCell(BaseModel):
     value_contaminated_unattributed_answers: Cat4Measure | None = None
     citation_contaminated_answers: Cat4Measure
     exposure_answers: Cat4Measure | None = None
-    recall_after_bm25: Cat4Measure | None = None
     recall_after_rerank: Cat4Measure | None = None
     distractors_selected: Cat4Measure | None = None
     backfilled: int | None = None
@@ -971,36 +848,11 @@ class Cat4PortfolioCell(BaseModel):
     cost_per_question_billed_sonnet_usd: float | None = None
     cost_per_question_billed_haiku_usd: float | None = None
     cache_write_premium_usd: float = 0.0
-    answers_with_documents_lack_claim: Cat4Measure | None = None
-    answers_with_not_in_text_provided_claim: Cat4Measure | None = None
-    judged_answers_with_unsupported_absence_claim: Cat4Measure | None = None
-
-
-class Cat4FormatChange(BaseModel):
-    adopted_on: str
-    answer_format: str
-    rungs: list[str] = Field(default_factory=list)
-    removed: list[str] = Field(default_factory=list)
-    added: list[str] = Field(default_factory=list)
-    note: str = ""
-
-
-class Cat4BreakEven(BaseModel):
-    a: str
-    b: str
-    premium_a_usd: float
-    per_question_a_usd: float
-    premium_b_usd: float
-    per_question_b_usd: float
-    n_star: float | None = None
-    questions: int | None = None
-    verdict: str
 
 
 class Cat4PortfolioQuestion(BaseModel):
     rung_id: str
     scale: int
-    answer_format: str = "original"
     question: str
     answers: int
     fact_recall: Cat4Measure
@@ -1018,12 +870,11 @@ class Cat4PortfolioQuestion(BaseModel):
 class Cat4GoldenMapped(BaseModel):
     selection_rule: str
     run_ids: dict[str, str] = Field(default_factory=dict)
-    answer_formats: dict[str, str] = Field(default_factory=dict)
     questions: list[Cat4PortfolioQuestion] = Field(default_factory=list)
 
 
 class Cat4QualityPortfolio(BaseModel):
-    """Pooled quality-rerun picture (replays/cat4_quality_summary.json): 4 versions x 2 corpus sizes."""
+    """Pooled quality-rerun picture (replays/cat4_quality_summary.json): without and with x 2 corpus sizes."""
 
     schema_version: int = 1
     source: str
@@ -1045,11 +896,7 @@ class Cat4QualityPortfolio(BaseModel):
     corpus: dict[str, dict[str, int]] = Field(default_factory=dict)
     synth_max_tokens: int | None = None
     matrix_complete: bool = True
-    adopted_answer_formats: dict[str, str] = Field(default_factory=dict)
-    format_change: Cat4FormatChange | None = None
     cells: list[Cat4PortfolioCell] = Field(default_factory=list)
-    break_even_basis: str | None = None
-    break_even: dict[str, list[Cat4BreakEven]] = Field(default_factory=dict)
     golden_mapped: Cat4GoldenMapped | None = None
 
 
@@ -1075,7 +922,6 @@ class Cat4QueryResult(BaseModel):
     reranker_latency_ms: int = 0
     reranker_stop_reason: str | None = None
     retrieval_funnel: list[Cat4RetrievalChunkTrace] = Field(default_factory=list)
-    bm25_recall_pct: float | None = None
     reranker_recall_pct: float | None = None
     context_tokens_sent: int = 0
     context_reduction_pct: float = 0.0
@@ -1112,7 +958,6 @@ class Cat4RungSummary(BaseModel):
     avg_reranker_recall_pct: float | None = None
     total_latency_ms: int = 0
     architectural_notes: list[str] = Field(default_factory=list)
-    answer_format: str | None = None  # synthesis prompt format of this run / recording (answer_formats.py)
     quality: Cat4RungQuality | None = None
     quality_unavailable_reason: str | None = None
 
@@ -1123,8 +968,7 @@ class Cat4RunRequest(BaseModel):
     rungs: list[Cat4RungId] = Field(
         default_factory=lambda: [
             "naive_full_corpus",
-            "cached_full_corpus_citations",
-            "hybrid_rag_rerank_citations",
+            "cached_rerank_hybrid",
         ]
     )
     mode: ExecutionMode = "replay"
@@ -1152,8 +996,7 @@ class Cat4AdhocQueryRequest(BaseModel):
     rungs: list[Cat4RungId] = Field(
         default_factory=lambda: [
             "naive_full_corpus",
-            "cached_full_corpus_citations",
-            "hybrid_rag_rerank_citations",
+            "cached_rerank_hybrid",
         ]
     )
     mode: ExecutionMode = "live"
@@ -1312,6 +1155,8 @@ class Cat5AblationArm(Cat5AblationCell):
     arm_id: str
     label: str
     adds: str
+    design: Literal["without", "with"] = "with"
+    model_column: Literal["sonnet", "haiku_first"] = "sonnet"
     runnable_in_app: bool = False
     app_rung_id: Cat5RungId | None = None
     tool_set: str
@@ -1320,109 +1165,24 @@ class Cat5AblationArm(Cat5AblationCell):
     gate: bool
     escalate: bool
     turn_cap: int
-    tool_calls_per_run: dict[str, float | None] = Field(default_factory=dict)
-    runs_calling_tool: dict[str, int] = Field(default_factory=dict)
-    disallowed_tool_calls: int = 0
-    disallowed_by_name: dict[str, int] = Field(default_factory=dict)
+    expected_runs: int = 0
+    pending_runs: int = 0
+    pending_invoices: list[str] = Field(default_factory=list)
     by_tier: dict[str, Cat5AblationCell] = Field(default_factory=dict)
     by_invoice: dict[str, Cat5AblationCell] = Field(default_factory=dict)
 
 
-class Cat5AblationLever(BaseModel):
-    lever: str
-    label: str
-    from_arm: str
-    to_arm: str
-    changes: list[str] = Field(default_factory=list)
-    available: bool = False
-    exact_from: float | None = None
-    exact_to: float | None = None
-    exact_delta_pp: float | None = None
-    decision_delta_pp: float | None = None
-    cost_billed_from: float | None = None
-    cost_billed_to: float | None = None
-    cost_billed_delta: float | None = None
-    cost_billed_ratio: float | None = None
-    cost_cold_from: float | None = None
-    cost_cold_to: float | None = None
-    cost_cold_delta: float | None = None
-    cost_cold_ratio: float | None = None
-    cost_warm_from: float | None = None
-    cost_warm_to: float | None = None
-    cost_warm_delta: float | None = None
-    cost_warm_ratio: float | None = None
-
-
-class Cat5AblationBaselineRow(BaseModel):
-    preset_id: str
-    source: Literal["original_scripted", "free_choice"]
-    runs: int
-    exact: int
-    decision_correct: int
-    turns_mean: float | None = None
-    tool_calls_mean: float | None = None
-    prompt_tokens_mean: float | None = None
-    output_tokens_mean: float | None = None
-    cost_per_1k_billed_usd: float | None = None
-
-
-class Cat5GateDisagreementArm(BaseModel):
-    arm_id: str
-    gate_arm: bool
-    runs: int
-    matches_manual: int
-    matches_gate_output: int
-    neither: int
-    no_commit: int
-    decisions: dict[str, int] = Field(default_factory=dict)
-    line1_rate: dict[str, int] = Field(default_factory=dict)
-
-
-class Cat5GateDisagreement(BaseModel):
-    preset_id: str
-    invoice_id: str
-    ruling: str
-    manual_text: str
-    manual_truth: dict[str, Any]
-    manual_calculation: list[str] = Field(default_factory=list)
-    gate_output_truth: dict[str, Any]
-    gate_calculation: list[str] = Field(default_factory=list)
-    line1: dict[str, Any] = Field(default_factory=dict)
-    bundle_note: str = ""
-    per_arm: list[Cat5GateDisagreementArm] = Field(default_factory=list)
-    no_gate_runs: int = 0
-    no_gate_match_manual: int = 0
-    gate_runs: int = 0
-    gate_match_gate_output: int = 0
-    gate_match_manual: int = 0
-    missing_keys: int = 0
-    # The gate was fixed after the experiment; the counts above are the recorded (pre-fix) runs.
-    gate_output_note: str = ""
-    gate_fixed_on: str | None = None
-    gate_version_recorded: str | None = None
-    gate_version_current: str | None = None
-    current_gate_output: dict[str, Any] = Field(default_factory=dict)
-    current_gate_matches_manual: bool | None = None
-    after_fix_per_arm: list[Cat5GateDisagreementArm] = Field(default_factory=list)
-    after_fix_gate_runs: int = 0
-    after_fix_gate_match_manual: int = 0
-    after_fix_missing_keys: int = 0
-
-
 class Cat5AblationPortfolio(BaseModel):
-    """Six-arm ablation picture (replays/cat5_ablation_summary.json); `original_scripted_captures` is not exposed."""
+    """The deck's improvement without and with (replays/cat5_ablation_summary.json): three cells."""
 
-    schema_version: int = 1
+    schema_version: int = 2
     source: str
     source_file: str | None = None
     fixture_version: str | None = None
     record_count: int
     pooled_runs: int
-    gate_disagreement_runs: int = 0
-    live_runs_used: int
-    error_records: int = 0
-    superseded_records: int = 0
-    superseded_reasons: list[str] = Field(default_factory=list)
+    expected_runs: int = 0
+    pending_runs: int = 0
     invoices_pooled: list[str] = Field(default_factory=list)
     invoice_count_pooled: int
     invoice_count_total: int
@@ -1432,10 +1192,6 @@ class Cat5AblationPortfolio(BaseModel):
     settings: dict[str, Any] = Field(default_factory=dict)
     tiers: dict[str, str | None] = Field(default_factory=dict)
     arms: list[Cat5AblationArm] = Field(default_factory=list)
-    levers: list[Cat5AblationLever] = Field(default_factory=list)
-    baseline: list[Cat5AblationBaselineRow] = Field(default_factory=list)
-    baseline_note: str = ""
-    gate_disagreement: list[Cat5GateDisagreement] = Field(default_factory=list)
     data_quality: dict[str, int] = Field(default_factory=dict)
     non_exact_runs: list[dict[str, Any]] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)

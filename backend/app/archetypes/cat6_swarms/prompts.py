@@ -19,16 +19,11 @@ AGENT_ROLE_LABELS: dict[str, str] = {
 
 
 def get_cat6_agent_system_prompt(rung_id: str, role_key: str) -> str:
-    """Role-specific instructions appended after cached SHARED_REPO_PREFIX_MARKDOWN."""
-    if rung_id == "unisolated_broadcast_swarm":
-        return (
-            "You are operating inside a shared-bus engineering swarm where all agents append full prose "
-            "and code to one cumulative thread.\n"
-            f"Current Active Persona: {AGENT_ROLE_LABELS.get(role_key, role_key)}.\n"
-            "Inspect all preceding messages carefully, provide exhaustive multi-section commentary, "
-            "and when acting as Patch Author output a complete fenced ```python code block with the repaired module."
-        )
+    """Role-specific instructions; the same on every rung, so the rungs differ only in context design and models.
 
+    On the isolated rungs they follow the cached SHARED_REPO_PREFIX_MARKDOWN; on the shared-bus rung the repo
+    manual travels in the bus itself. `rung_id` is accepted for call-site symmetry.
+    """
     role_directives = {
         "orchestrator_plan": (
             "Role: Lead Orchestrator (Plan Step). Read the incident summary & failing log, identify "
@@ -62,8 +57,63 @@ def get_cat6_agent_system_prompt(rung_id: str, role_key: str) -> str:
     return role_directives.get(role_key, "Follow NovaMart Engineering Standards strictly.")
 
 
-def build_cat6_unisolated_turn_message(preset: dict[str, Any], role_key: str) -> str:
-    """User message for Rung 1's shared-bus broadcast swarm (carries 100k+ bloated context)."""
+_BUS_TURN_LABELS: dict[str, str] = {
+    "orchestrator_plan": "[TURN 1 — LEAD ORCHESTRATOR]",
+    "ci_triager": "[TURN 2 — CI/CD & RUNTIME TRIAGER]",
+    "patch_author": "[TURN 3 — CODE & PATCH AUTHOR]",
+    "security_critic": "[TURN 4 — SECURITY & TEST CRITIC]",
+    "orchestrator_merge": "[TURN 5 — LEAD ORCHESTRATOR MERGE GATE]",
+}
+
+
+def _patch_author_ask(preset: dict[str, Any]) -> str:
+    return (
+        f"Write the COMPLETE repaired `{preset['module_filename']}` strictly conforming to "
+        f"`{preset['standard_ref']}` in one fenced ```python block."
+    )
+
+
+def format_cat6_failing_checks(sandbox_report: dict[str, Any]) -> str:
+    """Failing-check lines sent back to the patch author on the one gate retry (every rung)."""
+    return "\n".join(
+        f"- FAIL {c['check_id']} ({c['name']}): {c['detail']}"
+        for c in sandbox_report.get("checks") or []
+        if not c["passed"]
+    )
+
+
+def _sandbox_checks_block(sandbox_report: dict[str, Any]) -> str:
+    sbx = sandbox_report or {}
+    sbx_summary = "\n".join(
+        f"- {c['check_id']} [{'PASS' if c['passed'] else 'FAIL'}]: {c['name']} -> {c['detail']}"
+        for c in (sbx.get("checks") or [])
+    )
+    return (
+        f"#### Deterministic PR-SANDBOX-GATE-01 ({sbx.get('passed_checks', 0)}/{sbx.get('total_checks', 10)})\n"
+        f"{sbx_summary}"
+    )
+
+
+def _sandbox_status_line(sandbox_report: dict[str, Any]) -> str:
+    sbx = sandbox_report or {}
+    return (
+        f"#### PR-SANDBOX-GATE-01 Status: `{sbx.get('passed_checks', 0)}/{sbx.get('total_checks', 10)}` "
+        f"(Verified Outcome: `{sbx.get('verified_outcome', False)}`)"
+    )
+
+
+def build_cat6_shared_bus_turn_message(
+    preset: dict[str, Any],
+    role_key: str,
+    *,
+    sandbox_report: dict[str, Any] | None = None,
+) -> str:
+    """User message for one shared-bus turn (Rung 1): the same asks as the isolated rungs, on one growing thread.
+
+    Turn 1 carries the incident, the buggy source, the full repo manual and the unrelated neighbour services and
+    OTel spans; later turns append only their ask, so every agent reads everything said before it.
+    """
+    label = _BUS_TURN_LABELS[role_key]
     if role_key == "orchestrator_plan":
         return (
             f"### INCIDENT / PR TICKET: {preset['pr_id']} ({preset['use_case_tag']})\n"
@@ -75,28 +125,30 @@ def build_cat6_unisolated_turn_message(preset: dict[str, Any], role_key: str) ->
             f"#### Buggy Target Source (`{preset['target_file']}`)\n```python\n{preset['buggy_code']}\n```\n\n"
             f"#### Monorepo Architecture & Standards Manual\n{SHARED_REPO_PREFIX_MARKDOWN}\n\n"
             f"{UNFILTERED_REPO_AND_TELEMETRY_NOISE}\n\n"
-            "[TURN 1 — LEAD ORCHESTRATOR]: Produce a thorough root-cause analysis and multi-agent "
-            "execution plan covering all affected modules and CI runner traces."
+            f"{label}: Produce your concise 4-bullet remediation order."
         )
     if role_key == "ci_triager":
-        return (
-            "[TURN 2 — CI/CD & RUNTIME TRIAGER]: Correlate the failing assertions and OpenTelemetry traces above "
-            "to every concrete bug in the target source file and list all edge cases that must be fixed."
-        )
+        return f"{label}: Pinpoint the exact broken lines and mandatory contracts for the Patch Author."
     if role_key == "patch_author":
-        return (
-            f"[TURN 3 — CODE & PATCH AUTHOR]: Implement the complete repaired `{preset['module_filename']}` module "
-            f"following `{preset['standard_ref']}` exactly (preserve all public names/signatures and AST rules). "
-            "Provide the full module inside one fenced ```python block."
-        )
+        return f"{label}: {_patch_author_ask(preset)}"
+    if sandbox_report is None:
+        raise ValueError(f"`{role_key}` turn requires the sandbox report.")
     if role_key == "security_critic":
         return (
-            "[TURN 4 — SECURITY & TEST CRITIC]: Critically review the proposed patch against every unit, "
-            "security, privacy, and concurrency invariant and document your findings."
+            f"{label}:\n\n{_sandbox_checks_block(sandbox_report)}\n\n"
+            f"Confirm `{preset['standard_ref']}` and all AST security/privacy invariants hold."
         )
+    if role_key == "orchestrator_merge":
+        return f"{label}:\n\n{_sandbox_status_line(sandbox_report)}\n\nEmit your final PR merge readiness sign-off."
+    raise ValueError(f"Unknown role_key `{role_key}`")
+
+
+def build_cat6_shared_bus_retry_message(preset: dict[str, Any], failing_lines: str) -> str:
+    """The single gate-retry user message appended to the shared bus after a failed sandbox run."""
     return (
-        "[TURN 5 — LEAD ORCHESTRATOR MERGE GATE]: Provide the final deployment readiness sign-off memo "
-        "synthesizing all findings above."
+        f"{_BUS_TURN_LABELS['patch_author']} — SANDBOX RETRY:\n\n"
+        f"#### SANDBOX RETRY FEEDBACK (Fix All Failing Checks Below)\n{failing_lines}\n\n"
+        f"{_patch_author_ask(preset)}"
     )
 
 

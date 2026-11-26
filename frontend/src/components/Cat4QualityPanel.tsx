@@ -1,6 +1,5 @@
 import { ShieldCheck } from 'lucide-react'
 import type {
-  Cat4BreakEven,
   Cat4GraderError,
   Cat4Measure,
   Cat4PortfolioCell,
@@ -16,29 +15,21 @@ interface Cat4QualityPanelProps {
 }
 
 const RUNG_SHORT: Record<Cat4RungId, string> = {
-  naive_full_corpus: 'Rung 1 · Whole corpus, no cache',
-  cached_full_corpus_citations: 'Rung 2 · Cached whole corpus + citations',
-  hybrid_rag_rerank_citations: 'Rung 3 · Keyword search + small-model rerank',
+  naive_full_corpus: 'Without · Whole corpus, no cache, no citations',
+  cached_rerank_hybrid: 'With · Retrieval paired with caching + citations',
 }
 
-const VERSION_LABEL: Record<string, string> = {
-  naive_full_corpus: 'Whole corpus in every prompt, no cache, no citations',
-  cached_full_corpus_citations: 'Whole corpus cached, with citations',
-  hybrid_rag_rerank_citations: 'Keyword search picks 10 clauses, small model keeps 5, large model answers',
-  cached_rerank_hybrid: 'Small model picks clauses from the cached corpus, large model answers',
-}
+// Without and with the deck improvement
+const VERSIONS: Cat4RungId[] = ['naive_full_corpus', 'cached_rerank_hybrid']
 
-const VERSION_ORDER = [
-  'naive_full_corpus',
-  'cached_full_corpus_citations',
-  'hybrid_rag_rerank_citations',
-  'cached_rerank_hybrid',
-]
+const VERSION_HEAD: Record<Cat4RungId, string> = {
+  naive_full_corpus: 'Without',
+  cached_rerank_hybrid: 'With',
+}
 
 const RUNG_BAR: Record<Cat4RungId, string> = {
   naive_full_corpus: 'bg-rose-500',
-  cached_full_corpus_citations: 'bg-blue-600',
-  hybrid_rag_rerank_citations: 'bg-amber-500',
+  cached_rerank_hybrid: 'bg-emerald-600',
 }
 
 function pct(m: Cat4Measure | null | undefined): number | null {
@@ -114,29 +105,12 @@ function SeriousError({ err, question }: { err: Cat4GraderError; question: numbe
   )
 }
 
-function breakEvenSentence(row: Cat4BreakEven | undefined, size: string): string | null {
-  if (!row) return null
-  if (row.questions != null && row.n_star != null && row.n_star >= 1) {
-    return `At ${size}, caching the whole corpus becomes cheaper than retrieval once ${row.questions} questions share one cache write (it costs more for fewer).`
-  }
-  if (row.questions === 1) return `At ${size}, caching the whole corpus is cheaper than retrieval from the first question.`
-  return `At ${size}, caching the whole corpus does not become cheaper than retrieval at the measured costs.`
-}
-
 function supplierCell(c: Cat4PortfolioCell, portfolio: Cat4QualityPortfolio): string {
   if (c.distractors_selected) return `${frac(c.distractors_selected)} clauses`
   if (c.scale === 1) return 'none (no other supplier in this corpus)'
   return c.exposure_answers && c.exposure_answers.hits > 0
     ? `all of them (whole ${sizeLabel(portfolio, c.scale)} sent)`
     : '—'
-}
-
-function plainInstruction(line: string): string {
-  return line.replace(/^-\s*/, '').replace(/\*\*/g, '')
-}
-
-function Before({ text }: { text: string | null }) {
-  return text ? <span className="block text-[9px] font-normal text-slate-400">before: {text}</span> : null
 }
 
 function neededCell(c: Cat4PortfolioCell): string {
@@ -146,6 +120,31 @@ function neededCell(c: Cat4PortfolioCell): string {
   }
   return 'all (whole corpus sent)'
 }
+
+interface RerunRow {
+  label: string
+  note?: string
+  render: (c: Cat4PortfolioCell, portfolio: Cat4QualityPortfolio) => { text: string; sub?: string; alert?: boolean }
+}
+
+const RERUN_ROWS: RerunRow[] = [
+  {
+    label: 'Cost / question',
+    note: 'cold session · warm cache',
+    render: (c) => ({ text: `${money(c.cost_per_question_billed_usd)} · ${money(c.cost_per_question_warm_usd)}` }),
+  },
+  { label: 'Key facts stated', render: (c) => ({ text: frac(c.fact_recall) }) },
+  {
+    label: 'Answers with a serious error',
+    render: (c) => ({
+      text: c.judged > 0 ? frac(c.answers_with_material_error) : '—',
+      sub: c.correctness_mean != null ? `grade ${c.correctness_mean.toFixed(2)}/5` : undefined,
+      alert: (c.answers_with_material_error?.hits ?? 0) > 0,
+    }),
+  },
+  { label: 'Needed clauses sent to the answering model', render: (c) => ({ text: neededCell(c) }) },
+  { label: "Other suppliers' clauses sent to the answering model", render: (c, p) => ({ text: supplierCell(c, p) }) },
+]
 
 export function Cat4QualityPanel({ results, portfolio, cacheMode }: Cat4QualityPanelProps) {
   const ok = results.filter((r) => r.status === 'ok')
@@ -158,15 +157,9 @@ export function Cat4QualityPanel({ results, portfolio, cacheMode }: Cat4QualityP
   ).sort((a, b) => a - b)
 
   const cells = portfolio?.cells ?? []
-  // the version's current answer format; retrieval versions also have a "before" (original-format) cell
-  const cell = (rung: string, scale: number) =>
-    cells.find((c) => c.rung_id === rung && c.scale === scale && c.adopted !== false)
-  const beforeCell = (rung: string, scale: number) =>
-    cells.find((c) => c.rung_id === rung && c.scale === scale && c.adopted === false)
-  const change = portfolio?.format_change ?? null
-  const changedVersions = new Set(change?.rungs ?? [])
+  const cell = (rung: string, scale: number) => cells.find((c) => c.rung_id === rung && c.scale === scale)
   const scales = portfolio?.scales ?? []
-  const versions = VERSION_ORDER.filter((v) => cells.some((c) => c.rung_id === v))
+  const versions = VERSIONS.filter((v) => cells.some((c) => c.rung_id === v))
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -175,7 +168,7 @@ export function Cat4QualityPanel({ results, portfolio, cacheMode }: Cat4QualityP
           <ShieldCheck className="h-4 w-4" />
           Answer Quality vs Cost · Answer Key + Blind Grader
         </div>
-        <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">How the Cheaper Answers Compare</h2>
+        <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">Without vs With: Answer Quality and Cost</h2>
         <p className="mt-1 max-w-4xl text-xs leading-relaxed text-slate-600">
           Each answer is checked for the specific amounts, dates, clauses and parties a fixed answer key expects, and its
           citations are checked against the clauses the question needs. A separate grader model, which never sees which
@@ -189,7 +182,7 @@ export function Cat4QualityPanel({ results, portfolio, cacheMode }: Cat4QualityP
             'Quality scores are not available for this run.'}
         </p>
       ) : (
-        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
           {ok.map((r) => {
             const q = r.quality
             const errors = (q?.questions ?? []).flatMap((x) =>
@@ -221,7 +214,7 @@ export function Cat4QualityPanel({ results, portfolio, cacheMode }: Cat4QualityP
                     />
                     {q.audit.retrieval_recall && (
                       <MeasureBar
-                        label="Needed clauses found by retrieval"
+                        label="Needed clauses among Haiku's picks"
                         measure={q.audit.retrieval_recall}
                         barClass={RUNG_BAR[r.rung_id]}
                       />
@@ -254,7 +247,7 @@ export function Cat4QualityPanel({ results, portfolio, cacheMode }: Cat4QualityP
                     )}
                   </>
                 ) : (
-                  <p className="text-[11px] text-slate-500">{r.quality_unavailable_reason ?? 'Not scored for this rung.'}</p>
+                  <p className="text-[11px] text-slate-500">{r.quality_unavailable_reason ?? 'Not scored for this version.'}</p>
                 )}
               </div>
             )
@@ -328,120 +321,72 @@ export function Cat4QualityPanel({ results, portfolio, cacheMode }: Cat4QualityP
               version with two other suppliers' look-alike contracts added. Cost per question is shown for an 8-question
               session that starts with a cold cache, and with the cache already warm.
             </p>
-            {change && change.added.length > 0 && (
-              <div className="mt-2 max-w-4xl rounded-lg bg-emerald-50 px-3 py-2 text-[11px] leading-relaxed text-emerald-950 ring-1 ring-emerald-200">
-                <span className="font-extrabold">What changed on {change.adopted_on}:</span> the retrieval versions' answer
-                instructions. Their sign-off bullet changed from “{plainInstruction(change.removed[0] ?? '')}” to “
-                {plainInstruction(change.added[0])}”, and one rule was added: “{plainInstruction(change.added[1] ?? '')}”{' '}
-                {change.note} Those rows show the current numbers, with the numbers from before the change underneath.
-              </div>
-            )}
             <div className="mt-2 overflow-x-auto">
-              <table className="w-full min-w-[1000px] border-collapse text-left text-[11px]">
+              <table className="w-full min-w-[720px] border-collapse text-left text-[11px]">
                 <thead>
+                  <tr className="text-[10px] uppercase text-slate-500">
+                    <th className="py-1.5 pr-3 font-bold" rowSpan={2}>
+                      Measure
+                    </th>
+                    {scales.map((sc) => (
+                      <th key={sc} colSpan={versions.length} className="border-l border-slate-200 py-1.5 pl-3 pr-3 text-center font-bold">
+                        Corpus {sc}× · {sizeLabel(portfolio, sc)}
+                      </th>
+                    ))}
+                  </tr>
                   <tr className="border-b border-slate-200 text-[10px] uppercase text-slate-500">
-                    <th className="py-1.5 pr-3 font-bold">Version</th>
-                    <th className="py-1.5 pr-3 font-bold">Corpus</th>
-                    <th className="py-1.5 pr-3 text-right font-bold">Cost / question (cold session · warm)</th>
-                    <th className="py-1.5 pr-3 text-right font-bold">Key facts stated</th>
-                    <th className="py-1.5 pr-3 text-right font-bold">Answers with a serious error</th>
-                    <th className="py-1.5 pr-3 text-right font-bold">Answers saying the documents lack something</th>
-                    <th className="py-1.5 pr-3 text-right font-bold">Needed clauses found</th>
-                    <th className="py-1.5 pr-3 text-right font-bold">Other suppliers' clauses passed to the answering model</th>
+                    {scales.flatMap((sc) =>
+                      versions.map((v, i) => (
+                        <th
+                          key={`${sc}-${v}`}
+                          className={`py-1.5 pr-3 text-right font-bold ${i === 0 ? 'border-l border-slate-200 pl-3' : ''}`}
+                        >
+                          {VERSION_HEAD[v]}
+                        </th>
+                      ))
+                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  {versions.flatMap((v) =>
-                    scales.map((sc, i) => {
-                      const c = cell(v, sc)
-                      if (!c) return null
-                      const b = beforeCell(v, sc)
-                      return (
-                        <tr key={`${v}-${sc}`} className={`align-top ${i === scales.length - 1 ? 'border-b border-slate-200' : ''}`}>
-                          <td className="py-1.5 pr-3 text-slate-800">
-                            {i === 0 && (
-                              <>
-                                <span className="font-bold">{VERSION_LABEL[v] ?? v}</span>
-                                {!c.runnable_in_app && (
-                                  <span className="ml-1.5 rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-violet-800">
-                                    measured in the rerun, not runnable here
-                                  </span>
-                                )}
-                                {changedVersions.has(v) && change && (
-                                  <span className="ml-1.5 rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-800">
-                                    answer instructions changed {change.adopted_on}
-                                  </span>
-                                )}
-                              </>
-                            )}
-                          </td>
-                          <td className="py-1.5 pr-3 text-slate-600">{sizeLabel(portfolio, sc)}</td>
-                          <td className="py-1.5 pr-3 text-right font-mono text-slate-900">
-                            {money(c.cost_per_question_billed_usd)} · {money(c.cost_per_question_warm_usd)}
-                            <Before text={b ? `${money(b.cost_per_question_billed_usd)} · ${money(b.cost_per_question_warm_usd)}` : null} />
-                          </td>
-                          <td className="py-1.5 pr-3 text-right font-mono">
-                            {frac(c.fact_recall)}
-                            <Before text={b ? frac(b.fact_recall) : null} />
-                          </td>
-                          <td
-                            className={`py-1.5 pr-3 text-right font-mono ${
-                              (c.answers_with_material_error?.hits ?? 0) > 0 ? 'font-bold text-rose-700' : 'text-slate-900'
-                            }`}
-                          >
-                            {c.judged > 0 ? frac(c.answers_with_material_error) : '—'}
-                            {c.correctness_mean != null && (
-                              <span className="block text-[9px] font-normal text-slate-500">grade {c.correctness_mean.toFixed(2)}/5</span>
-                            )}
-                            <Before
-                              text={
-                                b && b.judged > 0
-                                  ? `${frac(b.answers_with_material_error)}${b.correctness_mean != null ? ` · grade ${b.correctness_mean.toFixed(2)}/5` : ''}`
-                                  : null
-                              }
-                            />
-                          </td>
-                          <td className="py-1.5 pr-3 text-right font-mono">
-                            {frac(c.answers_with_documents_lack_claim)}
-                            <Before text={b ? frac(b.answers_with_documents_lack_claim) : null} />
-                          </td>
-                          <td className="py-1.5 pr-3 text-right font-mono">
-                            {neededCell(c)}
-                            <Before text={b && b.recall_after_rerank ? neededCell(b) : null} />
-                          </td>
-                          <td className="py-1.5 pr-3 text-right font-mono">{supplierCell(c, portfolio)}</td>
-                        </tr>
-                      )
-                    })
-                  )}
+                  {RERUN_ROWS.map((row) => (
+                    <tr key={row.label} className="border-b border-slate-100 align-top">
+                      <td className="py-1.5 pr-3 text-slate-800">
+                        <span className="font-bold">{row.label}</span>
+                        {row.note && <span className="block text-[10px] font-normal text-slate-500">{row.note}</span>}
+                      </td>
+                      {scales.flatMap((sc) =>
+                        versions.map((v, i) => {
+                          const c = cell(v, sc)
+                          const out = c ? row.render(c, portfolio) : { text: '—' }
+                          return (
+                            <td
+                              key={`${sc}-${v}`}
+                              className={`py-1.5 pr-3 text-right font-mono ${i === 0 ? 'border-l border-slate-200 pl-3' : ''} ${
+                                out.alert ? 'font-bold text-rose-700' : 'text-slate-900'
+                              }`}
+                            >
+                              {out.text}
+                              {out.sub && <span className="block text-[9px] font-normal text-slate-500">{out.sub}</span>}
+                            </td>
+                          )
+                        })
+                      )}
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-            <ul className="mt-3 space-y-1 text-[11px] leading-relaxed text-slate-700">
-              {scales.map((sc) => {
-                const row = (portfolio.break_even[String(sc)] ?? []).find(
-                  (b) => b.a === 'cached_full_corpus_citations' && b.b === 'hybrid_rag_rerank_citations'
-                )
-                const text = breakEvenSentence(row, sizeLabel(portfolio, sc))
-                return text ? <li key={sc}>• {text}</li> : null
-              })}
-            </ul>
-            {changedVersions.size > 0 && (
-              <p className="mt-1 text-[10px] text-slate-500">
-                Break-even uses each version's current answer format (the retrieval versions' sessions after the change).
-              </p>
-            )}
+            <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
+              Without: Sonnet answers from the whole corpus, uncached, with no citations. With: Haiku picks 5 clauses from
+              the cached corpus and Sonnet answers over them with citations; because it sees only those clauses, it is told
+              to say when a term is not in the text provided.
+            </p>
             <p className="mt-3 text-[10px] leading-relaxed text-slate-500">
               Method: {portfolio.answers_scored} answers — {versions.length} versions × {scales.length} corpus sizes ×{' '}
-              {portfolio.sessions_per_cell ?? 'several'} sessions of {portfolio.questions_per_session} questions
-              {changedVersions.size > 0
-                ? `, plus the same again for the ${changedVersions.size} retrieval versions before their answer instructions changed (separate sessions)`
-                : ''}{' '}
-              — each graded blind{portfolio.judge_passes === 1 ? ' once' : ` ${portfolio.judge_passes} times`} by a model
+              {portfolio.sessions_per_cell ?? 'several'} sessions of {portfolio.questions_per_session} questions — each
+              graded blind{portfolio.judge_passes === 1 ? ' once' : ` ${portfolio.judge_passes} times`} by a model
               not under test{portfolio.judge_model ? ` (${portfolio.judge_model})` : ''}, plus a fixed answer key. Every
-              rerun question carried a one-line note naming the supplier under audit. "Documents lack something" counts
-              answers with a sentence saying the documents, deal room or contracts contain no such term (a fixed pattern
-              check, not the grader).
+              question carried a one-line note naming the supplier under audit.
             </p>
           </>
         )}

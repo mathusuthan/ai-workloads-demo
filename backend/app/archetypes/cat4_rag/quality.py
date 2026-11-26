@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from app.archetypes.cat4_rag.quality_rerun import (
+    RETRIEVAL_RUNGS,
     build_scaled_corpus,
     facts_for,
     load_quality_keys,
@@ -111,13 +112,11 @@ def _score_query(
         return None
     corpus = build_scaled_corpus(1)
     selected = [f.chunk_id for f in q.retrieval_funnel if f.stage == "selected_by_reranker"]
-    candidates = [f.chunk_id for f in q.retrieval_funnel if f.stage in ("selected_by_reranker", "pruned_by_reranker")]
     expected = list(q.expected_chunk_ids)
     retrieval = None
-    if rung_id == "hybrid_rag_rerank_citations" and q.retrieval_funnel:
+    if rung_id in RETRIEVAL_RUNGS and q.retrieval_funnel:
         retrieval = {
             "selected_chunk_ids": selected,
-            "recall_after_bm25": {"hits": len(set(expected) & set(candidates)), "total": len(set(expected))},
             "recall_after_rerank": {"hits": len(set(expected) & set(selected)), "total": len(set(expected))},
             "backfilled_chunk_ids": [], "invalid_picks": [],
         }

@@ -34,7 +34,6 @@ PROSE_PATTERNS = (
     "prefix_cached_sliding_summary",
     "uncached_full_corpus_stuffing",
     "prefix_cached_full_corpus_citations",
-    "hybrid_bm25_haiku_rerank_citations",
     "unbounded_uncached_react_loop",
     "bounded_sonnet_cached_gate",
     "hybrid_haiku_sonnet_governed_loop",
@@ -123,7 +122,9 @@ def main() -> None:
 
     st.title("NovaMart AI Trace Explorer")
     st.caption(
-        f"Inspect partitioned LLM inputs, system instructions, schemas, outputs & FinOps metrics · Storage: `{traces_dir}`"
+        f"Inspect partitioned LLM inputs, system instructions, schemas, outputs & FinOps metrics · Storage: `{traces_dir}`. "
+        "Holds one seed trace per recorded call of the current recorded runs, plus any live requests; replay requests "
+        "do not write traces."
     )
 
     with st.sidebar:
@@ -138,8 +139,9 @@ def main() -> None:
 
     if not all_traces:
         st.info(
-            "No traces captured yet. Run a request in the web dashboard (`http://127.0.0.1:8000`) "
-            "or run `python backend/scripts/seed_traces_from_replays.py`."
+            "No traces captured yet. Run `python backend/scripts/seed_traces_from_replays.py` to load the recorded "
+            "runs, or send a live request from the web dashboard (`http://127.0.0.1:8000`); replay requests do not "
+            "write traces."
         )
         return
 
@@ -280,7 +282,7 @@ def main() -> None:
                     st.markdown("**System Instruction**")
                     st.code(sys_inst, language="text")
                 else:
-                    st.info("No system instruction — Gemini Decisions API evaluates typed questions directly.")
+                    st.info("No system instruction recorded for this call.")
 
                 if req.get("parameters"):
                     with st.expander("Model Request Parameters", expanded=False):

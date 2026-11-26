@@ -22,7 +22,6 @@ from app.core.anthropic_service import AnthropicRawResult
 from app.data.cat5_ablation_fixtures import (
     CAT5_ABLATION_DEFAULT_INVOICE_IDS,
     CAT5_ABLATION_ERP_ROWS,
-    CAT5_ABLATION_EXCLUDED_PENDING_REVIEW,
     CAT5_ABLATION_NEW_PRESETS,
     CAT5_ABLATION_PRESETS,
     CAT5_ABLATION_PRESETS_BY_ID,
@@ -34,6 +33,7 @@ from app.data.cat5_fixtures import CAT5_PRESETS, ERP_SEED_DATA
 BACKEND = Path(__file__).resolve().parent.parent
 P = CAT5_ABLATION_PRESETS_BY_ID
 GATE_ARMS = ("bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate")
+ALL_ARMS = (*ab.ARM_IDS, *ab.OTHER_LEVER_ARM_IDS)  # the displayed cells, then the other single levers tried
 NEUTRAL_ARMS = ("raw_free_sonnet", "raw_free_sonnet_cached", "bundle_sonnet_cached", "bundle_haiku_cached")
 
 
@@ -133,11 +133,10 @@ def bundle_script(preset_id: str, **override: Any) -> list:
 # --------------------------------------------------------------------------------------------------
 
 
-def test_six_arms_and_tool_lists() -> None:
-    assert ab.ARM_IDS == (
-        "raw_free_sonnet", "raw_free_sonnet_cached", "bundle_sonnet_cached",
-        "bundle_gate_sonnet_cached", "bundle_haiku_cached", "bundle_gate_haiku_escalate",
-    )
+def test_displayed_and_other_lever_arms_and_tool_lists() -> None:
+    assert ab.ARM_IDS == ("raw_free_sonnet", "bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate")
+    assert ab.OTHER_LEVER_ARM_IDS == ("raw_free_sonnet_cached", "bundle_sonnet_cached", "bundle_haiku_cached")
+    assert set(ab.ARMS) == set(ALL_ARMS) and len(ALL_ARMS) == 6
     for a in ("raw_free_sonnet", "raw_free_sonnet_cached"):
         tools = ab.tools_for(a)
         assert tools == NAIVE_TOOLS and all(x is y for x, y in zip(tools, NAIVE_TOOLS))
@@ -162,10 +161,10 @@ def test_caps_and_flags() -> None:
     for a in GATE_ARMS:
         assert ab.ARMS[a].step_budget == 4 and ab.ARMS[a].turn_cap == 5 and ab.ARMS[a].gate
     assert not ab.ARMS["raw_free_sonnet"].cached
-    assert all(ab.ARMS[a].cached for a in ab.ARM_IDS if a != "raw_free_sonnet")
+    assert all(ab.ARMS[a].cached for a in ALL_ARMS if a != "raw_free_sonnet")
     assert ab.ARMS["bundle_haiku_cached"].start_model == "claude-haiku-5-5"
     assert ab.ARMS["bundle_gate_haiku_escalate"].escalate
-    assert sum(ab.ARMS[a].escalate for a in ab.ARM_IDS) == 1
+    assert sum(ab.ARMS[a].escalate for a in ALL_ARMS) == 1
 
 
 def test_neutral_protocol_identical_and_names_no_tool_order() -> None:
@@ -184,7 +183,7 @@ def test_gate_prompts_byte_identical_to_today() -> None:
 
 
 def test_every_arm_gets_todays_user_task_and_call_settings() -> None:
-    for a in ab.ARM_IDS:
+    for a in ALL_ARMS:
         agent = Scripted([("end_turn", [], "x")])
         rec = run(a, "inv-01", agent)
         kw = agent.calls[0]
@@ -427,26 +426,19 @@ def test_fixture_shape_and_derivations() -> None:
         assert f"{gt['debit_note_deduction_inr']:,.2f}" in p["derivation"]["debit_note_deduction_inr"]
 
 
-def test_default_matrix_equals_gate_and_exclusions_differ() -> None:
+def test_default_matrix_is_all_twelve_and_equals_the_policy_tool() -> None:
+    assert CAT5_ABLATION_DEFAULT_INVOICE_IDS == tuple(f"inv-{i:02d}" for i in range(1, 13))
     for pid in CAT5_ABLATION_DEFAULT_INVOICE_IDS:
         cmp = ab.compare_with_gate(pid)
         assert cmp["agree"], (pid, cmp["differences"])
-    assert set(CAT5_ABLATION_EXCLUDED_PENDING_REVIEW) == {"inv-06"}
-    for pid in CAT5_ABLATION_DEFAULT_INVOICE_IDS:  # ... and with the pre-fix gate the experiment ran on
-        assert ab.compare_with_gate(pid, ab.GATE_VERSION_V1)["agree"], pid
-    for pid in CAT5_ABLATION_EXCLUDED_PENDING_REVIEW:
-        cmp = ab.compare_with_gate(pid, ab.GATE_VERSION_V1)  # the recorded disagreement
-        assert not cmp["agree"]
-        assert cmp["differences"]["decision"] == {"derivation": "APPROVE_PARTIAL_DEBIT_NOTE", "gate": "APPROVE_CLEAN"}
-        assert ab.compare_with_gate(pid)["agree"], ab.compare_with_gate(pid)["differences"]  # fixed gate = manual
-    assert set(CAT5_ABLATION_DEFAULT_INVOICE_IDS) | set(CAT5_ABLATION_EXCLUDED_PENDING_REVIEW) == set(P)
 
 
 def test_fixture_spread() -> None:
     tiers = [p["analysis_tier"] for p in CAT5_ABLATION_PRESETS]
     assert tiers.count("routine") >= 4 and tiers.count("dispute") >= 4 and tiers.count("hard_stop") == 2
-    esc = [p["ground_truth"]["expected_escalation"] for p in CAT5_ABLATION_PRESETS if p["id"] in CAT5_ABLATION_DEFAULT_INVOICE_IDS]
-    assert esc.count(True) >= 4 and esc.count(False) >= 4
+    # manual 6.2 (multi-factor rule): only the two invoices with two or more distinct factor kinds escalate
+    assert [p["id"] for p in CAT5_ABLATION_PRESETS if p["ground_truth"]["expected_escalation"]] == ["inv-02", "inv-12"]
+    assert all(p.get("escalation_derivation") for p in CAT5_ABLATION_PRESETS)
     assert len({p["fc_hub"] for p in CAT5_ABLATION_NEW_PRESETS}) == 4
     assert len({p["vendor_name"] for p in CAT5_ABLATION_NEW_PRESETS}) == 9
 
@@ -515,35 +507,12 @@ def test_cost_views() -> None:
     assert abs(c2["billed"] - c2["cold"]) < 1e-9 and c2["warm"] < c2["cold"]
 
 
-def test_lever_table_maths() -> None:
-    def m(exact: int, n: int, billed: float, cold: float, warm: float) -> dict[str, Any]:
-        return {"runs": n, "exact": ab._rate_block(exact, n), "decision_correct": ab._rate_block(exact, n),
-                "cost_per_1k_invoices_usd": {"billed": billed, "cold": cold, "warm": warm}}
-
-    metrics = {
-        "raw_free_sonnet": m(18, 36, 240.0, 240.0, 240.0),
-        "raw_free_sonnet_cached": m(27, 36, 150.0, 150.0, 120.0),
-        "bundle_sonnet_cached": m(36, 36, 50.0, 50.0, 30.0),
-    }
-    rows = {r["lever"]: r for r in ab.lever_table(metrics)}
-    c = rows["caching alone"]
-    assert c["available"] and c["changes"] == ["cached: False -> True"]
-    assert c["exact"]["delta_pp"] == pytest.approx(25.0)
-    assert c["cost_per_1k_invoices_usd"]["billed"]["delta"] == pytest.approx(-90.0)
-    assert c["cost_per_1k_invoices_usd"]["billed"]["ratio"] == pytest.approx(0.625)
-    assert c["cost_per_1k_invoices_usd"]["warm"]["delta"] == pytest.approx(-120.0)
-    assert rows["narrow query"]["exact"]["delta_pp"] == pytest.approx(25.0)
-    assert not rows["deterministic gate"]["available"]
-    assert "gate: False -> True" in rows["deterministic gate"]["changes"]
-    assert "prompt: neutral -> bounded_sonnet_cached_gate" in rows["deterministic gate"]["changes"]
-
-
 # --------------------------------------------------------------------------------------------------
-# Resume, superseded settings, budget guard, plan order
+# Resume, stale settings, budget guard, plan order
 # --------------------------------------------------------------------------------------------------
 
 
-def test_plan_order_resume_and_superseded() -> None:
+def test_plan_order_resume_and_stale_settings() -> None:
     planned = ab.plan_matrix(["a1", "a2"], ["inv-01", "inv-02"], 2)
     assert planned[:4] == [("a1", "inv-01", 0), ("a2", "inv-01", 0), ("a1", "inv-02", 0), ("a2", "inv-02", 0)]
     assert planned[4] == ("a1", "inv-01", 1)
@@ -556,8 +525,6 @@ def test_plan_order_resume_and_superseded() -> None:
     pending = ab.select_pending(plan, [ok, err, stale])
     assert pending == plan[1:]
     assert ab.is_current_settings(ok) and not ab.is_current_settings(stale)
-    sup = ab.superseded_records([ok, err, stale])
-    assert len(sup) == 1 and sup[0]["recorded"]["max_tokens_per_turn"] == 2048
     tampered = _hand_record("inv-01", None)
     tampered["settings"] = {**tampered["settings"], "invoice_fingerprint": "different"}
     assert not ab.is_current_settings(tampered)
@@ -579,7 +546,7 @@ def test_budget_guard() -> None:
 def test_dry_run_estimates_are_calibrated_and_ordered() -> None:
     cal = ab.calibrate()
     assert cal.source.endswith("cat5_golden_replays.json")
-    ests = {a: ab.estimate_run(a, P["inv-02"], cal) for a in ab.ARM_IDS}
+    ests = {a: ab.estimate_run(a, P["inv-02"], cal) for a in ALL_ARMS}
     for e in ests.values():
         assert 0 < e["typical_usd"] <= e["worst_case_usd"]
     assert ests["raw_free_sonnet"]["typical_usd"] > ests["raw_free_sonnet_cached"]["typical_usd"] > ests["bundle_sonnet_cached"]["typical_usd"]
@@ -604,10 +571,13 @@ def _load_script(name: str):
 def test_analysis_with_zero_records(tmp_path: Path) -> None:
     s = ab.summarise([])
     assert s["ok_runs_used"] == 0 and s["arms"]["raw_free_sonnet"]["exact"]["rate"] is None
-    assert all(not row["available"] for row in s["levers"])
-    assert len(s["baseline"]["golden_scripted"]) == 3
+    assert s["arm_ids"] == list(ab.ARM_IDS) and s["preset_ids"] == list(CAT5_ABLATION_DEFAULT_INVOICE_IDS)
+    for k in ("levers", "baseline", "gate_disagreement", "pooled_excludes"):
+        assert k not in s
     md = ab.render_markdown(s)
-    assert "Lever table" in md and "inv-06" in md
+    assert md.startswith("# Category 5: 4-step budget + deterministic policy tool, without and with")
+    for gone in ("Lever table", "Before the fix", "superseded", "gate v1", "When the deterministic gate is wrong"):
+        assert gone not in md
     mod = _load_script("analyze_cat5_ablation")
     out_md = tmp_path / "a.md"
     assert mod.main(["--in", str(tmp_path / "missing.jsonl"), "--out-md", str(out_md)]) == 0
@@ -615,51 +585,54 @@ def test_analysis_with_zero_records(tmp_path: Path) -> None:
 
 
 def test_analysis_with_records(tmp_path: Path) -> None:
+    raw = "raw_free_sonnet"
     recs = [
-        run("bundle_sonnet_cached", "inv-04", Scripted(bundle_script("inv-04"))),
-        run("bundle_sonnet_cached", "inv-05", Scripted(bundle_script("inv-05", debit_note_deduction_inr=0.0))),
+        run(raw, "inv-04", Scripted(bundle_script("inv-04")[1:])),  # commits the exact voucher straight away
+        run(raw, "inv-02", Scripted([("tool_use", [("commit_reconciliation_voucher", _commit_input(P["inv-02"], debit_note_deduction_inr=0.0))], ""),
+                                      ("end_turn", [], "Done.")])),
         run("bundle_gate_sonnet_cached", "inv-04", Scripted(governed_script("inv-04"))),
-        run("bundle_gate_sonnet_cached", "inv-05", Scripted(governed_script("inv-05")), sink={}),
-        {**run("bundle_gate_sonnet_cached", "inv-05", Scripted(governed_script("inv-05"), fail_on=1), repeat_index=1)},
+        run("bundle_gate_sonnet_cached", "inv-02", Scripted(governed_script("inv-02")), sink={}),
+        run("bundle_gate_sonnet_cached", "inv-02", Scripted(governed_script("inv-02"), fail_on=1), repeat_index=1),
     ]
-    stale = run("bundle_sonnet_cached", "inv-04", Scripted(bundle_script("inv-04")))
+    stale = run(raw, "inv-04", Scripted(bundle_script("inv-04")[1:]))
     stale["settings"] = {**stale["settings"], "turn_cap": 99}
     recs.append(stale)
-    s = ab.summarise(recs, preset_ids=["inv-04", "inv-05"], expected_repeats=1)
-    a = s["arms"]["bundle_sonnet_cached"]
+    s = ab.summarise(recs, preset_ids=["inv-04", "inv-02"], expected_repeats=1)
+    a = s["arms"][raw]
     assert a["runs"] == 2 and a["exact"]["k"] == 1 and a["decision_correct"]["k"] == 2
     assert a["by_tier"]["routine"]["exact"]["k"] == 1 and a["by_tier"]["dispute"]["exact"]["k"] == 0
-    assert a["tool_calls_per_run"] == {"commit_reconciliation_voucher": 1.0, "fetch_3way_match_bundle": 1.0}
     g = s["arms"]["bundle_gate_sonnet_cached"]
-    assert g["runs"] == 2 and g["exact"]["k"] == 2 and g["escalation"]["gate_flagged"] == 1
-    lever = next(r for r in s["levers"] if r["lever"] == "deterministic gate")
-    assert lever["available"] and lever["exact"]["delta_pp"] == pytest.approx(50.0)
-    assert [e["preset_id"] for e in s["for_lead_review"]] == ["inv-05"]
-    assert s["for_lead_review"][0]["mismatched_fields"] == ["debit_note_deduction_inr"]
-    dq = s["data_quality"]
-    assert len(dq["errors"]) == 1 and len(dq["superseded_records"]) == 1 and dq["cache_anomalies"] == []
-    assert not s["matrix"]["complete"] and len(s["matrix"]["missing_keys"]) == 8 and s["matrix"]["balanced"] is False
-    two = ab.summarise(recs, arm_ids=["bundle_sonnet_cached", "bundle_gate_sonnet_cached"], preset_ids=["inv-04", "inv-05"], expected_repeats=1)
+    assert g["runs"] == 2 and g["exact"]["k"] == 2 and g["escalation"]["gate_flagged"] == 1  # inv-02 is a multi-factor dispute
+    assert [e["preset_id"] for e in s["non_exact_runs"]] == ["inv-02"]
+    assert s["non_exact_runs"][0]["mismatched_fields"] == ["debit_note_deduction_inr"]
+    assert s["data_quality"]["cache_anomalies"] == 0 and s["data_quality"]["no_voucher_committed"] == 0
+    # the Haiku-first cell has no runs yet: pending, listed per version
+    h = s["arms"]["bundle_gate_haiku_escalate"]
+    assert h["runs"] == 0 and h["pending"] == {"runs": 2, "invoices": ["inv-02", "inv-04"]}
+    assert not s["matrix"]["complete"] and len(s["matrix"]["pending_keys"]) == 2 and s["matrix"]["balanced"] is False
+    two = ab.summarise(recs, arm_ids=[raw, "bundle_gate_sonnet_cached"], preset_ids=["inv-04", "inv-02"], expected_repeats=1)
     assert two["matrix"]["complete"] and two["matrix"]["balanced"]
     md = ab.render_markdown(s)
-    assert "bundle_sonnet_cached / inv-05 / r0" in md
+    assert "raw_free_sonnet / inv-02 / r0" in md
+    assert "Pending (not run yet): 2 runs — bundle_gate_haiku_escalate: inv-02, inv-04 (2 runs)." in md
+    assert "Pending" not in ab.render_markdown(two)
     path = tmp_path / "runs.jsonl"
     path.write_text("\n".join(json.dumps(r) for r in recs) + "\n")
     out_md = tmp_path / "out.md"
-    assert _load_script("analyze_cat5_ablation").main(["--in", str(path), "--out-md", str(out_md), "--invoices", "inv-04,inv-05"]) == 0
-    assert "deterministic gate" in out_md.read_text()
+    assert _load_script("analyze_cat5_ablation").main(["--in", str(path), "--out-md", str(out_md), "--invoices", "inv-04,inv-02"]) == 0
+    assert "## Without and with (all invoices)" in out_md.read_text()
 
 
 def test_runner_cli_dry_run(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
     mod = _load_script("cat5_ablation")
     rc = asyncio.run(mod.run_matrix(mod.parse_args(["--dry-run", "--out", str(tmp_path / "runs.jsonl"), "--repeats", "1"])))
     out = capsys.readouterr().out
-    assert rc == 0 and "66 pending" in out and "TOTAL typical" in out and "no API calls" in out
+    assert rc == 0 and "36 pending" in out and "TOTAL typical" in out and "no API calls" in out
     assert not (tmp_path / "runs.jsonl").exists()
 
 
 # --------------------------------------------------------------------------------------------------
-# Follow-up: stop-reason robustness, harness-artefact records, gate-disagreement group, tool-use report
+# Stop-reason robustness, harness-artefact records, policy-tool staleness, notes
 # --------------------------------------------------------------------------------------------------
 
 PINNED_INVOICE_FP = {
@@ -678,7 +651,7 @@ def test_fingerprints_pinned_so_recorded_runs_stay_current() -> None:
     from app.data.cat5_ablation_fixtures import invoice_fingerprint
 
     assert {p: invoice_fingerprint(p) for p in PINNED_INVOICE_FP} == PINNED_INVOICE_FP
-    assert {a: ab.arm_fingerprint(a) for a in ab.ARM_IDS} == PINNED_ARM_FP
+    assert {a: ab.arm_fingerprint(a) for a in ALL_ARMS} == PINNED_ARM_FP
 
 
 def test_end_turn_with_tool_use_blocks_executes_and_continues() -> None:
@@ -698,8 +671,7 @@ def test_end_turn_with_tool_use_blocks_executes_and_continues() -> None:
     assert rec["committed_voucher"] is not None and rec["ended_with_stop_reason"] == "end_turn"
     assert not ab.harness_artifact(rec) and ab.is_current_settings(rec)
     assert rec["settings"]["loop_rule"] == ab.LOOP_RULE
-    dq = ab.data_quality([rec], [rec])
-    assert dq["tool_use_blocks_with_other_stop_reason"][0]["stop_reason"] == "end_turn"
+    assert ab.data_quality([rec])["tool_use_blocks_with_other_stop_reason"] == 1
 
 
 def test_truncated_turn_is_not_an_artifact() -> None:
@@ -721,18 +693,15 @@ def _v1_artifact_record() -> dict[str, Any]:
     return rec
 
 
-def test_artifact_record_is_superseded_retried_and_excluded() -> None:
+def test_artifact_record_is_retried_and_excluded() -> None:
     art = _v1_artifact_record()
     good = run("raw_free_sonnet", "inv-01", Scripted([("end_turn", [], "x")]))
-    assert ab.harness_artifact(art) and not ab.is_current_settings(art)
+    assert ab.harness_artifact(art) and not ab.is_current_settings(art) and not ab.record_is_current(art)
     keys = [("raw_free_sonnet", "inv-05", 0), ("raw_free_sonnet", "inv-01", 0)]
     assert ab.select_pending(keys, [art, good]) == [keys[0]]
-    sup = ab.superseded_records([art, good])
-    assert [s["reason"] for s in sup] == ["harness ended the run with tool calls not executed"]
     s = ab.summarise([art, good], arm_ids=["raw_free_sonnet"], preset_ids=["inv-01", "inv-05"], expected_repeats=1)
-    assert s["ok_runs_used"] == 1 and s["matrix"]["missing_keys"] == [["raw_free_sonnet", "inv-05", 0]]
-    md = ab.render_markdown(s)
-    assert "superseded: harness ended the run with tool calls not executed — raw_free_sonnet / inv-05 / r0" in md
+    assert s["ok_runs_used"] == 1 and s["matrix"]["pending_keys"] == [["raw_free_sonnet", "inv-05", 0]]
+    assert "Pending (not run yet): 1 runs — raw_free_sonnet: inv-05 (1 runs)." in ab.render_markdown(s)
     # a fresh retry appended after the artefact is used
     retry = run("raw_free_sonnet", "inv-05", Scripted([
         ("tool_use", [("commit_reconciliation_voucher", _commit_input(P["inv-05"]))], ""), ("end_turn", [], "ok")]))
@@ -740,84 +709,54 @@ def test_artifact_record_is_superseded_retried_and_excluded() -> None:
     assert ab.latest_ok_current([art, good, retry])[keys[0]]["run_id"] == retry["run_id"]
 
 
-def test_groups_and_both_truths_for_inv06() -> None:
-    from app.data.cat5_ablation_fixtures import CAT5_ABLATION_GATE_DISAGREEMENT, CAT5_ABLATION_GROUPS
-
-    assert CAT5_ABLATION_GROUPS["default"] == CAT5_ABLATION_DEFAULT_INVOICE_IDS and len(CAT5_ABLATION_DEFAULT_INVOICE_IDS) == 11
-    assert CAT5_ABLATION_GROUPS["gate_disagreement"] == ("inv-06",)
+def test_inv06_is_in_the_matrix_and_the_policy_tool_follows_manual_2_1() -> None:
     pre = P["inv-06"]
+    assert "inv-06" in CAT5_ABLATION_DEFAULT_INVOICE_IDS
     assert pre["ground_truth"]["decision"] == "APPROVE_PARTIAL_DEBIT_NOTE" and pre["ground_truth"]["debit_note_deduction_inr"] == 22800.0
-    # gate_output_truth is frozen: what the pre-fix gate returned on 2026-11-26 (reproduced by the v1 gate)
-    g = ab.gate_output_for("inv-06", ab.GATE_VERSION_V1)
+    assert "gate_output_truth" not in pre and "gate_output_truth" not in pre["ground_truth"]
+    g = ab.gate_output_for("inv-06")
     got = {"decision": g["recommended_decision"], **{f: g[f] for f in ab.VOUCHER_FIELDS[1:]}, "expected_escalation": g["escalation_required"]}
-    assert pre["gate_output_truth"] == got == CAT5_ABLATION_GATE_DISAGREEMENT["inv-06"]["gate_output_truth"]
-    assert "before the fix" in CAT5_ABLATION_GATE_DISAGREEMENT["inv-06"]["gate_output_note"]
-    assert "gate_output_truth" not in pre["ground_truth"]
-    # the FIXED gate now equals the manual derivation on inv-06
-    g2 = ab.gate_output_for("inv-06")
-    fixed = {"decision": g2["recommended_decision"], **{f: g2[f] for f in ab.VOUCHER_FIELDS[1:]}, "expected_escalation": g2["escalation_required"]}
-    assert fixed == {f: pre["ground_truth"][f] for f in (*ab.VOUCHER_FIELDS, "expected_escalation")}
-    assert g2["line_findings"][0]["price_rule"] == "WITHIN_1.5PCT_NOT_INDEX_LINKED_PO_RATE"
+    assert got == {f: pre["ground_truth"][f] for f in (*ab.VOUCHER_FIELDS, "expected_escalation")}
+    assert g["line_findings"][0]["price_rule"] == "WITHIN_1.5PCT_NOT_INDEX_LINKED_PO_RATE"
 
 
-def test_gate_disagreement_section_and_never_pooled() -> None:
+def _with_sha(record: dict[str, Any], tool: str) -> dict[str, Any]:
+    """A copy whose `tool` calls recorded a different output (as if made while the tool returned something else)."""
+    out = json.loads(json.dumps(record))
+    for t in out["turns"]:
+        for c in t.get("tool_calls") or []:
+            if c["name"] == tool:
+                c["result_sha256"] = "0" * 64
+    return out
+
+
+@pytest.mark.parametrize("tool", ["run_policy_tolerance_gate", "fetch_3way_match_bundle", "commit_reconciliation_voucher"])
+def test_record_is_current_only_while_every_tool_output_matches(tool: str) -> None:
     pre = P["inv-06"]
-    gate_vals = {k: v for k, v in pre["gate_output_truth"].items() if k != "expected_escalation"}
-    recs = [
-        run("bundle_sonnet_cached", "inv-06", Scripted(bundle_script("inv-06"))),  # manual figures
-        run("raw_free_sonnet", "inv-06", Scripted([
-            ("tool_use", [("query_po_raw", {"po_id": pre["po_id"]})], ""),
-            ("tool_use", [("commit_reconciliation_voucher", _commit_input(pre, **gate_vals))], ""), ("end_turn", [], "ok")])),
-        run("bundle_haiku_cached", "inv-06", Scripted(bundle_script("inv-06", authorized_net_principal_inr=3600000.0))),
-        run("raw_free_sonnet_cached", "inv-06", Scripted([("end_turn", [], "no commit")])),
-        run("bundle_sonnet_cached", "inv-04", Scripted(bundle_script("inv-04"))),
-    ]
-    gated = run("bundle_gate_sonnet_cached", "inv-06", Scripted([
-        ("tool_use", [("fetch_3way_match_bundle", {"invoice_id": pre["invoice_id"]})], ""),
-        ("tool_use", [("run_policy_tolerance_gate", {"invoice_id": pre["invoice_id"]})], ""),
-        ("tool_use", [("commit_reconciliation_voucher", _commit_input(pre, **gate_vals))], ""), ("end_turn", [], "ok")]))
-    assert gated["settings"]["gate_version"] == ab.GATE_VERSION
-    legacy = json.loads(json.dumps(gated))  # a record written before the fix: no gate_version / bundle_version
-    for k in ("gate_version", "bundle_version"):
-        legacy["settings"].pop(k)
-    after = run("bundle_gate_sonnet_cached", "inv-06", Scripted([
-        ("tool_use", [("fetch_3way_match_bundle", {"invoice_id": pre["invoice_id"]})], ""),
-        ("tool_use", [("run_policy_tolerance_gate", {"invoice_id": pre["invoice_id"]})], ""),
+    gated = run("bundle_gate_sonnet_cached", "inv-06", Scripted(governed_script("inv-06")))
+    assert "gate_version" not in gated["settings"] and "bundle_version" not in gated["settings"]
+    assert ab.record_tool_outputs_current(gated) and ab.record_is_current(gated)
+    # a record in which any tool returned something else (an older tool) is stale: pending again, never used
+    old = _with_sha(gated, tool)
+    assert ab.is_current_settings(old) and not ab.record_tool_outputs_current(old) and not ab.record_is_current(old)
+    key = ("bundle_gate_sonnet_cached", "inv-06", 0)
+    assert ab.select_pending([key], [old]) == [key] and ab.select_pending([key], [old, gated]) == []
+    s = ab.summarise([old], arm_ids=["bundle_gate_sonnet_cached"], preset_ids=["inv-06"], expected_repeats=1)
+    assert s["ok_runs_used"] == 0 and s["matrix"]["pending_keys"] == [list(key)]
+    assert pre["invoice_id"] in json.dumps(gated["turns"][1]["tool_calls"][0]["input"])
+
+
+def test_raw_table_runs_are_replayed_too() -> None:
+    pre = P["inv-06"]
+    raw = run("raw_free_sonnet", "inv-06", Scripted([
+        ("tool_use", [("query_invoice_raw", {"invoice_id": pre["invoice_id"]}), ("query_po_raw", {"po_id": pre["po_id"]})], ""),
         ("tool_use", [("commit_reconciliation_voucher", _commit_input(pre))], ""), ("end_turn", [], "ok")]))
-    recs += [legacy, after]
-    assert ab.is_current_settings(legacy) and not ab.is_current_gate(legacy) and ab.is_current_gate(after)
-    assert not ab.superseded_records([legacy])  # before-fix evidence, not superseded
-    s = ab.summarise(recs, preset_ids=["inv-04", "inv-06"], expected_repeats=1)
-    assert s["preset_ids"] == ["inv-04"] and s["pooled_excludes"] == ["inv-06"]
-    assert s["arms"]["bundle_sonnet_cached"]["runs"] == 1 and "inv-06" not in s["arms"]["bundle_sonnet_cached"]["by_invoice"]
-    assert all(e["preset_id"] != "inv-06" for e in s["for_lead_review"])
-    sec = s["gate_disagreement"]["inv-06"]
-    pa = sec["per_arm"]
-    assert (pa["bundle_sonnet_cached"]["matches_manual"], pa["bundle_sonnet_cached"]["line1_rate"]) == (1, {"po_rate": 1})
-    assert (pa["raw_free_sonnet"]["matches_gate_output"], pa["raw_free_sonnet"]["line1_rate"]) == (1, {"billed_rate": 1})
-    assert pa["raw_free_sonnet"]["decisions"] == {"APPROVE_CLEAN": 1}
-    assert pa["bundle_haiku_cached"]["neither"] == 1 and pa["bundle_haiku_cached"]["line1_rate"] == {"other": 1}
-    assert pa["raw_free_sonnet_cached"]["no_commit"] == 1 and pa["raw_free_sonnet_cached"]["decisions"] == {"(no commit)": 1}
-    assert pa["bundle_gate_sonnet_cached"]["matches_gate_output"] == 1 and pa["bundle_gate_sonnet_cached"]["gate_arm"]
-    assert pa["bundle_gate_haiku_escalate"]["runs"] == 0 and sec["missing_keys"] == [["bundle_gate_haiku_escalate", "inv-06", 0]]
-    af = sec["after_fix"]
-    assert af["gate_version"] == ab.GATE_VERSION and set(af["per_arm"]) == {"bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate"}
-    assert af["per_arm"]["bundle_gate_sonnet_cached"]["matches_manual"] == 1 and af["per_arm"]["bundle_gate_haiku_escalate"]["runs"] == 0
-    assert af["missing_keys"] == [["bundle_gate_haiku_escalate", "inv-06", 0]]
-    assert sec["gate_fix"]["current_gate_matches_manual"] is True
-    assert s["run_ids"]["gate_disagreement"]["bundle_gate_sonnet_cached"] == [legacy["run_id"]]
-    assert s["run_ids"]["gate_disagreement_after_fix"]["bundle_gate_sonnet_cached"] == [after["run_id"]]
-    md = ab.render_markdown(s)
-    assert "### Before the fix (recorded, gate v1-band-unconditional)" in md and "### After the fix (gate v2-manual-aligned" in md
-    assert "| bundle_gate_haiku_escalate | 0 | - | - | - | - | not run yet | - |" in md
-    assert "## When the deterministic gate is wrong (inv-06)" in md
-    assert "MAY pass ONLY when PO currency notes specify index-linked float" in md
-    assert "3,656,000.00" in md and "3,678,800.00" in md and "did not return purchase_orders.currency" in md
-    assert "| bundle_sonnet_cached | 1 | 1 | 0 | 0 | 0 | APPROVE_PARTIAL_DEBIT_NOTE 1 | 1 / 0 / 0 |" in md
-    assert "| bundle_gate_sonnet_cached | 1 | 0 | 1 | 0 | 0 | APPROVE_CLEAN 1 | gate computes (n/a) |" in md
+    assert ab.record_is_current(raw) and not ab.record_is_current(_with_sha(raw, "query_po_raw"))
+    no_tools = run("raw_free_sonnet", "inv-06", Scripted([("end_turn", [], "x")]))
+    assert ab.record_tool_outputs_current(no_tools) and ab.record_is_current(no_tools)
 
 
-def test_tool_use_report_and_notes() -> None:
+def test_tool_counts_and_notes() -> None:
     pre = P["inv-01"]
     rec = run("raw_free_sonnet", "inv-01", Scripted([
         ("tool_use", [("query_invoice_raw", {"invoice_id": pre["invoice_id"]}), ("query_vendor_audit_history", {"vendor_id": "VND-BLR-401"}),
@@ -825,25 +764,21 @@ def test_tool_use_report_and_notes() -> None:
         ("tool_use", [("commit_reconciliation_voucher", _commit_input(pre))], ""), ("end_turn", [], "ok")]))
     s = ab.summarise([rec], arm_ids=["raw_free_sonnet"], preset_ids=["inv-01"], expected_repeats=1)
     m = s["arms"]["raw_free_sonnet"]
-    assert list(m["tool_calls_per_run"])[:6] == [t["name"] for t in NAIVE_TOOLS]
     assert m["tool_calls_per_run"]["query_po_raw"] == 0 and m["tool_calls_per_run"]["query_vendor_audit_history"] == 1
-    assert m["runs_calling_tool"]["query_vendor_audit_history"] == 1 and m["runs_calling_tool"]["query_po_raw"] == 0
     assert m["disallowed_tool_calls"] == {"total": 1, "per_run": 1.0, "by_name": {"run_policy_tolerance_gate": 1}}
+    assert s["data_quality"]["disallowed_tool_calls"] == 1
     md = ab.render_markdown(s)
-    assert "## Tool use" in md and "Raw arms: how often each raw SELECT * tool was called" in md
-    assert "Tool precision is not comparable between raw and bundle arms" in md
-    assert "## Analysis notes" in md
-    for needle in ("4-step budget", "debit note is above zero", "Haiku", "-UNB", "approved_freight_waiver_inr", "max_retries=2"):
+    assert "## Method notes" in md and "## Tool use" not in md
+    for needle in ("4-step budget", "one narrow query", "cached prefix", "multi-factor", "manual 6.2", "Haiku", "-UNB", "max_retries=2"):
         assert needle in md
-    empty = ab.render_markdown(ab.summarise([]))
-    assert "## Tool use" in empty and "When the deterministic gate is wrong (inv-06)" in empty
+    for banned in ("debit note is above zero", "lever", "before the fix", "superseded", "the query now also returns"):
+        assert banned not in md.lower()
 
 
-def test_runner_cli_group_dry_run(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+def test_runner_cli_invoice_dry_run(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
     mod = _load_script("cat5_ablation")
-    rc = asyncio.run(mod.run_matrix(mod.parse_args(["--dry-run", "--group", "gate_disagreement", "--out", str(tmp_path / "r.jsonl")])))
+    rc = asyncio.run(mod.run_matrix(mod.parse_args(["--dry-run", "--invoices", "inv-06", "--out", str(tmp_path / "r.jsonl")])))
     cap = capsys.readouterr()
-    assert rc == 0 and "6 arms x 1 invoices x 3 repeats = 18 runs" in cap.out and "group gate_disagreement" in cap.out
-    assert "WARNING" not in cap.err
-    rc = asyncio.run(mod.run_matrix(mod.parse_args(["--dry-run", "--invoices", "inv-06", "--repeats", "1", "--out", str(tmp_path / "r.jsonl")])))
-    assert rc == 0 and "WARNING" not in capsys.readouterr().err
+    assert rc == 0 and "9 pending" in cap.out and "WARNING" not in cap.err
+    with pytest.raises(SystemExit):
+        mod.parse_args(["--dry-run", "--group", "gate_disagreement"])

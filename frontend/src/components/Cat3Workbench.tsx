@@ -50,11 +50,8 @@ interface Cat3WorkbenchProps {
   onRefreshSystemStatus: () => void
 }
 
-const CAT3_RUNGS: Cat3RungId[] = [
-  'naive_full_history',
-  'prefix_cached_history',
-  'prefix_cached_summarized',
-]
+// Without and with the deck improvement (prefix caching + sliding-window summaries)
+const CAT3_RUNGS: Cat3RungId[] = ['naive_full_history', 'prefix_cached_summarized']
 
 const VOLUME_STEPS = [
   { label: '5k / mo (Pilot Desk)', value: 5_000 },
@@ -279,7 +276,7 @@ export function Cat3Workbench({
     }
   }
 
-  // Sliced FinOps across all 3 rungs for Arena
+  // Sliced FinOps for both versions
   const slicedByRung = useMemo(() => {
     if (!runResponse) return []
     return runResponse.results
@@ -288,7 +285,6 @@ export function Cat3Workbench({
   }, [runResponse, selectedMaxTurn, cacheMode])
 
   const naiveSlice = slicedByRung.find((s) => s.rungId === 'naive_full_history')
-  const cachedSlice = slicedByRung.find((s) => s.rungId === 'prefix_cached_history')
   const compactSlice = slicedByRung.find((s) => s.rungId === 'prefix_cached_summarized')
 
   // Line Chart data: Per-Turn Cost (cents/turn) & Cumulative $/1k sessions
@@ -299,7 +295,6 @@ export function Cat3Workbench({
     for (let i = 0; i < selectedMaxTurn; i++) {
       const tNum = i + 1
       const r1 = byId.naive_full_history?.turns[i]
-      const r2 = byId.prefix_cached_history?.turns[i]
       const r3 = byId.prefix_cached_summarized?.turns[i]
 
       const costFor = (t: Cat3TurnResult | undefined): number => {
@@ -329,10 +324,6 @@ export function Cat3Workbench({
           lineMetricMode === 'per_turn_cents'
             ? Number((costFor(r1) * 100).toFixed(3))
             : Number((cumFor(r1) * 1000).toFixed(2)),
-        cachedValue:
-          lineMetricMode === 'per_turn_cents'
-            ? Number((costFor(r2) * 100).toFixed(3))
-            : Number((cumFor(r2) * 1000).toFixed(2)),
         compactValue:
           lineMetricMode === 'per_turn_cents'
             ? Number((costFor(r3) * 100).toFixed(3))
@@ -345,12 +336,7 @@ export function Cat3Workbench({
   // Stacked bar chart data
   const stackedCostData = useMemo(() => {
     return slicedByRung.map((s) => ({
-      name:
-        s.rungId === 'naive_full_history'
-          ? '1. Uncached Full'
-          : s.rungId === 'prefix_cached_history'
-            ? '2. Prefix Cache Only'
-            : '3. Cache + Summary',
+      name: s.rungId === 'naive_full_history' ? 'Without' : 'With',
       uncachedIn1k: s.uncachedInputCost1k,
       cache1k: s.cacheCost1k,
       output1k: s.outputCost1k,
@@ -409,7 +395,7 @@ export function Cat3Workbench({
       : Math.max(0, rawFocus.finops.input_tokens - memTok)
     const handbookUncached = isUncached ? handbookTokens : 0
 
-    // Counterfactual Rung 1 prompt size at same turn index (up to Turn 10) for evicted savings
+    // Prompt size without the improvement at same turn index (up to Turn 10) for evicted savings
     const naiveMatchTurn =
       runResponse?.results
         .find((r) => r.rung_id === 'naive_full_history')
@@ -576,7 +562,7 @@ export function Cat3Workbench({
             }`}
           >
             <Sparkles className="h-3.5 w-3.5" />
-            3-Pattern Session Cost Arena (Turn 1 → Turn 10)
+            Session Cost: Without vs With (Turn 1 → Turn 10)
           </button>
 
           <button
@@ -608,7 +594,7 @@ export function Cat3Workbench({
         </div>
       )}
 
-      {/* TAB PANEL 1: 3-PATTERN SESSION COST ARENA (zero padding/border directly on tabpanel) */}
+      {/* TAB PANEL 1: SESSION COST, WITHOUT VS WITH (zero padding/border directly on tabpanel) */}
       <div role="tabpanel" aria-labelledby="cat3-tab-arena" hidden={activeView !== 'arena'}>
         <div className="space-y-6">
           {/* Scenario Picker & Session Controls */}
@@ -643,7 +629,7 @@ export function Cat3Workbench({
                   {loadingArena
                     ? 'Running 10-Turn Arena...'
                     : creds.mode === 'live'
-                      ? 'Run Live 3-Pattern Session'
+                      ? 'Run Live Session (Without & With)'
                       : 'Replay Verified 10-Turn Arena'}
                 </span>
               </button>
@@ -771,36 +757,20 @@ export function Cat3Workbench({
                 {runResponse.session_callout}
               </div>
 
-              {/* 3 Rung Comparison Cards */}
-              <div className="grid gap-4 lg:grid-cols-3">
+              {/* Without vs with comparison cards */}
+              <div className="grid gap-4 lg:grid-cols-2">
                 {slicedByRung.map((s) => {
                   const fullRung = runResponse.results.find((r) => r.rung_id === s.rungId)!
                   const isNaive = s.rungId === 'naive_full_history'
-                  const isCachedOnly = s.rungId === 'prefix_cached_history'
                   const isCompact = s.rungId === 'prefix_cached_summarized'
 
-                  const borderTheme = isNaive
-                    ? 'border-rose-300'
-                    : isCachedOnly
-                      ? 'border-amber-300'
-                      : 'border-emerald-400 ring-1 ring-emerald-200'
-                  const headerBg = isNaive
-                    ? 'bg-rose-50'
-                    : isCachedOnly
-                      ? 'bg-amber-50/70'
-                      : 'bg-emerald-50/90'
-                  const badgeBg = isNaive
-                    ? 'bg-rose-600 text-white'
-                    : isCachedOnly
-                      ? 'bg-amber-600 text-white'
-                      : 'bg-emerald-700 text-white'
+                  const borderTheme = isNaive ? 'border-rose-300' : 'border-emerald-400 ring-1 ring-emerald-200'
+                  const headerBg = isNaive ? 'bg-rose-50' : 'bg-emerald-50/90'
+                  const badgeBg = isNaive ? 'bg-rose-600 text-white' : 'bg-emerald-700 text-white'
 
                   const naiveCost = naiveSlice?.sessionCostUsd ?? 0
-                  const cachedCost = cachedSlice?.sessionCostUsd ?? 0
                   const vsNaivePct =
                     naiveCost > 0 ? ((naiveCost - s.sessionCostUsd) / naiveCost) * 100 : 0
-                  const vsCachedPct =
-                    cachedCost > 0 ? ((cachedCost - s.sessionCostUsd) / cachedCost) * 100 : 0
 
                   return (
                     <div
@@ -837,9 +807,7 @@ export function Cat3Workbench({
                                   isNaive ? 'text-rose-700' : 'text-emerald-700'
                                 }`}
                               >
-                                {isNaive
-                                  ? 'Baseline O(N²)'
-                                  : `-${vsNaivePct.toFixed(1)}% vs Rung 1`}
+                                {isNaive ? 'Baseline O(N²)' : `-${vsNaivePct.toFixed(1)}% vs without`}
                               </div>
                             </div>
                             <div>
@@ -851,9 +819,9 @@ export function Cat3Workbench({
                               </div>
                               <div className="font-mono text-[10px] text-slate-600">
                                 {isCompact && s.summarizerCalls > 0
-                                  ? `Incl. ${s.summarizerCalls} sum calls (-${vsCachedPct.toFixed(1)}% vs R2)`
-                                  : isCachedOnly
-                                    ? 'Handbook cached only'
+                                  ? `Incl. ${s.summarizerCalls} summarizer calls`
+                                  : isCompact
+                                    ? 'Cached prefix · summaries from T5'
                                     : 'No cache · full history'}
                               </div>
                             </div>
@@ -887,7 +855,7 @@ export function Cat3Workbench({
                             </div>
                           </div>
 
-                          {/* Transparent Summarizer Cost Accountability Box on Rung 3 */}
+                          {/* Summarizer cost included in the version with the improvement */}
                           {isCompact && (
                             <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-[11px] text-emerald-950">
                               <strong>Compactor Cost Included:</strong>{' '}
@@ -905,11 +873,7 @@ export function Cat3Workbench({
                               setActiveView('simulator')
                             }}
                             className={`inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-extrabold text-white transition ${
-                              isNaive
-                                ? 'bg-rose-600 hover:bg-rose-700'
-                                : isCachedOnly
-                                  ? 'bg-amber-600 hover:bg-amber-700'
-                                  : 'bg-emerald-700 hover:bg-emerald-800'
+                              isNaive ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-700 hover:bg-emerald-800'
                             }`}
                           >
                             <Layers className="h-3.5 w-3.5" />
@@ -985,7 +949,7 @@ export function Cat3Workbench({
                     {annualSavingsUsd > 0 && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 font-mono text-xs font-bold text-emerald-900">
                         <TrendingDown className="h-3.5 w-3.5" />
-                        Annualized Savings (Rung 3 vs Rung 1): $
+                        Annualized Savings (With vs Without): $
                         {annualSavingsUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr
                       </span>
                     )}
@@ -1014,7 +978,7 @@ export function Cat3Workbench({
                   <div className="rounded-xl border border-slate-200 p-4">
                     <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-slate-700">
                       {lineMetricMode === 'per_turn_cents'
-                        ? 'Per-Turn Total Spend (¢ · Note Rung 3 Compaction Sawtooth After T5 & T8)'
+                        ? 'Per-Turn Total Spend (¢ · Compaction Sawtooth After T5 & T8 With the Improvement)'
                         : 'Cumulative Session Spend ($ per 1,000 Sessions)'}
                     </h3>
                     <div className="h-64 w-full">
@@ -1039,23 +1003,15 @@ export function Cat3Workbench({
                           <Line
                             type="monotone"
                             dataKey="naiveValue"
-                            name="1. Uncached Full"
+                            name="Without: full history, no cache"
                             stroke="#dc2626"
                             strokeWidth={2.5}
                             dot={{ r: 3 }}
                           />
                           <Line
                             type="monotone"
-                            dataKey="cachedValue"
-                            name="2. Prefix Cache Only"
-                            stroke="#d97706"
-                            strokeWidth={2.5}
-                            dot={{ r: 3 }}
-                          />
-                          <Line
-                            type="monotone"
                             dataKey="compactValue"
-                            name="3. Cache + Summary"
+                            name="With: cached prefix + summaries"
                             stroke="#15803d"
                             strokeWidth={3}
                             dot={{ r: 4 }}
@@ -1094,14 +1050,9 @@ export function Cat3Workbench({
                 </div>
 
                 {/* Monthly & Annual Projected Spend Cards */}
-                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   {slicedByRung.map((s) => {
-                    const color =
-                      s.rungId === 'naive_full_history'
-                        ? '#dc2626'
-                        : s.rungId === 'prefix_cached_history'
-                          ? '#d97706'
-                          : '#15803d'
+                    const color = s.rungId === 'naive_full_history' ? '#dc2626' : '#15803d'
                     const mSpend = s.sessionCostUsd * monthlyVol
                     const aSpend = mSpend * 12
                     return (
@@ -1140,9 +1091,8 @@ export function Cat3Workbench({
                     <div className="inline-flex flex-wrap gap-1.5">
                       {(
                         [
-                          ['prefix_cached_summarized', '3. Cache + Summary'],
-                          ['prefix_cached_history', '2. Prefix Cache Only'],
-                          ['naive_full_history', '1. Uncached Full'],
+                          ['prefix_cached_summarized', 'With: cache + summaries'],
+                          ['naive_full_history', 'Without: full history'],
                         ] as const
                       ).map(([rid, lbl]) => (
                         <button
@@ -1292,9 +1242,8 @@ export function Cat3Workbench({
               <div className="flex flex-wrap items-center gap-2">
                 {(
                   [
-                    ['prefix_cached_summarized', 'Rung 3: Cache + Summary'],
-                    ['prefix_cached_history', 'Rung 2: Cache Only'],
-                    ['naive_full_history', 'Rung 1: Uncached Full'],
+                    ['prefix_cached_summarized', 'With: Cache + Summaries'],
+                    ['naive_full_history', 'Without: Full History'],
                   ] as const
                 ).map(([rid, lbl]) => (
                   <button
@@ -1702,7 +1651,7 @@ export function Cat3Workbench({
                     </label>
                     <p id="cat3-followup-hint" className="text-[11px] text-slate-600">
                       {creds.mode === 'live'
-                        ? 'Live API Mode active: sends a real follow-up turn to Sonnet 5.5 on top of the active context window (triggering compaction on Rung 3 after every 4 uncompacted turns).'
+                        ? 'Live API Mode active: sends a real follow-up turn to Sonnet 5.5 on top of the active context window (with the improvement, compaction triggers after every 4 uncompacted turns).'
                         : 'Verified Replay Mode ($0) covers pre-captured Turns 1–10. Switch Credit Shield in the top bar to Live API Mode to send custom Turn-11+ follow-ups.'}
                     </p>
 

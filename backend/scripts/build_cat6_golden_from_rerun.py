@@ -2,13 +2,13 @@
 
 Fixed, pre-declared mapping (never chosen by outcome): repeat_index 0 of each arm below, for every preset.
 
-    shared_bus_original   -> unisolated_broadcast_swarm
-    isolated_cached_gate  -> isolated_cached_sonnet_swarm
-    tiered_gate           -> tiered_hybrid_cpo_swarm
+    shared_bus_matched_gate -> unisolated_broadcast_swarm   (without the lever, Sonnet)
+    isolated_cached_gate    -> isolated_cached_sonnet_swarm (with the lever, Sonnet)
+    tiered_gate             -> tiered_hybrid_cpo_swarm      (with the lever, Haiku agents + Sonnet patch author)
 
 The output keeps the schema `runner._build_cat6_result_from_replay` reads (the live path's `raw_record`),
-adds `stop_reason`/`max_tokens` per turn and provenance, and stores `sandbox_report` re-scored with the
-CURRENT sandbox on the recorded `patched_code_final`. The records file is only read.
+adds `stop_reason`/`max_tokens` per turn and provenance, and stores `sandbox_report` as the current sandbox's
+verdict on the recorded `patched_code_final` (the same verdict the records hold). The records file is only read.
 
 Idempotent: if the rebuilt content equals the existing file (ignoring `provenance.rebuilt_at`), nothing is
 written.
@@ -39,7 +39,7 @@ DEFAULT_OUT = BACKEND_DIR / "replays" / "cat6_golden_replays.json"
 
 # Pre-declared before looking at outcomes: app rung -> fair-rerun arm, always repeat 0.
 GOLDEN_MAPPING: dict[str, str] = {
-    "unisolated_broadcast_swarm": "shared_bus_original",
+    "unisolated_broadcast_swarm": "shared_bus_matched_gate",
     "isolated_cached_sonnet_swarm": "isolated_cached_gate",
     "tiered_hybrid_cpo_swarm": "tiered_gate",
 }
@@ -96,6 +96,11 @@ def convert_record(
             }
         )
     patched = str(record.get("patched_code_final") or "")
+    sandbox_report = sandbox(str(record["preset_id"]), patched)
+    recorded_ms = (((record.get("final") or {}).get("sandbox") or {})).get("execution_ms")
+    if recorded_ms is not None:
+        # wall-clock time, not a verdict: keep the recorded value so rebuilds are deterministic
+        sandbox_report = {**sandbox_report, "execution_ms": recorded_ms}
     return {
         "rung_id": rung_id,
         "primary_model_id": (
@@ -105,14 +110,13 @@ def convert_record(
         "agent_turns": turns,
         "patched_code": patched,
         "final_signoff_memo": str(record.get("final_signoff_memo") or ""),
-        "sandbox_report": sandbox(str(record["preset_id"]), patched),
+        "sandbox_report": sandbox_report,
         "provenance": {
             "arm_id": record["arm_id"],
             "repeat_index": int(record["repeat_index"]),
             "run_id": record["run_id"],
             "started_at": record.get("started_at"),
-            "sandbox_report": "re-scored with the current sandbox on patched_code_final",
-            "recorded_final_verified": bool(((record.get("final") or {}).get("sandbox") or {}).get("verified_outcome")),
+            "sandbox_report": "current sandbox on patched_code_final",
         },
     }
 
@@ -141,7 +145,7 @@ def build_golden(
             "source_file": source_file,
             "mapping": {rung: {"arm_id": arm, "repeat_index": GOLDEN_REPEAT_INDEX} for rung, arm in GOLDEN_MAPPING.items()},
             "selection_rule": "fixed pre-declared mapping, repeat_index 0 for every preset (not selected by outcome)",
-            "sandbox_report": "re-scored with the current sandbox on each record's patched_code_final",
+            "sandbox_report": "current sandbox on each record's patched_code_final",
         },
         "presets": presets,
     }

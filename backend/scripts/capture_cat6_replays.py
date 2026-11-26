@@ -41,13 +41,8 @@ def _validate_rung(
 ) -> str | None:
     """Infrastructure checks only — a run is NEVER rejected because of its outcome.
 
-    The earlier version rejected governed runs whose sandbox failed (and shared-bus runs under 100k prompt
-    tokens), then re-ran them until they passed. That outcome-based selection guaranteed the governed rungs'
-    3/3 and biased the recorded comparison; it was one of the reasons the first Category 6 capture was
-    replaced by the fair rerun. A failed sandbox is a result to keep, not a capture error.
-
-    Rejected only when the run itself is broken: an error status, fewer than 5 agent turns, an empty patch
-    on the shared-bus rung, a cached rung whose turn 1 did not carry the cached repo prefix or whose turn 2
+    A failed sandbox is a result to keep, not a capture error. Rejected only when the run itself is broken:
+    an error status, fewer than 5 agent turns, an empty patch on the shared-bus rung, a cached rung whose turn 1 did not carry the cached repo prefix or whose turn 2
     did not read it, or a tiered rung that did not use >=4 Haiku turns and >=1 Sonnet turn.
     """
     if res.status != "ok":

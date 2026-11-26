@@ -1,4 +1,4 @@
-"""App <-> Category 5 ablation alignment: live loop, rung-1 prompt, golden builder, ablation portfolio, capture
+"""App <-> Category 5 experiment alignment: live loop, rung-1 prompt, golden builder, the without/with portfolio, capture
 validation, trace seeding and the validation report's Category 5 section. No live API calls."""
 
 from __future__ import annotations
@@ -151,7 +151,15 @@ def test_rung1_prompt_is_the_ablation_neutral_text() -> None:
 
 
 @pytest.mark.skipif(not HAVE_ABLATION, reason="ablation records not present")
+def _golden_keys_pending() -> list[tuple[str, str, int]]:
+    keys = [(a, p, ablation.GOLDEN_REPEAT_INDEX) for a in ablation.APP_RUNG_FOR_ARM for p in ("inv-01", "inv-02", "inv-03")]
+    return ablation.select_pending(keys, ablation.load_jsonl(RUNS))
+
+
 def test_golden_builder_fixed_mapping_and_idempotent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    pending = _golden_keys_pending()
+    if pending:  # the golden replays are rebuilt from fresh runs only; no fallback to an older rung
+        pytest.skip(f"golden source runs not recorded yet: {pending}")
     mod = _load_script("build_cat5_golden_from_ablation", monkeypatch, tmp_path)
     assert ablation.APP_RUNG_FOR_ARM == {
         "raw_free_sonnet": "unbounded_sonnet_loop",
@@ -160,6 +168,7 @@ def test_golden_builder_fixed_mapping_and_idempotent(monkeypatch: pytest.MonkeyP
     }
     out, summ = tmp_path / "golden.json", tmp_path / "summary.json"
     committed_summary = BACKEND_DIR / "replays" / "cat5_ablation_summary.json"
+    committed_golden = BACKEND_DIR / "replays" / "cat5_golden_replays.json"
     summ.write_text(committed_summary.read_text(encoding="utf-8"), encoding="utf-8")
     argv = ["--in", str(RUNS), "--out", str(out), "--summary-out", str(summ)]
     assert mod.main(argv) == 0
@@ -174,8 +183,18 @@ def test_golden_builder_fixed_mapping_and_idempotent(monkeypatch: pytest.MonkeyP
             assert prov["repeat_index"] == 0 and ablation.APP_RUNG_FOR_ARM[prov["arm_id"]] == rid
             assert all(s["max_tokens"] == 4096 and s["stop_reason"] for s in g["presets"][pid]["rungs"][rid]["steps"])
     # the committed files equal a fresh build
-    assert mod._comparable(g) == mod._comparable(json.loads((BACKEND_DIR / "replays" / "cat5_golden_replays.json").read_text()))
+    assert mod._comparable(g) == mod._comparable(json.loads(committed_golden.read_text()))
     assert json.loads(first_s) == json.loads(committed_summary.read_text())
+    assert set(json.loads(first_s)["golden_mapping"]["arm_to_rung"]) == set(ablation.ARM_IDS)
+    assert not any("the query now also returns" in n for n in json.loads(first_s)["notes"])
+
+
+def test_golden_builder_refuses_without_a_fresh_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    mod = _load_script("build_cat5_golden_from_ablation", monkeypatch, tmp_path)
+    assert not hasattr(mod, "load_golden") and "existing" not in mod.build_golden.__code__.co_varnames
+    recs = [r for r in ablation.load_jsonl(RUNS) if not (r["arm_id"] == "bundle_gate_sonnet_cached" and r["preset_id"] == "inv-01")] if HAVE_ABLATION else []
+    with pytest.raises(ValueError, match="no current ok record"):
+        mod.build_golden(recs, source_file="x")
 
 
 def test_golden_builder_raises_on_replay_mismatch(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -193,15 +212,22 @@ def test_golden_builder_raises_on_replay_mismatch(monkeypatch: pytest.MonkeyPatc
 # ------------------------------------------------------------------------ 4. portfolio + API
 
 
-def test_portfolio_loads_and_matches_headline() -> None:
+def test_portfolio_loads_with_the_three_cells() -> None:
     p = runner.load_cat5_ablation_portfolio()
-    assert p is not None and isinstance(p, Cat5AblationPortfolio)
-    assert p.pooled_runs == 198 and p.runs_per_arm == 33 and len(p.arms) == 6
-    exact = {a.arm_id: a.exact for a in p.arms}
-    assert exact["raw_free_sonnet_cached"] == 32 and sum(v == 33 for v in exact.values()) == 5
+    assert p is not None and isinstance(p, Cat5AblationPortfolio) and p.schema_version == 2
+    assert [a.arm_id for a in p.arms] == list(ablation.ARM_IDS)
+    assert [(a.design, a.model_column) for a in p.arms] == [("without", "sonnet"), ("with", "sonnet"), ("with", "haiku_first")]
+    assert [a.app_rung_id for a in p.arms] == list(APP_RUNGS) and all(a.runnable_in_app for a in p.arms)
+    assert p.invoice_count_pooled == 12 and p.repeats == 3 and p.runs_per_arm == 36 and p.expected_runs == 108
+    assert all(a.expected_runs == 36 and a.runs + a.pending_runs == 36 for a in p.arms)
+    assert p.pooled_runs == sum(a.runs for a in p.arms) and p.pending_runs == sum(a.pending_runs for a in p.arms)
+    assert p.matrix_complete is (p.pending_runs == 0)
+    assert p.arms[0].pending_runs == 0  # the without-cell is complete
     assert sum(a.cap_hits for a in p.arms) == 0
-    gd = p.gate_disagreement[0]
-    assert (gd.no_gate_match_manual, gd.no_gate_runs, gd.gate_match_gate_output, gd.gate_runs) == (12, 12, 6, 6)
+    assert [a.escalate for a in p.arms] == [False, False, True]
+    dumped = p.model_dump()
+    for gone in ("levers", "baseline", "gate_disagreement", "superseded_records", "original_scripted_captures"):
+        assert gone not in dumped
 
 
 def test_portfolio_falls_back_to_none_and_copy_is_number_free(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -216,6 +242,7 @@ def test_portfolio_falls_back_to_none_and_copy_is_number_free(monkeypatch: pytes
         title, badge, notes = runner._rung_metadata(rid)
         blob = badge + " ".join(notes)
         assert not any(ch.isdigit() for ch in blob.replace("AP-POL-GATE-01", "").replace("5.5", "").replace("Rung 2", "")), rid
+        assert "lever" in badge.lower(), rid
     callout = runner._orchestration_callout(PRESET, [], None)
     assert not any(ch.isdigit() for ch in callout.replace("SQLite 3-way", "").replace("Category 5", ""))
 
@@ -226,14 +253,16 @@ def test_replay_api_returns_ablation_portfolio(client: TestClient, pid: str) -> 
     assert resp.status_code == 200, resp.text
     data = resp.json()
     port = data["ablation_portfolio"]
-    assert port is not None and port["pooled_runs"] == 198 and "original_scripted_captures" not in port
+    assert port is not None and len(port["arms"]) == 3 and port["pooled_runs"] + port["pending_runs"] == 108
+    assert "original_scripted_captures" not in port and "levers" not in port
     rungs = {r["rung_id"]: r for r in data["results"]}
     assert rungs["unbounded_sonnet_loop"]["max_step_budget"] == 12
     assert rungs["unbounded_sonnet_loop"]["rung_title"].startswith("1. Free-Choice")
     blob = json.dumps([r["architectural_notes"] for r in data["results"]]) + data["orchestration_callout"]
-    for banned in ("-92%", "quadratic", "runaway", "prevents"):
+    for banned in ("-92%", "quadratic", "runaway", "prevents", "before the fix", "superseded", "inv-06"):
         assert banned not in blob
-    assert "198 ablation runs" in data["orchestration_callout"]
+    assert "12 invoices × 3 runs per version" in data["orchestration_callout"]
+    assert "with them (plus one narrow query and the cached manual)" in data["orchestration_callout"]
 
 
 def test_replay_api_without_portfolio(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -313,22 +342,31 @@ def test_seed_cat5_writes_ablation_traces_with_real_stop_reasons(monkeypatch: py
 
 
 @pytest.mark.skipif(not HAVE_ABLATION, reason="ablation records not present")
-def test_validator_cat5_uses_ablation_and_judges_lever_parts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_validator_cat5_reads_the_three_cells_and_judges_the_lever_as_a_whole(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     mod = _load_script("validate_deck_claims", monkeypatch, tmp_path)
     info, src = mod.cat5_ablation_info()
     assert src == "backend/replays/cat5_ablation_summary.json" and info is not None
-    pooled, gd = mod.cat5_ablation_units(info["run_ids"])
-    assert sum(len(v) for v in pooled.values()) == 198 and {len(v) for v in pooled.values()} == {33}
-    assert sum(len(v) for v in gd.values()) == 18
+    assert list(info["arms"]) == mod.CAT5_ARMS == list(ablation.ARM_IDS)
+    pooled = mod.cat5_ablation_units(info["run_ids"])
+    assert set(pooled) == set(mod.CAT5_ARMS) and {a: len(v) for a, v in pooled.items()} == {a: info["arms"][a]["runs"] for a in mod.CAT5_ARMS}
     res = mod.analyse()
     c5 = res["categories"]["cat5"]
     assert c5["source"] == "ablation" and c5["max_cost_diff_vs_summary_per_1k"] < 0.01
-    assert c5["lever_parts"] == {"max_step_budgets": "NOT SHOWN", "deterministic_guardrails": "NOT SUPPORTED", "small_model_routing": "SUPPORTED"}
+    for gone in ("levers", "gate_disagreement", "baseline"):
+        assert gone not in c5
+    assert c5["lever_parts"] == {"max_step_budgets": "NOT SHOWN", "deterministic_guardrails": "SUPPORTED", "small_model_routing": "SUPPORTED"}
+    common = set(c5["common_invoices"])
+    assert common == set.intersection(*({u["preset_id"] for u in pooled[a]} for a in mod.CAT5_ARMS))
     rows = {c["claim"]: c for c in res["claims"] if c["category"] == "Cat 5"}
-    assert rows["Max-step budgets + deterministic guardrails + small-model routing for routine tool calls"]["verdict"] == "PARTLY SUPPORTED"
+    lever = rows["Max-step budgets + deterministic guardrails + small-model routing for routine tool calls"]
+    assert lever["verdict"] == "PARTLY SUPPORTED" and "Judged as a whole, without → with" in lever["note"]
+    assert "one narrow query" in lever["note"] and "cached prefix" in lever["note"]
     assert rows["…without losing accuracy (implicit)"]["verdict"] == "PARTLY SUPPORTED"
+    assert rows["Input 25k–150k+ tokens per task"]["verdict"] == "SUPPORTED"
     md = mod.render_markdown(res)
-    assert "Source: the Category 5 ablation, 198 pooled runs" in md and "When the policy gate is wrong" in md
+    assert "| | Sonnet 5.5 | Haiku-first, escalating to Sonnet |" in md and "(not run)" in md
+    for gone in ("When the policy gate is wrong", "Old scripted rung 1", "What each step changed", "capture script selected runs by outcome"):
+        assert gone not in md
     assert mod.render_markdown(mod.analyse()) == md  # deterministic
 
 
@@ -337,7 +375,7 @@ def test_validator_cat5_falls_back(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     monkeypatch.setattr(mod, "CAT5_ABLATION_SUMMARY", tmp_path / "missing.json")
     info, src = mod.cat5_ablation_info()
     if (BACKEND_DIR.parent / "analysis" / "cat5_ablation.json").is_file():
-        assert src == "analysis/cat5_ablation.json" and info is not None and len(info["arms"]) == 6
+        assert src == "analysis/cat5_ablation.json" and info is not None and list(info["arms"]) == mod.CAT5_ARMS
     monkeypatch.setattr(mod, "CAT5_ABLATION_ANALYSIS", tmp_path / "missing2.json")
     info, src = mod.cat5_ablation_info()
     assert info is None and "could be read" in src

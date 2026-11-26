@@ -42,7 +42,6 @@ export function loadCredentials(): CreditShieldCredentials {
       return {
         mode: parsed.mode === 'live' ? 'live' : 'replay',
         anthropicKey: parsed.anthropicKey ?? '',
-        geminiKey: parsed.geminiKey ?? '',
         authorPasscode: parsed.authorPasscode ?? '',
       }
     }
@@ -52,7 +51,6 @@ export function loadCredentials(): CreditShieldCredentials {
   return {
     mode: 'replay',
     anthropicKey: '',
-    geminiKey: '',
     authorPasscode: '',
   }
 }
@@ -69,7 +67,6 @@ function buildAuthHeaders(creds: CreditShieldCredentials): Record<string, string
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (creds.mode === 'live') {
     if (creds.anthropicKey.trim()) headers['X-Anthropic-Api-Key'] = creds.anthropicKey.trim()
-    if (creds.geminiKey.trim()) headers['X-Gemini-Api-Key'] = creds.geminiKey.trim()
     if (creds.authorPasscode.trim()) headers['X-Author-Passcode'] = creds.authorPasscode.trim()
   }
   return headers

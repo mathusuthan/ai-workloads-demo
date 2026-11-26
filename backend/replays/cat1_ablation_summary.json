@@ -3,16 +3,15 @@
   "source": "cat1 ablation (ablation.summarise)",
   "source_files": {
     "runs": "experiments/cat1_ablation/runs.jsonl",
-    "extractions": "experiments/cat1_ablation/extractions.jsonl",
-    "original_capture": "replays/cat1_original_capture.json"
+    "extractions": "experiments/cat1_ablation/extractions.jsonl"
   },
   "items": 12,
   "presets": 6,
   "batch_items": 6,
   "repeats": 3,
   "runs_per_arm": 36,
-  "planned_runs": 252,
-  "ok_runs": 252,
+  "planned_runs": 144,
+  "ok_runs": 144,
   "ground_truth_fields_per_repeat": 42,
   "fields_per_arm": 126,
   "reader_model": "claude-opus-5-5",
@@ -20,12 +19,10 @@
   "settings": {
     "caps": {
       "report": 8192,
-      "classify_text": 1024,
       "schema": 512
     },
     "timeouts_s": {
       "report": 300.0,
-      "classify_text": 120.0,
       "schema": 60.0
     },
     "max_retries": 0,
@@ -36,12 +33,9 @@
       "haiku": {
         "type": "disabled"
       }
-    },
-    "app_caps_before": {
-      "prose": 2048,
-      "schema": 256
     }
   },
+  "reader_check_note": "The reader model was checked on 100 known fields (20 JSON answers rewritten as plain text) and read all of them correctly.",
   "arms": [
     {
       "arm_id": "sonnet_report",
@@ -164,159 +158,10 @@
       },
       "model_mismatches": 0,
       "schema_parse_failures": null,
-      "keyword_fields_correct": 90,
-      "keyword_field_accuracy_pct": 71.42857142857143,
       "reader_value_counts": {
         "stated": 72,
         "not_stated": 10,
         "ambiguous": 44
-      },
-      "extractor_agreement": {
-        "fields": 126,
-        "agree": 75,
-        "same_value": 63,
-        "different_value": 7,
-        "regex_only": 42,
-        "judge_only": 2,
-        "neither": 12
-      }
-    },
-    {
-      "arm_id": "sonnet_classify_text",
-      "label": "Sonnet classification, plain text",
-      "what": "Large model answers only the fields, one `field: value` line each",
-      "model": "Sonnet 5.5",
-      "task": "classify_text",
-      "output_format": "free_text",
-      "runnable_in_app": false,
-      "app_rung_id": null,
-      "given_allowed_labels": true,
-      "scored_by": "reader_model",
-      "max_tokens": 1024,
-      "thinking": "between_tools",
-      "runs": 36,
-      "scored_runs": 36,
-      "fields_correct": 126,
-      "fields_total": 126,
-      "field_accuracy_pct": 100.0,
-      "wilson95": [
-        97.04142355178014,
-        99.99999999999997
-      ],
-      "items_fully_correct": 36,
-      "items": 36,
-      "by_field": {
-        "queue": {
-          "hits": 18,
-          "total": 18
-        },
-        "priority": {
-          "hits": 18,
-          "total": 18
-        },
-        "auto_action": {
-          "hits": 18,
-          "total": 18
-        },
-        "contains_pii": {
-          "hits": 18,
-          "total": 18
-        },
-        "leaf_category": {
-          "hits": 18,
-          "total": 18
-        },
-        "compliance_status": {
-          "hits": 18,
-          "total": 18
-        },
-        "contradiction_detected": {
-          "hits": 18,
-          "total": 18
-        }
-      },
-      "by_sub_task": {
-        "support_triage": {
-          "fields_correct": 72,
-          "fields_total": 72,
-          "field_accuracy_pct": 100.0,
-          "wilson95": [
-            94.93488274035423,
-            100.0
-          ],
-          "items_fully_correct": 18,
-          "items": 18
-        },
-        "sku_tagging": {
-          "fields_correct": 54,
-          "fields_total": 54,
-          "field_accuracy_pct": 100.0,
-          "wilson95": [
-            93.35864119091038,
-            100.0
-          ],
-          "items_fully_correct": 18,
-          "items": 18
-        }
-      },
-      "by_group": {
-        "preset": {
-          "fields_correct": 63,
-          "fields_total": 63,
-          "field_accuracy_pct": 100.0,
-          "wilson95": [
-            94.25288004111484,
-            100.0
-          ],
-          "items_fully_correct": 18,
-          "items": 18,
-          "input_tokens_median": 1506.5
-        },
-        "batch": {
-          "fields_correct": 63,
-          "fields_total": 63,
-          "field_accuracy_pct": 100.0,
-          "wilson95": [
-            94.25288004111484,
-            100.0
-          ],
-          "items_fully_correct": 18,
-          "items": 18,
-          "input_tokens_median": 497.0
-        }
-      },
-      "cost_per_1k_items_usd": 2.8873333333333333,
-      "batch_cost_per_1k_items_usd_computed": null,
-      "input_tokens_median": 979.5,
-      "input_tokens_min": 450,
-      "input_tokens_max": 1657,
-      "output_tokens_median": 88.0,
-      "output_tokens_min": 62,
-      "output_tokens_max": 114,
-      "thinking_tokens_total": 0,
-      "io_ratio_median": 9.918505942275043,
-      "latency_ms_median": 1881.5,
-      "truncated": 0,
-      "stop_reasons": {
-        "end_turn": 36
-      },
-      "model_mismatches": 0,
-      "schema_parse_failures": null,
-      "keyword_fields_correct": 108,
-      "keyword_field_accuracy_pct": 85.71428571428571,
-      "reader_value_counts": {
-        "stated": 126,
-        "not_stated": 0,
-        "ambiguous": 0
-      },
-      "extractor_agreement": {
-        "fields": 126,
-        "agree": 108,
-        "same_value": 108,
-        "different_value": 0,
-        "regex_only": 0,
-        "judge_only": 18,
-        "neither": 0
       }
     },
     {
@@ -326,8 +171,8 @@
       "model": "Sonnet 5.5",
       "task": "schema",
       "output_format": "json_schema",
-      "runnable_in_app": false,
-      "app_rung_id": null,
+      "runnable_in_app": true,
+      "app_rung_id": "sonnet_calibrated",
       "given_allowed_labels": true,
       "scored_by": "structured_output",
       "max_tokens": 512,
@@ -562,159 +407,10 @@
       },
       "model_mismatches": 0,
       "schema_parse_failures": null,
-      "keyword_fields_correct": 74,
-      "keyword_field_accuracy_pct": 58.730158730158735,
       "reader_value_counts": {
         "stated": 73,
         "not_stated": 9,
         "ambiguous": 44
-      },
-      "extractor_agreement": {
-        "fields": 126,
-        "agree": 73,
-        "same_value": 62,
-        "different_value": 11,
-        "regex_only": 42,
-        "judge_only": 0,
-        "neither": 11
-      }
-    },
-    {
-      "arm_id": "haiku_classify_text",
-      "label": "Haiku classification, plain text",
-      "what": "Small model answers only the fields, one `field: value` line each",
-      "model": "Haiku 5.5",
-      "task": "classify_text",
-      "output_format": "free_text",
-      "runnable_in_app": false,
-      "app_rung_id": null,
-      "given_allowed_labels": true,
-      "scored_by": "reader_model",
-      "max_tokens": 1024,
-      "thinking": "disabled",
-      "runs": 36,
-      "scored_runs": 36,
-      "fields_correct": 120,
-      "fields_total": 126,
-      "field_accuracy_pct": 95.23809523809523,
-      "wilson95": [
-        89.99983205231048,
-        97.79955116120489
-      ],
-      "items_fully_correct": 33,
-      "items": 36,
-      "by_field": {
-        "queue": {
-          "hits": 15,
-          "total": 18
-        },
-        "priority": {
-          "hits": 18,
-          "total": 18
-        },
-        "auto_action": {
-          "hits": 15,
-          "total": 18
-        },
-        "contains_pii": {
-          "hits": 18,
-          "total": 18
-        },
-        "leaf_category": {
-          "hits": 18,
-          "total": 18
-        },
-        "compliance_status": {
-          "hits": 18,
-          "total": 18
-        },
-        "contradiction_detected": {
-          "hits": 18,
-          "total": 18
-        }
-      },
-      "by_sub_task": {
-        "support_triage": {
-          "fields_correct": 66,
-          "fields_total": 72,
-          "field_accuracy_pct": 91.66666666666666,
-          "wilson95": [
-            82.98764477932347,
-            96.12475750430502
-          ],
-          "items_fully_correct": 15,
-          "items": 18
-        },
-        "sku_tagging": {
-          "fields_correct": 54,
-          "fields_total": 54,
-          "field_accuracy_pct": 100.0,
-          "wilson95": [
-            93.35864119091038,
-            100.0
-          ],
-          "items_fully_correct": 18,
-          "items": 18
-        }
-      },
-      "by_group": {
-        "preset": {
-          "fields_correct": 57,
-          "fields_total": 63,
-          "field_accuracy_pct": 90.47619047619048,
-          "wilson95": [
-            80.73829893716311,
-            95.56165157231081
-          ],
-          "items_fully_correct": 15,
-          "items": 18,
-          "input_tokens_median": 1506.5
-        },
-        "batch": {
-          "fields_correct": 63,
-          "fields_total": 63,
-          "field_accuracy_pct": 100.0,
-          "wilson95": [
-            94.25288004111484,
-            100.0
-          ],
-          "items_fully_correct": 18,
-          "items": 18,
-          "input_tokens_median": 497.0
-        }
-      },
-      "cost_per_1k_items_usd": 0.14513055555555557,
-      "batch_cost_per_1k_items_usd_computed": null,
-      "input_tokens_median": 979.5,
-      "input_tokens_min": 450,
-      "input_tokens_max": 1657,
-      "output_tokens_median": 88.0,
-      "output_tokens_min": 62,
-      "output_tokens_max": 140,
-      "thinking_tokens_total": 0,
-      "io_ratio_median": 8.750460829493086,
-      "latency_ms_median": 1067.0,
-      "truncated": 0,
-      "stop_reasons": {
-        "end_turn": 36
-      },
-      "model_mismatches": 0,
-      "schema_parse_failures": null,
-      "keyword_fields_correct": 102,
-      "keyword_field_accuracy_pct": 80.95238095238095,
-      "reader_value_counts": {
-        "stated": 126,
-        "not_stated": 0,
-        "ambiguous": 0
-      },
-      "extractor_agreement": {
-        "fields": 126,
-        "agree": 108,
-        "same_value": 108,
-        "different_value": 0,
-        "regex_only": 0,
-        "judge_only": 18,
-        "neither": 0
       }
     },
     {
@@ -838,140 +534,18 @@
       },
       "model_mismatches": 0,
       "schema_parse_failures": 0
-    },
-    {
-      "arm_id": "gemini_decision",
-      "label": "Gemini decision",
-      "what": "Decision model answers fixed questions; no text is generated",
-      "model": "Gemini Decision 1",
-      "task": "decision",
-      "output_format": "decisions_api",
-      "runnable_in_app": true,
-      "app_rung_id": "gemini_decision",
-      "given_allowed_labels": true,
-      "scored_by": "structured_output",
-      "max_tokens": null,
-      "thinking": null,
-      "runs": 36,
-      "scored_runs": 36,
-      "fields_correct": 123,
-      "fields_total": 126,
-      "field_accuracy_pct": 97.61904761904762,
-      "wilson95": [
-        93.23339858507347,
-        99.18700479757426
-      ],
-      "items_fully_correct": 33,
-      "items": 36,
-      "by_field": {
-        "queue": {
-          "hits": 18,
-          "total": 18
-        },
-        "priority": {
-          "hits": 18,
-          "total": 18
-        },
-        "auto_action": {
-          "hits": 18,
-          "total": 18
-        },
-        "contains_pii": {
-          "hits": 15,
-          "total": 18
-        },
-        "leaf_category": {
-          "hits": 18,
-          "total": 18
-        },
-        "compliance_status": {
-          "hits": 18,
-          "total": 18
-        },
-        "contradiction_detected": {
-          "hits": 18,
-          "total": 18
-        }
-      },
-      "by_sub_task": {
-        "support_triage": {
-          "fields_correct": 69,
-          "fields_total": 72,
-          "field_accuracy_pct": 95.83333333333334,
-          "wilson95": [
-            88.4507232586839,
-            98.57291925330748
-          ],
-          "items_fully_correct": 15,
-          "items": 18
-        },
-        "sku_tagging": {
-          "fields_correct": 54,
-          "fields_total": 54,
-          "field_accuracy_pct": 100.0,
-          "wilson95": [
-            93.35864119091038,
-            100.0
-          ],
-          "items_fully_correct": 18,
-          "items": 18
-        }
-      },
-      "by_group": {
-        "preset": {
-          "fields_correct": 63,
-          "fields_total": 63,
-          "field_accuracy_pct": 100.0,
-          "wilson95": [
-            94.25288004111484,
-            100.0
-          ],
-          "items_fully_correct": 18,
-          "items": 18,
-          "input_tokens_median": 1335.0
-        },
-        "batch": {
-          "fields_correct": 60,
-          "fields_total": 63,
-          "field_accuracy_pct": 95.23809523809523,
-          "wilson95": [
-            86.90903216209392,
-            98.36738311320045
-          ],
-          "items_fully_correct": 15,
-          "items": 18,
-          "input_tokens_median": 628.5
-        }
-      },
-      "cost_per_1k_items_usd": 0.0989,
-      "batch_cost_per_1k_items_usd_computed": null,
-      "input_tokens_median": 972.5,
-      "input_tokens_min": 581,
-      "input_tokens_max": 1472,
-      "output_tokens_median": 0.0,
-      "output_tokens_min": 0,
-      "output_tokens_max": 0,
-      "thinking_tokens_total": 0,
-      "io_ratio_median": null,
-      "latency_ms_median": 543.0,
-      "truncated": 0,
-      "stop_reasons": {
-        "None": 36
-      },
-      "model_mismatches": 0,
-      "schema_parse_failures": null
     }
   ],
   "levers": [
     {
-      "lever": "write-up → classification-only text (sonnet)",
-      "kind": "ask_less",
-      "label": "Ask for the classification instead of a write-up (Sonnet)",
+      "lever": "write-up → schema (sonnet)",
+      "kind": "with_vs_without",
+      "label": "Write-up → classification with JSON schema (Sonnet)",
       "from_arm": "sonnet_report",
-      "to_arm": "sonnet_classify_text",
+      "to_arm": "sonnet_schema",
       "cost_from": 29.49777777777778,
-      "cost_to": 2.8873333333333333,
-      "cost_change_pct": -90.21169202953142,
+      "cost_to": 3.7656666666666663,
+      "cost_change_pct": -87.23406659635377,
       "fields_from": 69,
       "fields_to": 126,
       "fields_total": 126,
@@ -979,29 +553,14 @@
       "comparable_accuracy": false
     },
     {
-      "lever": "text → schema (sonnet)",
-      "kind": "schema",
-      "label": "Enforce a JSON schema instead of plain-text lines (Sonnet)",
-      "from_arm": "sonnet_classify_text",
-      "to_arm": "sonnet_schema",
-      "cost_from": 2.8873333333333333,
-      "cost_to": 3.7656666666666663,
-      "cost_change_pct": 30.4202262756869,
-      "fields_from": 126,
-      "fields_to": 126,
-      "fields_total": 126,
-      "accuracy_change_pp": 0.0,
-      "comparable_accuracy": true
-    },
-    {
-      "lever": "write-up → classification-only text (haiku)",
-      "kind": "ask_less",
-      "label": "Ask for the classification instead of a write-up (Haiku)",
+      "lever": "write-up → schema (haiku)",
+      "kind": "with_vs_without",
+      "label": "Write-up → classification with JSON schema (Haiku)",
       "from_arm": "haiku_report",
-      "to_arm": "haiku_classify_text",
+      "to_arm": "haiku_schema",
       "cost_from": 1.2481805555555556,
-      "cost_to": 0.14513055555555557,
-      "cost_change_pct": -88.37263127441052,
+      "cost_to": 0.18840833333333334,
+      "cost_change_pct": -84.90536224949649,
       "fields_from": 69,
       "fields_to": 120,
       "fields_total": 126,
@@ -1009,24 +568,9 @@
       "comparable_accuracy": false
     },
     {
-      "lever": "text → schema (haiku)",
-      "kind": "schema",
-      "label": "Enforce a JSON schema instead of plain-text lines (Haiku)",
-      "from_arm": "haiku_classify_text",
-      "to_arm": "haiku_schema",
-      "cost_from": 0.14513055555555557,
-      "cost_to": 0.18840833333333334,
-      "cost_change_pct": 29.819893965203747,
-      "fields_from": 120,
-      "fields_to": 120,
-      "fields_total": 126,
-      "accuracy_change_pp": 0.0,
-      "comparable_accuracy": true
-    },
-    {
       "lever": "Sonnet → Haiku (report)",
       "kind": "model",
-      "label": "Switch Sonnet → Haiku (write-up)",
+      "label": "Sonnet → Haiku (write-up)",
       "from_arm": "sonnet_report",
       "to_arm": "haiku_report",
       "cost_from": 29.49777777777778,
@@ -1039,24 +583,9 @@
       "comparable_accuracy": false
     },
     {
-      "lever": "Sonnet → Haiku (classify_text)",
-      "kind": "model",
-      "label": "Switch Sonnet → Haiku (classification, plain text)",
-      "from_arm": "sonnet_classify_text",
-      "to_arm": "haiku_classify_text",
-      "cost_from": 2.8873333333333333,
-      "cost_to": 0.14513055555555557,
-      "cost_change_pct": -94.97354344647118,
-      "fields_from": 126,
-      "fields_to": 120,
-      "fields_total": 126,
-      "accuracy_change_pp": -4.761904761904767,
-      "comparable_accuracy": true
-    },
-    {
       "lever": "Sonnet → Haiku (schema)",
       "kind": "model",
-      "label": "Switch Sonnet → Haiku (classification, JSON schema)",
+      "label": "Sonnet → Haiku (classification with JSON schema)",
       "from_arm": "sonnet_schema",
       "to_arm": "haiku_schema",
       "cost_from": 3.7656666666666663,
@@ -1069,24 +598,9 @@
       "comparable_accuracy": true
     },
     {
-      "lever": "Haiku schema → Gemini decision",
-      "kind": "gemini",
-      "label": "Switch Haiku JSON schema → Gemini decision",
-      "from_arm": "haiku_schema",
-      "to_arm": "gemini_decision",
-      "cost_from": 0.18840833333333334,
-      "cost_to": 0.0989,
-      "cost_change_pct": -47.507629704984744,
-      "fields_from": 120,
-      "fields_to": 123,
-      "fields_total": 126,
-      "accuracy_change_pp": 2.3809523809523836,
-      "comparable_accuracy": true
-    },
-    {
       "lever": "whole stack: Sonnet write-up → Haiku schema",
       "kind": "whole_stack",
-      "label": "All of it: Sonnet write-up → Haiku JSON schema",
+      "label": "Sonnet write-up → Haiku classification with JSON schema",
       "from_arm": "sonnet_report",
       "to_arm": "haiku_schema",
       "cost_from": 29.49777777777778,
@@ -1097,104 +611,6 @@
       "fields_total": 126,
       "accuracy_change_pp": 40.47619047619047,
       "comparable_accuracy": false
-    }
-  ],
-  "scoring_comparison": [
-    {
-      "arm_id": "sonnet_report",
-      "label": "Sonnet write-up",
-      "fields_total": 126,
-      "keyword_fields_correct": 90,
-      "keyword_field_accuracy_pct": 71.42857142857143,
-      "reader_fields_correct": 69,
-      "reader_field_accuracy_pct": 54.761904761904766,
-      "difference_pp": 16.666666666666664,
-      "extractor_agreement": {
-        "fields": 126,
-        "agree": 75,
-        "same_value": 63,
-        "different_value": 7,
-        "regex_only": 42,
-        "judge_only": 2,
-        "neither": 12
-      },
-      "reader_value_counts": {
-        "stated": 72,
-        "not_stated": 10,
-        "ambiguous": 44
-      }
-    },
-    {
-      "arm_id": "sonnet_classify_text",
-      "label": "Sonnet classification, plain text",
-      "fields_total": 126,
-      "keyword_fields_correct": 108,
-      "keyword_field_accuracy_pct": 85.71428571428571,
-      "reader_fields_correct": 126,
-      "reader_field_accuracy_pct": 100.0,
-      "difference_pp": -14.285714285714292,
-      "extractor_agreement": {
-        "fields": 126,
-        "agree": 108,
-        "same_value": 108,
-        "different_value": 0,
-        "regex_only": 0,
-        "judge_only": 18,
-        "neither": 0
-      },
-      "reader_value_counts": {
-        "stated": 126,
-        "not_stated": 0,
-        "ambiguous": 0
-      }
-    },
-    {
-      "arm_id": "haiku_report",
-      "label": "Haiku write-up",
-      "fields_total": 126,
-      "keyword_fields_correct": 74,
-      "keyword_field_accuracy_pct": 58.730158730158735,
-      "reader_fields_correct": 69,
-      "reader_field_accuracy_pct": 54.761904761904766,
-      "difference_pp": 3.9682539682539684,
-      "extractor_agreement": {
-        "fields": 126,
-        "agree": 73,
-        "same_value": 62,
-        "different_value": 11,
-        "regex_only": 42,
-        "judge_only": 0,
-        "neither": 11
-      },
-      "reader_value_counts": {
-        "stated": 73,
-        "not_stated": 9,
-        "ambiguous": 44
-      }
-    },
-    {
-      "arm_id": "haiku_classify_text",
-      "label": "Haiku classification, plain text",
-      "fields_total": 126,
-      "keyword_fields_correct": 102,
-      "keyword_field_accuracy_pct": 80.95238095238095,
-      "reader_fields_correct": 120,
-      "reader_field_accuracy_pct": 95.23809523809523,
-      "difference_pp": -14.285714285714278,
-      "extractor_agreement": {
-        "fields": 126,
-        "agree": 108,
-        "same_value": 108,
-        "different_value": 0,
-        "regex_only": 0,
-        "judge_only": 18,
-        "neither": 0
-      },
-      "reader_value_counts": {
-        "stated": 126,
-        "not_stated": 0,
-        "ambiguous": 0
-      }
     }
   ],
   "write_up_note": {
@@ -1208,45 +624,7 @@
     },
     "example_ambiguous": "Status: HOLD / DO NOT PUBLISH. Route to Compliance Audit."
   },
-  "classification_text_readable": {
-    "answers": 72,
-    "every_field_stated": 72
-  },
   "misses": [
-    {
-      "arm_id": "haiku_classify_text",
-      "item_id": "tkt-01",
-      "item_title": "Damaged Ceramic Dinnerware + Exposed Payment Card & Phone",
-      "sub_task": "support_triage",
-      "field": "auto_action",
-      "field_label": "action",
-      "expected": "auto_replace",
-      "returned": "route_specialist",
-      "repeats": [
-        0,
-        1,
-        2
-      ],
-      "runs_missed": 3,
-      "runs_total": 3
-    },
-    {
-      "arm_id": "haiku_classify_text",
-      "item_id": "tkt-01",
-      "item_title": "Damaged Ceramic Dinnerware + Exposed Payment Card & Phone",
-      "sub_task": "support_triage",
-      "field": "queue",
-      "field_label": "queue",
-      "expected": "replacements",
-      "returned": "billing_payouts",
-      "repeats": [
-        0,
-        1,
-        2
-      ],
-      "runs_missed": 3,
-      "runs_total": 3
-    },
     {
       "arm_id": "haiku_schema",
       "item_id": "tkt-01",
@@ -1308,120 +686,8 @@
       ],
       "runs_missed": 2,
       "runs_total": 3
-    },
-    {
-      "arm_id": "gemini_decision",
-      "item_id": "tkt-05",
-      "item_title": "Invoice GST/VAT Credit Correction Request on B2B Order",
-      "sub_task": "support_triage",
-      "field": "contains_pii",
-      "field_label": "contains personal data",
-      "expected": true,
-      "returned": false,
-      "repeats": [
-        0,
-        1,
-        2
-      ],
-      "runs_missed": 3,
-      "runs_total": 3
     }
   ],
-  "original_capture": [
-    {
-      "arm_id": "sonnet_report",
-      "app_rung_id": "sonnet_naive",
-      "responses": 12,
-      "truncated_at_cap": 11,
-      "cap": 2048,
-      "output_tokens_median": 2048.0,
-      "cost_per_1k_items_usd": 22.035,
-      "keyword_fields_correct": 27,
-      "fields_total": 42,
-      "keyword_field_accuracy_pct": 64.28571428571429,
-      "reader_fields_correct": 23,
-      "reader_field_accuracy_pct": 54.761904761904766,
-      "reader_status": "complete",
-      "extractor_agreement": {
-        "fields": 42,
-        "agree": 24,
-        "same_value": 20,
-        "different_value": 3,
-        "regex_only": 15,
-        "judge_only": 0,
-        "neither": 4
-      }
-    },
-    {
-      "arm_id": "haiku_report",
-      "app_rung_id": "haiku_naive",
-      "responses": 12,
-      "truncated_at_cap": 8,
-      "cap": 2048,
-      "output_tokens_median": 2048.0,
-      "cost_per_1k_items_usd": 1.0235833333333333,
-      "keyword_fields_correct": 24,
-      "fields_total": 42,
-      "keyword_field_accuracy_pct": 57.14285714285714,
-      "reader_fields_correct": 22,
-      "reader_field_accuracy_pct": 52.38095238095239,
-      "reader_status": "complete",
-      "extractor_agreement": {
-        "fields": 42,
-        "agree": 25,
-        "same_value": 20,
-        "different_value": 4,
-        "regex_only": 13,
-        "judge_only": 0,
-        "neither": 5
-      }
-    },
-    {
-      "arm_id": "haiku_schema",
-      "app_rung_id": "haiku_calibrated",
-      "responses": 12,
-      "truncated_at_cap": null,
-      "cap": 256,
-      "output_tokens_median": 99.5,
-      "output_tokens_max": 135,
-      "cost_per_1k_items_usd": 0.18886666666666665,
-      "fields_correct": 40,
-      "fields_total": 42,
-      "field_accuracy_pct": 95.23809523809523
-    },
-    {
-      "arm_id": "gemini_decision",
-      "app_rung_id": "gemini_decision",
-      "responses": 12,
-      "truncated_at_cap": null,
-      "cap": null,
-      "output_tokens_median": 0.0,
-      "output_tokens_max": 0,
-      "cost_per_1k_items_usd": 0.0989,
-      "fields_correct": 41,
-      "fields_total": 42,
-      "field_accuracy_pct": 97.61904761904762
-    }
-  ],
-  "original_capture_note": "First capture, kept in replays/cat1_original_capture.json: prose capped at 2048 output tokens, schema at 256; stop reasons were not stored, so truncation is inferred from output at the cap.",
-  "pending": {
-    "original_capture_reader": {
-      "planned": 24,
-      "done": 24,
-      "pending": 0,
-      "status": "complete",
-      "what": "reader-model scoring of the 24 stored write-ups of the original capture"
-    },
-    "schema_as_text_check": {
-      "planned": 20,
-      "done": 20,
-      "pending": 0,
-      "status": "complete",
-      "what": "reader-model check on 20 JSON-schema answers rendered as plain text",
-      "fields_agree": 100,
-      "fields": 100
-    }
-  },
   "deck_profile": {
     "bands": {
       "input_tokens": [
@@ -1451,11 +717,6 @@
         "output_tokens_median": 2739.0,
         "io_ratio_median": 0.23747438137221044
       },
-      "sonnet_classify_text": {
-        "input_tokens_median": 979.5,
-        "output_tokens_median": 88.0,
-        "io_ratio_median": 9.918505942275043
-      },
       "sonnet_schema": {
         "input_tokens_median": 1388.5,
         "output_tokens_median": 96.0,
@@ -1466,39 +727,21 @@
         "output_tokens_median": 2283.0,
         "io_ratio_median": 0.2820232643937585
       },
-      "haiku_classify_text": {
-        "input_tokens_median": 979.5,
-        "output_tokens_median": 88.0,
-        "io_ratio_median": 8.750460829493086
-      },
       "haiku_schema": {
         "input_tokens_median": 1388.5,
         "output_tokens_median": 97.5,
         "io_ratio_median": 13.421295774647888
-      },
-      "gemini_decision": {
-        "input_tokens_median": 972.5,
-        "output_tokens_median": 0.0,
-        "io_ratio_median": null
       }
     }
   },
   "data_quality": {
-    "run_records": 252,
-    "ok_current_runs": 252,
-    "error_records": 0,
-    "superseded_records": 0,
+    "ok_current_runs": 144,
+    "planned_runs": 144,
     "truncated": 0,
     "model_mismatches": 0,
-    "gemini_ok": 36,
-    "gemini_planned": 36,
-    "gemini_input_tokens_possibly_estimated": 0,
-    "extraction_records": 231,
-    "extraction_ok_current": 188,
-    "extractions_planned": 188,
-    "extraction_errors": 43,
-    "evidence_not_verbatim": 0,
-    "missing_runs": 0
+    "extractions": 72,
+    "extractions_planned": 72,
+    "evidence_not_verbatim": 0
   },
   "run_ids": {
     "sonnet_report": [
@@ -1538,44 +781,6 @@
       "sonnet_report:tkt-06:r0",
       "sonnet_report:tkt-06:r1",
       "sonnet_report:tkt-06:r2"
-    ],
-    "sonnet_classify_text": [
-      "sonnet_classify_text:sku-01:r0",
-      "sonnet_classify_text:sku-01:r1",
-      "sonnet_classify_text:sku-01:r2",
-      "sonnet_classify_text:sku-02:r0",
-      "sonnet_classify_text:sku-02:r1",
-      "sonnet_classify_text:sku-02:r2",
-      "sonnet_classify_text:sku-03:r0",
-      "sonnet_classify_text:sku-03:r1",
-      "sonnet_classify_text:sku-03:r2",
-      "sonnet_classify_text:sku-04:r0",
-      "sonnet_classify_text:sku-04:r1",
-      "sonnet_classify_text:sku-04:r2",
-      "sonnet_classify_text:sku-05:r0",
-      "sonnet_classify_text:sku-05:r1",
-      "sonnet_classify_text:sku-05:r2",
-      "sonnet_classify_text:sku-06:r0",
-      "sonnet_classify_text:sku-06:r1",
-      "sonnet_classify_text:sku-06:r2",
-      "sonnet_classify_text:tkt-01:r0",
-      "sonnet_classify_text:tkt-01:r1",
-      "sonnet_classify_text:tkt-01:r2",
-      "sonnet_classify_text:tkt-02:r0",
-      "sonnet_classify_text:tkt-02:r1",
-      "sonnet_classify_text:tkt-02:r2",
-      "sonnet_classify_text:tkt-03:r0",
-      "sonnet_classify_text:tkt-03:r1",
-      "sonnet_classify_text:tkt-03:r2",
-      "sonnet_classify_text:tkt-04:r0",
-      "sonnet_classify_text:tkt-04:r1",
-      "sonnet_classify_text:tkt-04:r2",
-      "sonnet_classify_text:tkt-05:r0",
-      "sonnet_classify_text:tkt-05:r1",
-      "sonnet_classify_text:tkt-05:r2",
-      "sonnet_classify_text:tkt-06:r0",
-      "sonnet_classify_text:tkt-06:r1",
-      "sonnet_classify_text:tkt-06:r2"
     ],
     "sonnet_schema": [
       "sonnet_schema:sku-01:r0",
@@ -1653,44 +858,6 @@
       "haiku_report:tkt-06:r1",
       "haiku_report:tkt-06:r2"
     ],
-    "haiku_classify_text": [
-      "haiku_classify_text:sku-01:r0",
-      "haiku_classify_text:sku-01:r1",
-      "haiku_classify_text:sku-01:r2",
-      "haiku_classify_text:sku-02:r0",
-      "haiku_classify_text:sku-02:r1",
-      "haiku_classify_text:sku-02:r2",
-      "haiku_classify_text:sku-03:r0",
-      "haiku_classify_text:sku-03:r1",
-      "haiku_classify_text:sku-03:r2",
-      "haiku_classify_text:sku-04:r0",
-      "haiku_classify_text:sku-04:r1",
-      "haiku_classify_text:sku-04:r2",
-      "haiku_classify_text:sku-05:r0",
-      "haiku_classify_text:sku-05:r1",
-      "haiku_classify_text:sku-05:r2",
-      "haiku_classify_text:sku-06:r0",
-      "haiku_classify_text:sku-06:r1",
-      "haiku_classify_text:sku-06:r2",
-      "haiku_classify_text:tkt-01:r0",
-      "haiku_classify_text:tkt-01:r1",
-      "haiku_classify_text:tkt-01:r2",
-      "haiku_classify_text:tkt-02:r0",
-      "haiku_classify_text:tkt-02:r1",
-      "haiku_classify_text:tkt-02:r2",
-      "haiku_classify_text:tkt-03:r0",
-      "haiku_classify_text:tkt-03:r1",
-      "haiku_classify_text:tkt-03:r2",
-      "haiku_classify_text:tkt-04:r0",
-      "haiku_classify_text:tkt-04:r1",
-      "haiku_classify_text:tkt-04:r2",
-      "haiku_classify_text:tkt-05:r0",
-      "haiku_classify_text:tkt-05:r1",
-      "haiku_classify_text:tkt-05:r2",
-      "haiku_classify_text:tkt-06:r0",
-      "haiku_classify_text:tkt-06:r1",
-      "haiku_classify_text:tkt-06:r2"
-    ],
     "haiku_schema": [
       "haiku_schema:sku-01:r0",
       "haiku_schema:sku-01:r1",
@@ -1728,133 +895,88 @@
       "haiku_schema:tkt-06:r0",
       "haiku_schema:tkt-06:r1",
       "haiku_schema:tkt-06:r2"
-    ],
-    "gemini_decision": [
-      "gemini_decision:sku-01:r0",
-      "gemini_decision:sku-01:r1",
-      "gemini_decision:sku-01:r2",
-      "gemini_decision:sku-02:r0",
-      "gemini_decision:sku-02:r1",
-      "gemini_decision:sku-02:r2",
-      "gemini_decision:sku-03:r0",
-      "gemini_decision:sku-03:r1",
-      "gemini_decision:sku-03:r2",
-      "gemini_decision:sku-04:r0",
-      "gemini_decision:sku-04:r1",
-      "gemini_decision:sku-04:r2",
-      "gemini_decision:sku-05:r0",
-      "gemini_decision:sku-05:r1",
-      "gemini_decision:sku-05:r2",
-      "gemini_decision:sku-06:r0",
-      "gemini_decision:sku-06:r1",
-      "gemini_decision:sku-06:r2",
-      "gemini_decision:tkt-01:r0",
-      "gemini_decision:tkt-01:r1",
-      "gemini_decision:tkt-01:r2",
-      "gemini_decision:tkt-02:r0",
-      "gemini_decision:tkt-02:r1",
-      "gemini_decision:tkt-02:r2",
-      "gemini_decision:tkt-03:r0",
-      "gemini_decision:tkt-03:r1",
-      "gemini_decision:tkt-03:r2",
-      "gemini_decision:tkt-04:r0",
-      "gemini_decision:tkt-04:r1",
-      "gemini_decision:tkt-04:r2",
-      "gemini_decision:tkt-05:r0",
-      "gemini_decision:tkt-05:r1",
-      "gemini_decision:tkt-05:r2",
-      "gemini_decision:tkt-06:r0",
-      "gemini_decision:tkt-06:r1",
-      "gemini_decision:tkt-06:r2"
     ]
   },
-  "extraction_history": {
-    "error_records": 43,
-    "error_reasons": [
-      "API usage limit reached on 2026-11-26"
-    ],
-    "retried_to_ok": 43
-  },
   "golden_mapping": {
-    "selection_rule": "fixed pre-declared mapping: repeat_index 0 of sonnet_report -> sonnet_naive, haiku_report -> haiku_naive, haiku_schema -> haiku_calibrated, gemini_decision -> gemini_decision on all 12 items (not selected by outcome)",
+    "selection_rule": "fixed pre-declared mapping: repeat_index 0 of sonnet_report -> sonnet_naive, haiku_report -> haiku_naive, sonnet_schema -> sonnet_calibrated, haiku_schema -> haiku_calibrated on all 12 items (not selected by outcome)",
     "arm_to_rung": {
       "sonnet_report": "sonnet_naive",
       "haiku_report": "haiku_naive",
-      "haiku_schema": "haiku_calibrated",
-      "gemini_decision": "gemini_decision"
+      "sonnet_schema": "sonnet_calibrated",
+      "haiku_schema": "haiku_calibrated"
     },
     "run_ids": {
       "tkt-01": {
         "sonnet_naive": "sonnet_report:tkt-01:r0",
         "haiku_naive": "haiku_report:tkt-01:r0",
-        "haiku_calibrated": "haiku_schema:tkt-01:r0",
-        "gemini_decision": "gemini_decision:tkt-01:r0"
+        "sonnet_calibrated": "sonnet_schema:tkt-01:r0",
+        "haiku_calibrated": "haiku_schema:tkt-01:r0"
       },
       "tkt-02": {
         "sonnet_naive": "sonnet_report:tkt-02:r0",
         "haiku_naive": "haiku_report:tkt-02:r0",
-        "haiku_calibrated": "haiku_schema:tkt-02:r0",
-        "gemini_decision": "gemini_decision:tkt-02:r0"
+        "sonnet_calibrated": "sonnet_schema:tkt-02:r0",
+        "haiku_calibrated": "haiku_schema:tkt-02:r0"
       },
       "tkt-03": {
         "sonnet_naive": "sonnet_report:tkt-03:r0",
         "haiku_naive": "haiku_report:tkt-03:r0",
-        "haiku_calibrated": "haiku_schema:tkt-03:r0",
-        "gemini_decision": "gemini_decision:tkt-03:r0"
+        "sonnet_calibrated": "sonnet_schema:tkt-03:r0",
+        "haiku_calibrated": "haiku_schema:tkt-03:r0"
       },
       "sku-01": {
         "sonnet_naive": "sonnet_report:sku-01:r0",
         "haiku_naive": "haiku_report:sku-01:r0",
-        "haiku_calibrated": "haiku_schema:sku-01:r0",
-        "gemini_decision": "gemini_decision:sku-01:r0"
+        "sonnet_calibrated": "sonnet_schema:sku-01:r0",
+        "haiku_calibrated": "haiku_schema:sku-01:r0"
       },
       "sku-02": {
         "sonnet_naive": "sonnet_report:sku-02:r0",
         "haiku_naive": "haiku_report:sku-02:r0",
-        "haiku_calibrated": "haiku_schema:sku-02:r0",
-        "gemini_decision": "gemini_decision:sku-02:r0"
+        "sonnet_calibrated": "sonnet_schema:sku-02:r0",
+        "haiku_calibrated": "haiku_schema:sku-02:r0"
       },
       "sku-03": {
         "sonnet_naive": "sonnet_report:sku-03:r0",
         "haiku_naive": "haiku_report:sku-03:r0",
-        "haiku_calibrated": "haiku_schema:sku-03:r0",
-        "gemini_decision": "gemini_decision:sku-03:r0"
+        "sonnet_calibrated": "sonnet_schema:sku-03:r0",
+        "haiku_calibrated": "haiku_schema:sku-03:r0"
       },
       "tkt-04": {
         "sonnet_naive": "sonnet_report:tkt-04:r0",
         "haiku_naive": "haiku_report:tkt-04:r0",
-        "haiku_calibrated": "haiku_schema:tkt-04:r0",
-        "gemini_decision": "gemini_decision:tkt-04:r0"
+        "sonnet_calibrated": "sonnet_schema:tkt-04:r0",
+        "haiku_calibrated": "haiku_schema:tkt-04:r0"
       },
       "tkt-05": {
         "sonnet_naive": "sonnet_report:tkt-05:r0",
         "haiku_naive": "haiku_report:tkt-05:r0",
-        "haiku_calibrated": "haiku_schema:tkt-05:r0",
-        "gemini_decision": "gemini_decision:tkt-05:r0"
+        "sonnet_calibrated": "sonnet_schema:tkt-05:r0",
+        "haiku_calibrated": "haiku_schema:tkt-05:r0"
       },
       "tkt-06": {
         "sonnet_naive": "sonnet_report:tkt-06:r0",
         "haiku_naive": "haiku_report:tkt-06:r0",
-        "haiku_calibrated": "haiku_schema:tkt-06:r0",
-        "gemini_decision": "gemini_decision:tkt-06:r0"
+        "sonnet_calibrated": "sonnet_schema:tkt-06:r0",
+        "haiku_calibrated": "haiku_schema:tkt-06:r0"
       },
       "sku-04": {
         "sonnet_naive": "sonnet_report:sku-04:r0",
         "haiku_naive": "haiku_report:sku-04:r0",
-        "haiku_calibrated": "haiku_schema:sku-04:r0",
-        "gemini_decision": "gemini_decision:sku-04:r0"
+        "sonnet_calibrated": "sonnet_schema:sku-04:r0",
+        "haiku_calibrated": "haiku_schema:sku-04:r0"
       },
       "sku-05": {
         "sonnet_naive": "sonnet_report:sku-05:r0",
         "haiku_naive": "haiku_report:sku-05:r0",
-        "haiku_calibrated": "haiku_schema:sku-05:r0",
-        "gemini_decision": "gemini_decision:sku-05:r0"
+        "sonnet_calibrated": "sonnet_schema:sku-05:r0",
+        "haiku_calibrated": "haiku_schema:sku-05:r0"
       },
       "sku-06": {
         "sonnet_naive": "sonnet_report:sku-06:r0",
         "haiku_naive": "haiku_report:sku-06:r0",
-        "haiku_calibrated": "haiku_schema:sku-06:r0",
-        "gemini_decision": "gemini_decision:sku-06:r0"
+        "sonnet_calibrated": "sonnet_schema:sku-06:r0",
+        "haiku_calibrated": "haiku_schema:sku-06:r0"
       }
     }
   }

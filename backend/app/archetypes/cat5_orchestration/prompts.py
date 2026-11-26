@@ -85,7 +85,7 @@ resp = await client.messages.create(
     messages=loop_history,
 )""",
     "hybrid_haiku_sonnet_governed": """# RUNG 3: Rung 2's tools on Haiku 5.5, switching to Sonnet 5.5 when the gate flags escalation
-# The gate sets escalation_required when the debit note is above zero or 2+ discrepancies combine.
+# The gate sets escalation_required only for a multi-factor dispute (2+ of: DOA/short receipt, amendment, price rise, freight).
 active_model = "claude-haiku-5-5"
 for turn in range(5):  # step budget 4 + one wrap-up turn
     resp = await client.messages.create(

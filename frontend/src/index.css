@@ -113,12 +113,13 @@ dialog::backdrop {
   .mwg-table[data-table="cfo"] td:nth-child(4)::before { content: var(--label-4, "Per 1k:") " "; }
   .mwg-table[data-table="cfo"] td:nth-child(5)::before { content: var(--label-5, "100k/mo:") " "; }
   .mwg-table[data-table="cfo"] td:nth-child(6)::before { content: var(--label-6, "1M/mo:") " "; }
-  .mwg-table[data-table="cfo"] td:nth-child(7)::before { content: var(--label-7, "Savings:") " "; }
+  .mwg-table[data-table="cfo"] td:nth-child(7)::before { content: var(--label-7, "Batch API (computed):") " "; }
+  .mwg-table[data-table="cfo"] td:nth-child(8)::before { content: var(--label-8, "Savings:") " "; }
 
   .mwg-table[data-table="batch-items"] td:nth-child(2)::before { content: var(--label-2, "Task:") " "; }
   .mwg-table[data-table="batch-items"] td:nth-child(3)::before { content: var(--label-3, "Tokens:") " "; }
   .mwg-table[data-table="batch-items"] td:nth-child(4)::before { content: var(--label-4, "Haiku 5.5 JSON:") " "; }
-  .mwg-table[data-table="batch-items"] td:nth-child(5)::before { content: var(--label-5, "Gemini Decision 1:") " "; }
+  .mwg-table[data-table="batch-items"] td:nth-child(5)::before { content: var(--label-5, "Sonnet 5.5 JSON:") " "; }
   .mwg-table[data-table="batch-items"] td:nth-child(6)::before { content: var(--label-6, "Model Accuracy:") " "; }
   .mwg-table[data-table="batch-items"] td:nth-child(7)::before { content: var(--label-7, "Regex PII:") " "; }
 
@@ -133,10 +134,9 @@ dialog::backdrop {
   .mwg-table[data-table="cat3-turns"] td:nth-child(6)::before { content: var(--label-6, "Turn Cost:") " "; }
   .mwg-table[data-table="cat3-turns"] td:nth-child(7)::before { content: var(--label-7, "Cum. Cost:") " "; }
 
-  .mwg-table[data-table="cat4-funnel"] td:nth-child(2)::before { content: var(--label-2, "Document & Clause:") " "; }
-  .mwg-table[data-table="cat4-funnel"] td:nth-child(3)::before { content: var(--label-3, "BM25:") " "; }
-  .mwg-table[data-table="cat4-funnel"] td:nth-child(4)::before { content: var(--label-4, "Stage & Haiku Score:") " "; }
-  .mwg-table[data-table="cat4-funnel"] td:nth-child(5)::before { content: var(--label-5, "Gold / Tokens:") " "; }
+  .mwg-table[data-table="cat4-picks"] td:nth-child(2)::before { content: var(--label-2, "Document & Clause:") " "; }
+  .mwg-table[data-table="cat4-picks"] td:nth-child(3)::before { content: var(--label-3, "Haiku Score & Rationale:") " "; }
+  .mwg-table[data-table="cat4-picks"] td:nth-child(4)::before { content: var(--label-4, "Expected / Est. Tok:") " "; }
 
   .mwg-table[data-table="cat5-scorecard"] td:nth-child(2)::before { content: var(--label-2, "Steps / Tokens:") " "; }
   .mwg-table[data-table="cat5-scorecard"] td:nth-child(3)::before { content: var(--label-3, "Accuracy:") " "; }

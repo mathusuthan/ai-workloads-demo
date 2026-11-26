@@ -65,7 +65,7 @@ def get_memory_summarizer_system_prompt() -> str:
 
 
 CAT3_CODE_SNIPPETS: dict[str, str] = {
-    "naive_full_history": """# RUNG 1 ANTI-PATTERN: Uncached Full History (Quadratic O(N^2) Bill on Sonnet 5.5)
+    "naive_full_history": """# WITHOUT: Uncached Full History (Quadratic O(N^2) Bill on Sonnet 5.5)
 # Re-sends ~9,860-tok IT/HR Handbook + growing verbatim chat history @ $2.00/M every turn
 resp = await client.messages.create(
     model="claude-sonnet-5-5",
@@ -74,21 +74,7 @@ resp = await client.messages.create(
     system=full_handbook_and_profile,  # NO cache_control! Billed $2.00/M every turn
     messages=all_verbatim_turns_1_to_k,  # Grows linearly -> cumulative cost scales O(N^2)
 )""",
-    "prefix_cached_history": """# RUNG 2 LEVER 1: Anthropic Prefix Context Caching (-95% Cache Read Discount)
-# Pays 1.25x ($2.50/M) once on cold Turn 1 (or $0.10/M warm fleet), then $0.10/M on Turns 2..10
-# Note: Raw multi-turn logs in `messages` still grow uncached at $2.00/M!
-resp = await client.messages.create(
-    model="claude-sonnet-5-5",
-    max_tokens=4096,
-    thinking={"type": "between_tools"},
-    system=[{
-        "type": "text",
-        "text": full_handbook_and_profile,
-        "cache_control": {"type": "ephemeral"},  # >= 4,096 tok cache floor satisfied (~9.86k tok measured)
-    }],
-    messages=all_verbatim_turns_1_to_k,
-)""",
-    "prefix_cached_summarized": """# RUNG 3 LEVER 1 + LEVER 2: Prefix Caching + Sliding-Window Memory Summarization
+    "prefix_cached_summarized": """# WITH: Prefix Caching + Sliding-Window Memory Summarization
 # Compacts older turns when uncompacted window hits 4 turns ([T1..T3] before Turn 5, +[T4..T6] before Turn 8)
 # Keeps active tail flat while preserving cached handbook prefix — net savings INCLUDES 100% summarizer cost!
 # Trade-off: compaction is lossy — specifics dropped from memory can't be recalled in later turns.

@@ -18,7 +18,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 from app.archetypes.cat6_swarms import fair_rerun as fr  # noqa: E402
 from app.archetypes.cat6_swarms.prompts import (  # noqa: E402
     build_cat6_isolated_payload,
-    build_cat6_unisolated_turn_message,
+    build_cat6_shared_bus_turn_message,
     get_cat6_agent_system_prompt,
 )
 from app.core.anthropic_service import AnthropicRawResult  # noqa: E402
@@ -158,7 +158,6 @@ GOV_CAPS = [4000, 4000, 16000, 4000, 4000]
 @pytest.mark.parametrize(
     ("arm_id", "models", "caps", "cached"),
     [
-        ("shared_bus_original", [S] * 5, [16000] * 5, False),
         ("shared_bus_matched_gate", [S] * 5, GOV_CAPS, False),
         ("isolated_cached_gate", [S] * 5, GOV_CAPS, True),
         ("tiered_gate", [H, H, S, H, H], GOV_CAPS, True),
@@ -176,7 +175,7 @@ def test_arm_call_sequence(arm_id: str, models: list[str], caps: list[int], cach
     assert [t["intended_model_id"] for t in rec["turns"]] == models
     assert [t["max_tokens"] for t in rec["turns"]] == caps
     assert [t["step_number"] for t in rec["turns"]] == [1, 2, 3, 4, 5]
-    assert rec["gate_enabled"] is (arm_id != "shared_bus_original")
+    assert rec["gate_enabled"] is True
     assert rec["final"]["sandbox"]["verified_outcome"] is True
     assert rec["final_signoff_memo"].startswith("orchestrator_merge output")
 
@@ -206,10 +205,7 @@ def test_matched_bus_first_message_has_noise_prefix_and_governed_ask() -> None:
     assert SHARED_REPO_PREFIX_MARKDOWN in first
     assert PRESET["buggy_code"] in first and PRESET["ci_failure_log"] in first
     assert first.endswith("Produce your concise 4-bullet remediation order.")
-    assert "thorough root-cause analysis" not in first
-    original = build_cat6_unisolated_turn_message(PRESET, "orchestrator_plan")
-    marker = "[TURN 1 — LEAD ORCHESTRATOR]:"
-    assert first.split(marker)[0] == original.split(marker)[0]
+    assert first == build_cat6_shared_bus_turn_message(PRESET, "orchestrator_plan")
 
 
 def test_matched_bus_later_turns_reuse_isolated_asks_and_sandbox_blocks() -> None:
@@ -233,14 +229,13 @@ def test_matched_bus_later_turns_reuse_isolated_asks_and_sandbox_blocks() -> Non
     assert author.endswith(iso_author.rsplit("\n\n", 1)[1])
 
 
-def test_shared_bus_original_uses_todays_unisolated_prompts() -> None:
-    agent = FakeAgent()
-    rec = run("shared_bus_original", agent)
-    for role, call, turn in zip(fr.ROLE_SEQUENCE, agent.calls, rec["turns"], strict=True):
-        assert call["role_instructions"] == get_cat6_agent_system_prompt("unisolated_broadcast_swarm", role)
-        assert call["messages"][-1]["content"] == build_cat6_unisolated_turn_message(PRESET, role)
-        assert turn["user_message"] == build_cat6_unisolated_turn_message(PRESET, role)
-        assert call["shared_repo_prefix"] == ""
+def test_every_rung_and_arm_uses_the_same_role_instructions() -> None:
+    for role in fr.ROLE_SEQUENCE:
+        prompts = {get_cat6_agent_system_prompt(r, role) for r in
+                   ("unisolated_broadcast_swarm", "isolated_cached_sonnet_swarm", "tiered_hybrid_cpo_swarm")}
+        prompts |= {fr.system_prompt_for(a, role) for a in fr.ARM_IDS}
+        assert len(prompts) == 1
+        assert "exhaustive" not in next(iter(prompts))
 
 
 # --------------------------------------------------------------------------------------------------
@@ -248,7 +243,7 @@ def test_shared_bus_original_uses_todays_unisolated_prompts() -> None:
 # --------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("arm_id", ["shared_bus_original", "shared_bus_matched_gate"])
+@pytest.mark.parametrize("arm_id", ["shared_bus_matched_gate"])
 def test_shared_bus_sends_growing_thread(arm_id: str) -> None:
     agent = FakeAgent()
     rec = run(arm_id, agent)
@@ -311,17 +306,6 @@ def test_gate_fail_twice_is_ok_outcome_with_one_retry() -> None:
     assert len(rec["turns"]) == 6
 
 
-def test_shared_bus_original_never_retries() -> None:
-    sandbox = FakeSandbox([False, True])
-    rec = run("shared_bus_original", FakeAgent(), sandbox)
-    assert rec["status"] == "ok"
-    assert rec["retries_used"] == 0
-    assert len(sandbox.calls) == 1
-    assert rec["first_attempt"] == rec["final"]
-    assert rec["final"]["sandbox"]["verified_outcome"] is False
-    assert len(rec["turns"]) == 5
-
-
 def test_no_retry_first_equals_final() -> None:
     rec = run("tiered_gate", FakeAgent(), FakeSandbox([True]))
     assert rec["retries_used"] == 0
@@ -359,7 +343,7 @@ def test_truncated_patch_is_not_extracted() -> None:
         texts={"patch_author": "Here you go:\n```python\ndef f(:\n    pass"},
         stop_reasons={"patch_author": "max_tokens"},
     )
-    rec = run("shared_bus_original", agent, FakeSandbox([False]))
+    rec = run("shared_bus_matched_gate", agent, FakeSandbox([False, False]))
     assert rec["first_attempt"]["patch_extracted"] is False
     assert rec["first_attempt"]["patch_author_stop_reason"] == "max_tokens"
 
@@ -382,7 +366,7 @@ def test_cached_arms_use_per_run_nonce_prefix(arm_id: str) -> None:
     assert prefix1 == f"<!-- run:{r1['run_nonce']} -->\n" + SHARED_REPO_PREFIX_MARKDOWN
 
 
-@pytest.mark.parametrize("arm_id", ["shared_bus_original", "shared_bus_matched_gate"])
+@pytest.mark.parametrize("arm_id", ["shared_bus_matched_gate"])
 def test_shared_bus_arms_pass_empty_prefix(arm_id: str) -> None:
     agent = FakeAgent()
     rec = run(arm_id, agent)
@@ -567,7 +551,7 @@ def test_wilson_interval_known_values() -> None:
 
 
 def test_summary_maths_on_hand_built_records() -> None:
-    arm, other = "isolated_cached_gate", "shared_bus_original"
+    arm, other = "isolated_cached_gate", "shared_bus_matched_gate"
     t_ok = [_turn("patch_author", cw=100), _turn("security_critic", stop="max_tokens")]
     t_fail = [
         _turn("patch_author", stop="max_tokens"),
@@ -624,7 +608,7 @@ def test_summary_maths_on_hand_built_records() -> None:
         (arm, "orchestrator_merge", H)
     ]
     assert s["matrix"]["complete"] is False and s["matrix"]["balanced"] is False
-    assert ["shared_bus_original", "inc-02", 0] in s["matrix"]["missing_keys"]
+    assert ["shared_bus_matched_gate", "inc-02", 0] in s["matrix"]["missing_keys"]
     assert s["arms"][arm]["by_preset"]["inc-03"]["error_records"] == 1
     json.dumps(s)
 
@@ -648,57 +632,16 @@ def test_analysis_markdown_renders() -> None:
     spec.loader.exec_module(mod)
     records = [
         _full("isolated_cached_gate", "inc-01", 0, False, True, [_turn("patch_author", cw=6000)], retries=1),
-        _full("shared_bus_original", "inc-01", 0, False, False, [_turn("patch_author", stop="max_tokens")]),
+        _full("shared_bus_matched_gate", "inc-01", 0, False, False, [_turn("patch_author", stop="max_tokens")]),
         _full("tiered_gate", "inc-01", 0, False, False, [_turn("ci_triager", H)], status="error", error_message="x"),
     ]
     md = mod.render_markdown(fr.summarise(records))
     assert "## Main results (per arm)" in md and "## Data quality" in md and "How to read the cost views" in md
     assert "`shared_bus_matched_gate`" in md
     assert "Individual turns stopped on `max_tokens` (ok runs used + error records): 1." in md
-    assert "`shared_bus_original` inc-01 r0 (ok) step None `patch_author` attempt 1: cap None" in md
-
-
-def test_rescore_with_fake_sandbox_never_mutates_records() -> None:
-    import copy
-
-    arm = "shared_bus_original"
-    r0 = _full(arm, "inc-02", 0, False, False, [_turn("patch_author", inp=1_000_000, out=0)])
-    r1 = _full(arm, "inc-02", 1, True, True, [_turn("patch_author", inp=1_000_000, out=0)])
-    for r, code in ((r0, "FLAGGED"), (r1, "FINE")):
-        r["patched_code_first"] = r["patched_code_final"] = code
-    records = [r0, r1]
-    snapshot = copy.deepcopy(records)
-    calls: list[tuple[str, str]] = []
-
-    def fake(preset_id: str, code: str) -> dict[str, Any]:
-        calls.append((preset_id, code))
-        return make_sbx(True)
-
-    s = fr.summarise(records, arm_ids=[arm], preset_ids=["inc-02"], rescore_sandbox=fake)
-    assert records == snapshot
-    assert sorted(set(calls)) == [("inc-02", "FINE"), ("inc-02", "FLAGGED")]
-    assert len(calls) == 2  # identical first/final code is judged once
-    # as-recorded view untouched
-    assert s["arms"][arm]["final_verified"] == 1
-    assert s["arms"][arm]["cost_per_verified_outcome_usd"]["billed"] == pytest.approx(4.0)
-    rs = s["rescored"]["arms"][arm]
-    assert (rs["first_attempt_verified_recorded"], rs["first_attempt_verified_rescored"]) == (1, 2)
-    assert (rs["final_verified_recorded"], rs["final_verified_rescored"]) == (1, 2)
-    assert rs["cost_per_verified_outcome_usd_rescored"]["billed"] == pytest.approx(2.0)
-    changes = s["rescored"]["changes"]
-    assert [(c["repeat_index"], c["attempt"]) for c in changes] == [(0, "first_attempt"), (0, "final")]
-    assert changes[1]["recorded_passed_checks"] == 8 and changes[1]["rescored_passed_checks"] == 10
-    assert [f["check_id"] for f in changes[1]["flipped_checks"]] == ["ADV-01", "AST-SEC-01"]
-    assert fr.summarise(records, arm_ids=[arm], preset_ids=["inc-02"])["rescored"] is None
-
-    spec = importlib.util.spec_from_file_location("analyze_cat6_fair_rerun", BACKEND_DIR / "scripts" / "analyze_cat6_fair_rerun.py")
-    assert spec and spec.loader
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    md = mod.render_markdown(s)
-    assert "## Re-scored with the current sandbox" in md
-    assert "- `shared_bus_original` inc-02 r0 (final): 8/10 (verified=False) → 10/10 (verified=True); " in md
-    assert "AST-SEC-01 FAIL→PASS" in md
+    assert "`shared_bus_matched_gate` inc-01 r0 (ok) step None `patch_author` attempt 1: cap None" in md
+    assert "## Design: with and without the deck's lever" in md and "(not run)" in md
+    assert "shared_bus_original" not in md
 
 
 # --------------------------------------------------------------------------------------------------
@@ -730,6 +673,6 @@ def test_runner_dry_run_makes_no_calls(tmp_path: Path) -> None:
         env={"PATH": "/usr/bin:/bin", "NOVAMART_TRACES_DIR": str(tmp_path / "traces")},
     )
     assert proc.returncode == 0, proc.stderr
-    assert "24 runs; 1 already ok, 23 pending" in proc.stdout
+    assert "18 runs; 1 already ok, 17 pending" in proc.stdout
     assert "Dry run: no API calls made." in proc.stdout
     assert out.read_text(encoding="utf-8").count("\n") == 1

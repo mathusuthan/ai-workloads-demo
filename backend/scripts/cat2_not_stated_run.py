@@ -1,22 +1,22 @@
-"""Category 2 follow-up experiment runner: "Not stated in source" template variant.
+"""Category 2 experiment runner: unbounded long-form draft vs section template with length caps.
 
 Usage (from backend/):
     .venv/bin/python scripts/cat2_not_stated_run.py draft --dry-run         # 48 planned drafts + cost estimate, no calls
     .venv/bin/python scripts/cat2_not_stated_run.py draft --max-usd 2 --concurrency 4
-    .venv/bin/python scripts/cat2_not_stated_run.py judge --dry-run         # 112 planned judge calls + estimate + blinding check
+    .venv/bin/python scripts/cat2_not_stated_run.py judge --dry-run         # 96 planned judge calls + estimate + blinding check
     .venv/bin/python scripts/cat2_not_stated_run.py judge --max-usd 12 --concurrency 4
 
-draft: Sonnet 5.5 and Haiku 5.5 through the app's `run_cat2_structured_draft` (same settings as the app's templated
-rungs), 2 arms x 4 bundles x 3 repeats. Appends one record per call to experiments/cat2_not_stated/drafts.jsonl;
+draft: Sonnet 5.5 and Haiku 5.5 through the app's own calls (`run_cat2_unbounded_sonnet(model_tier=...)` for the
+unbounded version, `run_cat2_structured_draft` for the section template; the app's caps and thinking settings),
+2 versions x 2 models x 4 bundles x 3 repeats. Appends one record per call to experiments/cat2_not_stated/drafts.jsonl;
 an ok record (including a truncated one, which is flagged) is never redone; error records stay and are retried.
 --max-usd counts every recorded draft at the app's rate card and refuses a draft whose worst case (estimated input +
 max_tokens output) could cross the cap.
 
-judge: the baseline blind judge (model, settings, prompts, schemas imported from quality_scoring.py): one rubric pass
-per draft (48), matched pairwise not_stated vs original on bundle/model/repeat in both orders (48), and not_stated
-repeat 0 vs the stored unbounded draft in both orders per model (16). A live run needs all 48 drafts; --dry-run
-without them estimates with the stored templated drafts standing in. Every planned prompt is checked for blinding
-before anything is sent. The baseline files (judgements, deterministic, replays, summary) are only read.
+judge: the blind judge (model, settings, prompts, schemas imported from quality_scoring.py): one rubric pass per draft
+(48) and template vs unbounded on the same bundle, model and repeat in both orders (48). A live run needs all 48
+drafts; --dry-run without them estimates with stand-ins (prompt sizes approximate). Every planned prompt is checked for
+blinding before anything is sent.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ def _api_key() -> str | None:
 
 
 async def draft_phase(args: argparse.Namespace, *, draft_call: Any = None) -> int:
-    replays = qs.load_replays(args.replays)
+    replays = None
     out = Path(args.out)
     existing = ns.load_jsonl(out)
     plan = ns.plan_drafts(args.repeats)
@@ -59,15 +59,16 @@ async def draft_phase(args: argparse.Namespace, *, draft_call: Any = None) -> in
     stale = ns.stale_draft_records(plan, existing)
     est = ns.estimate_draft_plan(pending, replays)
     guard = ns.CostGuard(args.max_usd, existing)
-    print(f"Planned {len(plan)} drafts ({len(ns.ARMS)} arms x {len(ns.MODEL_KEYS)} models x {len(qs.PRESET_IDS)} bundles x {args.repeats} repeats); "
+    print(f"Planned {len(plan)} drafts ({len(ns.ARMS)} versions x {len(ns.MODEL_KEYS)} models x {len(qs.PRESET_IDS)} bundles x {args.repeats} repeats); "
           f"{len(plan) - len(pending)} already ok in {out.name}, {len(pending)} pending.")
     if stale:
         print(f"WARNING: {len(stale)} ok drafts were made from a different prompt/schema than the current plan: {stale[:6]}")
-    print("Estimate for pending drafts (input = stored templated rung's measured input + added instruction; typical output = stored output):")
-    for m, s in est["by_model"].items():
-        print(f"  {m:<7} {s['drafts']:>3} drafts  input≈{s['input_tokens']:,} tok  ${s['typical_usd']:.3f} typical / ${s['worst_case_usd']:.3f} worst (max_tokens {ns.DRAFT_MAX_TOKENS})")
+    print("Estimate for pending drafts (input and typical output = the estimate-basis constants in not_stated_experiment.py; worst = max_tokens output):")
+    for c, s in est["by_cell"].items():
+        print(f"  {c:<28} {s['drafts']:>3} drafts  input≈{s['input_tokens']:,} tok  ${s['typical_usd']:.3f} typical / ${s['worst_case_usd']:.3f} worst "
+              f"(max_tokens {ns.DRAFT_MAX_TOKENS[c.split('|')[0]]:,})")
     t = est["total"]
-    print(f"  total   {t['drafts']:>3} drafts  input≈{t['input_tokens']:,} tok  ${t['typical_usd']:.3f} typical / ${t['worst_case_usd']:.3f} worst")
+    print(f"  {'total':<28} {t['drafts']:>3} drafts  input≈{t['input_tokens']:,} tok  ${t['typical_usd']:.3f} typical / ${t['worst_case_usd']:.3f} worst")
     print(f"Budget: --max-usd ${args.max_usd:.2f}; already recorded ${guard.spent_usd:.4f}.")
     if args.dry_run:
         for i, p in enumerate(pending[: args.show], 1):
@@ -102,7 +103,6 @@ async def draft_phase(args: argparse.Namespace, *, draft_call: Any = None) -> in
 
 
 async def judge_phase(args: argparse.Namespace, *, judge_call: Any = None) -> int:
-    replays = qs.load_replays(args.replays)
     keys = qs.load_quality_keys()
     drafts = ns.load_jsonl(Path(args.drafts))
     scored = ns.score_drafts(drafts, keys)
@@ -113,23 +113,24 @@ async def judge_phase(args: argparse.Namespace, *, judge_call: Any = None) -> in
         if not args.dry_run:
             print(f"{len(missing)} of {len(planned_keys)} drafts are missing from {Path(args.drafts).name}; run the draft phase first.", file=sys.stderr)
             return 2
-        stand = ns.standin_drafts(replays, keys)
+        stand = ns.standin_drafts(scored, keys)
         for k in missing:
-            scored[k] = stand[k]
-        standins = len(missing)
-    plan = ns.plan_judge_calls(scored, replays, repeats=args.repeats)
-    bad = ns.blinding_report(plan, scored, replays)
-    counts = {t: sum(1 for p in plan if p["meta"]["comparison"] == t) for t in ("rubric", "matched", "vs_unbounded")}
+            if k in stand:
+                scored[k] = stand[k]
+                standins += 1
+    plan = ns.plan_judge_calls(scored, repeats=args.repeats)
+    bad = ns.blinding_report(plan, scored)
+    counts = {t: sum(1 for p in plan if p["meta"]["comparison"] == t) for t in ("rubric", ns.COMPARISON)}
     out = Path(args.out)
     existing = qs.load_judgements(out)
     pending = qs.select_pending(plan, existing)
     stale = qs.stale_ok_records(plan, existing)
-    cal = ns.calibrate_judge_estimate(args.baseline_judgements)
+    cal = ns.calibrate_judge_estimate(out, args.drafts)
     est = qs.estimate_plan(pending, chars_per_token=cal["chars_per_token"], max_tokens=args.max_tokens, typical_output_tokens=cal["typical_output_tokens"])
-    print(f"Planned {len(plan)} judge calls (rubric: {counts['rubric']}, matched pairwise: {counts['matched']}, vs stored unbounded: {counts['vs_unbounded']}); "
+    print(f"Planned {len(plan)} judge calls (rubric: {counts['rubric']}, template vs unbounded pairwise: {counts[ns.COMPARISON]}); "
           f"{len(plan) - len(pending)} already ok in {out.name}, {len(pending)} pending. Judge {qs.JUDGE_MODEL}, max_tokens {args.max_tokens}.")
     if standins:
-        print(f"NOTE: {standins} drafts not yet drafted; the estimate uses the stored templated drafts as stand-ins (prompt sizes approximate).")
+        print(f"NOTE: {standins} drafts not yet drafted; the estimate uses stand-ins (an earlier unbounded draft of the same bundle; prompt sizes approximate).")
     print(f"Blinding: {len(plan) - len(bad)}/{len(plan)} planned prompts clean." + (f" VIOLATIONS: {dict(list(bad.items())[:5])}" if bad else ""))
     if stale:
         print(f"WARNING: {len(stale)} ok records were made from a different prompt than the current plan: {stale[:6]}")
@@ -159,7 +160,7 @@ async def judge_phase(args: argparse.Namespace, *, judge_call: Any = None) -> in
 
     def on_record(rec: dict[str, Any]) -> None:
         rec["meta"] = meta[rec["call_id"]]
-        rec["experiment"] = "cat2_not_stated"
+        rec["experiment"] = "cat2_experiment"
         append_record(out, rec)
         print(f"  {rec['status']:<5} {rec['call_id']:<62} stop={rec.get('stop_reason')} in={rec.get('input_tokens')} out={rec.get('output_tokens')}"
               f"{' ' + str(rec.get('error_type')) if rec['status'] != 'ok' else ''}", flush=True)
@@ -181,7 +182,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     d.add_argument("--concurrency", type=int, default=4)
     d.add_argument("--repeats", type=int, default=ns.REPEATS)
     d.add_argument("--out", default=str(ns.DRAFTS_PATH))
-    d.add_argument("--replays", default=str(qs.REPLAYS_PATH))
     d.add_argument("--show", type=int, default=48, help="dry run: planned drafts to list")
     j = sub.add_parser("judge")
     j.add_argument("--dry-run", action="store_true")
@@ -191,8 +191,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     j.add_argument("--max-tokens", type=int, default=qs.JUDGE_MAX_TOKENS)
     j.add_argument("--drafts", default=str(ns.DRAFTS_PATH))
     j.add_argument("--out", default=str(ns.JUDGEMENTS_PATH))
-    j.add_argument("--replays", default=str(qs.REPLAYS_PATH))
-    j.add_argument("--baseline-judgements", default=str(qs.JUDGEMENTS_PATH), help="read-only; calibrates the estimate")
     return ap.parse_args(argv)
 
 

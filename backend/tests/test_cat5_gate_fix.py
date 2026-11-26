@@ -1,9 +1,10 @@
-"""Category 5 policy-gate fixes (gate v2-manual-aligned, 2026-11-26) and the bundle's added fields, with the
-recorded experiment kept reproducible. No live API calls.
+"""Category 5 deterministic policy tool (AP-POL-GATE-01) against the policy manual, and the narrow query's fields,
+with the recorded runs kept reproducible. No live API calls.
 
-Fixes, each tested on synthetic rows (positive and negative): the 1.5% band only for index-linked POs (2.1); the
-approved freight waiver of a signed amendment (2.2/2.3); GST at each line's own rate (1.1(a)/3.2); Trigger 3,
-duplicate invoice or PAYMENT_FREEZE vendor (4.1)."""
+Each rule is tested on synthetic rows (positive and negative): the 1.5% band only for index-linked POs (2.1); the
+approved freight waiver of a signed amendment (2.2/2.3); GST at each line's own PO rate (1.1(a)/3.2); Trigger 3,
+duplicate invoice or PAYMENT_FREEZE vendor (4.1); escalation only for a multi-factor dispute (6.2); held-line labels
+from the lowest-numbered hard-block trigger that fired (4.1)."""
 
 from __future__ import annotations
 
@@ -21,14 +22,18 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 from app.archetypes.cat5_orchestration import ablation as ab  # noqa: E402
 from app.archetypes.cat5_orchestration.erp_db import (  # noqa: E402
-    BUNDLE_VERSION,
-    BUNDLE_VERSION_V1,
-    GATE_VERSION,
-    GATE_VERSION_V1,
+    ESCALATION_FACTOR_KINDS,
+    FACTOR_AMENDMENT,
+    FACTOR_FREIGHT,
+    FACTOR_PRICE_HIKE,
+    FACTOR_QUANTITY_DOA,
     HARD_BLOCK_ROUTE,
+    HELD_LABEL_TRIGGER1,
+    HELD_LABEL_TRIGGER2,
+    HELD_LABEL_TRIGGER3,
     PRICE_RULE_WITHIN_BAND,
     PRICE_RULE_WITHIN_BAND_NOT_INDEX_LINKED,
-    Cat5ErpSession,
+    escalation_factor_kinds,
     evaluate_deterministic_policy_gate,
     po_currency_index_linked,
 )
@@ -38,9 +43,12 @@ from app.data.cat5_ablation_fixtures import (  # noqa: E402
     CAT5_ABLATION_PRESETS_BY_ID,
 )
 
-RUNS = BACKEND_DIR / "experiments" / "cat5_ablation" / "runs.jsonl"
+EXP_DIR = BACKEND_DIR / "experiments" / "cat5_ablation"
+RUNS = EXP_DIR / "runs.jsonl"
+OTHER_RUNS = EXP_DIR / "other_levers" / "runs.jsonl"
 HAVE_RECORDS = RUNS.is_file()
 INV06 = CAT5_ABLATION_PRESETS_BY_ID["inv-06"]
+P = CAT5_ABLATION_PRESETS_BY_ID
 
 
 def _sha(text: str) -> str:
@@ -104,10 +112,10 @@ def _rows(*, currency: str = "INR", billed_rate: float | None = None) -> dict[st
     return rows
 
 
-def _gate(rows: dict[str, list[dict[str, Any]]], version: str = GATE_VERSION) -> dict[str, Any]:
+def _gate(rows: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
     s = ab.AblationErpSession(rung_id="bounded_sonnet_cached_gate", extra_rows=rows)
     try:
-        return evaluate_deterministic_policy_gate(s.conn, INV06["invoice_id"], gate_version=version)
+        return evaluate_deterministic_policy_gate(s.conn, INV06["invoice_id"])
     finally:
         s.close()
 
@@ -129,31 +137,20 @@ def test_plain_po_inside_band_pays_po_rate_with_deduction() -> None:
     assert l1["line_deduction_inr"] == pytest.approx(1200 * (1499.0 - 1480.0)) == 22800.0
     assert g["recommended_decision"] == "APPROVE_PARTIAL_DEBIT_NOTE"
     assert (g["authorized_net_principal_inr"], g["authorized_gst_payout_inr"], g["debit_note_deduction_inr"]) == (3656000.0, 658080.0, 22800.0)
-    assert g["escalation_required"] is True
+    assert g["escalation_required"] is False  # one factor (an unauthorized price rise): not a multi-factor dispute
     gt = INV06["ground_truth"]  # equals the manual derivation
     assert g["recommended_decision"] == gt["decision"] and g["authorized_net_principal_inr"] == gt["authorized_net_principal_inr"]
-    # the pre-fix gate (kept for replay only) still passes the band unconditionally
-    g1 = _gate(_rows(currency="INR"), GATE_VERSION_V1)
-    assert g1["line_findings"][0]["price_rule"] == PRICE_RULE_WITHIN_BAND and g1["recommended_decision"] == "APPROVE_CLEAN"
 
 
 @pytest.mark.parametrize("currency", ["INR", "INR (index-linked float: LME copper)"])
-def test_rise_above_band_is_unaffected_by_the_fix(currency: str) -> None:
-    rows = _rows(currency=currency, billed_rate=1520.0)  # +2.7% > 1.5%
-    g2, g1 = _gate(rows), _gate(rows, GATE_VERSION_V1)
-    assert g2 == g1
-    l1 = g2["line_findings"][0]
+def test_rise_above_band_is_capped_whatever_the_po_notes(currency: str) -> None:
+    g = _gate(_rows(currency=currency, billed_rate=1520.0))  # +2.7% > 1.5%
+    assert g == _gate(_rows(currency="INR", billed_rate=1520.0))
+    l1 = g["line_findings"][0]
     assert l1["price_rule"] == "UNAUTHORIZED_HIKE_CAPPED_TO_PO" and l1["effective_unit_price_inr"] == 1480.0
 
 
-def test_unknown_versions_are_rejected() -> None:
-    with pytest.raises(ValueError):
-        Cat5ErpSession(rung_id="bounded_sonnet_cached_gate", gate_version="v3")
-    with pytest.raises(ValueError):
-        Cat5ErpSession(rung_id="bounded_sonnet_cached_gate", bundle_version="v3")
-
-
-# ------------------------------------------------------------------------ the three other gaps (synthetic rows)
+# ------------------------------------------------------------------------ freight waiver, GST per line, Trigger 3 (synthetic rows)
 #
 # Each test edits a fresh in-memory ERP (the ablation rows) with SQL and runs the gate. Hand derivations in comments.
 
@@ -161,12 +158,12 @@ INV04, INV09, INV01, INV03 = "INV-TS-2026-1184", "INV-HR-2026-5826", "INV-KA-202
 ZERO4 = ("authorized_net_principal_inr", "authorized_gst_payout_inr", "gst_escrow_holdback_inr", "debit_note_deduction_inr")
 
 
-def _gate_sql(invoice_id: str, *sql: tuple[str, tuple[Any, ...]], version: str = GATE_VERSION) -> dict[str, Any]:
+def _gate_sql(invoice_id: str, *sql: tuple[str, tuple[Any, ...]]) -> dict[str, Any]:
     s = ab.AblationErpSession(rung_id="bounded_sonnet_cached_gate")
     try:
         for stmt, params in sql:
             s.conn.execute(stmt, params)
-        return evaluate_deterministic_policy_gate(s.conn, invoice_id, gate_version=version)
+        return evaluate_deterministic_policy_gate(s.conn, invoice_id)
     finally:
         s.close()
 
@@ -205,19 +202,17 @@ def _freeze(invoice_id: str, flag: str = "PAYMENT_FREEZE") -> tuple[str, tuple[A
 def test_no_waiver_disallows_the_excess_freight() -> None:
     g = _gate_sql(INV09)
     assert (g["authorized_net_principal_inr"], g["debit_note_deduction_inr"], g["freight_disallowed_inr"]) == (4498000.0, 9500.0, 9500.0)
-    assert "freight_waiver_applied_inr" not in g and g == _gate_sql(INV09, version=GATE_VERSION_V1)
+    assert "freight_waiver_applied_inr" not in g and g["escalation_required"] is False  # one factor: disallowed freight
 
 
 def test_signed_waiver_covering_the_excess_allows_all_freight() -> None:
     # cap 18,000 + waiver 9,500 = 27,500 -> freight 27,500 allowed; net 4,480,000 + 27,500 = 4,507,500;
-    # GST ROUND(4,507,500 x 0.18, 2) = 811,350; debit 0 -> APPROVE_CLEAN; one discrepancy (freight over PO cap), no escalation
+    # GST ROUND(4,507,500 x 0.18, 2) = 811,350; debit 0 -> APPROVE_CLEAN; one factor (the amendment's waiver), no escalation
     g = _gate_sql(INV09, _amend(9500.0))
     assert (g["recommended_decision"], g["authorized_net_principal_inr"], g["authorized_gst_payout_inr"],
             g["debit_note_deduction_inr"], g["freight_disallowed_inr"], g["freight_waiver_applied_inr"]) == (
         "APPROVE_CLEAN", 4507500.0, 811350.0, 0.0, 0.0, 9500.0)
     assert g["escalation_required"] is False
-    # the pre-fix gate ignored the waiver
-    assert _gate_sql(INV09, _amend(9500.0), version=GATE_VERSION_V1)["debit_note_deduction_inr"] == 9500.0
 
 
 def test_partial_waiver_disallows_the_rest() -> None:
@@ -226,7 +221,7 @@ def test_partial_waiver_disallows_the_rest() -> None:
     assert (g["recommended_decision"], g["authorized_net_principal_inr"], g["authorized_gst_payout_inr"],
             g["debit_note_deduction_inr"], g["freight_disallowed_inr"], g["freight_waiver_applied_inr"]) == (
         "APPROVE_PARTIAL_DEBIT_NOTE", 4503000.0, 810540.0, 4500.0, 4500.0, 5000.0)
-    assert g["escalation_required"] is True
+    assert g["escalation_required"] is True  # two factors: the amendment's waiver and the freight still disallowed
 
 
 def test_waiver_larger_than_the_excess_allows_only_the_claim() -> None:
@@ -247,7 +242,6 @@ def test_single_rate_invoice_keeps_the_invoice_level_formula() -> None:
     assert g["authorized_gst_payout_inr"] == 387900.0 and "gst_rates_by_line" not in g  # ROUND(2,155,000 x 0.18, 2)
     g5 = _gate_sql(INV04, *[q for sku in ("NM-FAN-1200-BLDC", "NM-LED-BATTEN-20W", "NM-LED-BULB-9W-PK4") for q in _rate(INV04, sku, 0.05)])
     assert g5["authorized_gst_payout_inr"] == 107750.0 and "gst_rates_by_line" not in g5  # one rate, 5%
-    assert g5 == _gate_sql(INV04, *[q for sku in ("NM-FAN-1200-BLDC", "NM-LED-BATTEN-20W", "NM-LED-BULB-9W-PK4") for q in _rate(INV04, sku, 0.05)], version=GATE_VERSION_V1)
 
 
 def test_mixed_rates_apply_each_lines_rate() -> None:
@@ -255,10 +249,9 @@ def test_mixed_rates_apply_each_lines_rate() -> None:
     g = _gate_sql(INV04, *_rate(INV04, "NM-LED-BULB-9W-PK4", 0.12))
     assert g["authorized_gst_payout_inr"] == 369000.0
     assert g["gst_rates_by_line"] == {"NM-FAN-1200-BLDC": 0.18, "NM-LED-BATTEN-20W": 0.18, "NM-LED-BULB-9W-PK4": 0.12}
-    # line 1 at 5%: the pre-fix gate took 5% for the whole invoice (107,750); per line 73,500 + 66,600 + 56,700 = 196,800
+    # line 1 at 5% (each line at its own rate, not the first line's rate for the whole invoice): 73,500 + 66,600 + 56,700 = 196,800
     rows = _rate(INV04, "NM-FAN-1200-BLDC", 0.05)
     assert _gate_sql(INV04, *rows)["authorized_gst_payout_inr"] == 196800.0
-    assert _gate_sql(INV04, *rows, version=GATE_VERSION_V1)["authorized_gst_payout_inr"] == 107750.0
 
 
 def test_mixed_rates_freight_at_the_largest_lines_rate() -> None:
@@ -280,14 +273,13 @@ def _assert_trigger3_block(g: dict[str, Any], label: str) -> None:
     assert g["hard_block"] is True and g["circuit_breaker_halt"] is True and g["escalation_required"] is False
     assert g["recommended_decision"] == "BLOCK_EXCEPTION_HOLD" and all(g[k] == 0.0 for k in ZERO4)
     assert len(g["block_reasons"]) == 1 and g["block_reasons"][0].startswith(label) and HARD_BLOCK_ROUTE in g["block_reasons"][0]
-    assert {f["status"] for f in g["line_findings"]} == {"HELD_BY_DUPLICATE_OR_FREEZE_BLOCK"}
+    assert {f["status"] for f in g["line_findings"]} == {HELD_LABEL_TRIGGER3}
 
 
 def test_duplicate_invoice_is_blocked() -> None:
     g = _gate_sql(INV04, _voucher(INV04, "PO-NM-HYD-1184"))
     _assert_trigger3_block(g, "HARD_BLOCK_DUPLICATE_INVOICE")
     assert "VCH-PRIOR-0001" in g["block_reasons"][0]
-    assert _gate_sql(INV04, _voucher(INV04, "PO-NM-HYD-1184"), version=GATE_VERSION_V1)["recommended_decision"] == "APPROVE_CLEAN"
 
 
 def test_voucher_for_another_invoice_does_not_block() -> None:
@@ -310,7 +302,6 @@ def test_duplicate_includes_a_voucher_committed_earlier_in_the_same_session() ->
 def test_frozen_vendor_is_blocked(flag: str) -> None:
     g = _gate_sql(INV04, _freeze(INV04, flag))
     _assert_trigger3_block(g, "HARD_BLOCK_VENDOR_PAYMENT_FREEZE")
-    assert _gate_sql(INV04, _freeze(INV04, flag), version=GATE_VERSION_V1)["recommended_decision"] == "APPROVE_CLEAN"
 
 
 @pytest.mark.parametrize("flag", ["CLEAN", "WATCH_PRICE_CLAIMS", "HIGH_AUDIT_ALERT", "PAYMENT_FREEZE_LIFTED"])
@@ -326,29 +317,120 @@ def test_trigger3_with_trigger1_keeps_the_recorded_line_labels() -> None:
     assert g["line_findings"] == base["line_findings"] and all(g[k] == 0.0 for k in ZERO4)
 
 
-@pytest.mark.parametrize("pid", sorted(CAT5_ABLATION_PRESETS_BY_ID))
-def test_neither_condition_leaves_the_gate_unchanged(pid: str) -> None:
-    """No recorded invoice has a waiver, mixed rates, a prior voucher or a frozen vendor: v2 == v1 except inv-06's band."""
-    inv = CAT5_ABLATION_PRESETS_BY_ID[pid]["invoice_id"]
-    v1, v2 = _gate_sql(inv, version=GATE_VERSION_V1), _gate_sql(inv)
-    assert (v1 == v2) is (pid != "inv-06")
+# ------------------------------------------------------------------------ escalation: manual 6.2, multi-factor
 
 
-# ------------------------------------------------------------------------ bundle: added fields
+def _line(**kw: Any) -> dict[str, Any]:
+    base = {"sku": "X", "billed_qty": 10, "payable_qty": 10, "doa_rejected_qty": 0, "price_rule": "EXACT_PO_MATCH",
+            "billed_unit_price_inr": 100.0, "effective_unit_price_inr": 100.0}
+    base.update(kw)
+    return base
 
 
-def _bundle(pid: str, version: str) -> str:
-    s = ab.AblationErpSession(rung_id="bounded_sonnet_cached_gate", bundle_version=version)
+_DOA = _line(sku="D", payable_qty=8, doa_rejected_qty=2)
+_SHORT = _line(sku="S", payable_qty=9)
+_AMD = _line(sku="A", price_rule="AMENDMENT_APPROVED (AMD-1)", billed_unit_price_inr=105.0, effective_unit_price_inr=105.0)
+_HIKE = _line(sku="H", price_rule="UNAUTHORIZED_HIKE_CAPPED_TO_PO", billed_unit_price_inr=110.0)
+_BAND_PLAIN = _line(sku="B", price_rule=PRICE_RULE_WITHIN_BAND_NOT_INDEX_LINKED, billed_unit_price_inr=101.0)
+_BAND_LINKED = _line(sku="L", price_rule=PRICE_RULE_WITHIN_BAND, billed_unit_price_inr=101.0, effective_unit_price_inr=101.0)
+
+
+@pytest.mark.parametrize(
+    ("lines", "freight", "waiver", "kinds"),
+    [
+        ([_line()], 0.0, 0.0, []),
+        ([_DOA], 0.0, 0.0, [FACTOR_QUANTITY_DOA]),
+        ([_DOA, _SHORT], 0.0, 0.0, [FACTOR_QUANTITY_DOA]),  # DOA and short receipt are one kind
+        ([_AMD], 0.0, 0.0, [FACTOR_AMENDMENT]),  # an amendment counts even when it deducts nothing
+        ([_HIKE, _HIKE], 0.0, 0.0, [FACTOR_PRICE_HIKE]),  # several lines of one kind are one factor
+        ([_BAND_PLAIN], 0.0, 0.0, [FACTOR_PRICE_HIKE]),  # inside the band on a PO that is not index-linked
+        ([_BAND_LINKED], 0.0, 0.0, []),  # inside the band on an index-linked PO is paid as billed
+        ([_line()], 500.0, 0.0, [FACTOR_FREIGHT]),
+        ([_line()], 0.0, 500.0, [FACTOR_AMENDMENT]),  # a signed waiver applied is an amendment factor
+        ([_DOA, _AMD], 0.0, 0.0, [FACTOR_QUANTITY_DOA, FACTOR_AMENDMENT]),
+        ([_HIKE], 500.0, 0.0, [FACTOR_PRICE_HIKE, FACTOR_FREIGHT]),
+        ([_DOA, _AMD, _HIKE], 500.0, 0.0, list(ESCALATION_FACTOR_KINDS)),
+    ],
+)
+def test_escalation_factor_kinds(lines: list[dict[str, Any]], freight: float, waiver: float, kinds: list[str]) -> None:
+    assert escalation_factor_kinds(lines, freight_disallowed_inr=freight, freight_waiver_applied_inr=waiver) == kinds
+
+
+def test_escalation_on_every_invoice_follows_manual_6_2() -> None:
+    """Two or more distinct factor kinds escalate; one factor or a hard block does not. Only inv-02 and inv-12 do."""
+    fired = []
+    for pid in sorted(P):
+        g = ab.gate_output_for(pid)
+        assert g["escalation_required"] is P[pid]["ground_truth"]["expected_escalation"], pid
+        if g["hard_block"]:
+            assert g["escalation_required"] is False, pid
+        if g["escalation_required"]:
+            fired.append(pid)
+    assert fired == ["inv-02", "inv-12"]
+
+
+def test_debit_note_alone_does_not_escalate() -> None:
+    # inv-05, 06, 07, 09 each carry a debit note from a single factor kind
+    for pid in ("inv-05", "inv-06", "inv-07", "inv-09"):
+        g = ab.gate_output_for(pid)
+        assert g["debit_note_deduction_inr"] > 0 and g["escalation_required"] is False, pid
+
+
+# ------------------------------------------------------------------------ held-line labels (lowest trigger that fired)
+
+
+def test_held_labels_name_the_lowest_trigger_that_fired() -> None:
+    g3 = ab.gate_output_for("inv-03")  # Trigger 1 (cancelled IRN) + Trigger 2 (phantom line)
+    held3 = {f["status"] for f in g3["line_findings"]} - {"PHANTOM_UNRECEIVED"}
+    assert held3 == {HELD_LABEL_TRIGGER1}
+    g11 = ab.gate_output_for("inv-11")  # Trigger 2 only
+    held11 = {f["status"] for f in g11["line_findings"]} - {"PHANTOM_UNRECEIVED"}
+    assert held11 == {HELD_LABEL_TRIGGER2} and HELD_LABEL_TRIGGER1 not in json.dumps(g11["line_findings"])
+    assert all(g11[k] == 0.0 for k in ZERO4) and g11["escalation_required"] is False
+
+
+# ------------------------------------------------------------------------ the tool's output per invoice, pinned
+
+# sha256 (first 16 hex) of the tool's output per invoice. Every recorded policy-tool call must return these bytes to
+# count (ablation.record_tool_outputs_current), so a change here makes the matching runs pending again.
+PINNED_GATE_SHA16 = {
+    "inv-01": "23cb32705ad7ae1b", "inv-02": "642cc6cba8d36fd1", "inv-03": "e2203739d075dda8", "inv-04": "6b944c4728b14d84",
+    "inv-05": "d90bc05d9fdcce7e", "inv-06": "599a4b891adce324", "inv-07": "3f11324d650ba260", "inv-08": "ecfde045a71a90f2",
+    "inv-09": "c61d2ce04aafac3e", "inv-10": "3aed494bbb3d15d8", "inv-11": "780b521e7a9adc85", "inv-12": "cdb396be01b7facf",
+}
+
+
+def _tool_out(name: str, inp: dict[str, Any]) -> str:
+    s = ab.AblationErpSession(rung_id="bounded_sonnet_cached_gate")
     try:
-        return s.execute_tool("fetch_3way_match_bundle", {"invoice_id": CAT5_ABLATION_PRESETS_BY_ID[pid]["invoice_id"]})[0]
+        return s.execute_tool(name, inp)[0]
     finally:
         s.close()
+
+
+def test_tool_output_per_invoice_is_pinned() -> None:
+    got = {pid: _sha(_tool_out("run_policy_tolerance_gate", {"invoice_id": P[pid]["invoice_id"]}))[:16] for pid in sorted(P)}
+    assert got == PINNED_GATE_SHA16
+
+
+def test_no_recorded_invoice_has_a_waiver_mixed_rates_a_prior_voucher_or_a_frozen_vendor() -> None:
+    for pid in sorted(P):
+        g = ab.gate_output_for(pid)
+        assert "freight_waiver_applied_inr" not in g and "gst_rates_by_line" not in g, pid
+        assert not any(r.startswith(("HARD_BLOCK_DUPLICATE_INVOICE", "HARD_BLOCK_VENDOR_PAYMENT_FREEZE")) for r in g.get("block_reasons") or []), pid
+
+
+# ------------------------------------------------------------------------ narrow query: the fields the tool reads
+
+
+def _bundle(pid: str) -> dict[str, Any]:
+    return json.loads(_tool_out("fetch_3way_match_bundle", {"invoice_id": P[pid]["invoice_id"]}))
 
 
 _ADDED_HEADER = ("currency", "risk_flag", "posted_vouchers")
 
 
-def _strip_v2(bundle: dict[str, Any]) -> dict[str, Any]:
+def _strip_added(bundle: dict[str, Any]) -> dict[str, Any]:
     b = copy.deepcopy(bundle)
     for k in _ADDED_HEADER:
         b["header"].pop(k)
@@ -358,14 +440,12 @@ def _strip_v2(bundle: dict[str, Any]) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("pid", sorted(CAT5_ABLATION_PRESETS_BY_ID))
-def test_bundle_adds_only_the_fields_the_gate_reads(pid: str) -> None:
-    old, new = json.loads(_bundle(pid, BUNDLE_VERSION_V1)), json.loads(_bundle(pid, BUNDLE_VERSION))
-    added = {k: v for k, v in new["header"].items() if k not in old["header"]}
-    assert set(added) == set(_ADDED_HEADER)
-    assert added["currency"] == "INR" and added["posted_vouchers"] == []
-    assert added["risk_flag"] in {"CLEAN", "WATCH_PRICE_CLAIMS", "HIGH_AUDIT_ALERT"}
-    assert all(ln["po_gst_rate"] == ln["gst_rate"] for ln in new["matched_lines"])
-    assert _strip_v2(new) == old  # nothing else moves
+def test_bundle_returns_the_fields_the_tool_reads(pid: str) -> None:
+    b = _bundle(pid)
+    assert all(k in b["header"] for k in _ADDED_HEADER)
+    assert b["header"]["currency"] == "INR" and b["header"]["posted_vouchers"] == []
+    assert b["header"]["risk_flag"] in {"CLEAN", "WATCH_PRICE_CLAIMS", "HIGH_AUDIT_ALERT"}
+    assert all(ln["po_gst_rate"] == ln["gst_rate"] for ln in b["matched_lines"])
 
 
 def test_bundle_shows_a_posted_voucher_and_the_po_line_rate() -> None:
@@ -380,27 +460,18 @@ def test_bundle_shows_a_posted_voucher_and_the_po_line_rate() -> None:
     assert {ln["sku"]: (ln["gst_rate"], ln["po_gst_rate"]) for ln in b["matched_lines"]}["NM-LED-BULB-9W-PK4"] == (0.18, 0.12)
 
 
-def test_no_default_invoice_has_an_inside_band_rise() -> None:
-    """The ruling that the added bundle field does not bear on the 11 pooled invoices rests on this."""
-    for pid in CAT5_ABLATION_DEFAULT_INVOICE_IDS:
-        b = json.loads(_bundle(pid, BUNDLE_VERSION))
-        inside = [ln["sku"] for ln in b["matched_lines"]
-                  if ln["po_unit_price_inr"] < ln["billed_unit_price_inr"] <= ln["po_unit_price_inr"] * 1.015]
-        assert inside == [], pid
-    b6 = json.loads(_bundle("inv-06", BUNDLE_VERSION))
-    assert [ln["sku"] for ln in b6["matched_lines"]
-            if ln["po_unit_price_inr"] < ln["billed_unit_price_inr"] <= ln["po_unit_price_inr"] * 1.015] == ["NM-CBL-1.5SQ-90M"]
+def test_only_inv06_has_an_inside_band_rise() -> None:
+    inside = {pid: [ln["sku"] for ln in _bundle(pid)["matched_lines"]
+                    if ln["po_unit_price_inr"] < ln["billed_unit_price_inr"] <= ln["po_unit_price_inr"] * 1.015] for pid in sorted(P)}
+    assert {pid: v for pid, v in inside.items() if v} == {"inv-06": ["NM-CBL-1.5SQ-90M"]}
 
 
-# ------------------------------------------------------------------------ recorded evidence stays reproducible
+# ------------------------------------------------------------------------ recorded runs stay reproducible
 
 
-def _recorded_calls(name: str) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+def _recorded_calls(path: Path, name: str) -> list[tuple[dict[str, Any], dict[str, Any]]]:
     out = []
-    for line in RUNS.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        r = json.loads(line)
+    for r in ab.load_jsonl(path):
         for t in r.get("turns") or []:
             for c in t.get("tool_calls") or []:
                 if c.get("name") == name and c.get("executed"):
@@ -408,74 +479,55 @@ def _recorded_calls(name: str) -> list[tuple[dict[str, Any], dict[str, Any]]]:
     return out
 
 
-def _tool_out(name: str, inp: dict[str, Any], *, gate_version: str = GATE_VERSION, bundle_version: str = BUNDLE_VERSION) -> str:
-    s = ab.AblationErpSession(rung_id="bounded_sonnet_cached_gate", gate_version=gate_version, bundle_version=bundle_version)
-    try:
-        return s.execute_tool(name, inp)[0]
-    finally:
-        s.close()
-
-
-@pytest.mark.skipif(not HAVE_RECORDS, reason="ablation records not present")
-def test_fixed_gate_is_byte_identical_on_every_recorded_default_invoice_call() -> None:
-    calls = _recorded_calls("run_policy_tolerance_gate")
-    default = [(r, c) for r, c in calls if r["preset_id"] in CAT5_ABLATION_DEFAULT_INVOICE_IDS]
-    inv06 = [(r, c) for r, c in calls if r["preset_id"] == "inv-06"]
-    before = [(r, c) for r, c in inv06 if ab.record_gate_version(r) == GATE_VERSION_V1]
-    after = [(r, c) for r, c in inv06 if ab.record_gate_version(r) == GATE_VERSION]
-    # one gate call per run: 2 gate arms x 11 invoices x 3 repeats; on inv-06 6 recorded before the fix, 6 after
-    assert len(default) == 66 and len(before) == 6 and len(after) == 6 and len(inv06) == 12
-    for r, c in default:  # all recorded on v1; the fixed gate returns the same bytes
-        assert _sha(_tool_out(c["name"], c["input"])) == c["result_sha256"], (r["run_id"], c["input"])
-    for r, c in before:  # the pre-fix gate reproduces what was recorded; the fixed gate does not
-        assert _sha(_tool_out(c["name"], c["input"], gate_version=GATE_VERSION_V1)) == c["result_sha256"]
-        assert _sha(_tool_out(c["name"], c["input"])) != c["result_sha256"]
-    for r, c in after:  # the after-fix runs reproduce on the fixed gate
-        assert _sha(_tool_out(c["name"], c["input"])) == c["result_sha256"], r["run_id"]
-
-
-@pytest.mark.skipif(not HAVE_RECORDS, reason="ablation records not present")
-def test_recorded_bundle_calls_reproduce_with_v1_and_v2_only_adds_fields() -> None:
-    calls = _recorded_calls("fetch_3way_match_bundle")
+@pytest.mark.skipif(not HAVE_RECORDS, reason="experiment records not present")
+def test_every_recorded_policy_tool_call_reproduces_on_the_current_tool() -> None:
+    calls = _recorded_calls(RUNS, "run_policy_tolerance_gate")
     assert calls
     for r, c in calls:
-        v1 = _tool_out(c["name"], c["input"], bundle_version=BUNDLE_VERSION_V1)
-        v2 = _tool_out(c["name"], c["input"])
-        if ab.record_bundle_version(r) == BUNDLE_VERSION_V1:
-            assert _sha(v1) == c["result_sha256"], r["run_id"]
-        else:  # the after-fix inv-06 runs
-            assert ab.record_bundle_version(r) == BUNDLE_VERSION and r["preset_id"] == "inv-06"
-            assert _sha(v2) == c["result_sha256"], r["run_id"]
-        assert _strip_v2(json.loads(v2)) == json.loads(v1)
+        assert _sha(_tool_out(c["name"], c["input"])) == c["result_sha256"], (r["run_id"], r["preset_id"])
 
 
-@pytest.mark.skipif(not HAVE_RECORDS, reason="ablation records not present")
-def test_records_stay_current_and_nothing_is_pending() -> None:
+@pytest.mark.skipif(not HAVE_RECORDS, reason="experiment records not present")
+def test_recorded_narrow_query_calls_reproduce_now_or_with_the_four_fields_removed() -> None:
+    """Every recorded narrow query returned either today's bytes or today's minus the four added fields; a displayed
+    version's run with the older bytes is not current (its key is pending until re-run)."""
+    for path in (RUNS, OTHER_RUNS):
+        for r, c in _recorded_calls(path, "fetch_3way_match_bundle"):
+            now = _tool_out(c["name"], c["input"])
+            older = json.dumps(_strip_added(json.loads(now)), indent=2)
+            assert c["result_sha256"] in (_sha(now), _sha(older)), r["run_id"]
+            if c["result_sha256"] == _sha(older):
+                assert not ab.record_tool_outputs_current(r) and not ab.record_is_current(r)
+
+
+# the invoices whose with-version runs were first recorded before the narrow query returned its four added fields
+RECORDED_ON_THE_OLDER_NARROW_QUERY = ("inv-01", "inv-02", "inv-03", "inv-04", "inv-08", "inv-10", "inv-12")
+
+
+@pytest.mark.skipif(not HAVE_RECORDS, reason="experiment records not present")
+def test_main_file_holds_only_runs_of_the_three_cells_and_only_known_stale_ones() -> None:
+    """Passes before and after the re-run of the older-narrow-query runs (and after the prune removes them)."""
     recs = ab.load_jsonl(RUNS)
-    arms = list(ab.ARM_IDS)
-    assert ab.select_pending(ab.plan_matrix(arms, list(CAT5_ABLATION_DEFAULT_INVOICE_IDS), 3), recs) == []
-    v2 = [r for r in recs if (r.get("settings") or {}).get("gate_version")]
-    assert len(v2) == 6 and {(r["arm_id"], r["preset_id"]) for r in v2} == {
-        (a, "inv-06") for a in ("bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate")}
-    assert all(r["settings"]["gate_version"] == GATE_VERSION and r["settings"]["bundle_version"] == BUNDLE_VERSION for r in v2)
-    assert ab.select_pending(ab.plan_matrix(arms, ["inv-06"], 3), recs) == []  # the after-fix check ran
-    assert len(ab.superseded_records(recs)) == 1  # only the earlier harness artifact; nothing new superseded
-    s = ab.summarise(recs)
-    assert s["ok_runs_used"] == 198
-    g = s["gate_disagreement"]["inv-06"]
-    gated = [m for m in g["per_arm"].values() if m["gate_arm"]]
-    assert sum(m["runs"] for m in gated) == 6 and sum(m["matches_gate_output"] for m in gated) == 6
-    assert sum(m["matches_manual"] for m in g["per_arm"].values() if not m["gate_arm"]) == 12
-    assert sum(m["runs"] for m in g["after_fix"]["per_arm"].values()) == 6 and g["after_fix"]["missing_keys"] == []
-    assert sum(m["matches_manual"] for m in g["after_fix"]["per_arm"].values()) == 6
-    assert g["gate_fix"]["current_gate_matches_manual"] is True
+    assert {r["arm_id"] for r in recs} <= set(ab.ARM_IDS)
+    with_arms = ("bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate")
+    stale = [r for r in recs if not ab.record_is_current(r)]
+    assert all(r["arm_id"] in with_arms and r["preset_id"] in RECORDED_ON_THE_OLDER_NARROW_QUERY for r in stale)
+    current = [r for r in recs if ab.record_is_current(r)]
+    assert len({ab.record_key(r) for r in current}) == len(current)  # one current record per key
+    pending = ab.select_pending(ab.plan_matrix(list(ab.ARM_IDS), list(CAT5_ABLATION_DEFAULT_INVOICE_IDS), 3), recs)
+    assert set(pending) <= {(a, p, i) for a in with_arms for p in RECORDED_ON_THE_OLDER_NARROW_QUERY for i in range(3)}
+    assert set(pending) == {ab.record_key(r) for r in stale} - {ab.record_key(r) for r in current}
+    assert not [k for k in pending if k[0] == "raw_free_sonnet"]
 
 
-def test_new_records_carry_tool_versions() -> None:
+@pytest.mark.skipif(not OTHER_RUNS.is_file(), reason="other-lever records not present")
+def test_other_levers_file_holds_current_runs_of_the_other_single_levers() -> None:
+    recs = ab.load_jsonl(OTHER_RUNS)
+    assert recs and {r["arm_id"] for r in recs} == set(ab.OTHER_LEVER_ARM_IDS)
+    assert all(r["status"] == "ok" and ab.is_current_settings(r) for r in recs)  # kept as recorded
+    assert len({ab.record_key(r) for r in recs}) == len(recs) == 3 * 12 * 3
+
+
+def test_settings_carry_no_tool_versions() -> None:
     st = ab.current_settings("bundle_gate_sonnet_cached", "inv-06")
-    assert st["gate_version"] == GATE_VERSION == "v2-manual-aligned"
-    assert st["bundle_version"] == BUNDLE_VERSION == "v2-manual-aligned"
-    assert "gate_version" not in ab._SETTINGS_COMPARED and "bundle_version" not in ab._SETTINGS_COMPARED
-    assert ab.gate_version_matters("bundle_gate_sonnet_cached", "inv-06")
-    assert not ab.gate_version_matters("bundle_sonnet_cached", "inv-06")
-    assert not any(ab.gate_version_matters(a, p) for a in ab.ARM_IDS for p in CAT5_ABLATION_DEFAULT_INVOICE_IDS)
+    assert "gate_version" not in st and "bundle_version" not in st, st

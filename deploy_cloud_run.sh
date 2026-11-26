@@ -25,4 +25,4 @@ gcloud run deploy "${SERVICE_NAME}" \
 # gcloud run services update "${SERVICE_NAME}" \
 #   --project "${PROJECT_ID}" \
 #   --region "${REGION}" \
-#   --set-secrets "ANTHROPIC_API_KEY=anthropic-api-key:latest,GEMINI_API_KEY=gemini-api-key:latest"
+#   --set-secrets "ANTHROPIC_API_KEY=anthropic-api-key:latest"

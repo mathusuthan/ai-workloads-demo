@@ -22,20 +22,8 @@ def get_cat4_synthesis_system_prompt(with_citations: bool) -> str:
     )
 
 
-def get_cat4_haiku_reranker_system_prompt() -> str:
-    """System prompt for Stage-2 Haiku 5.5 cross-chunk reranker."""
-    return (
-        "You are NovaMart's Stage-2 Legal & Statutory RAG Reranker.\n"
-        "From the 10 BM25 candidate contract chunks, select the EXACT 5 most decisive chunks needed to answer the query completely.\n"
-        "Rules:\n"
-        "1. Prioritize controlling overrides (Addendum A Peak overrides, Side Letter #2 SL.1–SL.4, Clause 9.2 carve-outs) AND their corresponding baseline clauses when both are asked.\n"
-        "2. Return exact chunk_id strings matching `CHUNK_ID:` (e.g., `DOC-07#c01`) sorted from highest to lowest relevance_score (0–100).\n"
-        "3. Keep each rationale <= 12 words."
-    )
-
-
 CAT4_CODE_SNIPPETS: dict[str, str] = {
-    "naive_full_corpus": """# RUNG 1 ANTI-PATTERN: Uncached Full-Corpus Stuffing (the whole corpus is re-billed on every query)
+    "naive_full_corpus": """# WITHOUT: Uncached Full-Corpus Stuffing (the whole corpus is re-billed on every query)
 # Sends all 7 Deal-Room documents as plain text on every question — no cache_control, no citations requested.
 resp = await client.messages.create(
     model="claude-sonnet-5-5",
@@ -47,44 +35,28 @@ resp = await client.messages.create(
         "content": f"=== FULL 7-DOC DEAL ROOM ===\\n{all_7_docs_text}\\n\\nQUESTION: {query}",
     }],
 )""",
-    "cached_full_corpus_citations": """# RUNG 2 LEVER 1: Document Block Prefix Caching + Native Citations
-# Attaches cache_control on the 7th document block: the first query writes the prefix ($2.50/M), later queries
-# within the cache lifetime read it ($0.10/M). Citations point at exact spans; they show where a claim came from.
-doc_blocks = [
-    {
-        "type": "document",
-        "title": doc["block_title"],
-        "source": {"type": "text", "media_type": "text/plain", "data": doc["full_text"]},
-        "citations": {"enabled": True},
-        **({"cache_control": {"type": "ephemeral"}} if idx == len(docs) - 1 else {}),
-    }
-    for idx, doc in enumerate(deal_room_docs)
-]
-resp = await client.messages.create(
-    model="claude-sonnet-5-5",
-    max_tokens=4096,
-    thinking={"type": "between_tools"},
-    system=DILIGENCE_SYNTHESIS_PROMPT,
-    messages=[{"role": "user", "content": [*doc_blocks, {"type": "text", "text": query}]}],
-)
-# IMPORTANT: Join TextBlock.text with "" (empty string) to preserve unbroken sentences around citations!""",
-    "hybrid_rag_rerank_citations": """# RUNG 3 LEVER 2: Hybrid BM25 (28 -> 10) + Haiku 5.5 Rerank (10 -> 5) + Native Citations
-# Sends only the 5 reranked chunks to Sonnet 5.5; a clause retrieval misses can't be cited or used.
-bm25_top10 = rank_chunks_bm25(query, all_28_chunks, top_k=10)
+    "cached_rerank_hybrid": """# WITH: Hybrid retrieval paired with context caching + native citations
+# Haiku 5.5 reads all 28 deal-room clauses from one cached block (the first question writes it, later questions
+# read it) and picks the 5 it judges most relevant; Sonnet 5.5 answers over those 5 only. A clause Haiku does not pick
+# can't be cited or used.
 rerank = await client.messages.create(
-    model="claude-haiku-5-5",  # $0.10/M in · $0.50/M out (thinking disabled)
+    model="claude-haiku-5-5",
     max_tokens=800,
     thinking={"type": "disabled"},
-    system=HAIKU_RERANKER_PROMPT,
+    system=HAIKU_FULL_CORPUS_RERANKER_PROMPT,
     output_config={"format": {"type": "json_schema", "schema": RERANK_JSON_SCHEMA}},
-    messages=[{"role": "user", "content": format_rerank_candidates(query, bm25_top10)}],
+    messages=[{"role": "user", "content": [
+        {"type": "text", "text": all_28_clauses_text, "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": f"=== DUE-DILIGENCE QUERY ===\n{query}"},
+    ]}],
 )
-top5_doc_blocks = [as_document_block(chunk, citations=True) for chunk in pick_top5(rerank)]
+top5_doc_blocks = [as_document_block(chunk, citations=True) for chunk in picked_clauses(rerank)]
 resp = await client.messages.create(
     model="claude-sonnet-5-5",
     max_tokens=4096,
     thinking={"type": "between_tools"},
-    system=DILIGENCE_SYNTHESIS_PROMPT,
+    system=DILIGENCE_SYNTHESIS_PROMPT_TEXT_PROVIDED,  # says when a term is not in the text provided
     messages=[{"role": "user", "content": [*top5_doc_blocks, {"type": "text", "text": query}]}],
-)""",
+)
+# IMPORTANT: Join TextBlock.text with "" (empty string) to preserve unbroken sentences around citations!""",
 }

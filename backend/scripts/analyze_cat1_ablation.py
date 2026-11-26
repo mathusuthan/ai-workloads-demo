@@ -1,10 +1,10 @@
-"""Tables for the Category 1 seven-arm ablation.
+"""Tables for the Category 1 four-cell experiment.
 
 Usage (from backend/):
     .venv/bin/python scripts/analyze_cat1_ablation.py
 
-Reads experiments/cat1_ablation/runs.jsonl and extractions.jsonl (either may be absent) and, read-only, the original
-capture (replays/cat1_original_capture.json, or the golden replays before they are rebuilt); writes <project>/analysis/cat1_ablation.md and .json. Factual tables only.
+Reads experiments/cat1_ablation/runs.jsonl and extractions.jsonl (either may be absent); writes
+<project>/analysis/cat1_ablation.md and .json. Factual tables only.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     out_json.write_text(json.dumps(summary, indent=2, default=str, ensure_ascii=False) + "\n", encoding="utf-8")
     dq = summary["data_quality"]
     print(f"Wrote {out_md} and {out_json}: {dq['ok_current_runs']}/{summary['design']['planned_runs']} current ok runs, "
-          f"{dq['extraction_ok_current']}/{dq['extractions_planned']} extractions, Gemini ok {dq['gemini']['ok']}/{dq['gemini']['planned']}.")
+          f"{dq['extraction_ok_current']}/{dq['extractions_planned']} extractions.")
     return 0
 
 

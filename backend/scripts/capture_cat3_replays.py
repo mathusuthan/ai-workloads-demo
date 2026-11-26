@@ -22,7 +22,6 @@ from app.models import Cat3RungId  # noqa: E402
 
 RUNGS: list[Cat3RungId] = [
     "naive_full_history",
-    "prefix_cached_history",
     "prefix_cached_summarized",
 ]
 
@@ -33,7 +32,7 @@ def _validate_rung(rid: Cat3RungId, raw_turns: list[dict[str, Any]], expected_tu
     for t in raw_turns:
         if t.get("stop_reason") != "end_turn":
             return f"Turn {t.get('turn_number')} stop_reason={t.get('stop_reason')}"
-        if rid in ("prefix_cached_history", "prefix_cached_summarized"):
+        if rid == "prefix_cached_summarized":
             cw = int(t.get("cache_creation_tokens") or 0)
             cr = int(t.get("cache_read_tokens") or 0)
             if cw + cr < 4096:

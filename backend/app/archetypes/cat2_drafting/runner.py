@@ -1,4 +1,10 @@
-"""Orchestrates Category 2 3-Rung Synthesis Arena & Surgical HITL Section Regeneration."""
+"""Orchestrates the Category 2 four-rung drafting arena and single-section HITL regeneration.
+
+Four rungs: Sonnet 5.5 and Haiku 5.5, each without the deck's improvement (unbounded long-form draft, free text) and
+with it (section template with length caps, strict JSON schema). The golden replays are repeat 0 of the Category 2
+experiment (scripts/build_cat2_golden_from_experiment.py); a rung whose experiment drafts do not exist yet replays as
+"pending". The experiment summary (replays/cat2_quality_summary.json) is attached as `quality_portfolio`.
+"""
 
 from __future__ import annotations
 
@@ -46,7 +52,6 @@ from app.models import (
     Cat2RunResponse,
     Cat2RungQuality,
     Cat2RungResult,
-    Cat2TemplateFix,
     Cat2SectionRegenRequest,
     Cat2SectionRegenResponse,
     HitlCostComparison,
@@ -55,25 +60,33 @@ from app.models import (
 CAT2_CATEGORY = "cat2_synthesis_drafting"
 CAT2_RUNG_TO_PATTERN: dict[str, str] = {
     "sonnet_unbounded": "unbounded_longform_draft",
+    "haiku_unbounded": "unbounded_longform_draft",
     "sonnet_templated": "section_templated_bounded",
-    "haiku_templated": "tier_routed_template_draft",
+    "haiku_templated": "section_templated_bounded",
 }
+RUNG_ORDER = ("sonnet_unbounded", "haiku_unbounded", "sonnet_templated", "haiku_templated")
+UNBOUNDED_RUNGS = ("sonnet_unbounded", "haiku_unbounded")
+MODEL_FOR_RUNG = {"sonnet_unbounded": "claude-sonnet-5-5", "haiku_unbounded": "claude-haiku-5-5",
+                  "sonnet_templated": "claude-sonnet-5-5", "haiku_templated": "claude-haiku-5-5"}
+# with-rung -> the without-rung on the same model
+WITHOUT_FOR = {"sonnet_templated": "sonnet_unbounded", "haiku_templated": "haiku_unbounded"}
+UNBOUNDED_MAX_TOKENS = 8000
+TEMPLATE_MAX_TOKENS = 3000
 HITL_REGEN_PATTERN = "hitl_section_regen"
+SECTION_REGEN_MAX_TOKENS = 1800
+TEMPLATED_RUNG_FOR_TIER = {"claude-sonnet-5-5": "sonnet_templated", "claude-haiku-5-5": "haiku_templated"}
 CAT2_QUALITY_SUMMARY_FILE = "cat2_quality_summary.json"
-CAT2_TEMPLATE_FIX_FILE = "cat2_not_stated_summary.json"
-FIX_MODEL_FOR_RUNG = {"sonnet_templated": "sonnet", "haiku_templated": "haiku"}
-FIX_POINTER_FALLBACK = (
-    "A follow-up that lets the template write \"Not stated in source\" was measured separately; "
-    "its results are not loaded here."
-)
+REPLAY_PENDING_MESSAGE = "Run pending: the experiment drafts for this version have not been made yet, so there is nothing to replay."
 REPLAY_GRADES_STALE_REASON = (
     "The stored grades are for a different version of this draft, so only the free checks are shown."
 )
 RUNG_LABEL = {
-    "sonnet_unbounded": "unbounded",
-    "sonnet_templated": "Sonnet template",
-    "haiku_templated": "Haiku template",
+    "sonnet_unbounded": "Sonnet unbounded draft",
+    "haiku_unbounded": "Haiku unbounded draft",
+    "sonnet_templated": "Sonnet section template",
+    "haiku_templated": "Haiku section template",
 }
+_RATE = {"claude-sonnet-5-5": "$2.00/M in · $10.00/M out", "claude-haiku-5-5": "$0.10/M in · $0.50/M out"}
 
 
 def _preset_map() -> dict[str, dict[str, Any]]:
@@ -107,68 +120,79 @@ def build_section_regen_payload(
     )
 
 
+def section_regen_request(
+    *, sub_task: str, section_key: str, source_text: str, current_section: Any, reviewer_instruction: str
+) -> dict[str, Any]:
+    """The exact single-section regeneration request the app sends (live path and capture harness)."""
+    return {
+        "system": get_section_regen_system_prompt(sub_task, section_key),
+        "payload": build_section_regen_payload(source_text=source_text, section_key=section_key,
+                                               current_section=current_section, reviewer_instruction=reviewer_instruction),
+        "schema": get_single_section_schema(section_key),
+        "max_tokens": SECTION_REGEN_MAX_TOKENS,
+    }
+
+
+def _tier_of(model_id: str) -> str:
+    return "claude-sonnet-5-5" if "sonnet" in model_id else "claude-haiku-5-5"
+
+
+def templated_draft_for(replays: dict[str, Any], preset_id: str | None, model_tier: str) -> dict[str, Any] | None:
+    """The current repeat-0 templated draft of this preset on this model (golden replays), or None."""
+    if not preset_id:
+        return None
+    rung = TEMPLATED_RUNG_FOR_TIER.get(_tier_of(model_tier))
+    return (((replays.get("presets") or {}).get(preset_id) or {}).get("rungs") or {}).get(rung) or None
+
+
 def _cat2_rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
-    if rung_id == "sonnet_unbounded":
+    """Number-free fallback copy; `_apply_measured_claims` replaces the result-dependent sentences."""
+    model = MODEL_FOR_RUNG[rung_id]
+    name = "Sonnet 5.5" if "sonnet" in model else "Haiku 5.5"
+    thinking = "thinking between tools" if "sonnet" in model else "thinking disabled"
+    if rung_id in UNBOUNDED_RUNGS:
         return (
-            "Rung 1 · Sonnet 5.5 (Unbounded Longform)",
-            "Anti-Pattern: Uncapped Output Tax",
+            f"Without · {name} unbounded long-form draft",
+            f"Without the Improvement · {name.split()[0]}",
             [
-                "Prompts Claude Sonnet 5.5 ($2.00/M in · $10.00/M out) for an exhaustive multi-page narrative + appendices.",
+                f"Asks {name} ({_RATE[model]}, {thinking}) for an exhaustive long-form draft in free text "
+                f"(max_tokens {UNBOUNDED_MAX_TOKENS:,}).",
                 # replaced with the measured output tokens and cost share by _apply_measured_claims
-                "At 5x output token pricing, unbounded output tokens drive most of the inference bill.",
-            ],
-        )
-    if rung_id == "sonnet_templated":
-        return (
-            "Rung 2 · Sonnet 5.5 + Bounded Section Template",
-            "Calibrated Lever: Section-Bounded Schema",
-            [
-                "Same Sonnet 5.5 model, constrained to a 4-section JSON schema with strict word caps.",
-                # replaced with the measured output and cost cut by _apply_measured_claims
-                "Caps output tokens and unit cost while enabling single-section HITL locking & regen.",
+                "Output tokens are priced at 5x input, so a long draft's output drives most of its cost.",
             ],
         )
     return (
-        "Rung 3 · Haiku 5.5 First-Draft Template",
-        "Tier-Routed Draft",  # measured saving appended by _apply_measured_claims
+        f"With · {name} section template with length caps",
+        f"With the Improvement · {name.split()[0]}",
         [
-            "Runs the exact same 4-section bounded schema on Haiku 5.5 ($0.10/M in · $0.50/M out).",
-            # replaced with the measured draft cost by _apply_measured_claims
-            "Drafts all four sections at a fraction of Sonnet cost; a reviewer can regenerate any single section on Sonnet 5.5.",
+            f"Same {name} model ({_RATE[model]}, {thinking}), constrained to a 4-section JSON schema with word caps "
+            f"(max_tokens {TEMPLATE_MAX_TOKENS:,}); action-plan owners and dates only when the source states them.",
+            # replaced with the measured output and cost cut by _apply_measured_claims
+            "Capping each section bounds output tokens and enables single-section HITL locking & regeneration.",
         ],
     )
 
 
 def _apply_measured_claims(results: list[Cat2RungResult]) -> None:
-    """Rewrite result-dependent rung badges/notes with numbers measured on this run."""
+    """Rewrite result-dependent rung notes with numbers measured on this run (with vs without on the same model)."""
     ok = {r.rung_id: r for r in results if r.status == "ok"}
-    unb, tmpl, haiku = ok.get("sonnet_unbounded"), ok.get("sonnet_templated"), ok.get("haiku_templated")
-    if unb:
-        set_note(
-            unb,
-            1,
-            f"At 5x output token pricing, {unb.finops.output_tokens:,} unbounded output tokens drive "
-            f"{fmt_pct(unb.finops.output_cost_share_pct)} of this draft's inference bill.",
-        )
-    if tmpl and unb:
-        out_cut = pct_cut(unb.finops.output_tokens, tmpl.finops.output_tokens)
-        if out_cut is not None:
-            set_note(
-                tmpl,
-                1,
-                f"Cuts output tokens {fmt_pct(out_cut)} vs the unbounded draft "
-                f"({unb.finops.output_tokens:,} → {tmpl.finops.output_tokens:,}) and unit cost "
-                f"{fmt_pct(tmpl.savings_vs_unbounded_pct)}, while enabling single-section HITL locking & regen.",
-            )
-    if haiku:
-        if unb:
-            haiku.badge_text = f"Tier-Routed Draft (-{fmt_pct(haiku.savings_vs_unbounded_pct)} Cost)"
-        set_note(
-            haiku,
-            1,
-            f"Drafts all four sections for ${haiku.finops.total_cost_usd:.4f}; a reviewer can regenerate "
-            "any single section on Sonnet 5.5.",
-        )
+    for rid in UNBOUNDED_RUNGS:
+        r = ok.get(rid)
+        if r:
+            set_note(r, 1, f"Writes {r.finops.output_tokens:,} output tokens on this document; output is "
+                           f"{fmt_pct(r.finops.output_cost_share_pct)} of its cost.")
+    for rid, without_id in WITHOUT_FOR.items():
+        r, w = ok.get(rid), ok.get(without_id)
+        if not r:
+            continue
+        if w:
+            out_cut = pct_cut(w.finops.output_tokens, r.finops.output_tokens)
+            cost_cut = pct_cut(w.finops.total_cost_usd, r.finops.total_cost_usd)
+            if out_cut is not None and cost_cut is not None:
+                set_note(r, 1, f"Writes {r.finops.output_tokens:,} output tokens vs {w.finops.output_tokens:,} for the unbounded draft "
+                               f"on the same model ({fmt_pct(out_cut)} fewer), cutting cost {fmt_pct(cost_cut)}.")
+                continue
+        set_note(r, 1, f"Writes {r.finops.output_tokens:,} output tokens (${r.finops.total_cost_usd:.4f} for this draft).")
 
 
 # --------------------------------------------------------------------------------------------------
@@ -177,7 +201,7 @@ def _apply_measured_claims(results: list[Cat2RungResult]) -> None:
 
 
 def load_cat2_quality_summary() -> dict[str, Any] | None:
-    """replays/cat2_quality_summary.json (scripts/build_cat2_quality_summary.py); None if absent or unreadable."""
+    """replays/cat2_quality_summary.json (scripts/build_cat2_golden_from_experiment.py); None if absent or unreadable."""
     path = Path(get_settings().replays_dir) / CAT2_QUALITY_SUMMARY_FILE
     if not path.is_file():
         return None
@@ -206,7 +230,7 @@ def build_cat2_rung_quality(
     mode: str,
     summary: dict[str, Any] | None,
 ) -> Cat2RungQuality | None:
-    """Replay: the judged cell for this preset x rung (only if the draft text is the one that was graded).
+    """Replay: the judged repeat-0 draft for this preset x rung (only if the draft text is the one that was graded).
     Live (or stale replay): fact coverage + unsupported numbers on the fresh draft, judge fields None."""
     if result.status != "ok":
         return None
@@ -259,179 +283,57 @@ def _plural(n: int, word: str) -> str:
     return f"{n} {word}" if n == 1 else f"{n} {word}s"
 
 
-def _doc_record(q: Cat2RungQuality, opponent: str | None = None) -> tuple[int, int]:
-    """(wins, comparisons) on this document, against one opponent or all."""
-    wins = total = 0
-    for h in q.head_to_head or []:
-        if opponent and h.opponent != opponent:
-            continue
-        for o in h.results:
-            if o.winner is None:
-                continue
-            total += 1
-            wins += o.winner not in (h.opponent, "tie")
-    return wins, total
-
-
 def _judged(r: Cat2RungResult | None) -> Cat2RungQuality | None:
     q = r.quality if r else None
     return q if q is not None and q.rubric and q.serious_errors is not None else None
 
 
+def _cell(portfolio: Cat2QualityPortfolio | None, rung_id: str):
+    return next((c for c in (portfolio.cells if portfolio else []) if c.rung_id == rung_id), None)
+
+
 def _apply_quality_claims(results: list[Cat2RungResult], portfolio: Cat2QualityPortfolio | None) -> None:
-    """Note 3 (and 4 for templated rungs): measured quality on this document, or the pooled stored-draft
-    results when this run was not graded. No note is added when nothing was measured."""
-    ok = {r.rung_id: r for r in results if r.status == "ok"}
-    unb_q = _judged(ok.get("sonnet_unbounded"))
-    pooled = {p.rung_id: p for p in (portfolio.rungs if portfolio else [])}
-    n_docs = len(portfolio.documents) if portfolio else 0
-    for rid, r in ok.items():
+    """Note 3: measured quality of this draft (replay) or, when this run is not graded, of the version's experiment
+    drafts. No note is added when nothing was measured."""
+    for r in results:
+        if r.status != "ok":
+            continue
         q = _judged(r)
         if q is not None:
-            acc, cov = q.rubric["factual_accuracy"].mean, q.rubric["coverage"].mean
-            text = (
-                f"Measured quality on this document (blind grading, 1–5): accuracy {_g(acc)}, coverage {_g(cov)}, "
-                f"{_plural(q.serious_errors, 'serious error')}"
-            )
-            if rid == "sonnet_unbounded":
-                w, t = _doc_record(q)
-                if t:
-                    text += f"; preferred over the templated drafts in {w} of {t} head-to-head comparisons"
-            else:
-                if unb_q is not None:
-                    text += (
-                        f" (unbounded: accuracy {_g(unb_q.rubric['factual_accuracy'].mean)}, coverage "
-                        f"{_g(unb_q.rubric['coverage'].mean)}, {unb_q.serious_errors})"
-                    )
-                w, t = _doc_record(q, "sonnet_unbounded")
-                if t:
-                    text += f"; preferred over the unbounded draft in {w} of {t} head-to-head comparisons"
+            text = (f"Measured quality of this draft (blind grading, 1–5): accuracy {_g(q.rubric['factual_accuracy'].mean)}, "
+                    f"coverage {_g(q.rubric['coverage'].mean)}, {_plural(q.serious_errors, 'serious error')}")
+            if r.rung_id in WITHOUT_FOR:
+                for h in q.head_to_head or []:
+                    decided = [o for o in h.results if o.winner is not None]
+                    if decided:
+                        text += (f"; preferred over the unbounded draft in {sum(1 for o in decided if o.winner == r.rung_id)} of "
+                                 f"{len(decided)} head-to-head comparisons")
             set_note(r, 2, text + ".")
-            if q.action_items and q.action_items.total:
-                ai = q.action_items
-                set_note(
-                    r,
-                    3,
-                    "The template requires an owner and a time window for every action item; on this document the "
-                    f"grader flagged an owner or deadline the source does not support in {ai.flagged} of {ai.total} "
-                    f"action items ({ai.flagged_serious} serious).",
-                )
             continue
-        p = pooled.get(rid)
-        if p is None or not n_docs:
+        c = _cell(portfolio, r.rung_id)
+        if c is None or c.status == "pending" or not c.rubric or c.rubric.get("factual_accuracy") is None:
             continue
-        acc, cov = p.rubric["factual_accuracy"].mean, p.rubric["coverage"].mean
-        if acc is None or cov is None:
-            continue
-        text = (
-            f"Quality is not graded on this run; on the {n_docs} stored documents this version averaged accuracy "
-            f"{acc:.2f} and coverage {cov:.2f} (1–5) with {_plural(p.serious_errors, 'serious error')} in total"
-        )
-        if rid != "sonnet_unbounded" and "sonnet_unbounded" in p.head_to_head:
-            rec = p.head_to_head["sonnet_unbounded"]
-            text += f", and was preferred over the unbounded draft in {rec.wins} of {rec.wins + rec.losses + rec.ties} comparisons"
-        set_note(r, 2, text + ".")
-        if p.action_items and p.action_items.total:
-            set_note(
-                r,
-                3,
-                "The template requires an owner and a time window for every action item; on the stored documents "
-                f"the grader flagged an owner or deadline the source does not support in {p.action_items.flagged} "
-                f"of {p.action_items.total} action items.",
-            )
+        set_note(r, 2, f"Quality is not graded on this run; the version's {c.drafts} experiment drafts averaged accuracy "
+                       f"{c.rubric['factual_accuracy']:.2f} and coverage {c.rubric['coverage']:.2f} (1–5), "
+                       f"{c.serious_per_draft:.2f} serious errors per draft.")
 
 
-def load_cat2_template_fix() -> Cat2TemplateFix | None:
-    """replays/cat2_not_stated_summary.json (scripts/build_cat2_not_stated_summary.py); None if absent or invalid.
-    Independent of mode and preset: it describes a measured follow-up, not this run."""
-    path = Path(get_settings().replays_dir) / CAT2_TEMPLATE_FIX_FILE
-    if not path.is_file():
-        return None
-    try:
-        return Cat2TemplateFix.model_validate(json.loads(path.read_text(encoding="utf-8")))
-    except (ValueError, OSError):
-        return None
+def _quality_callout(portfolio: Cat2QualityPortfolio | None) -> str:
+    if portfolio is None:
+        return " Draft quality is not graded on this run."
+    h = portfolio.head_to_head
+    if h.status == "pending" or h.all is None:
+        return " The template-vs-unbounded quality comparison is pending (the unbounded drafts have not been made yet)."
+    o = h.all.overall
+    return (f" Graded blind on the same document, model and repeat, the template draft was preferred in {o.template_wins} "
+            f"and the unbounded draft in {o.unbounded_wins} of {h.all.calls} comparisons ({o.ties} ties).")
 
 
-def _fix_cell(fix: Cat2TemplateFix, arm: str, model_key: str):
-    return next((c for c in fix.cells if c.arm == arm and c.model_key == model_key), None)
-
-
-def _fix_pointer(rung_id: str, fix: Cat2TemplateFix | None) -> str:
-    m = FIX_MODEL_FOR_RUNG.get(rung_id)
-    if fix is None or m is None:
-        return FIX_POINTER_FALLBACK
-    o, n = _fix_cell(fix, "template_original", m), _fix_cell(fix, "template_not_stated", m)
-    if o is None or n is None or o.serious_per_draft is None or n.serious_per_draft is None:
-        return FIX_POINTER_FALLBACK
-    return (
-        "Measured fix, not used by the app: one added sentence letting the template write \"Not stated in source\" "
-        f"cut serious errors per draft from {o.serious_per_draft:.2f} to {n.serious_per_draft:.2f} and owners / time windows "
-        f"not found in the source from {o.owner.unsupported} / {o.time_window.unsupported} to {n.owner.unsupported} / "
-        f"{n.time_window.unsupported} of {n.action_items} action items ({n.drafts} fresh drafts per template on this model)."
-    )
-
-
-def _apply_fix_pointers(results: list[Cat2RungResult], fix: Cat2TemplateFix | None) -> None:
-    """Append the follow-up pointer to the templated rungs' owner/time-window note (note 4) when it exists."""
-    for r in results:
-        if r.status == "ok" and r.rung_id in FIX_MODEL_FOR_RUNG and len(r.architectural_notes) > 3:
-            set_note(r, 3, f"{r.architectural_notes[3]} {_fix_pointer(r.rung_id, fix)}")
-
-
-def _fix_callout(results: list[Cat2RungResult], fix: Cat2TemplateFix | None) -> str:
-    if fix is None:
-        return ""
-    ok = {r.rung_id for r in results if r.status == "ok"}
-    pairs = [(m, _fix_cell(fix, "template_original", m), _fix_cell(fix, "template_not_stated", m))
-             for rid, m in FIX_MODEL_FOR_RUNG.items() if rid in ok]
-    pairs = [(m, o, n) for m, o, n in pairs if o and n and o.serious_per_draft is not None and n.serious_per_draft is not None]
-    ub = (fix.head_to_head.get("vs_unbounded") or None)
-    ub_all = ub.all if ub else None
-    if not pairs or ub_all is None:
-        return ""
-    before = " / ".join(f"{o.serious_per_draft:.2f}" for _, o, _ in pairs)
-    after = " / ".join(f"{n.serious_per_draft:.2f}" for _, _, n in pairs)
-    names = " / ".join("Sonnet" if m == "sonnet" else "Haiku" for m, _, _ in pairs)
-    return (
-        f" A measured fix (one sentence letting the template write \"Not stated in source\") cut serious errors per "
-        f"templated draft from {before} to {after} ({names}), but the long draft was still preferred in "
-        f"{ub_all.overall.losses} of {ub_all.calls} comparisons; the app keeps the original template."
-    )
-
-
-def _quality_callout(results: list[Cat2RungResult], portfolio: Cat2QualityPortfolio | None) -> str:
-    ok = {r.rung_id: r for r in results if r.status == "ok"}
-    unb_q = _judged(ok.get("sonnet_unbounded"))
-    templ = [(rid, _judged(ok.get(rid))) for rid in ("sonnet_templated", "haiku_templated")]
-    templ = [(rid, q) for rid, q in templ if q is not None]
-    if unb_q is not None and templ:
-        wins = sum(_doc_record(unb_q, rid)[0] for rid, _ in templ)
-        total = sum(_doc_record(unb_q, rid)[1] for rid, _ in templ)
-        errs = " and ".join(f"{q.serious_errors} ({RUNG_LABEL[rid]})" for rid, q in templ)
-        return (
-            f" The savings are not free on this document: the blind grader preferred the unbounded draft in {wins} of "
-            f"{total} head-to-head comparisons, and the templated drafts had {errs} serious errors vs "
-            f"{unb_q.serious_errors} for the unbounded draft."
-        )
-    if portfolio:
-        pooled = {p.rung_id: p for p in portfolio.rungs}
-        unb = pooled.get("sonnet_unbounded")
-        tp = [(rid, pooled[rid]) for rid in ("sonnet_templated", "haiku_templated") if rid in pooled and rid in ok]
-        if unb and tp:
-            wins = sum(unb.head_to_head[rid].wins for rid, _ in tp if rid in unb.head_to_head)
-            total = sum(
-                unb.head_to_head[rid].wins + unb.head_to_head[rid].losses + unb.head_to_head[rid].ties
-                for rid, _ in tp
-                if rid in unb.head_to_head
-            )
-            errs = " and ".join(f"{p.serious_errors} ({RUNG_LABEL[rid]})" for rid, p in tp)
-            return (
-                f" Quality is not graded on this run; on the {len(portfolio.documents)} stored documents the blind "
-                f"grader preferred the unbounded draft in {wins} of {total} comparisons, and the templated drafts had "
-                f"{errs} serious errors vs {unb.serious_errors}."
-            )
-    return " Draft quality is not graded on this run."
+def _pending_result(rung_id: str) -> Cat2RungResult:
+    res = build_cat2_rung_result(rung_id=rung_id, model_id=MODEL_FOR_RUNG[rung_id], provider="Anthropic", latency_ms=0,
+                                 input_tokens=0, output_tokens=0, status="pending", error_message=REPLAY_PENDING_MESSAGE)
+    res.architectural_notes = res.architectural_notes[:1] + [REPLAY_PENDING_MESSAGE]
+    return res
 
 
 def build_cat2_rung_result(
@@ -491,9 +393,9 @@ def build_cat2_request_envelope(
             system_instruction=get_unbounded_draft_system_prompt(sub_task),
             parameters=request_params_override
             or {
-                "max_tokens": 8000,
+                "max_tokens": UNBOUNDED_MAX_TOKENS,
                 "endpoint": "messages.create",
-                "thinking": {"type": "between_tools"},
+                "thinking": thinking_default,
             },
             input_payload=payload_text,
         )
@@ -505,7 +407,7 @@ def build_cat2_request_envelope(
             system_instruction=get_section_regen_system_prompt(sub_task, sk),
             parameters=request_params_override
             or {
-                "max_tokens": 1800,
+                "max_tokens": SECTION_REGEN_MAX_TOKENS,
                 "thinking": thinking_default,
                 "output_config": {"format": {"type": "json_schema"}},
             },
@@ -594,33 +496,47 @@ def build_hitl_cost_comparison(
     surgical_in_tokens: int,
     surgical_out_tokens: int,
     section_key: str,
+    preset_id: str | None = None,
+    replays: dict[str, Any] | None = None,
 ) -> HitlCostComparison:
-    """Compare single-section HITL regeneration vs naive full-draft chat re-prompt."""
+    """A single-section regeneration vs a full templated draft of the same document on the same model.
+
+    The full draft is the current repeat-0 templated draft of this preset and model (golden replays); for a custom
+    input it is the mean of that model's templated drafts over the presets. `naive_full_reprompt_finops` keeps its
+    field name for API compatibility; it holds that full-draft cost."""
+    replays = replays if replays is not None else load_cat2_replays()
+    tier = _tier_of(model_id)
     surgical = compute_run_finops(model_id, surgical_in_tokens, surgical_out_tokens)
-    naive = compute_run_finops(
-        "claude-sonnet-5-5",
-        input_tokens=surgical_in_tokens + 3200,
-        output_tokens=3200,
-    )
+    own = templated_draft_for(replays, preset_id, tier)
+    if own:
+        f_in, f_out, what = int(own["input_tokens"]), int(own["output_tokens"]), "this document's"
+    else:
+        rung = TEMPLATED_RUNG_FOR_TIER[tier]
+        drafts = [((p.get("rungs") or {}).get(rung)) for p in (replays.get("presets") or {}).values()]
+        drafts = [d for d in drafts if d]
+        if drafts:
+            f_in = round(sum(int(d["input_tokens"]) for d in drafts) / len(drafts))
+            f_out = round(sum(int(d["output_tokens"]) for d in drafts) / len(drafts))
+            what = f"the mean ({len(drafts)} documents)"
+        else:
+            f_in, f_out, what = surgical_in_tokens, surgical_out_tokens, "no stored"
+    full = compute_run_finops(tier, f_in, f_out)
     savings_pct = (
-        round(((naive.total_cost_usd - surgical.total_cost_usd) / naive.total_cost_usd) * 100, 2)
-        if naive.total_cost_usd > 0
+        round(((full.total_cost_usd - surgical.total_cost_usd) / full.total_cost_usd) * 100, 2)
+        if full.total_cost_usd > 0
         else 0.0
     )
-    tokens_avoided = max(
-        0,
-        (naive.input_tokens + naive.output_tokens) - (surgical.input_tokens + surgical.output_tokens),
-    )
+    tokens_avoided = max(0, (full.input_tokens + full.output_tokens) - (surgical.input_tokens + surgical.output_tokens))
     return HitlCostComparison(
         surgical_finops=surgical,
-        naive_full_reprompt_finops=naive,
+        naive_full_reprompt_finops=full,
         revision_savings_pct=savings_pct,
         tokens_avoided=tokens_avoided,
         explanation=(
-            f"Regenerating only `{section_key}` on {surgical.model_label} emitted "
-            f"{surgical.output_tokens} output tokens (${surgical.cost_per_1k_usd:.2f}/1k edits) vs. "
-            f"re-prompting the full ~3,200-token narrative in chat (${naive.cost_per_1k_usd:.2f}/1k edits) "
-            f"— avoiding {tokens_avoided:,} tokens (-{savings_pct:.1f}%)."
+            f"Regenerating only `{section_key}` on {surgical.model_label} wrote {surgical.output_tokens:,} output tokens "
+            f"(${surgical.cost_per_1k_usd:.2f}/1k edits) vs {what} full {full.model_label} template draft "
+            f"({full.input_tokens:,} in / {full.output_tokens:,} out tokens, ${full.cost_per_1k_usd:.2f}/1k): "
+            f"{savings_pct:.1f}% less."
         ),
     )
 
@@ -647,6 +563,8 @@ async def execute_cat2_run(
     item_id = preset["id"] if preset else "custom"
     item_title = preset["title"] if preset else "Custom Synthesis Bundle"
     trace_extras: dict[str, tuple[dict[str, Any] | None, str | None]] = {}
+    replay_meta: dict[str, dict[str, Any]] = {}
+    rungs = [r for r in RUNG_ORDER if r in req.rungs]
 
     if req.mode == "replay":
         is_exact_preset = preset is not None and payload_text.strip() == preset["payload"].strip()
@@ -664,66 +582,54 @@ async def execute_cat2_run(
             raise HTTPException(status_code=404, detail=f"Replay trace missing for {preset['id']}.")
 
         results: list[Cat2RungResult] = []
-        for rung_id in req.rungs:
-            r_data = preset_trace["rungs"][rung_id]
-            trace_extras[rung_id] = (None, r_data.get("stop_reason") or "end_turn")
+        for rung_id in rungs:
+            r_data = (preset_trace.get("rungs") or {}).get(rung_id)
+            if not r_data:
+                results.append(_pending_result(rung_id))
+                continue
+            trace_extras[rung_id] = (r_data.get("request_params"), r_data.get("stop_reason"))
+            replay_meta[rung_id] = (preset_trace.get("provenance") or {}).get(rung_id) or {}
             res = build_cat2_rung_result(
-                    rung_id=rung_id,
-                    model_id=r_data["model_id"],
-                    provider=r_data["provider"],
-                    latency_ms=int(r_data["latency_ms"]),
-                    input_tokens=int(r_data["input_tokens"]),
-                    output_tokens=int(r_data["output_tokens"]),
-                    structured_draft=r_data.get("structured_draft") or {},
-                    raw_markdown=r_data.get("raw_markdown"),
-                    thinking_tokens=int(r_data.get("thinking_tokens") or 0),
-                )
+                rung_id=rung_id,
+                model_id=r_data["model_id"],
+                provider=r_data["provider"],
+                latency_ms=int(r_data["latency_ms"]),
+                input_tokens=int(r_data["input_tokens"]),
+                output_tokens=int(r_data["output_tokens"]),
+                structured_draft=r_data.get("structured_draft") or {},
+                raw_markdown=r_data.get("raw_markdown"),
+                thinking_tokens=int(r_data.get("thinking_tokens") or 0),
+            )
             res.stop_reason = r_data.get("stop_reason")
             results.append(res)
         mode_used = "replay"
     else:
-        # Category 2 uses Anthropic ONLY (user constraint: Gemini Decision Model for Category 1 only)
         creds = credit_shield.resolve_live_credentials(
             http_request,
             need_anthropic=True,
-            need_gemini=False,
         )
         assert creds.anthropic_api_key
 
         async def _run_one(rung_id: str) -> Cat2RungResult:
+            model_tier = MODEL_FOR_RUNG[rung_id]
             try:
-                if rung_id == "sonnet_unbounded":
+                if rung_id in UNBOUNDED_RUNGS:
                     raw = await run_cat2_unbounded_sonnet(
                         payload_text,
                         get_unbounded_draft_system_prompt(sub_task),
                         creds.anthropic_api_key or "",
+                        max_tokens=UNBOUNDED_MAX_TOKENS,
+                        model_tier=model_tier,
                     )
-                    trace_extras[rung_id] = (raw.request_params, raw.stop_reason)
-                    res = build_cat2_rung_result(
-                        rung_id="sonnet_unbounded",
-                        model_id=raw.model_id,
-                        provider="Anthropic",
-                        latency_ms=raw.latency_ms,
-                        input_tokens=raw.input_tokens,
-                        output_tokens=raw.output_tokens,
-                        structured_draft=raw.structured,
-                        raw_markdown=raw.raw_text,
-                        thinking_tokens=raw.thinking_tokens,
+                else:
+                    raw = await run_cat2_structured_draft(
+                        payload_text,
+                        get_templated_draft_system_prompt(sub_task),
+                        STRUCTURED_DRAFT_JSON_SCHEMA,
+                        model_tier,
+                        creds.anthropic_api_key or "",
+                        max_tokens=TEMPLATE_MAX_TOKENS,
                     )
-                    res.stop_reason = raw.stop_reason
-                    return res
-
-                model_tier = (
-                    "claude-sonnet-5-5" if rung_id == "sonnet_templated" else "claude-haiku-5-5"
-                )
-                raw = await run_cat2_structured_draft(
-                    payload_text,
-                    get_templated_draft_system_prompt(sub_task),
-                    STRUCTURED_DRAFT_JSON_SCHEMA,
-                    model_tier,
-                    creds.anthropic_api_key or "",
-                    max_tokens=3000,
-                )
                 trace_extras[rung_id] = (raw.request_params, raw.stop_reason)
                 res = build_cat2_rung_result(
                     rung_id=rung_id,
@@ -739,12 +645,9 @@ async def execute_cat2_run(
                 res.stop_reason = raw.stop_reason
                 return res
             except Exception as exc:
-                fallback_model = (
-                    "claude-haiku-5-5" if rung_id == "haiku_templated" else "claude-sonnet-5-5"
-                )
                 return build_cat2_rung_result(
                     rung_id=rung_id,
-                    model_id=fallback_model,
+                    model_id=model_tier,
                     provider="Anthropic",
                     latency_ms=0,
                     input_tokens=0,
@@ -753,36 +656,18 @@ async def execute_cat2_run(
                     error_message=str(exc)[:300],
                 )
 
-        results = list(await asyncio.gather(*(_run_one(r) for r in req.rungs)))
+        results = list(await asyncio.gather(*(_run_one(r) for r in rungs)))
         if creds.uses_server_budget:
             total_spend = sum(r.finops.total_cost_usd for r in results if r.status == "ok")
             credit_shield.record_server_spend(total_spend)
         mode_used = "live"
 
-    unbounded_res = next(
-        (r for r in results if r.rung_id == "sonnet_unbounded" and r.status == "ok"),
-        None,
-    )
-    est_tokens = max(1, round(len(payload_text) / 2.15))
-    ref_input_tokens = (
-        unbounded_res.finops.input_tokens
-        if unbounded_res
-        else next(
-            (r.finops.input_tokens for r in results if r.status == "ok" and r.finops.input_tokens > 0),
-            est_tokens,
-        )
-    )
-    unbounded_cost = (
-        unbounded_res.finops.total_cost_usd
-        if unbounded_res
-        else compute_run_finops("claude-sonnet-5-5", ref_input_tokens, 4800).total_cost_usd
-    )
-
+    ok = {r.rung_id: r for r in results if r.status == "ok"}
+    # savings: each rung vs the unbounded draft on the same model (0 when that rung did not run)
     for res in results:
-        if res.status == "ok" and unbounded_cost > 0:
-            res.savings_vs_unbounded_pct = round(
-                ((unbounded_cost - res.finops.total_cost_usd) / unbounded_cost) * 100, 2
-            )
+        w = ok.get(WITHOUT_FOR.get(res.rung_id, ""))
+        if res.status == "ok" and w and w.finops.total_cost_usd > 0:
+            res.savings_vs_unbounded_pct = round(((w.finops.total_cost_usd - res.finops.total_cost_usd) / w.finops.total_cost_usd) * 100, 2)
     _apply_measured_claims(results)
 
     quality_summary = load_cat2_quality_summary()
@@ -799,12 +684,19 @@ async def execute_cat2_run(
             summary=quality_summary,
         )
     _apply_quality_claims(results, portfolio)
-    template_fix = load_cat2_template_fix()
-    _apply_fix_pointers(results, template_fix)
 
-    # Persist partitioned traces (category / use_case / model / pattern)
+    # Persist partitioned traces (category / use_case / model / pattern); pending replays have nothing to record
     for res in results:
+        if res.status == "pending":
+            continue
         req_params, stop_reason = trace_extras.get(res.rung_id, (None, None))
+        meta: dict[str, Any] = {
+            "source_endpoint": "/api/cat2/run",
+            "rung_id": res.rung_id,
+            "savings_vs_unbounded_pct": res.savings_vs_unbounded_pct,
+        }
+        if replay_meta.get(res.rung_id):
+            meta["experiment_draft_id"] = replay_meta[res.rung_id].get("draft_id")
         persist_cat2_trace(
             source_mode=mode_used,
             run_group_id=run_group_id,
@@ -823,54 +715,40 @@ async def execute_cat2_run(
             stop_reason=stop_reason,
             thinking_tokens=res.thinking_tokens,
             error_message=res.error_message,
-            extra_metadata={
-                "source_endpoint": "/api/cat2/run",
-                "savings_vs_unbounded_pct": res.savings_vs_unbounded_pct,
-            },
+            extra_metadata=meta,
         )
 
-    templated_sonnet = next(
-        (r for r in results if r.rung_id == "sonnet_templated" and r.status == "ok"),
-        None,
-    )
-    haiku_res = next(
-        (r for r in results if r.rung_id == "haiku_templated" and r.status == "ok"),
-        None,
-    )
+    haiku_res = ok.get("haiku_templated")
     haiku_batch = (
-        compute_run_finops(
-            "claude-haiku-5-5-batch",
-            haiku_res.finops.input_tokens,
-            haiku_res.finops.output_tokens,
-        )
+        compute_run_finops("claude-haiku-5-5-batch", haiku_res.finops.input_tokens, haiku_res.finops.output_tokens)
         if haiku_res
         else None
     )
 
-    unb_share = unbounded_res.finops.output_cost_share_pct if unbounded_res else 80.0
-    unb_out = unbounded_res.finops.output_tokens if unbounded_res else 4800
-    tmp_out = templated_sonnet.finops.output_tokens if templated_sonnet else 1750
-    tmp_save = templated_sonnet.savings_vs_unbounded_pct if templated_sonnet else 50.0
-    h_save = haiku_res.savings_vs_unbounded_pct if haiku_res else 97.0
-
-    callout = (
-        f"5x Output Tax: Unbounded Sonnet 5.5 emitted {unb_out:,} output tokens "
-        f"({unb_share:.1f}% of its draft's bill). Section templates & length bounds cut Sonnet 5.5 output "
-        f"to {tmp_out:,} tokens (-{tmp_save:.1f}% cost on the same model), and the same template on Haiku 5.5 cuts "
-        f"draft cost by -{h_save:.1f}%." + _quality_callout(results, portfolio) + _fix_callout(results, template_fix)
-    )
+    parts = []
+    for rid, without_id in WITHOUT_FOR.items():
+        r, w = ok.get(rid), ok.get(without_id)
+        name = "Sonnet 5.5" if rid.startswith("sonnet") else "Haiku 5.5"
+        if r and w:
+            parts.append(f"on {name} the section template writes {r.finops.output_tokens:,} output tokens vs {w.finops.output_tokens:,} "
+                         f"for the unbounded draft ({fmt_pct(r.savings_vs_unbounded_pct)} lower cost)")
+        elif r:
+            parts.append(f"on {name} the section template writes {r.finops.output_tokens:,} output tokens "
+                         f"(the unbounded draft {'is pending' if any(x.rung_id == without_id and x.status == 'pending' for x in results) else 'was not run'})")
+    callout = ("Output tokens cost 5x input on both models: " + "; ".join(parts) + "." if parts
+               else "Output tokens cost 5x input on both models.") + _quality_callout(portfolio)
 
     return Cat2RunResponse(
         mode_used=mode_used,  # type: ignore[arg-type]
         preset_id=preset["id"] if preset else None,
         sub_task=sub_task,  # type: ignore[arg-type]
         input_char_count=len(payload_text),
-        estimated_input_tokens=ref_input_tokens,
+        estimated_input_tokens=next((r.finops.input_tokens for r in results if r.status == "ok" and r.finops.input_tokens > 0),
+                                    max(1, round(len(payload_text) / 2.15))),
         results=results,
         haiku_batch_comparator=haiku_batch,
         output_tax_callout=callout,
         quality_portfolio=portfolio,
-        template_fix=template_fix,
     )
 
 
@@ -923,48 +801,39 @@ async def execute_cat2_section_regen(
         in_tok = int(r_data["input_tokens"])
         out_tok = int(r_data["output_tokens"])
         updated_section = r_data["updated_section"]
-        raw_text = json.dumps({req.section_key: updated_section}, indent=2)
-        req_payload = build_section_regen_payload(
+        raw_text = r_data.get("raw_text") or json.dumps({req.section_key: updated_section}, indent=2)
+        req_payload = r_data.get("request_payload") or build_section_regen_payload(
             source_text=source_text,
             section_key=req.section_key,
-            current_section=req.current_section or r_data.get("prior_section") or {},
+            current_section=r_data.get("prior_section") or {},
             reviewer_instruction=effective_instruction,
         )
-        req_params = None
-        stop_reason = "end_turn"
+        req_params = r_data.get("request_params")
+        stop_reason = r_data.get("stop_reason")
+        thinking_tok = int(r_data.get("thinking_tokens") or 0)
         mode_used = "replay"
     else:
         creds = credit_shield.resolve_live_credentials(
             http_request,
             need_anthropic=True,
-            need_gemini=False,
         )
         assert creds.anthropic_api_key
 
         current_sec = req.current_section
         if current_sec is None and preset is not None:
-            replays = load_cat2_replays()
-            templated = (
-                ((replays.get("presets") or {}).get(preset["id"]) or {})
-                .get("rungs", {})
-                .get("sonnet_templated", {})
-                .get("structured_draft", {})
-            )
-            current_sec = templated.get(req.section_key, {})
+            base = templated_draft_for(load_cat2_replays(), preset["id"], req.model_tier) or {}
+            current_sec = (base.get("structured_draft") or {}).get(req.section_key, {})
 
-        req_payload = build_section_regen_payload(
-            source_text=source_text,
-            section_key=req.section_key,
-            current_section=current_sec or {},
-            reviewer_instruction=effective_instruction,
-        )
+        rq = section_regen_request(sub_task=sub_task, section_key=req.section_key, source_text=source_text,
+                                   current_section=current_sec or {}, reviewer_instruction=effective_instruction)
+        req_payload = rq["payload"]
         raw = await run_cat2_structured_draft(
             req_payload,
-            get_section_regen_system_prompt(sub_task, req.section_key),
-            get_single_section_schema(req.section_key),
+            rq["system"],
+            rq["schema"],
             req.model_tier,
             creds.anthropic_api_key,
-            max_tokens=1800,
+            max_tokens=rq["max_tokens"],
         )
         model_used = raw.model_id
         latency_ms = raw.latency_ms
@@ -974,6 +843,7 @@ async def execute_cat2_section_regen(
         raw_text = raw.raw_text
         req_params = raw.request_params
         stop_reason = raw.stop_reason
+        thinking_tok = int(raw.thinking_tokens or 0)
         if creds.uses_server_budget:
             fin_spent = compute_run_finops(model_used, in_tok, out_tok).total_cost_usd
             credit_shield.record_server_spend(fin_spent)
@@ -984,6 +854,7 @@ async def execute_cat2_section_regen(
         surgical_in_tokens=in_tok,
         surgical_out_tokens=out_tok,
         section_key=req.section_key,
+        preset_id=preset["id"] if (preset is not None and source_text.strip() == preset["payload"].strip()) else None,
     )
 
     persist_cat2_trace(
@@ -1003,6 +874,7 @@ async def execute_cat2_section_regen(
         section_key=req.section_key,
         request_params_override=req_params,
         stop_reason=stop_reason,
+        thinking_tokens=thinking_tok,
         extra_metadata={
             "source_endpoint": "/api/cat2/regenerate-section",
             "section_key": req.section_key,

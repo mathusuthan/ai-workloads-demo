@@ -345,33 +345,21 @@ def _rows_to_dicts(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
-# --------------------------------------------------------------------------------------------------
-# Versions of the policy gate and of the bundle tool.
-#
-# v1 (the code the Category 5 ablation ran on 2026-11-26) is kept ONLY so recorded runs can be replayed and their
-# sha256-pinned tool outputs reproduced. Everything else uses the current versions.
-# --------------------------------------------------------------------------------------------------
-GATE_VERSION_V1 = "v1-band-unconditional"  # the gate the experiment ran on (see below for what it got wrong)
-# Fixed 2026-11-26, one version for four fixes, each read from the manual's wording:
-#   2.1  the 1.5% band passes only when the PO's currency notes specify an index-linked float;
-#   2.2/2.3  a SIGNED_ACTIVE amendment's approved_freight_waiver_inr raises the PO freight cap;
-#   1.1(a)/3.2  GST at each line's own (PO) rate when an invoice mixes rates;
-#   4.1 Trigger 3  duplicate invoice_id already in reconciliation_vouchers, or vendor risk_flag PAYMENT_FREEZE.
-GATE_VERSION_V2 = "v2-manual-aligned"
-GATE_VERSIONS: tuple[str, ...] = (GATE_VERSION_V1, GATE_VERSION_V2)
-GATE_VERSION = GATE_VERSION_V2
-
-BUNDLE_VERSION_V1 = "v1-no-po-currency"  # fetch_3way_match_bundle as the experiment ran it
-# 2026-11-26: the bundle also returns what the fixed gate reads, so a model can check the same conditions:
-# header.currency (PO currency notes, 2.1), header.risk_flag (vendor PAYMENT_FREEZE, Trigger 3),
-# header.posted_vouchers (vouchers already posted for this invoice_id, Trigger 3), matched_lines[].po_gst_rate (1.1(a)).
-BUNDLE_VERSION_V2 = "v2-manual-aligned"
-BUNDLE_VERSIONS: tuple[str, ...] = (BUNDLE_VERSION_V1, BUNDLE_VERSION_V2)
-BUNDLE_VERSION = BUNDLE_VERSION_V2
-
 PRICE_RULE_WITHIN_BAND = "WITHIN_1.5PCT_TOLERANCE"
 PRICE_RULE_WITHIN_BAND_NOT_INDEX_LINKED = "WITHIN_1.5PCT_NOT_INDEX_LINKED_PO_RATE"
 PAYMENT_FREEZE_FLAG = "PAYMENT_FREEZE"
+# Manual 6.2's factor kinds (Lever B: "multi-factor commercial disputes mixing partial DOA returns, signed contract
+# amendments, unauthorized line price hikes, and disallowed freight").
+FACTOR_QUANTITY_DOA = "partial_doa_or_quantity_shortage"
+FACTOR_AMENDMENT = "signed_contract_amendment"
+FACTOR_PRICE_HIKE = "unauthorized_line_price_hike"
+FACTOR_FREIGHT = "disallowed_freight"
+ESCALATION_FACTOR_KINDS: tuple[str, ...] = (FACTOR_QUANTITY_DOA, FACTOR_AMENDMENT, FACTOR_PRICE_HIKE, FACTOR_FREIGHT)
+# Line label on a hard block, by the trigger that fired (manual 4.1 names). With several triggers, the lowest-numbered
+# one names the label (all of them are listed in block_reasons). A line with 0 accepted units is PHANTOM_UNRECEIVED.
+HELD_LABEL_TRIGGER1 = "HELD_BY_IRN_BLOCK"  # Trigger 1 CANCELLED_OR_FORGED_IRN
+HELD_LABEL_TRIGGER2 = "HELD_BY_PHANTOM_LINE_BLOCK"  # Trigger 2 PHANTOM_UNRECEIVED_LINE
+HELD_LABEL_TRIGGER3 = "HELD_BY_DUPLICATE_OR_FREEZE_BLOCK"  # Trigger 3 DUPLICATE_OR_SANCTIONED_VENDOR
 HARD_BLOCK_ROUTE = "route to Forensic Tax & Internal Audit review, queue AP-FRAUD-IRN-HOLD (P1 SLA 4h)"
 
 
@@ -400,21 +388,45 @@ def po_currency_index_linked(currency_notes: str | None) -> bool:
 _INDEX_LINK_NEGATORS = frozenset({"not", "no", "non", "without", "never", "nor"})
 
 
-def _check_version(value: str, allowed: tuple[str, ...], what: str) -> str:
-    if value not in allowed:
-        raise ValueError(f"Unknown {what} `{value}`; expected one of {list(allowed)}")
-    return value
+def escalation_factor_kinds(
+    line_findings: list[dict[str, Any]],
+    *,
+    freight_disallowed_inr: float,
+    freight_waiver_applied_inr: float = 0.0,
+) -> list[str]:
+    """Manual 6.2's factor kinds present on a non-blocked invoice, in ESCALATION_FACTOR_KINDS order.
+
+    * partial DOA / quantity shortage: a line pays fewer units than billed (DOA rejects or accepted < billed, 1.2);
+    * signed contract amendment: a SIGNED_ACTIVE amendment set a line's rate (2.2), or its freight waiver allowed
+      freight above the PO cap (2.3);
+    * unauthorized line price hike: a line billed above the rate it is paid at, without an amendment covering the
+      excess -- above 1.5% (2.1/2.2), inside the band on a PO that is not index-linked (2.1), or above the amendment's
+      approved rate;
+    * disallowed freight: freight above the cap (after any waiver) is disallowed (2.3).
+    Several lines of one kind are one factor. escalation_required = two or more kinds."""
+    kinds: set[str] = set()
+    for f in line_findings:
+        rule = str(f.get("price_rule") or "")
+        if int(f["payable_qty"]) < int(f.get("billed_qty", f["payable_qty"])) or int(f.get("doa_rejected_qty") or 0) > 0:
+            kinds.add(FACTOR_QUANTITY_DOA)
+        if rule.startswith("AMENDMENT_APPROVED"):
+            kinds.add(FACTOR_AMENDMENT)
+        if float(f["billed_unit_price_inr"]) > float(f["effective_unit_price_inr"]):
+            kinds.add(FACTOR_PRICE_HIKE)
+    if freight_waiver_applied_inr > 0:
+        kinds.add(FACTOR_AMENDMENT)
+    if freight_disallowed_inr > 0:
+        kinds.add(FACTOR_FREIGHT)
+    return [k for k in ESCALATION_FACTOR_KINDS if k in kinds]
 
 
 def evaluate_deterministic_policy_gate(
     conn: sqlite3.Connection,
     invoice_id: str,
-    *,
-    gate_version: str = GATE_VERSION,
 ) -> dict[str, Any]:
     """Deterministic Python AP tolerance & statutory gate over SQLite ERP rows.
 
-    Current gate (`v2-manual-aligned`), each rule read from the manual (SOP-AP-3WAY-2026.v4):
+    Each rule is read from the manual (SOP-AP-3WAY-2026.v4):
 
     * Hard blocks (4.1): Trigger 1 cancelled IRN; Trigger 2 phantom line (0 accepted, >10% of taxable); Trigger 3
       `DUPLICATE_OR_SANCTIONED_VENDOR` -- the invoice_id already has a row in `reconciliation_vouchers`, or the
@@ -429,10 +441,11 @@ def evaluate_deterministic_policy_gate(
       when the PO lines carry different rates, ROUND(SUM(authorized_line_total * line rate) + allowed freight * the
       rate of the line with the largest authorized total, 2).
 
-    `gate_version="v1-band-unconditional"` reproduces the gate the experiment ran on (band passed for every PO,
-    waivers ignored, the first line's GST rate for the whole invoice, no Trigger 3) for replaying recorded runs only.
-    On every invoice none of these conditions touches, the two versions return byte-identical output."""
-    _check_version(gate_version, GATE_VERSIONS, "gate_version")
+    * Escalation (6.2): escalation_required only when two or more distinct factor kinds combine
+      (`escalation_factor_kinds`); a hard block or a single-factor invoice completes without escalation.
+    * Hard-block line labels (4.1): PHANTOM_UNRECEIVED for a line with 0 accepted units; every other line is held
+      under the lowest-numbered trigger that fired (HELD_BY_IRN_BLOCK / HELD_BY_PHANTOM_LINE_BLOCK /
+      HELD_BY_DUPLICATE_OR_FREEZE_BLOCK)."""
     inv_row = conn.execute(
         """
         SELECT vi.*, po.fc_hub, po.approved_freight_cap_inr, po.po_total_taxable_inr,
@@ -468,7 +481,6 @@ def evaluate_deterministic_policy_gate(
             (po_id, po_id, invoice_id),
         ).fetchall()
     )
-    v2 = gate_version != GATE_VERSION_V1
     amend_rows = _rows_to_dicts(
         conn.execute(
             """
@@ -483,6 +495,7 @@ def evaluate_deterministic_policy_gate(
     amend_by_sku = {a["sku"]: a for a in amend_rows}
 
     block_reasons: list[str] = []
+    fired: set[int] = set()  # manual 4.1 trigger numbers
     if (
         inv["gstr2b_status"] == "IRN_CANCELLED_INVALID"
         or inv["irn_status"] == "CANCELLED_ON_IRP_WITHIN_24H"
@@ -490,6 +503,7 @@ def evaluate_deterministic_policy_gate(
         block_reasons.append(
             "HARD_BLOCK_IRN_CANCELLED: NIC IRP e-Invoice IRN cancelled within 24h (CGST Sec 74 risk)."
         )
+        fired.add(1)
 
     taxable_total = float(inv["invoice_total_taxable_inr"])
     for ln in line_rows:
@@ -498,23 +512,27 @@ def evaluate_deterministic_policy_gate(
                 f"HARD_BLOCK_PHANTOM_LINE: SKU {ln['sku']} billed INR {ln['billed_line_total_inr']:,.0f} "
                 f"with 0 units accepted at {inv['fc_hub']} GRN (>10% invoice threshold)."
             )
-    trigger12 = bool(block_reasons)
-    if v2:  # manual 4.1 Trigger 3 (DUPLICATE_OR_SANCTIONED_VENDOR)
-        posted = conn.execute(
-            "SELECT voucher_id, decision FROM reconciliation_vouchers WHERE invoice_id = ?", (invoice_id,)
-        ).fetchall()
-        for row in posted:
-            block_reasons.append(
-                f"HARD_BLOCK_DUPLICATE_INVOICE: invoice_id {invoice_id} already posted in reconciliation_vouchers "
-                f"({row['voucher_id']}, {row['decision']}); {HARD_BLOCK_ROUTE}."
-            )
-        if str(inv.get("vendor_risk_flag") or "").strip().upper() == PAYMENT_FREEZE_FLAG:
-            block_reasons.append(
-                f"HARD_BLOCK_VENDOR_PAYMENT_FREEZE: vendor {inv['vendor_id']} ({inv['vendor_name']}) is flagged "
-                f"{PAYMENT_FREEZE_FLAG}; {HARD_BLOCK_ROUTE}."
-            )
+            fired.add(2)
+    # manual 4.1 Trigger 3 (DUPLICATE_OR_SANCTIONED_VENDOR)
+    posted = conn.execute(
+        "SELECT voucher_id, decision FROM reconciliation_vouchers WHERE invoice_id = ?", (invoice_id,)
+    ).fetchall()
+    for row in posted:
+        block_reasons.append(
+            f"HARD_BLOCK_DUPLICATE_INVOICE: invoice_id {invoice_id} already posted in reconciliation_vouchers "
+            f"({row['voucher_id']}, {row['decision']}); {HARD_BLOCK_ROUTE}."
+        )
+        fired.add(3)
+    if str(inv.get("vendor_risk_flag") or "").strip().upper() == PAYMENT_FREEZE_FLAG:
+        block_reasons.append(
+            f"HARD_BLOCK_VENDOR_PAYMENT_FREEZE: vendor {inv['vendor_id']} ({inv['vendor_name']}) is flagged "
+            f"{PAYMENT_FREEZE_FLAG}; {HARD_BLOCK_ROUTE}."
+        )
+        fired.add(3)
 
     if block_reasons:
+        # held lines are named by the lowest-numbered trigger that fired (all are listed in block_reasons)
+        held = {1: HELD_LABEL_TRIGGER1, 2: HELD_LABEL_TRIGGER2, 3: HELD_LABEL_TRIGGER3}[min(fired)]
         return {
             "gate_id": "AP-POL-GATE-01",
             "invoice_id": invoice_id,
@@ -533,11 +551,7 @@ def evaluate_deterministic_policy_gate(
                     "sku": ln["sku"],
                     "billed_qty": ln["billed_qty"],
                     "grn_accepted_qty": ln["accepted_qty"],
-                    "status": (
-                        "PHANTOM_UNRECEIVED" if int(ln["accepted_qty"]) == 0
-                        # Trigger 3 alone; the recorded label is kept whenever Trigger 1 or 2 fired
-                        else "HELD_BY_IRN_BLOCK" if trigger12 else "HELD_BY_DUPLICATE_OR_FREEZE_BLOCK"
-                    ),
+                    "status": "PHANTOM_UNRECEIVED" if int(ln["accepted_qty"]) == 0 else held,
                 }
                 for ln in line_rows
             ],
@@ -545,7 +559,6 @@ def evaluate_deterministic_policy_gate(
 
     authorized_merch = 0.0
     line_findings: list[dict[str, Any]] = []
-    discrepancy_count = 0
 
     for ln in line_rows:
         sku = ln["sku"]
@@ -562,25 +575,19 @@ def evaluate_deterministic_policy_gate(
         if amd is not None:
             eff_price = min(billed_price, float(amd["approved_unit_price_inr"]))
             price_rule = f"AMENDMENT_APPROVED ({amd['amendment_id']})"
-            discrepancy_count += 1
         elif billed_price <= po_price:
             eff_price = billed_price
             price_rule = "EXACT_PO_MATCH"
         elif billed_price <= po_price * 1.015:
-            if gate_version == GATE_VERSION_V1 or po_currency_index_linked(inv["po_currency_notes"]):
+            if po_currency_index_linked(inv["po_currency_notes"]):
                 eff_price = billed_price
                 price_rule = PRICE_RULE_WITHIN_BAND
             else:  # manual 2.1: a standard (not index-linked) PO pays the PO unit rate unless amended
                 eff_price = po_price
                 price_rule = PRICE_RULE_WITHIN_BAND_NOT_INDEX_LINKED
-                discrepancy_count += 1
         else:
             eff_price = po_price
             price_rule = "UNAUTHORIZED_HIKE_CAPPED_TO_PO"
-            discrepancy_count += 1
-
-        if billed_qty > payable_qty or doa_qty > 0:
-            discrepancy_count += 1
 
         auth_line = round(payable_qty * eff_price, 2)
         billed_line = float(ln["billed_line_total_inr"])
@@ -606,17 +613,15 @@ def evaluate_deterministic_policy_gate(
     claimed_freight = float(inv["claimed_freight_inr"])
     po_freight_cap = float(inv["approved_freight_cap_inr"])
     # manual 2.2 / 2.3: a SIGNED_ACTIVE amendment can override the PO freight cap by its approved waiver
-    freight_waiver = round(sum(float(a["approved_freight_waiver_inr"] or 0.0) for a in amend_rows), 2) if v2 else 0.0
+    freight_waiver = round(sum(float(a["approved_freight_waiver_inr"] or 0.0) for a in amend_rows), 2)
     freight_cap = po_freight_cap + freight_waiver
-    if claimed_freight > po_freight_cap:
-        discrepancy_count += 1
     auth_freight = min(claimed_freight, freight_cap)
 
     authorized_net_principal = round(authorized_merch + auth_freight, 2)
     debit_note_deduction = round(taxable_total - authorized_net_principal, 2)
 
-    rates = [float(ln["po_gst_rate"] if v2 else ln["gst_rate"]) for ln in line_rows]
-    mixed_rates = v2 and len(set(rates)) > 1
+    rates = [float(ln["po_gst_rate"]) for ln in line_rows]
+    mixed_rates = len(set(rates)) > 1
     if mixed_rates:
         # manual 1.1(a): the PO fixes each line's GST rate; 3.2's ROUND(principal * gst_rate, 2) applied per line,
         # freight at the rate of the line with the largest authorized total (the manual gives no freight rate)
@@ -645,8 +650,15 @@ def evaluate_deterministic_policy_gate(
             else "APPROVE_PARTIAL_DEBIT_NOTE"
         )
 
-    # Escalate to Sonnet 5.5 when multiple commercial/amendment/freight exceptions combine
-    escalation_required = bool(discrepancy_count >= 2 or debit_note_deduction > 0)
+    freight_disallowed = round(max(0.0, claimed_freight - freight_cap), 2)
+    waiver_applied = round(min(freight_waiver, max(0.0, claimed_freight - po_freight_cap)), 2) if freight_waiver > 0 else 0.0
+    # manual 6.2: escalate only a multi-factor commercial dispute
+    factors = escalation_factor_kinds(
+        [{**f, "billed_qty": int(ln["billed_qty"])} for f, ln in zip(line_findings, line_rows)],
+        freight_disallowed_inr=freight_disallowed,
+        freight_waiver_applied_inr=waiver_applied,
+    )
+    escalation_required = len(factors) >= 2
 
     out: dict[str, Any] = {
         "gate_id": "AP-POL-GATE-01",
@@ -663,11 +675,11 @@ def evaluate_deterministic_policy_gate(
         "gst_escrow_holdback_inr": gst_escrow_holdback,
         "debit_note_deduction_inr": debit_note_deduction,
         "line_findings": line_findings,
-        "freight_disallowed_inr": round(max(0.0, claimed_freight - freight_cap), 2),
+        "freight_disallowed_inr": freight_disallowed,
     }
-    # keys added only where the new rules apply, so the output elsewhere stays byte-identical to the recorded gate
+    # keys present only when a waiver or mixed GST rates apply
     if freight_waiver > 0:
-        out["freight_waiver_applied_inr"] = round(min(freight_waiver, max(0.0, claimed_freight - po_freight_cap)), 2)
+        out["freight_waiver_applied_inr"] = waiver_applied
     if mixed_rates:
         out["gst_rates_by_line"] = {f["sku"]: r for f, r in zip(line_findings, rates)}
     return out
@@ -680,14 +692,9 @@ class Cat5ErpSession:
         self,
         *,
         rung_id: str,
-        gate_version: str = GATE_VERSION,
-        bundle_version: str = BUNDLE_VERSION,
     ) -> None:
         self.conn = create_seeded_erp_connection()
         self.rung_id = rung_id
-        # Non-current versions exist only to replay recorded runs (see GATE_VERSIONS / BUNDLE_VERSIONS).
-        self.gate_version = _check_version(gate_version, GATE_VERSIONS, "gate_version")
-        self.bundle_version = _check_version(bundle_version, BUNDLE_VERSIONS, "bundle_version")
         self.tables_touched: set[str] = set()
         self.gate_by_invoice: dict[str, dict[str, Any]] = {}
         self.total_tool_calls = 0
@@ -788,19 +795,18 @@ class Cat5ErpSession:
 
         if name == "fetch_3way_match_bundle":
             inv_id = str(tool_input.get("invoice_id") or "")
-            bundle_v1 = self.bundle_version == BUNDLE_VERSION_V1
             sql = (
                 "SELECT vi.invoice_id, vi.po_id, vi.vendor_id, vi.irn_status, vi.gstr2b_status,\n"
                 "       vi.claimed_freight_inr, vi.invoice_total_taxable_inr, vi.invoice_gst_inr,\n"
                 "       vi.invoice_grand_total_inr, po.fc_hub, po.approved_freight_cap_inr,\n"
                 "       v.name AS vendor_name, v.gstin, v.udyam_tier, v.msmed_45d_applicable"
-                + ("\n" if bundle_v1 else ",\n       po.currency, v.risk_flag  -- PO currency notes (2.1), vendor flag (4.1)\n")
-                + "FROM vendor_invoices vi\n"
+                ",\n       po.currency, v.risk_flag  -- PO currency notes (2.1), vendor flag (4.1)\n"
+                "FROM vendor_invoices vi\n"
                 "JOIN purchase_orders po ON vi.po_id = po.po_id\n"
                 "JOIN vendors v ON vi.vendor_id = v.vendor_id\n"
                 "WHERE vi.invoice_id = ?;\n"
                 "-- + projected JOIN on invoice_lines x po_lines x goods_receipts + contract_amendments"
-                + ("" if bundle_v1 else "\n-- + SELECT voucher_id, decision FROM reconciliation_vouchers WHERE invoice_id = ? (4.1 Trigger 3)")
+                "\n-- + SELECT voucher_id, decision FROM reconciliation_vouchers WHERE invoice_id = ? (4.1 Trigger 3)"
             )
             header = _rows_to_dicts(
                 self.conn.execute(
@@ -809,7 +815,8 @@ class Cat5ErpSession:
                            vi.irn_status, vi.gstr2b_status, vi.claimed_freight_inr,
                            vi.invoice_total_taxable_inr, vi.invoice_gst_inr, vi.invoice_grand_total_inr,
                            po.fc_hub, po.incoterms, po.approved_freight_cap_inr,
-                           v.name AS vendor_name, v.gstin, v.udyam_tier, v.msmed_45d_applicable
+                           v.name AS vendor_name, v.gstin, v.udyam_tier, v.msmed_45d_applicable,
+                           po.currency, v.risk_flag
                     FROM vendor_invoices vi
                     JOIN purchase_orders po ON vi.po_id = po.po_id
                     JOIN vendors v ON vi.vendor_id = v.vendor_id
@@ -821,25 +828,12 @@ class Cat5ErpSession:
             if not header:
                 return json.dumps({"error": f"Invoice {inv_id} not found"}), sql, ["vendor_invoices"], True, None
             po_id = header[0]["po_id"]
-            if not bundle_v1:  # fields the fixed gate reads (v1, as recorded before 2026-11-26, has none of them)
-                extra = self.conn.execute(
-                    """
-                    SELECT po.currency, v.risk_flag
-                    FROM vendor_invoices vi
-                    JOIN purchase_orders po ON vi.po_id = po.po_id
-                    JOIN vendors v ON vi.vendor_id = v.vendor_id
-                    WHERE vi.invoice_id = ?
-                    """,
+            header[0]["posted_vouchers"] = _rows_to_dicts(
+                self.conn.execute(
+                    "SELECT voucher_id, decision FROM reconciliation_vouchers WHERE invoice_id = ? ORDER BY voucher_id",
                     (inv_id,),
-                ).fetchone()
-                header[0]["currency"] = extra["currency"]
-                header[0]["risk_flag"] = extra["risk_flag"]
-                header[0]["posted_vouchers"] = _rows_to_dicts(
-                    self.conn.execute(
-                        "SELECT voucher_id, decision FROM reconciliation_vouchers WHERE invoice_id = ? ORDER BY voucher_id",
-                        (inv_id,),
-                    ).fetchall()
-                )
+                ).fetchall()
+            )
             lines = _rows_to_dicts(
                 self.conn.execute(
                     """
@@ -857,9 +851,6 @@ class Cat5ErpSession:
                     (po_id, po_id, inv_id),
                 ).fetchall()
             )
-            if bundle_v1:
-                for ln in lines:
-                    ln.pop("po_gst_rate", None)
             amends = _rows_to_dicts(
                 self.conn.execute(
                     """
@@ -871,9 +862,8 @@ class Cat5ErpSession:
                     (po_id,),
                 ).fetchall()
             )
-            touched = ["vendor_invoices", "purchase_orders", "vendors", "invoice_lines", "po_lines", "goods_receipts", "contract_amendments"]
-            if not bundle_v1:
-                touched.append("reconciliation_vouchers")
+            touched = ["vendor_invoices", "purchase_orders", "vendors", "invoice_lines", "po_lines", "goods_receipts",
+                       "contract_amendments", "reconciliation_vouchers"]
             self.tables_touched.update(touched)
             self.optimal_tool_calls += 1
             bundle = {
@@ -889,7 +879,7 @@ class Cat5ErpSession:
                 "/* AP-POL-GATE-01 Deterministic Check over vendor_invoices + invoice_lines "
                 "+ po_lines + goods_receipts + contract_amendments */"
             )
-            gate_out = evaluate_deterministic_policy_gate(self.conn, inv_id, gate_version=self.gate_version)
+            gate_out = evaluate_deterministic_policy_gate(self.conn, inv_id)
             self.gate_by_invoice[inv_id] = gate_out
             touched = ["vendor_invoices", "purchase_orders", "goods_receipts", "contract_amendments"]
             self.tables_touched.update(touched)

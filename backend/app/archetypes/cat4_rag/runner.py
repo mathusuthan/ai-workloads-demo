@@ -1,4 +1,8 @@
-"""Orchestrates Category 4 Multi-Doc RAG & Deep Ingestion Arena and Ad-Hoc Queries."""
+"""Orchestrates the Category 4 deal-room comparison (without vs with the deck improvement) and ad-hoc queries.
+
+Without: the whole corpus as uncached plain text, no citations (Sonnet answers). With: hybrid retrieval paired with
+context caching — Haiku picks 5 clauses from the cached corpus, Sonnet answers over them with citations (`paired.py`).
+"""
 
 from __future__ import annotations
 
@@ -9,14 +13,13 @@ from typing import Any
 from uuid import uuid4
 from fastapi import HTTPException, Request
 
-from app.archetypes.cat4_rag.answer_formats import adopted_answer_format, rung_synthesis_system_prompt
-from app.archetypes.cat4_rag.prompts import get_cat4_haiku_reranker_system_prompt
-from app.archetypes.cat4_rag.retriever import (
-    BM25_TOP_K,
-    RERANK_TOP_K,
-    build_reranker_payload,
-    merge_rerank_funnel,
-    rank_chunks_bm25,
+from app.archetypes.cat4_rag.answer_formats import rung_answer_format, rung_synthesis_system_prompt
+from app.archetypes.cat4_rag.paired import (
+    PAIRED_RUNG,
+    build_rerank_content,
+    get_full_corpus_reranker_system_prompt,
+    picked_funnel,
+    select_picked_chunks,
 )
 from app.archetypes.cat4_rag.schemas import RERANK_JSON_SCHEMA
 from app.archetypes.cat4_rag.scope import scoped_question
@@ -60,12 +63,11 @@ CAT4_CATEGORY = "cat4_multidoc_rag"
 CAT4_USE_CASE = "supplier_msa_due_diligence"
 CAT4_RUNG_TO_PATTERN: dict[str, str] = {
     "naive_full_corpus": "uncached_full_corpus_stuffing",
-    "cached_full_corpus_citations": "prefix_cached_full_corpus_citations",
-    "hybrid_rag_rerank_citations": "hybrid_bm25_haiku_rerank_citations",
+    PAIRED_RUNG: "cached_corpus_haiku_pick_citations",
 }
-RERANKER_PATTERN = "haiku_cross_chunk_reranker"
-# Synthesis output cap. 2,048 truncated 3 of 64 answers in the quality-rerun pilot (the live path raises on
-# truncation), so the app and the rerun both use 4,096. The reranker keeps 800.
+RERANKER_PATTERN = "haiku_cached_corpus_clause_picker"
+# Synthesis output cap (the app and the rerun both use 4,096; the live path raises on truncation). The reranker
+# keeps 800.
 CAT4_SYNTH_MAX_TOKENS = 4096
 CAT4_RERANK_MAX_TOKENS = 800
 
@@ -84,8 +86,8 @@ def load_cat4_replays() -> dict[str, Any]:
 def _rung_metadata(rung_id: str) -> tuple[str, str, str | None, list[str]]:
     if rung_id == "naive_full_corpus":
         return (
-            "1. Uncached Full-Corpus Stuffing",
-            "Anti-Pattern: Uncached Dump ($2.00/M In)",
+            "1. Without: Full Corpus, No Cache, No Citations",
+            "Without the improvement",
             None,
             [
                 # replaced with the measured prompt size by _apply_measured_claims
@@ -93,35 +95,22 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, str | None, list[str]]:
                 "Requests no citations — a reviewer has to search the 7 agreements to check each claim.",
                 # replaced with this audit's measured answer quality by _apply_measured_claims
                 "Answer quality for this audit is scored against the answer key in the results panel.",
-                "Prompt not changed: the 2026-11-26 answer-format change applies to the retrieval version only, and this version was not re-measured.",
-            ],
-        )
-    if rung_id == "cached_full_corpus_citations":
-        return (
-            "2. Cached Full Corpus + Native Citations",
-            "Lever 1: Cache Reads + Citations",  # measured cache-read share added by _apply_measured_claims
-            None,
-            [
-                "Attaches cache_control={'type': 'ephemeral'} on the 7th DocumentBlock: the first question writes the prefix ($2.50/M), later questions read it ($0.10/M).",
-                "Native citations point at exact document spans a reviewer can check; a citation shows where a claim came from, not that the claim is right.",
-                # replaced with this audit's measured answer quality by _apply_measured_claims
-                "Answer quality for this audit is scored against the answer key in the results panel.",
-                "Prompt not changed: the 2026-11-26 answer-format change applies to the retrieval version only, and this version was not re-measured.",
             ],
         )
     return (
-        "3. Hybrid BM25 + Haiku Rerank + Citations",
-        "Lever 2: Retrieval + Citations",  # measured share of corpus not sent added by _apply_measured_claims
+        "2. With: Retrieval Paired with Caching + Citations",
+        "With the improvement",  # measured share of corpus not sent to Sonnet added by _apply_measured_claims
         "claude-haiku-5-5",
         [
-            "Deterministic BM25 retrieves top-10 of 28 clauses; Haiku 5.5 ($0.10/M) reranks them to 5 chunks for Sonnet synthesis.",
+            # replaced with the measured cached block size by _apply_measured_claims
+            "Haiku 5.5 reads all 28 deal-room clauses from one cached block (the first question writes it, later "
+            "questions read it) and picks the 5 it judges most relevant; Sonnet 5.5 answers over those 5 with native citations.",
             # replaced with the measured single-query saving by _apply_measured_claims
-            "100% of Haiku reranker spend is included here, so its cost comparison with Rung 1 is like-for-like.",
+            "Haiku's spend, including the cache write, is included in this version's cost.",
             # replaced with this audit's measured answer quality by _apply_measured_claims
-            "The answering model sees only the retrieved chunks, so a clause retrieval misses can't be cited or used.",
-            # replaced with the rerun's measured before -> after by _apply_measured_claims
-            "Since 2026-11-26 this version's answer prompt says to report a missing term as 'not in the text provided' "
-            "instead of saying the documents lack it, because it sees only the retrieved clauses.",
+            "The answering model sees only the picked clauses, so a clause Haiku does not pick can't be cited or used.",
+            "Because it sees only the picked clauses, its answer prompt tells it to say when a term is not in the "
+            "text provided.",
         ],
     )
 
@@ -205,6 +194,31 @@ def _enrich_citations(
     return out
 
 
+def _cold_warm(fin: FinOpsBreakdown | None, q_idx: int) -> tuple[float, float]:
+    """(cold, warm) for one call: a call with a cached prefix writes it on the audit's first question and reads it
+    after (cold), or reads it on every question (warm). A call without cache tokens costs the same in both views."""
+    if fin is None:
+        return 0.0, 0.0
+    prefix = fin.cache_creation_tokens + fin.cache_read_tokens
+    if prefix <= 0:
+        return fin.total_cost_usd, fin.total_cost_usd
+    cold = compute_run_finops(
+        model_id=fin.model_id,
+        input_tokens=fin.input_tokens,
+        output_tokens=fin.output_tokens,
+        cache_creation_tokens=prefix if q_idx == 0 else 0,
+        cache_read_tokens=0 if q_idx == 0 else prefix,
+    )
+    warm = compute_run_finops(
+        model_id=fin.model_id,
+        input_tokens=fin.input_tokens,
+        output_tokens=fin.output_tokens,
+        cache_creation_tokens=0,
+        cache_read_tokens=prefix,
+    )
+    return cold.total_cost_usd, warm.total_cost_usd
+
+
 def compute_cat4_cold_warm_costs(
     *,
     rung_id: str,
@@ -212,31 +226,10 @@ def compute_cat4_cold_warm_costs(
     synth_finops: FinOpsBreakdown,
     rerank_finops: FinOpsBreakdown | None,
 ) -> tuple[float, float]:
-    """Return (cold_query_cost_usd, warm_query_cost_usd) normalized cleanly for cache state."""
-    rerank_cost = rerank_finops.total_cost_usd if rerank_finops else 0.0
-    if rung_id != "cached_full_corpus_citations":
-        tot = round(synth_finops.total_cost_usd + rerank_cost, 8)
-        return tot, tot
-
-    prefix_tok = synth_finops.cache_creation_tokens + synth_finops.cache_read_tokens
-    if prefix_tok <= 0:
-        return synth_finops.total_cost_usd, synth_finops.total_cost_usd
-
-    cold_fin = compute_run_finops(
-        model_id=synth_finops.model_id,
-        input_tokens=synth_finops.input_tokens,
-        output_tokens=synth_finops.output_tokens,
-        cache_creation_tokens=prefix_tok if q_idx == 0 else 0,
-        cache_read_tokens=0 if q_idx == 0 else prefix_tok,
-    )
-    warm_fin = compute_run_finops(
-        model_id=synth_finops.model_id,
-        input_tokens=synth_finops.input_tokens,
-        output_tokens=synth_finops.output_tokens,
-        cache_creation_tokens=0,
-        cache_read_tokens=prefix_tok,
-    )
-    return cold_fin.total_cost_usd, warm_fin.total_cost_usd
+    """Return (cold_query_cost_usd, warm_query_cost_usd) normalized cleanly for cache state (synthesis + rerank)."""
+    s_cold, s_warm = _cold_warm(synth_finops, q_idx)
+    r_cold, r_warm = _cold_warm(rerank_finops, q_idx)
+    return round(s_cold + r_cold, 8), round(s_warm + r_warm, 8)
 
 
 def persist_cat4_trace(
@@ -372,34 +365,11 @@ def _frac(m: Any) -> str:
     return f"{m.hits}/{m.total}" if m is not None else "n/a"
 
 
-def _portfolio_cell(portfolio: Cat4QualityPortfolio | None, rung_id: str, scale: int,
-                    *, adopted: bool = True) -> Cat4PortfolioCell | None:
-    """The rerun cell for (rung, scale) in the rung's current answer format, or its 'before' (original) cell."""
+def _portfolio_cell(portfolio: Cat4QualityPortfolio | None, rung_id: str, scale: int) -> Cat4PortfolioCell | None:
+    """The rerun cell for (rung, scale)."""
     if portfolio is None:
         return None
-    return next((c for c in portfolio.cells if c.rung_id == rung_id and c.scale == scale and c.adopted == adopted), None)
-
-
-def _format_change_text(portfolio: Cat4QualityPortfolio | None, rung_id: str) -> str | None:
-    """Measured before -> now for a rung whose answer format changed (None without both cells at both sizes)."""
-    pairs = [(_portfolio_cell(portfolio, rung_id, sc, adopted=False), _portfolio_cell(portfolio, rung_id, sc)) for sc in (1, 3)]
-    if not all(b and n and b.answer_format != n.answer_format and b.answers_with_documents_lack_claim
-               and n.answers_with_documents_lack_claim and b.answers_with_material_error and n.answers_with_material_error
-               and b.correctness_mean is not None and n.correctness_mean is not None for b, n in pairs):
-        return None
-    (b1, n1), (b3, n3) = pairs
-    date = portfolio.format_change.adopted_on if portfolio and portfolio.format_change else "2026-11-26"
-    return (
-        f"Since {date} this version's answer prompt says to report a missing term as 'not in the text provided' instead "
-        f"of saying the documents lack it. In the rerun ({n1.answers} answers per corpus size, before → now, separate "
-        f"sessions): answers saying the documents lack something {b1.answers_with_documents_lack_claim.hits} → "
-        f"{n1.answers_with_documents_lack_claim.hits} (7 documents) and {b3.answers_with_documents_lack_claim.hits} → "
-        f"{n3.answers_with_documents_lack_claim.hits} (21 documents); answers with a serious error "
-        f"{b1.answers_with_material_error.hits} → {n1.answers_with_material_error.hits} and "
-        f"{b3.answers_with_material_error.hits} → {n3.answers_with_material_error.hits}; grader correctness "
-        f"{b1.correctness_mean:.2f} → {n1.correctness_mean:.2f} and {b3.correctness_mean:.2f} → {n3.correctness_mean:.2f}. "
-        "The full-corpus versions were not changed or re-measured."
-    )
+    return next((c for c in portfolio.cells if c.rung_id == rung_id and c.scale == scale), None)
 
 
 def _audit_quality_text(res: Cat4RungSummary) -> str | None:
@@ -412,7 +382,7 @@ def _audit_quality_text(res: Cat4RungSummary) -> str | None:
     if a.citations_requested and a.citations_at_expected is not None:
         parts.append(f"{_frac(a.citations_at_expected)} citations pointed at the expected clauses")
     if a.retrieval_recall is not None:
-        parts.append(f"retrieval found {_frac(a.retrieval_recall)} expected clauses")
+        parts.append(f"the picked clauses held {_frac(a.retrieval_recall)} expected clauses")
     if a.judged:
         parts.append(
             f"the blind grader gave {a.correctness_mean:.2f}/5 for correctness and found a serious error in "
@@ -428,8 +398,7 @@ def _apply_measured_claims(
     """Rewrite result-dependent rung badges/notes with numbers measured on this audit (and the rerun)."""
     ok = {r.rung_id: r for r in results if r.status == "ok" and r.queries}
     naive = ok.get("naive_full_corpus")
-    cached = ok.get("cached_full_corpus_citations")
-    hybrid = ok.get("hybrid_rag_rerank_citations")
+    paired = ok.get(PAIRED_RUNG)
     if naive:
         per_q = round(naive.total_uncached_input_tokens / len(naive.queries))
         set_note(
@@ -438,34 +407,32 @@ def _apply_measured_claims(
             f"Sends all 7 Deal-Room documents ({per_q:,} prompt tok per query) as plain uncached user text "
             "on every query ($2.00/M input).",
         )
-    if cached:
-        prompt = cached.total_uncached_input_tokens + cached.total_cache_creation_tokens + cached.total_cache_read_tokens
-        if prompt > 0 and cached.total_cache_read_tokens > 0:
-            cached.badge_text = (
-                f"Lever 1: {fmt_pct(cached.total_cache_read_tokens / prompt * 100)} of Prompt Tokens from Cache + Citations"
+    if paired:
+        avg_red = sum(q.context_reduction_pct for q in paired.queries) / len(paired.queries)
+        paired.badge_text = f"With the improvement: ~{fmt_pct(avg_red)} of Corpus Not Sent to Sonnet + Citations"
+        block = max(
+            (q.reranker_finops.cache_creation_tokens + q.reranker_finops.cache_read_tokens
+             for q in paired.queries if q.reranker_finops),
+            default=0,
+        )
+        if block:
+            set_note(
+                paired,
+                0,
+                f"Haiku 5.5 reads all 28 deal-room clauses from one cached ~{block:,}-tok block (the first question "
+                "writes it, later questions read it) and picks the 5 it judges most relevant; Sonnet 5.5 answers over those 5 "
+                "with native citations.",
             )
-    if hybrid:
-        avg_red = sum(q.context_reduction_pct for q in hybrid.queries) / len(hybrid.queries)
-        hybrid.badge_text = f"Lever 2: ~{fmt_pct(avg_red)} of Corpus Not Sent + Citations"
-        synth_prompt = round(
-            sum(q.finops.input_tokens + q.finops.cache_creation_tokens + q.finops.cache_read_tokens for q in hybrid.queries)
-            / len(hybrid.queries)
-        )
-        set_note(
-            hybrid,
-            0,
-            "Deterministic BM25 retrieves top-10 of 28 clauses; Haiku 5.5 ($0.10/M) reranks them to 5 chunks "
-            f"for Sonnet synthesis (~{synth_prompt:,}-tok synthesis prompt).",
-        )
-        cut = pct_cut(naive.single_query_cold_per_1k_usd, hybrid.single_query_cold_per_1k_usd) if naive else None
+        cut = pct_cut(naive.single_query_cold_per_1k_usd, paired.single_query_cold_per_1k_usd) if naive else None
         if cut is not None:
             set_note(
-                hybrid,
+                paired,
                 1,
-                f"100% of Haiku reranker spend is included here — cuts single cold-query cost {fmt_pct(cut)} vs Rung 1.",
+                f"Haiku's spend, including the cache write, is included in this version's cost — a single cold "
+                f"question costs {fmt_pct(cut)} less than without the improvement.",
             )
-    # note 2 of every rung: this audit's quality (+ the rerun at the larger corpus for the two levers)
-    for res in (naive, cached, hybrid):
+    # note 2 of both versions: this audit's quality (+ the rerun at the larger corpus)
+    for res in (naive, paired):
         if res is None:
             continue
         text = _audit_quality_text(res)
@@ -475,13 +442,9 @@ def _apply_measured_claims(
         if cell is not None and cell.judged and cell.answers_with_material_error is not None:
             extra = f" In the rerun with a 3× corpus (two other suppliers' look-alike contracts added), {cell.answers_with_material_error.hits}/{cell.judged} answers had a serious error"
             if cell.recall_after_rerank is not None:
-                extra += f" and retrieval kept {fmt_pct((cell.recall_after_rerank.rate or 0) * 100)} of the expected clauses after reranking"
+                extra += f" and Haiku's picks held {fmt_pct((cell.recall_after_rerank.rate or 0) * 100)} of the expected clauses"
             text += extra + "."
         set_note(res, 2, text)
-    if hybrid:
-        change = _format_change_text(portfolio, "hybrid_rag_rerank_citations")
-        if change:
-            set_note(hybrid, 3, change)
 
 
 def _apply_cross_rung_savings(results: list[Cat4RungSummary]) -> None:
@@ -517,8 +480,8 @@ async def _run_live_cat4_query_for_rung(
 ) -> tuple[Cat4QueryResult, dict[str, Any]]:
     doc_by_id = {d["doc_id"]: d for d in hydrated_docs}
     q_text = str(q_spec["question"])
-    # The question as the models receive it: the supplier-scope line + the original text, in the BM25 query, the
-    # reranker query and the synthesis message (as in the quality rerun). `question` stays the original text.
+    # The question as the models receive it: the supplier-scope line + the original text, in the clause-pick query
+    # and the synthesis message (as in the quality rerun). `question` stays the original text.
     q_asked = scoped_question(q_text)
     expected_docs = list(q_spec.get("expected_doc_ids") or [])
     expected_chunks = list(q_spec.get("expected_chunk_ids") or [])
@@ -530,7 +493,6 @@ async def _run_live_cat4_query_for_rung(
     rerank_payload_text: str | None = None
     rerank_raw_structured: dict[str, Any] | None = None
     funnel: list[Cat4RetrievalChunkTrace] = []
-    bm25_recall: float | None = None
     rerank_recall: float | None = None
     doc_blocks: list[dict[str, Any]] | None = None
     uncached_text: str | None = None
@@ -539,19 +501,15 @@ async def _run_live_cat4_query_for_rung(
 
     if rung_id == "naive_full_corpus":
         uncached_text = build_uncached_corpus_text(hydrated_docs)
-    elif rung_id == "cached_full_corpus_citations":
-        doc_blocks = build_rung2_doc_blocks(hydrated_docs)
-        use_cache = True
-    else:
-        bm25_ranked = rank_chunks_bm25(q_asked, flat_chunks, top_k=BM25_TOP_K)
-        candidates = [c for c in bm25_ranked if c["is_bm25_candidate"]]
-        rerank_payload_text = build_reranker_payload(q_asked, candidates)
+    elif rung_id == PAIRED_RUNG:
+        rerank_payload_text = q_asked
         rerank_raw = await run_cat4_haiku_reranker(
-            rerank_payload=rerank_payload_text,
-            system_prompt=get_cat4_haiku_reranker_system_prompt(),
+            rerank_payload="",
+            system_prompt=get_full_corpus_reranker_system_prompt(),
             schema=RERANK_JSON_SCHEMA,
             api_key=api_key,
             max_tokens=CAT4_RERANK_MAX_TOKENS,
+            user_content=build_rerank_content(flat_chunks, q_asked),
         )
         rerank_latency = rerank_raw.latency_ms
         rerank_stop = rerank_raw.stop_reason
@@ -559,21 +517,21 @@ async def _run_live_cat4_query_for_rung(
             model_id=rerank_raw.model_id,
             input_tokens=rerank_raw.input_tokens,
             output_tokens=rerank_raw.output_tokens,
+            cache_creation_tokens=rerank_raw.cache_creation_tokens,
+            cache_read_tokens=rerank_raw.cache_read_tokens,
         )
         rerank_raw_structured = rerank_raw.structured
-        selected_chunks, funnel_dicts, bm25_recall, rerank_recall = merge_rerank_funnel(
-            bm25_ranked=bm25_ranked,
-            reranker_structured=rerank_raw.structured,
-            expected_chunk_ids=expected_chunks,
-            top_k_rerank=RERANK_TOP_K,
-        )
+        selected_chunks, _invalid = select_picked_chunks({c["chunk_id"]: c for c in flat_chunks}, rerank_raw.structured)
+        funnel_dicts, rerank_recall = picked_funnel(selected_chunks, rerank_raw.structured, expected_chunks)
         funnel = [Cat4RetrievalChunkTrace(**fd) for fd in funnel_dicts]
         doc_blocks = build_rung3_chunk_blocks(selected_chunks)
         ctx_chars_sent = sum(len(b["data"]) for b in doc_blocks)
+    else:
+        raise ValueError(f"Unknown Category 4 rung `{rung_id}`")
 
     with_citations = doc_blocks is not None
     synth_raw = await run_cat4_rag_synthesis(
-        # per-rung prompt (answer_formats.ADOPTED_ANSWER_FORMAT): retrieval rung = scoped_absence, others = legacy
+        # per-rung prompt (answer_formats.RUNG_ANSWER_FORMAT)
         system_prompt=rung_synthesis_system_prompt(rung_id, with_citations=with_citations),
         user_question=q_asked,
         documents_for_blocks=doc_blocks,
@@ -612,7 +570,7 @@ async def _run_live_cat4_query_for_rung(
     ctx_tokens_sent = fin.input_tokens + fin.cache_creation_tokens + fin.cache_read_tokens
     reduction_pct = (
         round(((total_corpus_chars - ctx_chars_sent) / total_corpus_chars) * 100, 1)
-        if total_corpus_chars > 0 and rung_id == "hybrid_rag_rerank_citations"
+        if total_corpus_chars > 0 and rung_id == PAIRED_RUNG
         else 0.0
     )
 
@@ -638,7 +596,6 @@ async def _run_live_cat4_query_for_rung(
         reranker_latency_ms=rerank_latency,
         reranker_stop_reason=rerank_stop,
         retrieval_funnel=funnel,
-        bm25_recall_pct=bm25_recall,
         reranker_recall_pct=rerank_recall,
         context_tokens_sent=ctx_tokens_sent or full_est_tokens,
         context_reduction_pct=reduction_pct,
@@ -653,7 +610,7 @@ async def _run_live_cat4_query_for_rung(
         "latency_ms": synth_raw.latency_ms,
         "stop_reason": synth_raw.stop_reason,
         "max_tokens": CAT4_SYNTH_MAX_TOKENS,
-        "answer_format": adopted_answer_format(rung_id),
+        "answer_format": rung_answer_format(rung_id),
         "input_tokens": synth_raw.input_tokens,
         "output_tokens": synth_raw.output_tokens,
         "cache_creation_tokens": synth_raw.cache_creation_tokens,
@@ -668,10 +625,11 @@ async def _run_live_cat4_query_for_rung(
         "reranker_latency_ms": rerank_latency,
         "reranker_input_tokens": rerank_finops.input_tokens if rerank_finops else 0,
         "reranker_output_tokens": rerank_finops.output_tokens if rerank_finops else 0,
+        "reranker_cache_creation_tokens": rerank_finops.cache_creation_tokens if rerank_finops else 0,
+        "reranker_cache_read_tokens": rerank_finops.cache_read_tokens if rerank_finops else 0,
         "reranker_payload": rerank_payload_text,
         "reranker_structured": rerank_raw_structured,
         "retrieval_funnel": [f.model_dump() for f in funnel],
-        "bm25_recall_pct": bm25_recall,
         "reranker_recall_pct": rerank_recall,
     }
     return q_res, raw_record
@@ -686,7 +644,7 @@ async def _run_live_cat4_audit_for_rung(
     total_corpus_chars: int,
     api_key: str,
 ) -> tuple[Cat4RungSummary, list[dict[str, Any]]]:
-    """Run all 4 questions sequentially for one rung (preserving Rung 2 prefix cache chain)."""
+    """Run all 4 questions sequentially for one rung (so later questions read the cache the first one wrote)."""
     q_results: list[Cat4QueryResult] = []
     raw_records: list[dict[str, Any]] = []
     used_model = "claude-sonnet-5-5"
@@ -736,11 +694,13 @@ def _build_cat4_summary_from_replay(
             cache_read_tokens=int(rq.get("cache_read_tokens") or 0),
         )
         rerank_fin: FinOpsBreakdown | None = None
-        if int(rq.get("reranker_input_tokens") or 0) > 0:
+        if int(rq.get("reranker_input_tokens") or 0) > 0 or rq.get("reranker_model_id"):
             rerank_fin = compute_run_finops(
                 model_id=str(rq.get("reranker_model_id") or "claude-haiku-5-5"),
-                input_tokens=int(rq["reranker_input_tokens"]),
-                output_tokens=int(rq["reranker_output_tokens"]),
+                input_tokens=int(rq.get("reranker_input_tokens") or 0),
+                output_tokens=int(rq.get("reranker_output_tokens") or 0),
+                cache_creation_tokens=int(rq.get("reranker_cache_creation_tokens") or 0),
+                cache_read_tokens=int(rq.get("reranker_cache_read_tokens") or 0),
             )
         cold_cost, warm_cost = compute_cat4_cold_warm_costs(
             rung_id=rung_id,
@@ -761,7 +721,7 @@ def _build_cat4_summary_from_replay(
         ctx_chars = int(rq.get("context_chars_sent") or total_corpus_chars)
         reduction_pct = (
             round(((total_corpus_chars - ctx_chars) / total_corpus_chars) * 100, 1)
-            if total_corpus_chars > 0 and rung_id == "hybrid_rag_rerank_citations"
+            if total_corpus_chars > 0 and rung_id == PAIRED_RUNG
             else 0.0
         )
 
@@ -790,7 +750,6 @@ def _build_cat4_summary_from_replay(
                 retrieval_funnel=[
                     Cat4RetrievalChunkTrace(**f) for f in (rq.get("retrieval_funnel") or [])
                 ],
-                bm25_recall_pct=rq.get("bm25_recall_pct"),
                 reranker_recall_pct=rq.get("reranker_recall_pct"),
                 context_tokens_sent=fin.input_tokens + fin.cache_creation_tokens + fin.cache_read_tokens,
                 context_reduction_pct=reduction_pct,
@@ -855,26 +814,26 @@ def _persist_cat4_rung_traces(
         },
         request_params={
             "endpoint": "messages.create",
-            "prefix_cache_enabled": res.rung_id == "cached_full_corpus_citations",
+            "prefix_cache_enabled": res.rung_id == PAIRED_RUNG,
             "native_document_citations": res.rung_id != "naive_full_corpus",
             "queries": len(res.queries),
             "max_tokens": CAT4_SYNTH_MAX_TOKENS,
-            "answer_format": res.answer_format or adopted_answer_format(res.rung_id),
+            "answer_format": rung_answer_format(res.rung_id),
         },
         stop_reason=_rollup_stop_reason([q.stop_reason for q in res.queries]),
         extra_metadata={"source_endpoint": source_endpoint, "rung_id": res.rung_id},
     )
-    if res.rung_id == "hybrid_rag_rerank_citations":
+    if res.rung_id == PAIRED_RUNG:
         for q in res.queries:
             if q.reranker_finops:
                 persist_cat4_trace(
                     source_mode=source_mode,
                     run_group_id=run_group_id,
                     item_id=f"{item_prefix}__{q.question_id}_rerank",
-                    item_title=f"{preset_title} · Haiku Rerank ({q.question_id})",
+                    item_title=f"{preset_title} · Haiku Clause Pick ({q.question_id})",
                     model_id=q.reranker_finops.model_id,
                     pattern=RERANKER_PATTERN,
-                    system_instruction=get_cat4_haiku_reranker_system_prompt(),
+                    system_instruction=get_full_corpus_reranker_system_prompt(),
                     payload_text=(rerank_payloads or {}).get(q.question_id, q.question),
                     status="ok",
                     latency_ms=q.reranker_latency_ms,
@@ -897,6 +856,7 @@ def _persist_cat4_rung_traces(
                         "max_tokens": CAT4_RERANK_MAX_TOKENS,
                         "thinking": {"type": "disabled"},
                         "output_config": {"format": {"type": "json_schema"}},
+                        "cached_clause_block": True,
                     },
                     json_schema=RERANK_JSON_SCHEMA,
                     stop_reason=q.reranker_stop_reason,
@@ -923,15 +883,15 @@ LIVE_GRADER_REASON = (
 
 
 def _replay_billing_note(preset_trace: dict[str, Any]) -> str | None:
-    """Honest billing note when the recorded cached rung's first question READ a cache another audit wrote."""
-    qs = (preset_trace.get("rungs") or {}).get("cached_full_corpus_citations") or []
+    """Billing note when the recorded paired version's first question READ a cache another audit wrote."""
+    qs = (preset_trace.get("rungs") or {}).get(PAIRED_RUNG) or []
     if not qs:
         return None
     first = qs[0]
-    if int(first.get("cache_creation_tokens") or 0) == 0 and int(first.get("cache_read_tokens") or 0) > 0:
+    if int(first.get("reranker_cache_creation_tokens") or 0) == 0 and int(first.get("reranker_cache_read_tokens") or 0) > 0:
         return (
             "Recorded billing: this audit ran in the same session right after the other audit, so its first question "
-            "read the document cache that audit had written — no cache write was billed here. The cold-audit figures "
+            "read the clause cache that audit had written — no cache write was billed here. The cold-audit figures "
             "model a fresh cache write for this audit."
         )
     return None
@@ -939,54 +899,43 @@ def _replay_billing_note(preset_trace: dict[str, Any]) -> str | None:
 
 def _cat4_callout(
     naive: Cat4RungSummary | None,
-    cached: Cat4RungSummary | None,
-    hybrid: Cat4RungSummary | None,
+    paired: Cat4RungSummary | None,
     *,
     total_chars: int,
     portfolio: Cat4QualityPortfolio | None,
 ) -> str:
-    if not (naive and cached and hybrid):
+    if not (naive and paired):
         return (
-            "Category 4 contrasts Uncached Full-Corpus Stuffing vs. Document-Block Prefix Caching + Native Citations "
-            "vs. Hybrid BM25 + Haiku 5.5 Reranking + Native Citations."
+            "Category 4 compares the deal-room audit without the improvement (full corpus, no cache, no citations) "
+            "and with it (Haiku picks 5 clauses from the cached corpus; Sonnet answers with citations)."
         )
+    red = sum(q.context_reduction_pct for q in paired.queries) / len(paired.queries)
     text = (
-        f"4-question deal-room audit (7 documents · {round(total_chars / 2.4):,} est. tok): uncached full-corpus "
-        f"stuffing costs ${naive.cost_per_1k_audits_cold_usd:.2f}/1k audits and returns no citations. Caching the "
-        f"corpus with native citations costs ${cached.cost_per_1k_audits_cold_usd:.2f}/1k from a cold cache "
-        f"(${cached.cost_per_1k_audits_warm_usd:.2f}/1k warm). BM25 + Haiku rerank sends "
-        f"~{sum(q.context_reduction_pct for q in hybrid.queries) / len(hybrid.queries):.0f}% less of the corpus to the "
-        f"answering model for ${hybrid.cost_per_1k_audits_cold_usd:.2f}/1k (Haiku rerank included)."
+        f"4-question deal-room audit (7 documents · {round(total_chars / 2.4):,} est. tok): without the improvement "
+        f"(full corpus, no cache) it costs ${naive.cost_per_1k_audits_cold_usd:.2f}/1k audits and returns no "
+        f"citations. With retrieval paired with caching, Sonnet sees ~{red:.0f}% less of the corpus and the audit costs "
+        f"${paired.cost_per_1k_audits_cold_usd:.2f}/1k from a cold cache (${paired.cost_per_1k_audits_warm_usd:.2f}/1k "
+        "warm), Haiku included."
     )
-    qs = [(r, r.quality) for r in (naive, cached, hybrid)]
+    qs = [("Without", naive.quality), ("With", paired.quality)]
     if all(q is not None and q.audit.judged for _, q in qs):
         text += (
             " Answer quality on this audit (key facts stated · grader correctness · answers with a serious error): "
             + "; ".join(
-                f"Rung {i + 1} {_frac(q.audit.key_facts)} · {q.audit.correctness_mean:.2f}/5 · {q.audit.answers_with_material_error}/{q.audit.judged}"
-                for i, (_, q) in enumerate(qs)
+                f"{label} {_frac(q.audit.key_facts)} · {q.audit.correctness_mean:.2f}/5 · "
+                f"{q.audit.answers_with_material_error}/{q.audit.judged}"
+                for label, q in qs
+                if q is not None
             )
             + "."
         )
-    c3 = _portfolio_cell(portfolio, "cached_full_corpus_citations", 3)
-    h3 = _portfolio_cell(portfolio, "hybrid_rag_rerank_citations", 3)
-    h3_before = _portfolio_cell(portfolio, "hybrid_rag_rerank_citations", 3, adopted=False)
-    if c3 and h3 and c3.answers_with_material_error and h3.answers_with_material_error:
+    n3 = _portfolio_cell(portfolio, "naive_full_corpus", 3)
+    p3 = _portfolio_cell(portfolio, PAIRED_RUNG, 3)
+    if n3 and p3 and n3.answers_with_material_error and p3.answers_with_material_error:
         text += (
-            f" In the rerun with a 3× corpus, {c3.answers_with_material_error.hits}/{c3.judged} cached full-corpus "
-            f"answers had a serious error vs {h3.answers_with_material_error.hits}/{h3.judged} with retrieval"
+            f" In the rerun with a 3× corpus, {n3.answers_with_material_error.hits}/{n3.judged} answers had a serious "
+            f"error without the improvement vs {p3.answers_with_material_error.hits}/{p3.judged} with it."
         )
-        if h3_before and h3_before.answers_with_material_error and h3_before.answer_format != h3.answer_format:
-            date = portfolio.format_change.adopted_on if portfolio and portfolio.format_change else "2026-11-26"
-            lack_b, lack_n = h3_before.answers_with_documents_lack_claim, h3.answers_with_documents_lack_claim
-            text += (
-                f" — {h3_before.answers_with_material_error.hits}/{h3_before.judged} before the retrieval version's answer "
-                f"format changed on {date}"
-                + (f" (answers saying the documents lack something: {lack_b.hits} → {lack_n.hits})" if lack_b and lack_n else "")
-                + ". The full-corpus versions were not changed or re-measured."
-            )
-        else:
-            text += "."
     return text
 
 
@@ -1027,8 +976,6 @@ async def execute_cat4_run(
                 raw_queries=r_queries,
                 total_corpus_chars=total_chars,
             )
-            # the recording's format (golden provenance); recordings from before answer formats were the legacy prompt
-            summary.answer_format = str(((preset_trace.get("provenance") or {}).get(rung_id) or {}).get("answer_format") or "original")
             summary.quality, summary.quality_unavailable_reason = build_rung_quality(
                 summary.queries,
                 rung_id=rung_id,
@@ -1043,7 +990,6 @@ async def execute_cat4_run(
         creds = credit_shield.resolve_live_credentials(
             http_request,
             need_anthropic=True,
-            need_gemini=False,
         )
         assert creds.anthropic_api_key
 
@@ -1061,7 +1007,6 @@ async def execute_cat4_run(
                     summary.queries, rung_id=rid, preset_id=preset["id"], judgements=None,
                     grader_unavailable_reason=LIVE_GRADER_REASON,
                 )
-                summary.answer_format = adopted_answer_format(rid)
                 return summary
             except Exception as exc:
                 return finalize_cat4_rung_summary(
@@ -1094,15 +1039,8 @@ async def execute_cat4_run(
         )
 
     naive = next((r for r in results if r.rung_id == "naive_full_corpus" and r.status == "ok"), None)
-    cached = next(
-        (r for r in results if r.rung_id == "cached_full_corpus_citations" and r.status == "ok"),
-        None,
-    )
-    hybrid = next(
-        (r for r in results if r.rung_id == "hybrid_rag_rerank_citations" and r.status == "ok"),
-        None,
-    )
-    callout = _cat4_callout(naive, cached, hybrid, total_chars=total_chars, portfolio=portfolio)
+    paired = next((r for r in results if r.rung_id == PAIRED_RUNG and r.status == "ok"), None)
+    callout = _cat4_callout(naive, paired, total_chars=total_chars, portfolio=portfolio)
 
     return Cat4RunResponse(
         mode_used=mode_used,  # type: ignore[arg-type]
@@ -1129,8 +1067,8 @@ async def execute_cat4_adhoc_query(
         raise HTTPException(
             status_code=400,
             detail=(
-                "Custom Deal-Room questions execute live BM25 + Haiku 5.5 reranking and native Anthropic "
-                "DocumentBlock citations. Switch Credit Shield to Live API mode to ask ad-hoc questions."
+                "Custom Deal-Room questions run live: Haiku 5.5 picks clauses from the cached corpus and Sonnet 5.5 "
+                "answers with native citations. Switch Credit Shield to Live API mode to ask ad-hoc questions."
             ),
         )
     q_text = req.question.strip()
@@ -1143,7 +1081,6 @@ async def execute_cat4_adhoc_query(
     creds = credit_shield.resolve_live_credentials(
         http_request,
         need_anthropic=True,
-        need_gemini=False,
     )
     assert creds.anthropic_api_key
 
@@ -1178,7 +1115,6 @@ async def execute_cat4_adhoc_query(
                 summary.queries, rung_id=rid, preset_id=req.preset_id, judgements=None,
                 grader_unavailable_reason=LIVE_GRADER_REASON,
             )
-            summary.answer_format = adopted_answer_format(rid)
             return summary
         except Exception as exc:
             return finalize_cat4_rung_summary(

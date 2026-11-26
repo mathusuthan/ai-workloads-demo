@@ -208,8 +208,8 @@ def test_probe_answer_classification(answer: str, hit: bool, outcome: str) -> No
 
 def test_portfolio_loads_and_falls_back_to_none(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     pf = runner.load_cat3_quality_portfolio()
-    assert pf is not None and pf.runs == 18 and {r.runs for r in pf.rungs} == {6}
-    assert {r.rung_id for r in pf.rungs} == {"naive_full_history", "prefix_cached_history", "prefix_cached_summarized"}
+    assert pf is not None and pf.runs == 12 and {r.runs for r in pf.rungs} == {6}
+    assert {r.rung_id for r in pf.rungs} == {"naive_full_history", "prefix_cached_summarized"}
 
     class _S:
         replays_dir = str(tmp_path)

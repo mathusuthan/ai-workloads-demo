@@ -1,11 +1,11 @@
-"""Score Category 3 quality-rerun records and the original golden capture against the answer key.
+"""Score the Category 3 quality-rerun records against the answer key: without vs with the deck improvement.
 
 Usage (from backend/):
     .venv/bin/python scripts/analyze_cat3_quality.py
     .venv/bin/python scripts/analyze_cat3_quality.py --in path/to/runs.jsonl --repeats 3
 
-Works with zero rerun records (the "original capture" tables come from replays/cat3_golden_replays.json).
-Writes <project>/analysis/cat3_quality_rerun.md and .json. Factual tables only.
+Without = full history, no cache (`naive_full_history`); with = cached prefix + sliding-window summaries
+(`prefix_cached_summarized`). Writes <project>/analysis/cat3_quality_rerun.md and .json. Factual tables only.
 """
 
 from __future__ import annotations
@@ -33,7 +33,6 @@ from app.archetypes.cat3_assistants.quality_rerun import (  # noqa: E402
 )
 
 DEFAULT_IN = BACKEND_DIR / "experiments" / "cat3_quality" / "runs.jsonl"
-DEFAULT_GOLDEN = BACKEND_DIR / "replays" / "cat3_golden_replays.json"
 DEFAULT_OUT_MD = PROJECT_DIR / "analysis" / "cat3_quality_rerun.md"
 
 
@@ -49,6 +48,16 @@ def load_records(path: Path) -> list[dict[str, Any]]:
         except json.JSONDecodeError:
             print(f"WARNING: skipping malformed JSONL line {lineno} in {path}", file=sys.stderr)
     return records
+
+
+LABELS = {
+    "naive_full_history": "Without: full history, no cache",
+    "prefix_cached_summarized": "With: cached prefix + sliding-window summaries",
+}
+
+
+def _label(rung_id: str) -> str:
+    return f"{LABELS.get(rung_id, rung_id)} (`{rung_id}`)"
 
 
 def _p(x: dict[str, Any]) -> str:
@@ -107,21 +116,20 @@ def _quality_tables(lines: list[str], groups: list[tuple[str, dict[str, Any]]], 
         add("")
 
 
-def render_markdown(s: dict[str, Any], *, in_path: Path, golden_path: Path) -> str:
+def render_markdown(s: dict[str, Any], *, in_path: Path) -> str:
     lines: list[str] = []
     add = lines.append
     rr = s["rerun"]
     rungs = s["rung_ids"]
     presets = s["preset_ids"]
 
-    add("# Category 3 quality rerun — results")
+    add("# Category 3 — without vs with a cached prefix + sliding-window summaries")
     add("")
     add(f"Generated: {s['generated_at']} · answer key `{s['keys_version']}` (`{KEYS_PATH.name}`)")
     add("")
     add(
-        f"Rerun records: {rr['record_count']} read from `{in_path}` · ok runs used (latest ok per key): "
-        f"{rr['ok_runs_used']} · superseded ok: {rr['superseded_ok_records']} · error records: {rr['error_records']}. "
-        f"Original capture: `{golden_path.name}` ({len(s['original_capture']['cells'])} rung × session cells, n=1 each)."
+        f"Records: {rr['record_count']} read from `{in_path}`; {rr['ok_runs_used']} sessions used (latest ok per "
+        "rung, session and repeat). Both versions run on Claude Sonnet 5.5."
     )
     add("")
     add(
@@ -143,7 +151,7 @@ def render_markdown(s: dict[str, Any], *, in_path: Path, golden_path: Path) -> s
         )
     add("")
 
-    add("## Fresh reruns — quality per rung (pooled over sessions and repeats)")
+    add("## Quality — without vs with (pooled over sessions and repeats)")
     add("")
     if rr["ok_runs_used"] == 0:
         add(f"No ok rerun records found in `{in_path}`.")
@@ -151,39 +159,25 @@ def render_markdown(s: dict[str, Any], *, in_path: Path, golden_path: Path) -> s
     else:
         m = rr["matrix"]
         add(
-            f"Matrix: {len(rungs)} rungs × {len(presets)} sessions × {rr['expected_repeats']} repeats = "
+            f"Matrix: {len(rungs)} versions × {len(presets)} sessions × {rr['expected_repeats']} repeats = "
             f"{m['expected_runs']} runs ({'complete' if m['complete'] else 'INCOMPLETE'}, "
             f"{'balanced' if m['balanced'] else 'UNBALANCED'})."
         )
         add("")
-        _quality_tables(lines, [(f"`{r}`", rr["rungs"][r]["quality"]) for r in rungs], probes=True)
-        add("### Per rung × session")
+        _quality_tables(lines, [(_label(r), rr["rungs"][r]["quality"]) for r in rungs], probes=True)
+        add("### Per version × session")
         add("")
         _quality_tables(
             lines,
-            [(f"`{r}` {p}", rr["rungs"][r]["by_preset"][p]["quality"]) for r in rungs for p in presets],
+            [(f"{LABELS.get(r, r)} · {p}", rr["rungs"][r]["by_preset"][p]["quality"]) for r in rungs for p in presets],
             probes=True,
         )
 
-    add("## Original capture (golden replays, n=1 per cell) — quality")
-    add("")
-    oc = s["original_capture"]["rungs"]
-    _quality_tables(lines, [(f"`{r}`", oc[r]["quality"]) for r in rungs], probes=False)
-    add("### Per rung × session")
-    add("")
-    _quality_tables(
-        lines,
-        [(f"`{r}` {p}", oc[r]["by_preset"][p]["quality"]) for r in rungs for p in presets if p in oc[r]["by_preset"]],
-        probes=False,
-    )
-    add("The original capture has no probes (they were not asked at capture time).")
-    add("")
-
     if rr["ok_runs_used"]:
-        add("## Fresh reruns — cost, tokens and context")
+        add("## Cost, tokens and context")
         add("")
         add(
-            "| Rung | Runs | Session billed $/session | Session warm $/session | Session billed $/1k | "
+            "| Version | Runs | Session billed $/session | Session warm $/session | Session billed $/1k | "
             "Session warm $/1k | Probe-phase billed $/run | Probe-phase warm $/run |"
         )
         add("|---|---|---|---|---|---|---|---|")
@@ -197,7 +191,7 @@ def render_markdown(s: dict[str, Any], *, in_path: Path, golden_path: Path) -> s
             )
         add("")
         add(
-            "| Rung | Turn prompt tok/session | Turn output tok/session | Compaction prompt tok | Compaction output tok | "
+            "| Version | Turn prompt tok/session | Turn output tok/session | Compaction prompt tok | Compaction output tok | "
             "Probe-phase prompt tok | Probe-phase output tok | Thinking tok (all calls) | Compactions (session) | "
             "Probe-phase compactions |"
         )
@@ -213,22 +207,22 @@ def render_markdown(s: dict[str, Any], *, in_path: Path, golden_path: Path) -> s
         add("")
         add("Context size (prompt tokens = uncached input + cache write + cache read) at selected turns:")
         add("")
-        add("| Rung | " + " | ".join(f"Turn {n}" for n in CONTEXT_TURNS) + " |")
+        add("| Version | " + " | ".join(f"Turn {n}" for n in CONTEXT_TURNS) + " |")
         add("|---|" + "---|" * len(CONTEXT_TURNS))
         for r in rungs:
             ctx = rr["rungs"][r]["cost"]["context_prompt_tokens_at_turn"]
             add(f"| `{r}` | " + " | ".join(_tok(ctx[str(n)]) for n in CONTEXT_TURNS) + " |")
         add("")
-        add("Per rung × session (session billed / warm $ per session, mean):")
+        add("Per version × session (session billed / warm $ per session, mean):")
         add("")
-        add("| Rung | Session | Runs | Errors | Session billed | Session warm | Probe-phase billed |")
-        add("|---|---|---|---|---|---|---|")
+        add("| Version | Session | Runs | Session billed | Session warm | Probe-phase billed |")
+        add("|---|---|---|---|---|---|")
         for r in rungs:
             for p in presets:
                 bp = rr["rungs"][r]["by_preset"][p]
                 c = bp["cost"]
                 add(
-                    f"| `{r}` | {p} | {c['runs']} | {bp['error_records']} | {_usd(c['session_billed_usd'])} | "
+                    f"| `{r}` | {p} | {c['runs']} | {_usd(c['session_billed_usd'])} | "
                     f"{_usd(c['session_warm_usd'])} | {_usd(c['probe_billed_usd'])} |"
                 )
         add("")
@@ -242,68 +236,42 @@ def render_markdown(s: dict[str, Any], *, in_path: Path, golden_path: Path) -> s
 
     add("## Per-fact hit rates")
     add("")
-    add(
-        "Rerun columns: hits/n over ok runs. Original columns: ✓/✗ per golden cell (– = not scored). "
-        "`never` = observed but hit by no rung in any run or capture."
-    )
+    add("hits/n over the sessions used. `never` = observed but hit by neither version in any session.")
     add("")
-    add("| Fact | Session | Kind | Turn | Source | " + " | ".join(f"rerun `{r}`" for r in rungs) + " | "
-        + " | ".join(f"orig `{r}`" for r in rungs) + " | Flag |")
-    add("|---|---|---|---|---|" + "---|" * (2 * len(rungs) + 1))
+    add("| Fact | Session | Kind | Turn | Source | " + " | ".join(f"`{r}`" for r in rungs) + " | Flag |")
+    add("|---|---|---|---|---|" + "---|" * (len(rungs) + 1))
     for f in s["per_fact"]:
         rcells = [f"{f['rerun'][r]['hits']}/{f['rerun'][r]['n']}" if f["rerun"][r]["n"] else "–" for r in rungs]
-        ocells = ["–" if f["original"][r] is None else ("✓" if f["original"][r] else "✗") for r in rungs]
         add(
             f"| `{f['fact_id']}` | {f['preset_id']} | {f['kind']} | {f['turn']} | {f['source']} | "
-            + " | ".join(rcells) + " | " + " | ".join(ocells) + f" | {'never' if f['never_hit'] else ''} |"
+            + " | ".join(rcells) + f" | {'never' if f['never_hit'] else ''} |"
         )
     add("")
     by_id = {f["fact_id"]: f for f in s["per_fact"]}
-    add(f"### Facts hit by no rung in any run ({len(s['never_hit_facts'])})")
+    add(f"### Facts hit by neither version ({len(s['never_hit_facts'])})")
     add("")
     for fid in s["never_hit_facts"]:
         f = by_id[fid]
         add(f"- `{fid}` ({f['kind']}, turn {f['turn']}, {f['source']}): {f['description']} — any_of {f['any_of']}")
     add("")
-    add(f"### Largest spread between rungs (top {len(s['largest_spread_facts'])})")
+    add(f"### Largest difference between the versions (top {len(s['largest_spread_facts'])})")
     add("")
-    add("| Fact | Kind | Turn | Source | Spread | Basis | Per-rung |")
-    add("|---|---|---|---|---|---|---|")
+    add("| Fact | Kind | Turn | Source | Difference | Per version |")
+    add("|---|---|---|---|---|---|")
     for fid in s["largest_spread_facts"]:
         f = by_id[fid]
-        if f["spread_basis"] == "rerun":
-            per = ", ".join(f"{r} {f['rerun'][r]['hits']}/{f['rerun'][r]['n']}" for r in rungs if f["rerun"][r]["n"])
-        else:
-            per = ", ".join(f"{r} {'✓' if f['original'][r] else '✗'}" for r in rungs if f["original"][r] is not None)
-        add(f"| `{fid}` | {f['kind']} | {f['turn']} | {f['source']} | {f['spread'] * 100:.0f} pp | {f['spread_basis']} | {per} |")
+        per = ", ".join(f"{r} {f['rerun'][r]['hits']}/{f['rerun'][r]['n']}" for r in rungs if f["rerun"][r]["n"])
+        add(f"| `{fid}` | {f['kind']} | {f['turn']} | {f['source']} | {f['spread'] * 100:.0f} pp | {per} |")
     add("")
 
     add("## Data quality")
     add("")
-    add(f"- Rerun error records: {rr['error_records']} (billed ${rr['error_spend_usd']:.4f}).")
-    for e in rr["errors"]:
-        add(
-            f"  - `{e['rung_id']}` {e['preset_id']} r{e['repeat_index']} — {e['completed_turns']} turns, "
-            f"{e['completed_probes']} probes, ${e['billed_usd']:.4f}: {str(e['error_message'])[:300]}"
-        )
-    if rr["ok_runs_used"] or rr["record_count"]:
-        for k in rr["matrix"]["missing_keys"]:
-            add(f"  - missing `{k[0]}` {k[1]} r{k[2]}")
-    stops = rr["non_end_turn_calls"]
-    add(f"- Rerun calls not ending in `end_turn`: {len(stops)}.")
-    for x in stops:
-        add(f"  - `{x['rung_id']}` {x['preset_id']} r{x['repeat_index']} {x['call']}: {x['stop_reason']} ({x['output_tokens']} out)")
-    mm = rr["model_mismatches"]
-    add(f"- Rerun calls whose returned model is not `claude-sonnet-5-5`: {len(mm)}.")
-    for x in mm:
-        add(f"  - `{x['rung_id']}` {x['preset_id']} r{x['repeat_index']} {x['call']}: `{x['model_id']}`")
-    gq = s["original_capture"]["data_quality"]
+    m = rr["matrix"]
     add(
-        f"- Original capture: turns not ending in `end_turn`: {len(gq['non_end_turn_turns'])}; "
-        f"model mismatches: {len(gq['model_mismatches'])}."
+        f"Counts over the {rr['ok_runs_used']} sessions used: missing cells {len(m['missing_keys'])}; calls not ending "
+        f"in `end_turn` {len(rr['non_end_turn_calls'])}; calls whose returned model is not `claude-sonnet-5-5` "
+        f"{len(rr['model_mismatches'])}."
     )
-    for x in [*gq["non_end_turn_turns"], *gq["model_mismatches"]]:
-        add(f"  - {x}")
     add("")
 
     add(f"## Probe answers that did not match, for review ({len(s['misses_for_review'])})")
@@ -333,7 +301,7 @@ def render_markdown(s: dict[str, Any], *, in_path: Path, golden_path: Path) -> s
     add(
         "Turn facts are scored against the reply of their own turn; ledger facts against the turn-10 reply; "
         "probes against each probe's answer. Items whose reply was not recorded are omitted, not counted as non-matches. "
-        "Rerun statistics use the latest ok record per (rung, session, repeat)."
+        "Statistics use the latest ok record per (version, session, repeat)."
     )
     add("")
     return "\n".join(lines)
@@ -342,28 +310,26 @@ def render_markdown(s: dict[str, Any], *, in_path: Path, golden_path: Path) -> s
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--in", dest="in_path", default=str(DEFAULT_IN))
-    ap.add_argument("--golden", default=str(DEFAULT_GOLDEN))
     ap.add_argument("--keys", default=str(KEYS_PATH))
     ap.add_argument("--out-md", default=str(DEFAULT_OUT_MD))
     ap.add_argument("--out-json", default=None, help="default: --out-md with a .json suffix")
     ap.add_argument("--repeats", type=int, default=None, help="expected repeats (default: inferred from records)")
     args = ap.parse_args(argv)
 
-    in_path, golden_path = Path(args.in_path), Path(args.golden)
+    in_path = Path(args.in_path)
     records = load_records(in_path)
-    golden = json.loads(golden_path.read_text(encoding="utf-8")) if golden_path.is_file() else {"presets": {}}
     keys = load_quality_keys(args.keys)
-    summary = summarise(records, keys=keys, golden=golden, expected_repeats=args.repeats)
+    summary = summarise(records, keys=keys, expected_repeats=args.repeats)
 
     out_md = Path(args.out_md)
     out_json = Path(args.out_json) if args.out_json else out_md.with_suffix(".json")
     out_md.parent.mkdir(parents=True, exist_ok=True)
     out_json.parent.mkdir(parents=True, exist_ok=True)
-    out_md.write_text(render_markdown(summary, in_path=in_path, golden_path=golden_path), encoding="utf-8")
+    out_md.write_text(render_markdown(summary, in_path=in_path), encoding="utf-8")
     out_json.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
     print(
         f"Wrote {out_md} and {out_json} ({summary['rerun']['ok_runs_used']} ok rerun runs, "
-        f"{summary['rerun']['error_records']} errors, {len(summary['original_capture']['cells'])} original cells)."
+        f"{summary['rerun']['error_records']} errors)."
     )
     return 0
 

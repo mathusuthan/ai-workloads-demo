@@ -25,8 +25,7 @@ from app.models import Cat4RungId  # noqa: E402
 
 RUNGS: list[Cat4RungId] = [
     "naive_full_corpus",
-    "cached_full_corpus_citations",
-    "hybrid_rag_rerank_citations",
+    "cached_rerank_hybrid",
 ]
 
 
@@ -35,8 +34,8 @@ def _validate_rung(
     raw_queries: list[dict[str, Any]],
     expected_count: int,
 ) -> str | None:
-    """Infrastructure checks only: every question answered and ended normally, the cache prefix was written/read,
-    the reranker ran. Answer content is NOT checked: an answer with zero citations is a legitimate (and measured)
+    """Infrastructure checks only: every question answered and ended normally, the clause pick ran and its cached
+    block was written/read. Answer content is NOT checked: an answer with zero citations is a legitimate (and measured)
     outcome, and rejecting it would select the recorded runs by outcome. The quality rerun reports zero-citation
     answers as data (scripts/analyze_cat4_quality.py)."""
     if len(raw_queries) != expected_count:
@@ -44,16 +43,13 @@ def _validate_rung(
     for idx, q in enumerate(raw_queries):
         if q.get("stop_reason") != "end_turn":
             return f"Q{q.get('question_number')} stop_reason={q.get('stop_reason')}"
-        if rid == "cached_full_corpus_citations":
-            cw = int(q.get("cache_creation_tokens") or 0)
-            cr = int(q.get("cache_read_tokens") or 0)
+        if rid == "cached_rerank_hybrid":
+            cw = int(q.get("reranker_cache_creation_tokens") or 0)
+            cr = int(q.get("reranker_cache_read_tokens") or 0)
             if cw + cr < 14000:
-                return f"Q{q.get('question_number')} below 14k prefix cache (cw={cw}, cr={cr})"
+                return f"Q{q.get('question_number')} below 14k cached clause block (cw={cw}, cr={cr})"
             if idx >= 1 and cr < 14000:
-                return f"Q{q.get('question_number')} missed prefix cache read (cw={cw}, cr={cr})"
-        if rid == "hybrid_rag_rerank_citations":
-            if int(q.get("reranker_input_tokens") or 0) <= 0:
-                return f"Q{q.get('question_number')} missing Haiku reranker usage"
+                return f"Q{q.get('question_number')} missed the cached clause block read (cw={cw}, cr={cr})"
     return None
 
 

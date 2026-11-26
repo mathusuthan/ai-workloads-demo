@@ -1,70 +1,84 @@
-"""Category 2 follow-up experiment: may the section template say "Not stated in source"?
+"""Category 2 experiment: without and with the deck's improvement (section template with length caps), on both models.
 
-The baseline scoring (quality_scoring.py) found that the templated drafts fill the required `owner` and
-`target_window` fields of every action item even when the source names no owner or date. This module tests the
-untested fix: the same template and schema plus one instruction that permits the literal `Not stated in source`.
-
-Arms (same 4 source bundles, same section template, word budgets and schema):
-  template_original    — get_templated_draft_system_prompt(sub_task), unchanged
-  template_not_stated  — the same string with ADDED_LINE inserted after the `action_plan` rule (composed, not copied)
-Models: Sonnet 5.5 and Haiku 5.5 through the app's own `run_cat2_structured_draft` (same call settings).
-Repeats: 3 per (bundle x model x arm) -> 48 drafts, every one kept (truncation is flagged, not dropped).
+Cells (same 4 source bundles, 3 drafts per bundle x model x arm -> 48 drafts):
+  unbounded            — without: the app's unbounded long-form prompt (free text), max_tokens 8,000
+                         (`run_cat2_unbounded_sonnet(model_tier=...)`, the app's unbounded rungs)
+  template_not_stated  — with: the app's section template + JSON schema with word caps, max_tokens 3,000
+                         (`run_cat2_structured_draft`, the app's templated rungs). The arm id is the one the
+                         drafts were recorded under; the prompt is `get_templated_draft_system_prompt` byte for byte.
+Models: Sonnet 5.5 and Haiku 5.5, each with the app's thinking setting (Sonnet between tools, Haiku disabled).
+Every draft is kept (a truncated one is flagged, not dropped).
 
 Phases (all I/O is injectable; nothing here calls the network on import or in tests):
   1. drafting   -> experiments/cat2_not_stated/drafts.jsonl (append-only, deterministic ids, resume, budget guard)
-  2. scoring    -> deterministic: fact coverage, unsupported numbers, action-item field classes
-  3. judging    -> experiments/cat2_not_stated/judgements.jsonl, the baseline judge (model, settings, prompts and
-                   schemas imported from quality_scoring): rubric x48, matched pairwise x48, vs stored unbounded x16
-  4. analysis   -> analyse() + render_markdown() (scripts/analyze_cat2_not_stated.py)
+  2. scoring    -> deterministic: fact coverage, numbers not in source, action-item field classes
+  3. judging    -> experiments/cat2_not_stated/judgements.jsonl, the blind judge (model, settings, prompts and
+                   schemas from quality_scoring): rubric x48 (one pass per draft) and template vs unbounded pairwise
+                   x48 (same bundle, model and repeat, both orders)
+  4. analysis   -> analyse() + render_markdown() (scripts/analyze_cat2_experiment.py) and build_app_summary()
+                   (replays/cat2_quality_summary.json)
 """
 
 from __future__ import annotations
 
 import asyncio
-import difflib
 import hashlib
 import json
 import math
 import re
 import statistics
-import time
 from collections import Counter
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Iterable, Sequence
 
 from app.archetypes.cat2_drafting import quality_scoring as qs
-from app.archetypes.cat2_drafting.prompts import get_templated_draft_system_prompt
+from app.archetypes.cat2_drafting.prompts import (
+    ACTION_PLAN_SOURCE_RULE,
+    NOT_STATED_IN_SOURCE,
+    get_templated_draft_system_prompt,
+    get_unbounded_draft_system_prompt,
+)
 from app.archetypes.cat2_drafting.schemas import STRUCTURED_DRAFT_JSON_SCHEMA
-from app.core.pricing import compute_run_finops
+from app.core.pricing import compute_run_finops  # noqa: F401  (re-exported for callers)
 
 SCHEMA_VERSION = 1
 EXPERIMENT_DIR = qs.BACKEND_DIR / "experiments" / "cat2_not_stated"
 DRAFTS_PATH = EXPERIMENT_DIR / "drafts.jsonl"
 JUDGEMENTS_PATH = EXPERIMENT_DIR / "judgements.jsonl"
-BASELINE_SUMMARY_PATH = qs.BACKEND_DIR / "replays" / "cat2_quality_summary.json"
+APP_SUMMARY_PATH = qs.BACKEND_DIR / "replays" / "cat2_quality_summary.json"
 
-ARM_ORIGINAL = "template_original"
-ARM_NOT_STATED = "template_not_stated"
-ARMS: tuple[str, ...] = (ARM_ORIGINAL, ARM_NOT_STATED)
-STORED_UNBOUNDED = "stored_unbounded"
-# model key -> model_tier passed to run_cat2_structured_draft (exactly what runner.execute_cat2_run passes)
+ARM_UNBOUNDED = "unbounded"
+ARM_TEMPLATE = "template_not_stated"
+ARMS: tuple[str, ...] = (ARM_UNBOUNDED, ARM_TEMPLATE)
+ARM_LABEL = {ARM_UNBOUNDED: "Without: unbounded long-form draft", ARM_TEMPLATE: "With: section template with length caps"}
+# model key -> model_tier passed to the app's call (exactly what runner.execute_cat2_run passes)
 MODELS: dict[str, str] = {"sonnet": "claude-sonnet-5-5", "haiku": "claude-haiku-5-5"}
 MODEL_KEYS: tuple[str, ...] = tuple(MODELS)
-STORED_RUNG_FOR_MODEL = {"sonnet": "sonnet_templated", "haiku": "haiku_templated"}
+MODEL_LABEL = {"sonnet": "Sonnet 5.5", "haiku": "Haiku 5.5"}
+APP_RUNG = {(ARM_UNBOUNDED, "sonnet"): "sonnet_unbounded", (ARM_UNBOUNDED, "haiku"): "haiku_unbounded",
+            (ARM_TEMPLATE, "sonnet"): "sonnet_templated", (ARM_TEMPLATE, "haiku"): "haiku_templated"}
+CELL_FOR_RUNG = {v: k for k, v in APP_RUNG.items()}
 REPEATS = 3
-DRAFT_MAX_TOKENS = 3000  # runner.execute_cat2_run uses max_tokens=3000 for both templated rungs
+GOLDEN_REPEAT_INDEX = 0
+DRAFT_MAX_TOKENS = {ARM_UNBOUNDED: 8000, ARM_TEMPLATE: 3000}  # the app's caps (runner.execute_cat2_run)
+COMPARISON = "template_vs_unbounded"
 DEFAULT_DRAFT_MAX_USD = 2.0
 DEFAULT_JUDGE_MAX_USD = 12.0
 
-NOT_STATED = "Not stated in source"
-ADDED_INSTRUCTION = (
-    "For each action-plan item, give the owner and the time window only if the source states them. "
-    "If the source does not name an owner, or gives no date or time window, write exactly `Not stated in source` "
-    "in that field. Never supply an owner, team, date or deadline the source does not give."
-)
-# Placed with the other rules, as one more bullet directly after the `action_plan` rule.
-ADDED_LINE = f"- {ADDED_INSTRUCTION}\n"
-ANCHOR_PREFIX = "- `action_plan`:"
+# Estimate basis for unbounded drafts not yet made: measured input / output tokens of one earlier unbounded Sonnet
+# draft per bundle at the same prompt and cap (used for both models, each priced at its own rate). Estimates only.
+UNBOUNDED_ESTIMATE_TOKENS: dict[str, tuple[int, int]] = {
+    "brief-01": (3874, 6000), "brief-02": (3805, 4698), "reg-01": (3474, 5001), "reg-02": (3458, 4948),
+}
+# Estimate basis for template drafts not yet made (same prompt and schema; one measured draft per bundle).
+TEMPLATE_ESTIMATE_TOKENS: dict[str, tuple[int, int]] = {
+    "brief-01": (5073, 1853), "brief-02": (5004, 1757), "reg-01": (4683, 1695), "reg-02": (4667, 1708),
+}
+# Stand-in texts for a judge dry run before the unbounded drafts exist (estimate only; never displayed or analysed).
+STANDIN_TEXTS_PATH = qs.DETERMINISTIC_PATH
+
+NOT_STATED = NOT_STATED_IN_SOURCE
+ADDED_INSTRUCTION = ACTION_PLAN_SOURCE_RULE
 
 FIELD_CLASSES: tuple[str, ...] = ("supported", "not_stated", "unsupported")
 
@@ -78,49 +92,22 @@ def _utc_now_iso() -> str:
 
 
 # --------------------------------------------------------------------------------------------------
-# Prompts (variant composed from the app's prompt function; schema shared)
+# Prompts: the app's own prompt functions
 # --------------------------------------------------------------------------------------------------
 
 
-def original_system_prompt(sub_task: str) -> str:
-    return get_templated_draft_system_prompt(sub_task)
-
-
-def not_stated_system_prompt(sub_task: str) -> str:
-    """The original prompt with ADDED_LINE inserted after the single `action_plan` rule line; nothing else changes."""
-    base = original_system_prompt(sub_task)
-    lines = base.splitlines(keepends=True)
-    idx = [i for i, line in enumerate(lines) if line.startswith(ANCHOR_PREFIX)]
-    if len(idx) != 1 or not lines[idx[0]].endswith("\n"):
-        raise ValueError("expected exactly one `action_plan` rule line followed by more text in the templated prompt")
-    i = idx[0]
-    return "".join(lines[: i + 1] + [ADDED_LINE] + lines[i + 1 :])
-
-
 def system_prompt_for(arm: str, sub_task: str) -> str:
-    if arm == ARM_ORIGINAL:
-        return original_system_prompt(sub_task)
-    if arm == ARM_NOT_STATED:
-        return not_stated_system_prompt(sub_task)
+    if arm == ARM_UNBOUNDED:
+        return get_unbounded_draft_system_prompt(sub_task)
+    if arm == ARM_TEMPLATE:
+        return get_templated_draft_system_prompt(sub_task)
     raise ValueError(f"unknown arm {arm!r}")
 
 
-def schema_for(arm: str) -> dict[str, Any]:
+def schema_for(arm: str) -> dict[str, Any] | None:
     if arm not in ARMS:
         raise ValueError(f"unknown arm {arm!r}")
-    return STRUCTURED_DRAFT_JSON_SCHEMA
-
-
-def prompt_diff(sub_task: str) -> list[str]:
-    """Unified diff original -> not_stated system prompt."""
-    return list(
-        difflib.unified_diff(
-            original_system_prompt(sub_task).splitlines(keepends=True),
-            not_stated_system_prompt(sub_task).splitlines(keepends=True),
-            fromfile=f"{ARM_ORIGINAL}/{sub_task}",
-            tofile=f"{ARM_NOT_STATED}/{sub_task}",
-        )
-    )
+    return STRUCTURED_DRAFT_JSON_SCHEMA if arm == ARM_TEMPLATE else None
 
 
 # --------------------------------------------------------------------------------------------------
@@ -137,7 +124,7 @@ def draft_id(preset_id: str, model_key: str, arm: str, repeat_index: int) -> str
 
 
 def plan_drafts(repeats: int = REPEATS) -> list[dict[str, Any]]:
-    """Repeat-major order (repeat -> bundle -> model -> arm), so a run stopped early stays balanced across arms."""
+    """Repeat-major order (repeat -> bundle -> model -> arm), so a run stopped early stays balanced across cells."""
     presets = qs.preset_map()
     schema_sha = _sha(json.dumps(STRUCTURED_DRAFT_JSON_SCHEMA, sort_keys=True))
     plan = []
@@ -147,6 +134,7 @@ def plan_drafts(repeats: int = REPEATS) -> list[dict[str, Any]]:
             for m in MODEL_KEYS:
                 for arm in ARMS:
                     system = system_prompt_for(arm, p["sub_task"])
+                    schema = schema_for(arm)
                     plan.append(
                         {
                             "draft_id": draft_id(pid, m, arm, k),
@@ -159,10 +147,10 @@ def plan_drafts(repeats: int = REPEATS) -> list[dict[str, Any]]:
                             "repeat_index": k,
                             "system": system,
                             "payload": p["payload"],
-                            "schema": schema_for(arm),
-                            "max_tokens": DRAFT_MAX_TOKENS,
+                            "schema": schema,
+                            "max_tokens": DRAFT_MAX_TOKENS[arm],
                             "system_sha256": _sha(system),
-                            "schema_sha256": schema_sha,
+                            "schema_sha256": schema_sha if schema is not None else None,
                         }
                     )
     return plan
@@ -176,31 +164,30 @@ def draft_record_cost_usd(rec: dict[str, Any]) -> float:
     return _finops(rec.get("model_id") or rec.get("model_tier"), int(rec.get("input_tokens") or 0), int(rec.get("output_tokens") or 0)).total_cost_usd
 
 
-def estimate_draft(planned: dict[str, Any], replays: dict[str, Any], chars_per_token: float = qs.DEFAULT_CHARS_PER_TOKEN) -> dict[str, Any]:
-    """Input = the stored templated rung's measured input tokens for this bundle and model (same prompt + schema)
-    plus the added instruction's characters / chars_per_token; typical output = that rung's stored output."""
-    stored = replays["presets"][planned["preset_id"]]["rungs"][STORED_RUNG_FOR_MODEL[planned["model_key"]]]
-    extra_chars = len(planned["system"]) - len(original_system_prompt(planned["sub_task"]))
-    in_tok = int(stored["input_tokens"]) + int(math.ceil(max(0, extra_chars) / chars_per_token))
+def estimate_draft(planned: dict[str, Any], replays: dict[str, Any] | None = None, chars_per_token: float = qs.DEFAULT_CHARS_PER_TOKEN) -> dict[str, Any]:
+    """Input / typical output from the estimate-basis constants for this bundle and arm; worst case = max_tokens."""
+    basis = UNBOUNDED_ESTIMATE_TOKENS if planned["arm"] == ARM_UNBOUNDED else TEMPLATE_ESTIMATE_TOKENS
+    in_tok, typ_out = basis[planned["preset_id"]]
+    typ_out = min(typ_out, int(planned["max_tokens"]))
     model = planned["model_tier"]
     return {
         "input_tokens": in_tok,
-        "typical_output_tokens": int(stored["output_tokens"]),
-        "typical_usd": _finops(model, in_tok, int(stored["output_tokens"])).total_cost_usd,
+        "typical_output_tokens": typ_out,
+        "typical_usd": _finops(model, in_tok, typ_out).total_cost_usd,
         "worst_case_usd": _finops(model, in_tok, int(planned["max_tokens"])).total_cost_usd,
     }
 
 
-def estimate_draft_plan(plan: Sequence[dict[str, Any]], replays: dict[str, Any]) -> dict[str, Any]:
+def estimate_draft_plan(plan: Sequence[dict[str, Any]], replays: dict[str, Any] | None = None) -> dict[str, Any]:
     by: dict[str, dict[str, Any]] = {}
     for p in plan:
         e = estimate_draft(p, replays)
-        s = by.setdefault(p["model_key"], {"drafts": 0, "input_tokens": 0, "typical_output_tokens": 0, "typical_usd": 0.0, "worst_case_usd": 0.0})
+        s = by.setdefault(f"{p['arm']}|{p['model_key']}", {"drafts": 0, "input_tokens": 0, "typical_output_tokens": 0, "typical_usd": 0.0, "worst_case_usd": 0.0})
         s["drafts"] += 1
         for k in ("input_tokens", "typical_output_tokens", "typical_usd", "worst_case_usd"):
             s[k] += e[k]
     tot = {k: sum(s[k] for s in by.values()) for k in ("drafts", "input_tokens", "typical_output_tokens", "typical_usd", "worst_case_usd")}
-    return {"by_model": by, "total": tot}
+    return {"by_cell": by, "total": tot}
 
 
 class CostGuard:
@@ -229,11 +216,13 @@ DraftCall = Callable[..., Awaitable[Any]]
 
 
 def make_app_draft_call(api_key: str) -> DraftCall:
-    """The app's own templated call (`run_cat2_structured_draft`: same model resolution, thinking, output_config,
-    client timeout), with raise_on_max_tokens=False so a truncated draft is returned and recorded, not raised."""
-    from app.core.anthropic_service import run_cat2_structured_draft
+    """The app's own calls: schema None -> `run_cat2_unbounded_sonnet(model_tier=...)` (the unbounded rungs);
+    otherwise `run_cat2_structured_draft` with raise_on_max_tokens=False so a truncated draft is recorded, not raised."""
+    from app.core.anthropic_service import run_cat2_structured_draft, run_cat2_unbounded_sonnet
 
-    async def call(*, system: str, payload: str, schema: dict[str, Any], model_tier: str, max_tokens: int) -> Any:
+    async def call(*, system: str, payload: str, schema: dict[str, Any] | None, model_tier: str, max_tokens: int) -> Any:
+        if schema is None:
+            return await run_cat2_unbounded_sonnet(payload, system, api_key, max_tokens=max_tokens, model_tier=model_tier)
         return await run_cat2_structured_draft(payload, system, schema, model_tier, api_key, max_tokens=max_tokens, raise_on_max_tokens=False)
 
     return call
@@ -277,6 +266,7 @@ async def execute_draft(planned: dict[str, Any], *, draft_call: DraftCall) -> di
         rec["finished_at"] = _utc_now_iso()
         return rec
     sd = raw.structured if isinstance(raw.structured, dict) else {}
+    text_ok = bool(str(raw.raw_text or "").strip())
     rec.update(
         {
             "status": "ok",
@@ -284,7 +274,7 @@ async def execute_draft(planned: dict[str, Any], *, draft_call: DraftCall) -> di
             "model_matches_requested": raw.model_id == planned["model_tier"],
             "stop_reason": raw.stop_reason,
             "truncated": raw.stop_reason == "max_tokens",
-            "parse_ok": is_complete_structure(sd),
+            "parse_ok": is_complete_structure(sd) if planned["arm"] == ARM_TEMPLATE else text_ok,
             "input_tokens": int(raw.input_tokens),
             "output_tokens": int(raw.output_tokens),
             "thinking_tokens": int(getattr(raw, "thinking_tokens", 0) or 0),
@@ -309,7 +299,7 @@ async def run_draft_plan(
     draft_call: DraftCall,
     guard: CostGuard,
     on_record: Callable[[dict[str, Any]], None],
-    replays: dict[str, Any],
+    replays: dict[str, Any] | None = None,
     concurrency: int = 4,
 ) -> dict[str, Any]:
     sem = asyncio.Semaphore(max(1, concurrency))
@@ -645,7 +635,7 @@ def classify_action_items(structured_draft: Any, payload: str) -> list[dict[str,
 
 
 def draft_text(rec: dict[str, Any]) -> str:
-    """Rendered exactly like the baseline templated drafts; raw text when the JSON did not parse (flagged)."""
+    """Template drafts rendered like the app renders them; unbounded drafts (and unparsed JSON, flagged) as raw text."""
     sd = rec.get("structured_draft")
     if is_complete_structure(sd):
         try:
@@ -681,28 +671,46 @@ def score_experiment_draft(rec: dict[str, Any], keys: dict[str, Any]) -> dict[st
 
 def score_drafts(draft_records: Iterable[dict[str, Any]], keys: dict[str, Any] | None = None) -> dict[str, dict[str, Any]]:
     keys = keys or qs.load_quality_keys()
-    return {k: score_experiment_draft(r, keys) for k, r in sorted(latest_ok_by(draft_records, "draft_key").items())}
+    recs = [r for r in draft_records if r.get("arm") in ARMS]
+    return {k: score_experiment_draft(r, keys) for k, r in sorted(latest_ok_by(recs, "draft_key").items())}
 
 
 # --------------------------------------------------------------------------------------------------
-# Judge planning (baseline judge: prompts, schemas, model and settings imported from quality_scoring)
+# Judge planning (blind judge: prompts, schemas, model and settings imported from quality_scoring)
 # --------------------------------------------------------------------------------------------------
 
 
-def stored_unbounded_text(replays: dict[str, Any], preset_id: str) -> str:
-    return qs.render_draft(replays["presets"][preset_id]["rungs"]["sonnet_unbounded"])
+def _standin_unbounded_texts(path: Path | str | None = None) -> dict[str, tuple[str, int, int]]:
+    """preset -> (text, input_tokens, output_tokens) of an earlier unbounded draft; judge dry-run estimates only."""
+    p = Path(path or STANDIN_TEXTS_PATH)
+    if not p.is_file():
+        return {}
+    d = json.loads(p.read_text(encoding="utf-8"))
+    return {c["preset_id"]: (c["text"], int(c.get("input_tokens") or 0), int(c.get("output_tokens") or 0))
+            for c in d.get("drafts") or [] if c.get("rung_id") == "sonnet_unbounded" and c.get("text")}
 
 
-def standin_drafts(replays: dict[str, Any], keys: dict[str, Any] | None = None) -> dict[str, dict[str, Any]]:
-    """Stored templated drafts used in place of every planned draft (dry-run estimates before drafting only)."""
+def standin_drafts(scored: dict[str, dict[str, Any]], keys: dict[str, Any] | None = None, *, standin_path: Path | str | None = None) -> dict[str, dict[str, Any]]:
+    """Stand-ins for planned drafts that do not exist yet (judge dry-run estimates only): an unbounded draft -> an
+    earlier unbounded draft of the same bundle; a template draft -> the same bundle/model's repeat-0 template draft."""
     keys = keys or qs.load_quality_keys()
+    texts = _standin_unbounded_texts(standin_path)
     out = {}
     for p in plan_drafts():
-        r = replays["presets"][p["preset_id"]]["rungs"][STORED_RUNG_FOR_MODEL[p["model_key"]]]
-        rec = {**{k: p[k] for k in ("draft_id", "draft_key", "preset_id", "model_key", "arm", "repeat_index")}, "model_id": r["model_id"],
-               "input_tokens": r["input_tokens"], "output_tokens": r["output_tokens"], "structured_draft": r["structured_draft"],
-               "raw_text": r.get("raw_markdown"), "stop_reason": r.get("stop_reason"), "truncated": False, "parse_ok": True}
-        out[p["draft_key"]] = {**score_experiment_draft(rec, keys), "standin": True}
+        if p["draft_key"] in scored:
+            continue
+        if p["arm"] == ARM_UNBOUNDED:
+            t = texts.get(p["preset_id"])
+            if not t:
+                continue
+            rec = {**{k: p[k] for k in ("draft_id", "draft_key", "preset_id", "model_key", "arm", "repeat_index")},
+                   "model_id": p["model_tier"], "input_tokens": t[1], "output_tokens": t[2], "structured_draft": {},
+                   "raw_text": t[0], "stop_reason": "end_turn", "truncated": False, "parse_ok": True}
+            out[p["draft_key"]] = {**score_experiment_draft(rec, keys), "standin": True}
+        else:
+            base = scored.get(draft_key(p["preset_id"], p["model_key"], ARM_TEMPLATE, 0))
+            if base:
+                out[p["draft_key"]] = {**base, "draft_key": p["draft_key"], "draft_id": p["draft_id"], "repeat_index": p["repeat_index"], "standin": True}
     return out
 
 
@@ -714,10 +722,9 @@ def pairwise_call_id(comparison: str, preset_id: str, model_key: str, repeat_ind
     return f"pairwise:{comparison}:{preset_id}:{model_key}:r{repeat_index}:{order}"
 
 
-def plan_judge_calls(scored: dict[str, dict[str, Any]], replays: dict[str, Any], *, repeats: int = REPEATS) -> list[dict[str, Any]]:
-    """Rubric (one pass per draft), matched pairwise (not_stated vs original, same bundle/model/repeat, both orders),
-    and not_stated repeat 0 vs the stored unbounded draft (both orders, per model). Calls whose drafts are missing are
-    left out."""
+def plan_judge_calls(scored: dict[str, dict[str, Any]], replays: dict[str, Any] | None = None, *, repeats: int = REPEATS) -> list[dict[str, Any]]:
+    """Rubric (one pass per draft) and template vs unbounded pairwise (same bundle, model and repeat, both orders).
+    Calls whose drafts are missing are left out."""
     plan: list[dict[str, Any]] = []
     for k in range(repeats):
         for pid in qs.PRESET_IDS:
@@ -746,53 +753,43 @@ def plan_judge_calls(scored: dict[str, dict[str, Any]], replays: dict[str, Any],
                                      "draft_keys": [key]},
                         }
                     )
-
-    def pair_calls(comparison: str, pid: str, m: str, k: int, ns: dict[str, Any], other_label: str, other_text: str,
-                   other_key: str, other_sha: str) -> None:
-        for order, (a_lab, a_txt, b_lab, b_txt) in (
-            ("fwd", (ARM_NOT_STATED, ns["text"], other_label, other_text)),
-            ("rev", (other_label, other_text, ARM_NOT_STATED, ns["text"])),
-        ):
-            system, user = qs.build_pairwise_prompt(pid, a_txt, b_txt)
-            plan.append(
-                {
-                    "call_id": pairwise_call_id(comparison, pid, m, k, order),
-                    "task": "pairwise",
-                    "preset_id": pid,
-                    "pair": [ARM_NOT_STATED, other_label],
-                    "order": order,
-                    "a_rung": a_lab,
-                    "b_rung": b_lab,
-                    "system": system,
-                    "user": user,
-                    "schema": qs.PAIRWISE_SCHEMA,
-                    "prompt_sha256": qs._sha(system, user),
-                    "meta": {"comparison": comparison, "model_key": m, "draft_repeat": k,
-                             "draft_keys": [ns["draft_key"], other_key], "draft_sha256": [ns["text_sha256"], other_sha]},
-                }
-            )
-
     for k in range(repeats):
         for pid in qs.PRESET_IDS:
             for m in MODEL_KEYS:
-                ns, og = scored.get(draft_key(pid, m, ARM_NOT_STATED, k)), scored.get(draft_key(pid, m, ARM_ORIGINAL, k))
-                if ns and og:
-                    pair_calls("matched", pid, m, k, ns, ARM_ORIGINAL, og["text"], og["draft_key"], og["text_sha256"])
-    for pid in qs.PRESET_IDS:
-        ub = stored_unbounded_text(replays, pid)
-        for m in MODEL_KEYS:
-            ns = scored.get(draft_key(pid, m, ARM_NOT_STATED, 0))
-            if ns:
-                pair_calls("vs_unbounded", pid, m, 0, ns, STORED_UNBOUNDED, ub, f"{pid}:{STORED_UNBOUNDED}", _sha(ub))
+                t, u = scored.get(draft_key(pid, m, ARM_TEMPLATE, k)), scored.get(draft_key(pid, m, ARM_UNBOUNDED, k))
+                if not (t and u):
+                    continue
+                for order, (a_lab, a_txt, b_lab, b_txt) in (
+                    ("fwd", (ARM_TEMPLATE, t["text"], ARM_UNBOUNDED, u["text"])),
+                    ("rev", (ARM_UNBOUNDED, u["text"], ARM_TEMPLATE, t["text"])),
+                ):
+                    system, user = qs.build_pairwise_prompt(pid, a_txt, b_txt)
+                    plan.append(
+                        {
+                            "call_id": pairwise_call_id(COMPARISON, pid, m, k, order),
+                            "task": "pairwise",
+                            "preset_id": pid,
+                            "pair": [ARM_TEMPLATE, ARM_UNBOUNDED],
+                            "order": order,
+                            "a_rung": a_lab,
+                            "b_rung": b_lab,
+                            "system": system,
+                            "user": user,
+                            "schema": qs.PAIRWISE_SCHEMA,
+                            "prompt_sha256": qs._sha(system, user),
+                            "meta": {"comparison": COMPARISON, "model_key": m, "draft_repeat": k,
+                                     "draft_keys": [t["draft_key"], u["draft_key"]], "draft_sha256": [t["text_sha256"], u["text_sha256"]]},
+                        }
+                    )
     return plan
 
 
-EXTRA_BLINDING_TERMS: tuple[str, ...] = (*ARMS, "not_stated", STORED_UNBOUNDED, "draft:", *MODEL_KEYS, *MODELS.values())
+EXTRA_BLINDING_TERMS: tuple[str, ...] = (*ARMS, "not_stated", "draft:", *MODEL_KEYS, *MODELS.values())
 
 
 def experiment_blinding_violations(prompt_text: str, embedded_texts: Sequence[str], forbidden_numbers: Sequence[str] = ()) -> list[str]:
     """Baseline blinding check plus arm/model labels and draft token/cost numbers, all looked for only in what WE add
-    (source and draft texts are cut out first; the drafts may say anything, including "Not stated in source")."""
+    (source and draft texts are cut out first; the drafts may say anything)."""
     hits = qs.blinding_violations(prompt_text, embedded_texts)
     rest = prompt_text
     for t in sorted((t.strip() for t in embedded_texts if t and t.strip()), key=len, reverse=True):
@@ -805,7 +802,7 @@ def experiment_blinding_violations(prompt_text: str, embedded_texts: Sequence[st
     return hits
 
 
-def blinding_report(plan: Sequence[dict[str, Any]], scored: dict[str, dict[str, Any]], replays: dict[str, Any]) -> dict[str, list[str]]:
+def blinding_report(plan: Sequence[dict[str, Any]], scored: dict[str, dict[str, Any]], replays: dict[str, Any] | None = None) -> dict[str, list[str]]:
     """call_id -> violations, for every planned prompt with any."""
     presets = qs.preset_map()
     bad = {}
@@ -813,9 +810,6 @@ def blinding_report(plan: Sequence[dict[str, Any]], scored: dict[str, dict[str, 
         texts = [presets[p["preset_id"]]["payload"]] + [n["snippet"] for n in p.get("numbers") or []]  # draft-derived context
         nums: list[str] = []
         for key in p["meta"]["draft_keys"]:
-            if key.endswith(STORED_UNBOUNDED):
-                texts.append(stored_unbounded_text(replays, p["preset_id"]))
-                continue
             d = scored[key]
             texts.append(d["text"])
             for f in ("input_tokens", "output_tokens"):
@@ -828,14 +822,14 @@ def blinding_report(plan: Sequence[dict[str, Any]], scored: dict[str, dict[str, 
     return bad
 
 
-def calibrate_judge_estimate(baseline_judgements_path: Path | str | None = None) -> dict[str, Any]:
-    """chars/token and typical output tokens per task measured on the baseline judge run (read-only)."""
-    recs = qs.load_judgements(baseline_judgements_path or qs.JUDGEMENTS_PATH)
-    ok = [r for r in qs.latest_ok(recs).values()]
+def calibrate_judge_estimate(judgements_path: Path | str | None = None, drafts_path: Path | str | None = None) -> dict[str, Any]:
+    """chars/token and typical output tokens per task, measured on this experiment's own ok judge records."""
+    recs = qs.load_judgements(judgements_path or JUDGEMENTS_PATH)
+    ok = list(qs.latest_ok(recs).values())
     if not ok:
         return {"chars_per_token": qs.DEFAULT_CHARS_PER_TOKEN, "typical_output_tokens": None, "source": "defaults"}
-    det = qs.run_deterministic(qs.load_replays(), qs.load_quality_keys())
-    plan = {p["call_id"]: p for p in qs.plan_judge_calls(det)}
+    scored = score_drafts(load_jsonl(drafts_path or DRAFTS_PATH))
+    plan = {p["call_id"]: p for p in plan_judge_calls(scored)}
     ratios = [
         (len(plan[r["call_id"]]["system"]) + len(plan[r["call_id"]]["user"]) + len(json.dumps(plan[r["call_id"]]["schema"]))) / r["input_tokens"]
         for r in ok
@@ -846,7 +840,7 @@ def calibrate_judge_estimate(baseline_judgements_path: Path | str | None = None)
     return {
         "chars_per_token": statistics.fmean(ratios) if ratios else qs.DEFAULT_CHARS_PER_TOKEN,
         "typical_output_tokens": typical or None,
-        "source": f"baseline judge run ({len(ratios)} calls matched for chars/token, {len(ok)} ok calls for output)",
+        "source": f"this experiment's judge records ({len(ratios)} calls matched for chars/token, {len(ok)} ok calls for output)",
     }
 
 
@@ -933,47 +927,18 @@ def _pair_block(records: Sequence[dict[str, Any]]) -> dict[str, Any]:
             m = r.get("meta") or {}
             units.setdefault((r["preset_id"], m.get("model_key"), m.get("draft_repeat")), {})[r["order"]] = w
         both = {k: v for k, v in units.items() if "fwd" in v and "rev" in v}
-        other = next((x for r in records for x in r["pair"] if x != ARM_NOT_STATED), None)
         out[key] = {
-            "not_stated_wins": wins.get(ARM_NOT_STATED, 0),
-            "other_wins": wins.get(other, 0) if other else 0,
+            "template_wins": wins.get(ARM_TEMPLATE, 0),
+            "unbounded_wins": wins.get(ARM_UNBOUNDED, 0),
             "ties": wins.get("tie", 0),
-            "other": other,
             "position_consistency": {"units_with_both_orders": len(both), "consistent": sum(1 for v in both.values() if v["fwd"] == v["rev"])},
             "share_decisive_choosing_position_a": (a_pos / decisive) if decisive else None,
         }
     return out
 
 
-def load_baseline_summary(path: Path | str | None = None) -> dict[str, Any] | None:
-    p = Path(path or BASELINE_SUMMARY_PATH)
-    if not p.is_file():
-        return None
-    return json.loads(p.read_text(encoding="utf-8"))
-
-
-def baseline_table(summary: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Stored baseline (one draft per rung per bundle, 3 judge passes), for context only."""
-    if not summary:
-        return None
-    rungs = []
-    for r in summary["rungs"]:
-        rungs.append(
-            {
-                "rung_id": r["rung_id"],
-                "drafts": r["drafts"],
-                "core_facts": r["core_facts"],
-                "detail_facts": r["detail_facts"],
-                "rubric": {d: r["rubric"][d]["mean"] for d in qs.DIMENSIONS},
-                "serious_errors": r["serious_errors"],
-                "minor_errors": r["minor_errors"],
-                "action_items": r.get("action_items"),
-                "cost_per_1k_docs_usd": r.get("cost_per_1k_docs_usd"),
-                "output_tokens_mean": r.get("output_tokens_mean"),
-            }
-        )
-    return {"judge_model": summary.get("judge_model"), "passes_per_draft": summary.get("passes_per_draft"),
-            "drafts_per_cell": summary.get("drafts_per_cell"), "keys_version": summary.get("keys_version"), "rungs": rungs}
+def planned_pairwise_calls(repeats: int = REPEATS) -> int:
+    return 2 * repeats * len(qs.PRESET_IDS) * len(MODEL_KEYS)
 
 
 def analyse(
@@ -981,7 +946,6 @@ def analyse(
     judgements: Sequence[dict[str, Any]] | None,
     *,
     keys: dict[str, Any] | None = None,
-    baseline_summary: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     keys = keys or qs.load_quality_keys()
     scored = score_drafts(draft_records, keys)
@@ -989,6 +953,7 @@ def analyse(
     for key, d in scored.items():
         d["judge"] = judged_draft(ok_j.get(rubric_call_id(key)), d)
 
+    per_cell = REPEATS * len(qs.PRESET_IDS)
     groups: dict[str, Any] = {}
     for arm in ARMS:
         for m in MODEL_KEYS:
@@ -996,21 +961,26 @@ def analyse(
             groups[f"{arm}|{m}"] = {
                 "arm": arm,
                 "model_key": m,
+                "rung_id": APP_RUNG[(arm, m)],
+                "label": f"{ARM_LABEL[arm]} · {MODEL_LABEL[m]}",
+                "status": "ok" if len(sel) == per_cell else ("pending" if not sel else "partial"),
+                "drafts_planned": per_cell,
                 **_group_stats(sel),
+                "input_tokens": _dist([d["input_tokens"] for d in sel]),
                 "by_preset": {pid: _group_stats([d for d in sel if d["preset_id"] == pid]) for pid in qs.PRESET_IDS},
             }
 
-    pw = [r for r in ok_j.values() if r["task"] == "pairwise"]
-    pairwise: dict[str, Any] = {}
-    for comp in ("matched", "vs_unbounded"):
-        recs = [r for r in pw if (r.get("meta") or {}).get("comparison") == comp]
-        pairwise[comp] = {
-            "all": _pair_block(recs) if recs else None,
-            "by_model": {m: _pair_block([r for r in recs if r["meta"]["model_key"] == m]) for m in MODEL_KEYS
-                         if any(r["meta"]["model_key"] == m for r in recs)},
-            "by_model_preset": {f"{m}|{pid}": _pair_block(sel) for m in MODEL_KEYS for pid in qs.PRESET_IDS
-                                if (sel := [r for r in recs if r["meta"]["model_key"] == m and r["preset_id"] == pid])},
-        }
+    pw = [r for r in ok_j.values() if r["task"] == "pairwise" and (r.get("meta") or {}).get("comparison") == COMPARISON]
+    pairwise = {
+        "comparison": COMPARISON,
+        "planned_calls": planned_pairwise_calls(),
+        "status": "ok" if len(pw) == planned_pairwise_calls() else ("pending" if not pw else "partial"),
+        "all": _pair_block(pw) if pw else None,
+        "by_model": {m: _pair_block([r for r in pw if r["meta"]["model_key"] == m]) for m in MODEL_KEYS
+                     if any(r["meta"]["model_key"] == m for r in pw)},
+        "by_model_preset": {f"{m}|{pid}": _pair_block(sel) for m in MODEL_KEYS for pid in qs.PRESET_IDS
+                            if (sel := [r for r in pw if r["meta"]["model_key"] == m and r["preset_id"] == pid])},
+    }
 
     review_errors, review_fields = [], []
     for key, d in scored.items():
@@ -1032,8 +1002,8 @@ def analyse(
     drafts_all = list(draft_records)
     return {
         "schema_version": SCHEMA_VERSION,
-        "design": {"arms": list(ARMS), "models": dict(MODELS), "presets": list(qs.PRESET_IDS), "repeats": REPEATS,
-                   "planned_drafts": len(plan_drafts()), "added_instruction": ADDED_INSTRUCTION, "field_rules": list(FIELD_RULES),
+        "design": {"arms": list(ARMS), "arm_labels": dict(ARM_LABEL), "models": dict(MODELS), "presets": list(qs.PRESET_IDS), "repeats": REPEATS,
+                   "planned_drafts": len(plan_drafts()), "max_tokens": dict(DRAFT_MAX_TOKENS), "field_rules": list(FIELD_RULES),
                    "judge_model": qs.JUDGE_MODEL, "judge_passes_per_draft": 1, "keys_version": (keys.get("meta") or {}).get("keys_version")},
         "drafts_data_quality": {
             "records": len(drafts_all),
@@ -1048,8 +1018,7 @@ def analyse(
         },
         "judge_data_quality": qs.judge_data_quality(judgements) if judgements else None,
         "groups": groups,
-        "pairwise": pairwise if judgements else None,
-        "baseline": baseline_table(baseline_summary),
+        "pairwise": pairwise,
         "review": {"serious_errors": review_errors, "unsupported_fields": review_fields},
         "drafts": [{k: v for k, v in d.items() if k not in ("text", "structured_draft")} for d in scored.values()],
     }
@@ -1066,199 +1035,145 @@ def _f(v: float | None, digits: int = 2) -> str:
     return "—" if v is None else f"{v:.{digits}f}"
 
 
-def _d(x: dict[str, Any] | None, digits: int = 2) -> str:
-    if not x or not x.get("n"):
-        return "—"
-    if x["min"] == x["max"]:
-        return _f(x["mean"], digits)
-    return f"{_f(x['mean'], digits)} ({_f(x['min'], 0 if float(x['min']).is_integer() else digits)}–{_f(x['max'], 0 if float(x['max']).is_integer() else digits)})"
+def _mean(x: dict[str, Any] | None, digits: int = 2) -> str:
+    return "—" if not x or x.get("mean") is None else f"{x['mean']:.{digits}f}"
 
 
-def _cell(s: Any) -> str:
-    return str(s if s is not None else "—").replace("|", "\\|").replace("\n", " ")
+def _classes(c: dict[str, int] | None) -> str:
+    return "—" if not c else " / ".join(str(c[k]) for k in FIELD_CLASSES)
 
 
-def _classes(c: dict[str, int]) -> str:
-    return f"{c['supported']} / {c['not_stated']} / {c['unsupported']}"
+def _cell_lines(g: dict[str, Any]) -> str:
+    if g["status"] == "pending":
+        return "run pending"
+    o, ct = g["output_tokens"], g["cost_per_1k_docs_usd"]
+    parts = [f"{g['drafts']} drafts, {g['judged_drafts']} judged (1 pass)",
+             f"${ct['mean']:.2f}/1k docs" if ct.get("mean") is not None else "",
+             f"output {o['mean']:,.0f} tok ({o['min']:,}–{o['max']:,})" if o.get("mean") is not None else "",
+             f"core facts {g['core_facts']['hits']}/{g['core_facts']['total']}, detail {g['detail_facts']['hits']}/{g['detail_facts']['total']}"]
+    if g.get("rubric"):
+        parts.append(", ".join(f"{DIM_LABEL[d].lower()} {_mean(g['rubric'][d])}" for d in qs.DIMENSIONS))
+        parts.append(f"serious {_mean(g['serious_per_draft'])}/draft, minor {_mean(g['minor_per_draft'])}/draft")
+    parts.append(f"numbers not in source {g['not_in_source_numbers']}")
+    if g["action_items"]:
+        parts.append(f"owner {_classes(g['owner'])}, time window {_classes(g['time_window'])} (supported / not stated / not in source)")
+    if g["truncated"]:
+        parts.append(f"{g['truncated']} truncated")
+    if g["status"] == "partial":
+        parts.append(f"{g['drafts']} of {g['drafts_planned']} drafts")
+    return " · ".join(p for p in parts if p)
+
+
+def _h2h_line(b: dict[str, Any] | None) -> str:
+    if not b:
+        return "run pending"
+    o = b["overall"]
+    pc = o["position_consistency"]
+    return (f"template {o['template_wins']} – unbounded {o['unbounded_wins']} – ties {o['ties']} ({b['calls']} calls; "
+            f"position-consistent {pc['consistent']}/{pc['units_with_both_orders']})")
 
 
 def render_markdown(s: dict[str, Any]) -> str:
-    L: list[str] = []
-    add = L.append
-    dq = s["drafts_data_quality"]
-    des = s["design"]
-    add("# Category 2 follow-up: may the template say \"Not stated in source\"?")
-    add("")
-    add(f"Arms: `{ARM_ORIGINAL}` (the app's templated prompt and schema) vs `{ARM_NOT_STATED}` (the same prompt plus one instruction; "
-        f"schema unchanged). Models: Sonnet 5.5 and Haiku 5.5 via the app's templated call. {des['repeats']} drafts per bundle × model × arm.")
-    add("")
-    add(f"Added instruction: \"{des['added_instruction']}\"")
-    add("")
-    add(f"Drafts: {dq['ok_drafts']} of {des['planned_drafts']} planned ({dq['error_records']} error records); truncated (stop_reason "
-        f"`max_tokens`): {dq['truncated']}; JSON not parsed: {dq['parse_failures']}; stop reasons {dq['stop_reasons']}; models returned {dq['model_ids']}"
-        + (f"; model differs from requested: {dq['model_mismatches']}" if dq["model_mismatches"] else "") + ".")
-    if dq["missing_drafts"]:
-        add(f"Missing drafts: {', '.join(dq['missing_drafts'])}.")
-    jdq = s["judge_data_quality"]
-    add("")
-    add(f"Judge: `{des['judge_model']}` with the baseline rubric and pairwise prompts and settings, one rubric pass per draft. "
-        + (f"{jdq['ok_calls']} ok calls, {jdq['error_records']} error records, models returned {jdq['model_ids_returned']}, "
-           f"billed ≈ ${jdq['billed_usd_all_records']:.2f} at the assumed rate." if jdq else "No judgements file: judge tables are empty."))
-    add("")
-    add("## Action-item fields (deterministic)")
-    add("")
-    add("Counts are supported / not stated / unsupported over all action items. Rules:")
-    for r in des["field_rules"]:
-        add(f"- {r}")
-    add("")
-    add("| Arm | Model | Drafts | Items | Owner (sup / not stated / unsup) | Time window (sup / not stated / unsup) | Grader-flagged items per draft | Serious errors per draft | Minor errors per draft |")
-    add("|---|---|---:|---:|---|---|---:|---:|---:|")
-    for g in s["groups"].values():
-        add(f"| {g['arm']} | {g['model_key']} | {g['drafts']} | {g['action_items']} | {_classes(g['owner'])} | {_classes(g['time_window'])} | "
-            f"{_d(g['flagged_items_per_draft'])} | {_d(g['serious_per_draft'])} | {_d(g['minor_per_draft'])} |")
-    add("")
-    add("Per bundle (mean over repeats, range in brackets):")
-    add("")
-    add("| Arm | Model | Bundle | Drafts | Owner (sup / ns / unsup) | Window (sup / ns / unsup) | Flagged items | Serious | Minor |")
-    add("|---|---|---|---:|---|---|---:|---:|---:|")
-    for g in s["groups"].values():
-        for pid, b in g["by_preset"].items():
-            add(f"| {g['arm']} | {g['model_key']} | {pid} | {b['drafts']} | {_classes(b['owner'])} | {_classes(b['time_window'])} | "
-                f"{_d(b['flagged_items_per_draft'])} | {_d(b['serious_per_draft'])} | {_d(b['minor_per_draft'])} |")
-    add("")
-    add("## Rubric (blind judge, 1–5; mean over drafts, range in brackets)")
-    add("")
-    add("| Arm | Model | Judged | " + " | ".join(DIM_LABEL[d] for d in qs.DIMENSIONS) + " |")
-    add("|---|---|---:|" + "---:|" * len(qs.DIMENSIONS))
-    for g in s["groups"].values():
-        rub = g["rubric"] or {}
-        add(f"| {g['arm']} | {g['model_key']} | {g['judged_drafts']} | " + " | ".join(_d(rub.get(d)) for d in qs.DIMENSIONS) + " |")
-    add("")
-    add("Per bundle:")
-    add("")
-    add("| Arm | Model | Bundle | " + " | ".join(DIM_LABEL[d] for d in qs.DIMENSIONS) + " |")
-    add("|---|---|---|" + "---:|" * len(qs.DIMENSIONS))
-    for g in s["groups"].values():
-        for pid, b in g["by_preset"].items():
-            rub = b["rubric"] or {}
-            add(f"| {g['arm']} | {g['model_key']} | {pid} | " + " | ".join(_d(rub.get(d)) for d in qs.DIMENSIONS) + " |")
-    add("")
-    add("## Facts, numbers, tokens and cost")
-    add("")
-    add("| Arm | Model | Core facts | Detail facts | Numbers not in source | …judge verdicts (derived correct / derived wrong / unverifiable / not a claim) | Output tokens | $ / 1k docs | Truncated | JSON not parsed |")
-    add("|---|---|---:|---:|---:|---|---:|---:|---:|---:|")
-    for g in s["groups"].values():
-        v = g["number_verdicts"]
-        vt = " / ".join(str(v[k]) for k in qs.NUMBER_VERDICTS) if v else "—"
-        add(f"| {g['arm']} | {g['model_key']} | {g['core_facts']['hits']}/{g['core_facts']['total']} | {g['detail_facts']['hits']}/{g['detail_facts']['total']} | "
-            f"{g['not_in_source_numbers']} | {vt} | {_d(g['output_tokens'], 0)} | {_d(g['cost_per_1k_docs_usd'])} | {g['truncated']} | {g['parse_failures']} |")
-    add("")
-    add("## Head-to-head (blind judge, both presentation orders)")
-    add("")
+    d, dq = s["design"], s["drafts_data_quality"]
+    L = ["# Category 2: unbounded long-form draft vs section template with length caps, on Sonnet 5.5 and Haiku 5.5", "",
+         "Factual tables. Generated by `backend/scripts/analyze_cat2_experiment.py` from `backend/experiments/cat2_not_stated/drafts.jsonl` "
+         f"and `judgements.jsonl`. {d['repeats']} drafts per document × model × version on {len(d['presets'])} documents; the app's prompts, "
+         f"caps (unbounded {d['max_tokens'][ARM_UNBOUNDED]:,}, template {d['max_tokens'][ARM_TEMPLATE]:,} output tokens) and thinking settings. "
+         f"Blind judge `{d['judge_model']}` (not one of the models under test), one rubric pass per draft; head-to-head on the same document, "
+         "model and repeat, both orders.", "",
+         f"Data quality: {dq['ok_drafts']}/{d['planned_drafts']} drafts, {dq['truncated']} truncated, {dq['parse_failures']} unparsed, "
+         f"{dq['error_records']} error records.", "",
+         "| | " + " | ".join(MODEL_LABEL[m] for m in MODEL_KEYS) + " |", "|---|" + "---|" * len(MODEL_KEYS)]
+    for arm in ARMS:
+        L.append(f"| {ARM_LABEL[arm]} | " + " | ".join(_cell_lines(s["groups"][f"{arm}|{m}"]) for m in MODEL_KEYS) + " |")
     pw = s["pairwise"]
-    if not pw:
-        add("No judgements file.")
-    else:
-        add("| Comparison | Scope | Calls | Overall: not stated – other – tie | Accuracy | Usefulness to reader | Position-consistent units | Share of decisive picks for position A |")
-        add("|---|---|---:|---|---|---|---:|---:|")
-
-        def row(label: str, scope: str, b: dict[str, Any] | None) -> None:
-            if not b:
-                return
-            o = b["overall"]
-            add(f"| {label} | {scope} | {b['calls']} | {o['not_stated_wins']} – {o['other_wins']} – {o['ties']} | "
-                + " | ".join(f"{b[k]['not_stated_wins']} – {b[k]['other_wins']} – {b[k]['ties']}" for k in qs.PAIR_DIMENSIONS)
-                + f" | {o['position_consistency']['consistent']}/{o['position_consistency']['units_with_both_orders']} | {_f(o['share_decisive_choosing_position_a'])} |")
-
-        for comp, label in (("matched", f"{ARM_NOT_STATED} vs {ARM_ORIGINAL} (same bundle, model, repeat)"),
-                            ("vs_unbounded", f"{ARM_NOT_STATED} (repeat 0) vs stored unbounded draft")):
-            row(label, "all", pw[comp]["all"])
-            for m, b in pw[comp]["by_model"].items():
-                row(label, m, b)
-            for mp, b in pw[comp]["by_model_preset"].items():
-                row(label, mp.replace("|", " · "), b)
-    add("")
-    add("## Stored baseline, for context (different drafts: n=1 per cell, 3 judge passes)")
-    add("")
-    bl = s["baseline"]
-    if not bl:
-        add("Baseline summary not found.")
-    else:
-        add(f"Read from `backend/replays/cat2_quality_summary.json` (keys version `{bl['keys_version']}`, judge `{bl['judge_model']}`, "
-            f"{bl['passes_per_draft']} passes per draft, {bl['drafts_per_cell']} draft per rung per bundle). Not comparable draft-for-draft with the tables above.")
-        add("")
-        add("| Rung | Drafts | Core facts | Detail facts | " + " | ".join(DIM_LABEL[d] for d in qs.DIMENSIONS) + " | Serious / minor errors | Grader-flagged action items | $ / 1k docs |")
-        add("|---|---:|---:|---:|" + "---:|" * len(qs.DIMENSIONS) + "---:|---:|---:|")
-        for r in bl["rungs"]:
-            ai = r["action_items"]
-            add(f"| {r['rung_id']} | {r['drafts']} | {r['core_facts']['hits']}/{r['core_facts']['total']} | {r['detail_facts']['hits']}/{r['detail_facts']['total']} | "
-                + " | ".join(_f(r["rubric"][d]) for d in qs.DIMENSIONS)
-                + f" | {r['serious_errors']} / {r['minor_errors']} | {('—' if not ai else str(ai['flagged']) + '/' + str(ai['total']))} | {_f(r['cost_per_1k_docs_usd'])} |")
-    add("")
-    add("## For lead review")
-    add("")
-    rv = s["review"]
-    add(f"### Serious errors reported by the judge ({len(rv['serious_errors'])})")
-    add("")
-    if rv["serious_errors"]:
-        add("| Draft | Draft words | Problem | Source words |")
-        add("|---|---|---|---|")
-        for e in rv["serious_errors"]:
-            add(f"| {e['draft']} | {_cell(e['claim_quote'])} | {_cell(e['problem'])} | {_cell(e['source_quote'] or 'ABSENT')} |")
-    else:
-        add("None (or no judgements).")
-    add("")
-    add(f"### Owner / time-window fields classified unsupported ({len(rv['unsupported_fields'])})")
-    add("")
-    if rv["unsupported_fields"]:
-        add("| Draft | Item | Field | Draft words | Rule result | Nearest source text |")
-        add("|---|---:|---|---|---|---|")
-        for f in rv["unsupported_fields"]:
-            add(f"| {f['draft']} | {f['item']} | {f['field']} | {_cell(f['value'])} | {_cell(f['reason'])} | {_cell(f['nearest_source'])} |")
-    else:
-        add("None.")
-    add("")
-    return "\n".join(L)
+    L += ["", f"## Head-to-head: template vs unbounded ({pw['planned_calls']} planned calls)", "",
+          f"- All: {_h2h_line(pw['all'])}"]
+    for m in MODEL_KEYS:
+        L.append(f"- {MODEL_LABEL[m]}: {_h2h_line(pw['by_model'].get(m))}")
+    if pw["all"]:
+        L += ["", "| Dimension | Template | Unbounded | Ties |", "|---|---:|---:|---:|"]
+        for k in ("overall", *qs.PAIR_DIMENSIONS):
+            b = pw["all"][k]
+            L.append(f"| {k} | {b['template_wins']} | {b['unbounded_wins']} | {b['ties']} |")
+    L += ["", "## By document (rubric means, serious errors per draft)", "", "| Document | Cell | Drafts | Accuracy | Coverage | Serious / draft |", "|---|---|---:|---:|---:|---:|"]
+    for pid in d["presets"]:
+        for arm in ARMS:
+            for m in MODEL_KEYS:
+                b = s["groups"][f"{arm}|{m}"]["by_preset"][pid]
+                if not b["drafts"]:
+                    continue
+                r = b.get("rubric") or {}
+                L.append(f"| {pid} | {ARM_LABEL[arm].split(':')[0]} · {MODEL_LABEL[m]} | {b['drafts']} | {_mean(r.get('factual_accuracy'))} | "
+                         f"{_mean(r.get('coverage'))} | {_mean(b.get('serious_per_draft'))} |")
+    L += ["", "## For lead review", "", f"### Serious errors ({len(s['review']['serious_errors'])})", ""]
+    for e in s["review"]["serious_errors"]:
+        L.append(f"- {e['draft']}: \"{e['claim_quote']}\" — {e['problem']}" + (f" (source: \"{e['source_quote']}\")" if e["source_quote"] else " (source: absent)"))
+    L += ["", f"### Action-item fields not found in the source ({len(s['review']['unsupported_fields'])})", ""]
+    for f in s["review"]["unsupported_fields"]:
+        L.append(f"- {f['draft']}, item {f['item']} {f['field']}: \"{f['value']}\" ({f['reason']})")
+    L += ["", "### Field rules", ""] + [f"- {r}" for r in d["field_rules"]]
+    return "\n".join(L) + "\n"
 
 
 # --------------------------------------------------------------------------------------------------
-# Compact app summary (replays/cat2_not_stated_summary.json)
+# App summary (replays/cat2_quality_summary.json)
 # --------------------------------------------------------------------------------------------------
 
-APP_SUMMARY_SCHEMA_VERSION = 1
-APP_SUMMARY_PATH = qs.BACKEND_DIR / "replays" / "cat2_not_stated_summary.json"
-# Fixed example rule (not chosen by outcome): this bundle, this model, this repeat, action items in order.
-EXAMPLE_RULE = {"preset_id": "reg-02", "model_key": "sonnet", "repeat_index": 0}
+APP_SUMMARY_SCHEMA_VERSION = 2
 
 
 def _h2h(block: dict[str, Any] | None) -> dict[str, Any] | None:
     if not block:
         return None
-    out = {k: {"wins": block[k]["not_stated_wins"], "losses": block[k]["other_wins"], "ties": block[k]["ties"]}
+    out = {k: {"template_wins": block[k]["template_wins"], "unbounded_wins": block[k]["unbounded_wins"], "ties": block[k]["ties"]}
            for k in ("overall", *qs.PAIR_DIMENSIONS)}
     pc = block["overall"]["position_consistency"]
     return {**out, "calls": block["calls"], "position_consistency": {"pairs": pc["units_with_both_orders"], "consistent": pc["consistent"]}}
 
 
-def _example(draft_records: Sequence[dict[str, Any]]) -> dict[str, Any] | None:
-    latest = latest_ok_by(draft_records, "draft_key")
-    pid, m, k = EXAMPLE_RULE["preset_id"], EXAMPLE_RULE["model_key"], EXAMPLE_RULE["repeat_index"]
-    o, n = latest.get(draft_key(pid, m, ARM_ORIGINAL, k)), latest.get(draft_key(pid, m, ARM_NOT_STATED, k))
-    if not o or not n:
-        return None
-    payload = qs.preset_map()[pid]["payload"]
-
-    def side(rec: dict[str, Any]) -> list[dict[str, Any]]:
-        plan = (rec.get("structured_draft") or {}).get("action_plan") or []
-        cls = classify_action_items(rec.get("structured_draft"), payload)
-        return [{"milestone": a.get("milestone"), "owner": a.get("owner"), "time_window": a.get("target_window"),
-                 "owner_class": c["owner_class"], "window_class": c["window_class"]} for a, c in zip(plan, cls)]
-
-    so, sn = side(o), side(n)
+def _preset_cell(d: dict[str, Any], keys: dict[str, Any], pw_records: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """Quality of one draft (repeat 0) in the shape the app's per-rung quality reads."""
+    fact_desc = {f["id"]: f for f in keys["facts"]}
+    j = d.get("judge")
+    errors = sorted((j or {}).get("errors", []), key=lambda e: (e["severity"] != "material", -int(e.get("repeats_reporting") or 1), e["claim_quote"]))
+    verdicts = (j or {}).get("number_verdicts") or {}
+    rung = APP_RUNG[(d["arm"], d["model_key"])]
+    other_arm = ARM_UNBOUNDED if d["arm"] == ARM_TEMPLATE else ARM_TEMPLATE
+    opp = APP_RUNG[(other_arm, d["model_key"])]
+    results = []
+    for order in ("fwd", "rev"):
+        r = next((x for x in pw_records if x["preset_id"] == d["preset_id"] and x["order"] == order
+                  and x["meta"]["model_key"] == d["model_key"] and x["meta"]["draft_repeat"] == d["repeat_index"]), None)
+        w = qs._winner(r, r["parsed"]["preferred"]) if r else None
+        results.append({"shown_first": rung if (order == "fwd") == (d["arm"] == ARM_TEMPLATE) else opp,
+                        "winner": None if r is None else ("tie" if w in (None, "tie") else APP_RUNG[(w, d["model_key"])])})
+    ai = None
+    if j and d["arm"] == ARM_TEMPLATE:
+        ai = {"total": len(j["flag_rows"]), "flagged": j["flagged_items"], "flagged_serious": j["flagged_items_serious"]} if j["flag_rows"] else None
     return {
-        "rule": f"{pid}, {m}, repeat {k}, action items in order (fixed in advance, not chosen by outcome)",
-        **EXAMPLE_RULE,
-        "items": [{"slot": i + 1, "original": a, "not_stated": b} for i, (a, b) in enumerate(zip(so, sn))],
+        "rung_id": rung,
+        "draft_id": d["draft_id"],
+        "text_sha256": d["text_sha256"],
+        "output_tokens": d["output_tokens"],
+        "cost_per_1k_docs_usd": d["cost_per_1k_docs_usd"],
+        "core_facts": {"hits": d["core_facts"]["hits"], "total": d["core_facts"]["total"]},
+        "detail_facts": {"hits": d["detail_facts"]["hits"], "total": d["detail_facts"]["total"]},
+        "missed_facts": [{"description": fact_desc[f]["description"], "tier": fact_desc[f]["tier"]} for f in d["missed_facts"] if f in fact_desc],
+        "numbers": {
+            "numeric_tokens": d["numbers_summary"]["numeric_tokens"],
+            "not_in_source": d["numbers_summary"]["not_in_source"],
+            "verdicts": ({v: sum(1 for x in verdicts.values() if x == v) for v in (*qs.NUMBER_VERDICTS, "no_majority")} if j else None),
+            "items": [{"text": n["text"], "context": n["snippet"], "verdict": verdicts.get(n["id"])} for n in d["not_in_source"]],
+        },
+        "rubric": ({dim: {"mean": float(j["scores"][dim]), "scores": [int(j["scores"][dim])]} for dim in qs.DIMENSIONS} if j else None),
+        "serious_errors": j["serious"] if j else None,
+        "minor_errors": j["minor"] if j else None,
+        "errors": ([{"claim_quote": e["claim_quote"], "problem": e["problem"],
+                     "source_quote": None if e["source_quote_or_absent"].strip().upper() == "ABSENT" else e["source_quote_or_absent"],
+                     "severity": e["severity"], "passes_reporting": int(e.get("repeats_reporting") or 1)} for e in errors] if j else None),
+        "action_items": ai,
+        "head_to_head": [{"opponent": opp, "results": results}] if any(x["winner"] for x in results) else [],
     }
 
 
@@ -1269,67 +1184,74 @@ def build_app_summary(
     keys: dict[str, Any] | None = None,
     source_files: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Timestamp-free view of the follow-up for the app, built from `analyse()` (the analysis code path)."""
-    if not judgements:
-        raise ValueError("No judge records: the app summary needs the blind-judge results.")
-    s = analyse(draft_records, judgements, keys=keys, baseline_summary=None)
+    """Timestamp-free view of the experiment for the app, built from `analyse()` (the analysis code path)."""
+    keys = keys or qs.load_quality_keys()
+    s = analyse(draft_records, judgements, keys=keys)
     cells = []
     for g in s["groups"].values():
-        owners_ns_by_preset = {pid: b["owner"]["not_stated"] for pid, b in g["by_preset"].items()}
+        judged = g["judged_drafts"]
         cells.append(
             {
-                "arm": g["arm"],
-                "model_key": g["model_key"],
-                "drafts": g["drafts"],
-                "action_items": g["action_items"],
-                "owner": g["owner"],
-                "time_window": g["time_window"],
-                "owner_not_stated_by_preset": owners_ns_by_preset,
-                "owner_supported_by_preset": {pid: b["owner"]["supported"] for pid, b in g["by_preset"].items()},
-                "serious_per_draft": g["serious_per_draft"]["mean"],
-                "minor_per_draft": g["minor_per_draft"]["mean"],
-                "serious_total": g["serious_total"],
-                "flagged_items_total": g["flagged_items_total"],
-                "rubric": {d: g["rubric"][d]["mean"] for d in qs.DIMENSIONS},
-                "core_facts": g["core_facts"],
-                "detail_facts": g["detail_facts"],
-                "cost_per_1k_docs_usd": g["cost_per_1k_docs_usd"]["mean"],
-                "output_tokens_mean": g["output_tokens"]["mean"],
+                "arm": g["arm"], "model_key": g["model_key"], "rung_id": g["rung_id"], "label": g["label"], "status": g["status"],
+                "drafts": g["drafts"], "drafts_planned": g["drafts_planned"], "judged_drafts": judged, "passes_per_draft": 1,
                 "truncated": g["truncated"],
+                "rubric": {dim: g["rubric"][dim]["mean"] for dim in qs.DIMENSIONS} if g["rubric"] else None,
+                "serious_per_draft": g["serious_per_draft"]["mean"] if judged else None,
+                "minor_per_draft": g["minor_per_draft"]["mean"] if judged else None,
+                "serious_total": g["serious_total"],
+                "core_facts": g["core_facts"], "detail_facts": g["detail_facts"],
+                "not_in_source_numbers": g["not_in_source_numbers"],
+                "number_verdicts": g["number_verdicts"],
+                "action_items": g["action_items"] if g["arm"] == ARM_TEMPLATE else None,
+                "owner": g["owner"] if g["arm"] == ARM_TEMPLATE else None,
+                "time_window": g["time_window"] if g["arm"] == ARM_TEMPLATE else None,
+                "flagged_items_total": g["flagged_items_total"] if g["arm"] == ARM_TEMPLATE else None,
+                "cost_per_1k_docs_usd": g["cost_per_1k_docs_usd"]["mean"],
+                "input_tokens_mean": g["input_tokens"]["mean"],
+                "output_tokens_mean": g["output_tokens"]["mean"],
+                "output_tokens_min": g["output_tokens"]["min"],
+                "output_tokens_max": g["output_tokens"]["max"],
             }
         )
     pw = s["pairwise"]
-    comps = Counter((r.get("meta") or {}).get("comparison") for r in qs.latest_ok(judgements).values())
-    dq, jdq = s["drafts_data_quality"], s["judge_data_quality"]
+    ok_j = qs.latest_ok(judgements or [])
+    pw_records = [r for r in ok_j.values() if r["task"] == "pairwise" and (r.get("meta") or {}).get("comparison") == COMPARISON]
+    scored = {d["draft_key"]: d for d in s["drafts"]}
+    texts = score_drafts(draft_records, keys)
+    presets: dict[str, Any] = {}
+    for pid in qs.PRESET_IDS:
+        rungs = {}
+        for arm in ARMS:
+            for m in MODEL_KEYS:
+                k = draft_key(pid, m, arm, GOLDEN_REPEAT_INDEX)
+                if k in scored:
+                    d = {**texts[k], "judge": scored[k].get("judge")}
+                    rungs[APP_RUNG[(arm, m)]] = _preset_cell(d, keys, pw_records)
+        presets[pid] = {"rungs": rungs}
+    dq, jdq = s["drafts_data_quality"], s["judge_data_quality"] or {}
+    comps = Counter((r.get("meta") or {}).get("comparison") for r in ok_j.values())
     return {
         "schema_version": APP_SUMMARY_SCHEMA_VERSION,
-        "source": "cat2 not-stated follow-up (blind judge)",
+        "source": "cat2 experiment: unbounded draft vs section template (blind judge)",
         "source_files": dict(source_files or {}),
-        "app_template": ARM_ORIGINAL,
-        "added_instruction": ADDED_INSTRUCTION,
-        "not_stated_literal": NOT_STATED,
         "keys_version": s["design"]["keys_version"],
         "judge_model": qs.JUDGE_MODEL,
-        "judge_models_returned": sorted(m for m in jdq["model_ids_returned"] if m),
-        "judge_passes_per_draft": 1,
+        "judge_models_returned": sorted(m for m in (jdq.get("model_ids_returned") or {}) if m),
+        "passes_per_draft": 1,
+        "drafts_per_cell": REPEATS * len(qs.PRESET_IDS),
+        "drafts_per_document_model": REPEATS,
+        "golden_repeat_index": GOLDEN_REPEAT_INDEX,
+        "documents": list(qs.PRESET_IDS),
+        "dimensions": list(qs.DIMENSIONS),
+        "arm_labels": dict(ARM_LABEL),
+        "max_tokens": dict(DRAFT_MAX_TOKENS),
         "counts": {
-            "drafts": dq["ok_drafts"],
-            "drafts_planned": s["design"]["planned_drafts"],
-            "drafts_per_cell": REPEATS * len(qs.PRESET_IDS),
-            "drafts_per_document_model_template": REPEATS,
-            "documents": len(qs.PRESET_IDS),
-            "truncated": dq["truncated"],
-            "judge_ok_calls": jdq["ok_calls"],
-            "judge_error_records": jdq["error_records"],
-            "rubric_calls": comps.get("rubric", 0),
-            "pairwise_vs_original_calls": comps.get("matched", 0),
-            "pairwise_vs_unbounded_calls": comps.get("vs_unbounded", 0),
+            "drafts": dq["ok_drafts"], "drafts_planned": s["design"]["planned_drafts"], "truncated": dq["truncated"],
+            "judge_ok_calls": comps.get("rubric", 0) + comps.get(COMPARISON, 0), "judge_error_records": jdq.get("error_records", 0),
+            "rubric_calls": comps.get("rubric", 0), "pairwise_calls": comps.get(COMPARISON, 0), "pairwise_planned": pw["planned_calls"],
         },
         "field_rules": list(FIELD_RULES),
         "cells": cells,
-        "head_to_head": {
-            "vs_original": {"all": _h2h(pw["matched"]["all"]), "by_model": {m: _h2h(b) for m, b in pw["matched"]["by_model"].items()}},
-            "vs_unbounded": {"all": _h2h(pw["vs_unbounded"]["all"]), "by_model": {m: _h2h(b) for m, b in pw["vs_unbounded"]["by_model"].items()}},
-        },
-        "example": _example(draft_records),
+        "head_to_head": {"status": pw["status"], "all": _h2h(pw["all"]), "by_model": {m: _h2h(b) for m, b in pw["by_model"].items()}},
+        "presets": presets,
     }

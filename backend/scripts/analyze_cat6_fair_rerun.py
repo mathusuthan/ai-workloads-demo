@@ -19,12 +19,13 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 from app.archetypes.cat6_swarms.fair_rerun import (  # noqa: E402
     ARMS,
+    DESIGN_CELLS,
+    DESIGN_COLUMNS,
+    DESIGN_ROWS,
     GOVERNED_ROLE_MAX_TOKENS,
     PATCH_AUTHOR_MAX_TOKENS,
-    SHARED_BUS_ORIGINAL_MAX_TOKENS,
     summarise,
 )
-from app.archetypes.cat6_swarms.sandbox_verifier import evaluate_patch_in_sandbox  # noqa: E402
 
 DEFAULT_IN = BACKEND_DIR / "experiments" / "cat6_fair_rerun" / "runs.jsonl"
 DEFAULT_OUT_MD = PROJECT_DIR / "analysis" / "cat6_fair_rerun.md"
@@ -80,6 +81,37 @@ def render_markdown(summary: dict[str, Any]) -> str:
         f"({'complete' if m['complete'] else 'INCOMPLETE'}, {'balanced' if m['balanced'] else 'UNBALANCED'})."
     )
     add("")
+    add(
+        "Scoring: each patch is run through PR-SANDBOX-GATE-01 (4 CI unit + 4 adversarial + 2 static AST checks, "
+        "Python `-I` subprocess); a run is verified when its final patch passes 10/10. Every run starts with a cold "
+        "cache (a per-run nonce in the cached prefix) and every run is kept."
+    )
+    add("")
+    add("## Design: with and without the deck's lever")
+    add("")
+    add(
+        "The deck's lever for this archetype: isolate sub-agent contexts and cache the shared repo prefix, and "
+        "measure cost per verified outcome (CpO). Each cell: verified runs, CpO cold / warm, mean model time per run."
+    )
+    add("")
+    add("| | " + " | ".join(DESIGN_COLUMNS.values()) + " |")
+    add("|---|" + "---|" * len(DESIGN_COLUMNS))
+    for row_key, row_label in DESIGN_ROWS.items():
+        cells = []
+        for col_key in DESIGN_COLUMNS:
+            arm_id = DESIGN_CELLS.get((row_key, col_key))
+            a = arms.get(arm_id) if arm_id else None
+            if a is None:
+                cells.append("(not run)")
+                continue
+            cpo = a["cost_per_verified_outcome_usd"]
+            lat = a["model_latency_ms_per_run"]["mean"]
+            cells.append(
+                f"`{arm_id}`: {a['final_verified']}/{a['runs']} verified · CpO {_usd(cpo['cold'])} / {_usd(cpo['warm'])} · "
+                f"{'n/a' if lat is None else f'{lat / 1000:.1f} s'}"
+            )
+        add(f"| {row_label} | " + " | ".join(cells) + " |")
+    add("")
     add("## Arms")
     add("")
     add("| Arm | Context | Role instructions | Models | Sandbox gate + 1 retry | Output caps |")
@@ -87,14 +119,10 @@ def render_markdown(summary: dict[str, Any]) -> str:
     governed_caps = ", ".join(f"{k} {v}" for k, v in GOVERNED_ROLE_MAX_TOKENS.items())
     for arm_id in summary["arm_ids"]:
         spec = ARMS[arm_id]
-        caps = (
-            f"all roles {SHARED_BUS_ORIGINAL_MAX_TOKENS}"
-            if arm_id == "shared_bus_original"
-            else f"patch_author {PATCH_AUTHOR_MAX_TOKENS}; {governed_caps}"
-        )
+        caps = f"patch_author {PATCH_AUTHOR_MAX_TOKENS}; {governed_caps}"
         add(
             f"| `{arm_id}` | {spec.context_summary} | {spec.instructions_summary} | {spec.models_summary} | "
-            f"{'yes' if spec.gate_enabled else 'no (scored once, no retry)'} | {caps} |"
+            f"{'yes' if spec.gate_enabled else 'no'} | {caps} |"
         )
     add("")
 
@@ -226,9 +254,18 @@ def render_markdown(summary: dict[str, Any]) -> str:
         )
     add("")
 
-    rs = summary.get("rescored")
-    if rs is not None:
-        lines.extend(render_rescored_section(rs, summary["arm_ids"]))
+    rates = {arms[a]["final_verified_rate"] for a in summary["arm_ids"] if arms[a]["runs"]}
+    if len(rates) == 1:
+        add("## Limits of this data")
+        add("")
+        r = next(iter(rates))
+        add(
+            f"- Every arm verified the same share of its runs ({_pct(r)}), so these incidents do not separate the "
+            "configurations on correctness; the arms differ in tokens, cost and latency only, and CpO equals cost per "
+            "run divided by that share in every arm."
+        )
+        add("- Each incident is a single-file fix handled by five agent roles; larger tasks were not measured.")
+        add("")
 
     add("## How to read the cost views")
     add("")
@@ -254,67 +291,19 @@ def render_markdown(summary: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def render_rescored_section(rs: dict[str, Any], arm_ids: list[str]) -> list[str]:
-    lines: list[str] = []
-    add = lines.append
-    add("## Re-scored with the current sandbox")
-    add("")
-    add(f"{rs['note']} The as-recorded tables above are unchanged.")
-    add("")
-    add(
-        "| Arm | Runs | First-attempt verified (recorded → re-scored) | Final verified (recorded → re-scored) | "
-        "Final checks re-scored | CpO billed | CpO cold | CpO warm |"
-    )
-    add("|---|---|---|---|---|---|---|---|")
-    for arm_id in arm_ids:
-        a = rs["arms"][arm_id]
-        cpo = a["cost_per_verified_outcome_usd_rescored"]
-        add(
-            f"| `{arm_id}` | {a['runs']} | {a['first_attempt_verified_recorded']} → {a['first_attempt_verified_rescored']} | "
-            f"{a['final_verified_recorded']} → {a['final_verified_rescored']} | "
-            f"{a['final_checks_passed_rescored']}/{a['final_checks_total']} | "
-            f"{_usd(cpo['billed'])} | {_usd(cpo['cold'])} | {_usd(cpo['warm'])} |"
-        )
-    add("")
-    changes = rs["changes"]
-    add(f"Records whose verdict or passed-check count changed: {len(changes)}.")
-    for c in changes:
-        flips = ", ".join(
-            f"{f['check_id']} {'PASS' if f['recorded_passed'] else 'FAIL'}→{'PASS' if f['rescored_passed'] else 'FAIL'}"
-            for f in c["flipped_checks"]
-        )
-        add(
-            f"- `{c['arm_id']}` {c['preset_id']} r{c['repeat_index']} ({c['attempt']}): "
-            f"{c['recorded_passed_checks']}/{c['recorded_total_checks']} (verified={c['recorded_verified']}) → "
-            f"{c['rescored_passed_checks']}/{c['rescored_total_checks']} (verified={c['rescored_verified']}); "
-            f"flipped: {flips or 'none'}"
-        )
-    add("")
-    return lines
-
-
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--in", dest="in_path", default=str(DEFAULT_IN))
     ap.add_argument("--out-md", default=str(DEFAULT_OUT_MD))
     ap.add_argument("--out-json", default=None, help="default: --out-md with a .json suffix")
     ap.add_argument("--repeats", type=int, default=None, help="expected repeats (default: inferred from records)")
-    ap.add_argument(
-        "--rescore",
-        action="store_true",
-        help="also re-run the current sandbox offline on each used record's recorded patches (records untouched)",
-    )
     args = ap.parse_args(argv)
 
     records = load_records(Path(args.in_path))
     if not records:
         print(f"No records found in {args.in_path}", file=sys.stderr)
         return 1
-    summary = summarise(
-        records,
-        expected_repeats=args.repeats,
-        rescore_sandbox=evaluate_patch_in_sandbox if args.rescore else None,
-    )
+    summary = summarise(records, expected_repeats=args.repeats)
     out_md = Path(args.out_md)
     out_json = Path(args.out_json) if args.out_json else out_md.with_suffix(".json")
     out_md.parent.mkdir(parents=True, exist_ok=True)

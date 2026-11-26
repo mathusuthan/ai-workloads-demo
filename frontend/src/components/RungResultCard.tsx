@@ -1,86 +1,10 @@
 import { useState } from 'react'
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Cpu, Sparkles, Timer } from 'lucide-react'
-import type { DecisionProbEntry, RungExecutionResult } from '../types'
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Cpu, Timer } from 'lucide-react'
+import type { RungExecutionResult } from '../types'
 
 interface RungResultCardProps {
   result: RungExecutionResult
   visible: boolean
-}
-
-function renderProbabilityEntry(key: string, entry: DecisionProbEntry) {
-  return (
-    <div key={key} className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-2.5">
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <span className="font-mono font-bold text-slate-900">{key}</span>
-        <div className="flex items-center gap-2">
-          <span className="rounded bg-indigo-100 px-1.5 py-0.5 font-mono text-[11px] font-bold text-indigo-900">
-            {String(entry.value)}
-          </span>
-          <span className="font-mono text-[11px] text-slate-600">
-            conf {(entry.confidence * 100).toFixed(1)}%
-          </span>
-        </div>
-      </div>
-
-      {entry.type === 'choice' && entry.probabilities && (
-        <div className="mt-2 space-y-1">
-          {Object.entries(entry.probabilities)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, 3)
-            .map(([opt, prob]) => (
-              <div key={opt} className="grid grid-cols-[1fr_44px] items-center gap-2 text-[11px]">
-                <div className="flex items-center gap-1.5 overflow-hidden">
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
-                    <div
-                      className="h-full rounded-full bg-indigo-600"
-                      style={{ width: `${Math.max(2, Math.round(prob * 100))}%` }}
-                    />
-                  </div>
-                  <span className="truncate font-mono text-[10px] text-slate-600">{opt}</span>
-                </div>
-                <span className="text-right font-mono text-[10px] font-semibold text-slate-700">
-                  {(prob * 100).toFixed(1)}%
-                </span>
-              </div>
-            ))}
-        </div>
-      )}
-
-      {entry.type === 'score' && entry.probabilities && (
-        <div className="mt-1.5 flex items-center gap-1.5">
-          {Object.entries(entry.probabilities)
-            .sort(([a], [b]) => Number(a) - Number(b))
-            .map(([lvl, prob]) => (
-              <div
-                key={lvl}
-                title={entry.legend?.[lvl] ?? `Level ${lvl}`}
-                className="flex-1 rounded bg-white p-1 text-center ring-1 ring-indigo-100"
-              >
-                <div className="font-mono text-[10px] text-slate-400">L{lvl}</div>
-                <div className="font-mono text-[10px] font-bold text-indigo-900">
-                  {(prob * 100).toFixed(0)}%
-                </div>
-              </div>
-            ))}
-        </div>
-      )}
-
-      {entry.type === 'noul' && typeof entry.p_true === 'number' && (
-        <div className="mt-1.5">
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
-            <div
-              className={`h-full rounded-full ${entry.value ? 'bg-emerald-600' : 'bg-slate-400'}`}
-              style={{ width: `${Math.max(2, Math.round(entry.p_true * 100))}%` }}
-            />
-          </div>
-          <div className="mt-0.5 flex justify-between font-mono text-[10px] text-slate-500">
-            <span>P(true)</span>
-            <span>{(entry.p_true * 100).toFixed(1)}%</span>
-          </div>
-        </div>
-      )}
-    </div>
-  )
 }
 
 export function RungResultCard({ result, visible }: RungResultCardProps) {
@@ -127,9 +51,10 @@ export function RungResultCard({ result, visible }: RungResultCardProps) {
               border: 'border-indigo-300',
               headerBg: 'bg-indigo-50/80',
               badge: 'bg-indigo-600 text-white',
-              savingsColor: 'text-emerald-700',
-              icon: <Sparkles className="h-4 w-4 text-indigo-600" />,
+              savingsColor: 'text-indigo-700',
+              icon: <CheckCircle2 className="h-4 w-4 text-indigo-600" />,
             }
+  const isSchemaRung = result.rung_id === 'sonnet_calibrated' || result.rung_id === 'haiku_calibrated'
 
   const f = result.finops
 
@@ -178,7 +103,7 @@ export function RungResultCard({ result, visible }: RungResultCardProps) {
                 <div className={`text-[11px] font-bold ${theme.savingsColor}`}>
                   {result.rung_id === 'sonnet_naive'
                     ? 'Baseline (1.0x)'
-                    : `-${result.savings_vs_naive_pct.toFixed(1)}% vs. Rung 1`}
+                    : `-${result.savings_vs_naive_pct.toFixed(1)}% vs. Sonnet write-up`}
                 </div>
               </div>
 
@@ -242,9 +167,7 @@ export function RungResultCard({ result, visible }: RungResultCardProps) {
                     >
                       {result.accuracy.method === 'reader_model'
                         ? 'Write-up · read by reader model'
-                        : result.rung_id === 'gemini_decision'
-                          ? 'Decisions API'
-                          : 'JSON schema'}
+                        : 'JSON schema'}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 font-mono text-xs font-extrabold">
@@ -344,7 +267,7 @@ export function RungResultCard({ result, visible }: RungResultCardProps) {
                 </div>
               )}
 
-            {result.rung_id === 'haiku_calibrated' && (
+            {isSchemaRung && (
               <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-3">
                 <div className="text-[11px] font-bold text-blue-900">
                   JSON Schema Output ({f.output_tokens} tok
@@ -353,19 +276,6 @@ export function RungResultCard({ result, visible }: RungResultCardProps) {
                 <pre className="mt-1.5 overflow-x-auto rounded-lg bg-slate-950 p-2.5 font-mono text-[11px] leading-relaxed text-emerald-300">
                   {JSON.stringify(result.structured_output, null, 2)}
                 </pre>
-              </div>
-            )}
-
-            {result.rung_id === 'gemini_decision' && result.decision_probabilities && (
-              <div className="space-y-2">
-                <div className="text-[11px] font-bold text-indigo-950">
-                  Calibrated System-1 Probabilities (0 Output Tokens)
-                </div>
-                <div className="space-y-2">
-                  {Object.entries(result.decision_probabilities).map(([qKey, entry]) =>
-                    renderProbabilityEntry(qKey, entry)
-                  )}
-                </div>
               </div>
             )}
           </div>

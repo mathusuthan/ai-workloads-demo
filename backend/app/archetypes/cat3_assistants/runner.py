@@ -1,4 +1,4 @@
-"""Orchestrates Category 3 IT & HR Service Desk 3-Pattern Arena & Interactive Simulator."""
+"""Orchestrates the Category 3 IT & HR Service Desk comparison (without vs with the deck improvement) and simulator."""
 
 from __future__ import annotations
 
@@ -59,7 +59,6 @@ CAT3_CATEGORY = "cat3_conversational_assistants"
 CAT3_USE_CASE = "it_hr_service_desk"
 CAT3_RUNG_TO_PATTERN: dict[str, str] = {
     "naive_full_history": "uncached_full_history",
-    "prefix_cached_history": "prefix_cached_full_history",
     "prefix_cached_summarized": "prefix_cached_sliding_summary",
 }
 SUMMARIZER_PATTERN = "sliding_window_memory_compactor"
@@ -146,33 +145,23 @@ def build_rung_quality(
 def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
     if rung_id == "naive_full_history":
         return (
-            "1. Uncached Full History (Naive Chat)",
-            "Anti-Pattern: Quadratic O(N²) Session",
+            "1. Without: Full History, No Cache",
+            "Without the improvement",
             [
                 # replaced with the measured prefix size by _apply_measured_claims
                 "Re-sends the IT/HR Handbook + full verbatim multi-turn log stack at full $2.00/M input price on every turn.",
-                "Cumulative session spend explodes quadratically across 10 turns because prior raw JSON/CLI telemetry is re-read repeatedly.",
-            ],
-        )
-    if rung_id == "prefix_cached_history":
-        return (
-            "2. Prefix Context Caching Only",
-            "Lever 1: 95% Cache Read Discount",
-            [
-                # replaced with the measured prefix size by _apply_measured_claims
-                "Attaches cache_control={'type': 'ephemeral'} to the static IT/HR Handbook prefix ($0.10/M on cache hits).",
-                "Eliminates static prefix bloat, but uncached verbatim log history still ramps linearly per turn unless compacted.",
-                # replaced with this session's measured answer-key scores by _apply_measured_claims
-                "Keeps the full verbatim history, so caching changes the cost but not what the model can see.",
+                "Cumulative session spend grows quadratically across 10 turns because prior raw JSON/CLI telemetry is re-read every turn.",
             ],
         )
     return (
-        "3. Prefix Caching + Sliding-Window Memory",
-        "Lever 1 + Lever 2 (Flat Tail)",
+        "2. With: Cached Prefix + Sliding-Window Summaries",
+        "With the improvement",
         [
-            "Combines the cached IT/HR Handbook prefix with automatic Sonnet 5.5 JSON memory compaction whenever more than 4 turns are verbatim ([T1..T3] before T5, +[T4..T6] before T8).",
+            "Caches the IT/HR Handbook prefix (cache_control={'type': 'ephemeral'}, $0.10/M on cache hits) and compacts "
+            "older turns into a Sonnet 5.5 JSON memory whenever more than 4 turns are verbatim ([T1..T3] before T5, "
+            "+[T4..T6] before T8).",
             # replaced with the measured final-turn context by _apply_measured_claims
-            "100% of summarizer input/output spend is billed transparently here — yet net session cost stays lowest while keeping late-turn context bounded.",
+            "Summarizer input/output spend is included in this version's cost, and late-turn context stays bounded.",
             # replaced with this session's measured answer-key scores by _apply_measured_claims
             "Quality trade-off: details the compacted memory drops are no longer available, so specifics from early "
             "turns can't be recalled later in the session.",
@@ -391,50 +380,36 @@ def _quality_notes(
     results: list[Cat3RungSummary],
     portfolio: Cat3QualityPortfolio | None,
 ) -> None:
-    """Note 3 of the cached rungs: this session's answer-key scores (fallback text stays if unscored)."""
+    """Note 3 of the version with the improvement: this session's answer-key scores vs without."""
     ok = {r.rung_id: r for r in results if r.status == "ok" and r.quality is not None}
-    naive, cached, summ = ok.get("naive_full_history"), ok.get("prefix_cached_history"), ok.get("prefix_cached_summarized")
+    naive, summ = ok.get("naive_full_history"), ok.get("prefix_cached_summarized")
+    if not (summ and summ.quality):
+        return
 
     def early(r: Cat3RungSummary) -> Cat3Measure | None:
         return r.quality.ledger_by_origin.get("1-3") if r.quality else None
 
-    if cached and cached.quality:
-        q = cached.quality
-        parts = []
-        if q.probe_accuracy is not None:
-            parts.append(f"answered {_frac(q.probe_accuracy)} recall questions")
-        parts.append(f"kept {_frac(early(cached))} turn 1–3 details in the final summary")
-        text = "Keeps the full verbatim history; on this session it " + " and ".join(parts)
-        if naive and naive.quality:
-            ref = [f"{_frac(naive.quality.probe_accuracy)} recall"] if naive.quality.probe_accuracy is not None else []
-            ref.append(f"{_frac(early(naive))} early details")
-            text += f" (Rung 1: {', '.join(ref)})"
-        set_note(cached, 2, text + ".")
-
-    if summ and summ.quality:
-        q = summ.quality
-        ref_rung = cached or naive
-        ref_label = "Rung 2" if cached else "Rung 1"
-        rq = ref_rung.quality if ref_rung else None
-        if q.probe_accuracy is not None:
-            text = f"Quality trade-off on this session: answered {_frac(q.probe_accuracy)} recall questions"
-            if rq is not None and rq.probe_accuracy is not None:
-                text += f" vs {_frac(rq.probe_accuracy)} with full history ({ref_label})"
-            text += f", and kept {_frac(early(summ))} turn 1–3 details in the final summary"
-        else:
-            text = f"Quality trade-off on this session: kept {_frac(early(summ))} turn 1–3 details in the final summary"
-        if rq is not None:
-            text += f" vs {_frac(early(ref_rung))}"
-        if q.probe_accuracy is None and q.probes_unavailable_reason:
-            text += " (recall probes are not run live)"
-        pf_s = _portfolio_rung(portfolio, "prefix_cached_summarized")
-        pf_r = _portfolio_rung(portfolio, ref_rung.rung_id) if ref_rung else None
-        if pf_s is not None and pf_r is not None and portfolio is not None:
-            text += (
-                f". Across the {portfolio.runs}-run rerun ({pf_s.runs} sessions per rung): "
-                f"{_frac(pf_s.probe_accuracy)} recall questions vs {_frac(pf_r.probe_accuracy)}"
-            )
-        set_note(summ, 2, text + ".")
+    q = summ.quality
+    rq = naive.quality if naive else None
+    if q.probe_accuracy is not None:
+        text = f"Quality trade-off on this session: answered {_frac(q.probe_accuracy)} recall questions"
+        if rq is not None and rq.probe_accuracy is not None:
+            text += f" vs {_frac(rq.probe_accuracy)} without the improvement"
+        text += f", and kept {_frac(early(summ))} turn 1–3 details in the final summary"
+    else:
+        text = f"Quality trade-off on this session: kept {_frac(early(summ))} turn 1–3 details in the final summary"
+    if rq is not None and naive is not None:
+        text += f" vs {_frac(early(naive))}"
+    if q.probe_accuracy is None and q.probes_unavailable_reason:
+        text += " (recall probes are not run live)"
+    pf_s = _portfolio_rung(portfolio, "prefix_cached_summarized")
+    pf_n = _portfolio_rung(portfolio, "naive_full_history")
+    if pf_s is not None and pf_n is not None and portfolio is not None:
+        text += (
+            f". Across the {portfolio.runs}-session rerun ({pf_s.runs} sessions per version): "
+            f"{_frac(pf_s.probe_accuracy)} recall questions vs {_frac(pf_n.probe_accuracy)}"
+        )
+    set_note(summ, 2, text + ".")
 
 
 def _apply_measured_claims(
@@ -443,7 +418,7 @@ def _apply_measured_claims(
 ) -> None:
     """Rewrite result-dependent rung notes with numbers measured on this session."""
     ok = {r.rung_id: r for r in results if r.status == "ok" and r.turns}
-    naive, cached, summ = ok.get("naive_full_history"), ok.get("prefix_cached_history"), ok.get("prefix_cached_summarized")
+    naive, summ = ok.get("naive_full_history"), ok.get("prefix_cached_summarized")
     prefix = _cached_prefix_tokens(results)
 
     def context(t: Any) -> int:
@@ -456,39 +431,24 @@ def _apply_measured_claims(
             f"Re-sends the ~{prefix:,}-tok IT/HR Handbook prefix + full verbatim multi-turn log stack at full "
             "$2.00/M input price on every turn.",
         )
-    if cached and prefix:
-        set_note(
-            cached,
-            0,
-            "Attaches cache_control={'type': 'ephemeral'} to the static IT/HR Handbook prefix "
-            f"(~{prefix:,} tok -> $0.10/M on cache hits).",
-        )
     if summ:
         last = summ.turns[-1]
-        others = [r.total_session_cost_usd for r in (naive, cached) if r is not None]
-        lowest = bool(others) and summ.total_session_cost_usd <= min(others)
+        lower = naive is not None and summ.total_session_cost_usd <= naive.total_session_cost_usd
         text = (
-            "100% of summarizer input/output spend is billed transparently here"
-            + (" — yet net session cost stays lowest" if lowest else "")
-            + f"{' while holding' if lowest else ', and it holds'} Turn {last.turn_number} context to {context(last):,} tok"
+            "Summarizer input/output spend is included in this version's cost"
+            + (" — the session still costs less than without the improvement" if lower else "")
+            + f", and it holds Turn {last.turn_number} context to {context(last):,} tok"
         )
         if naive and len(naive.turns) >= len(summ.turns):
-            text += f" (vs {context(naive.turns[len(summ.turns) - 1]):,} uncompacted)"
+            text += f" (vs {context(naive.turns[len(summ.turns) - 1]):,} without the improvement)"
         set_note(summ, 1, text + ".")
     _quality_notes(results, portfolio)
 
 
 def _apply_cross_rung_savings(results: list[Cat3RungSummary]) -> None:
     naive = next((r for r in results if r.rung_id == "naive_full_history" and r.status == "ok"), None)
-    cached_only = next(
-        (r for r in results if r.rung_id == "prefix_cached_history" and r.status == "ok"),
-        None,
-    )
     naive_cold = naive.total_session_cost_usd if naive else 0.0
     naive_warm = naive.warm_fleet_session_cost_usd if naive else 0.0
-    ch_cold = cached_only.total_session_cost_usd if cached_only else 0.0
-    ch_warm = cached_only.warm_fleet_session_cost_usd if cached_only else 0.0
-
     for res in results:
         if res.status != "ok":
             continue
@@ -500,46 +460,38 @@ def _apply_cross_rung_savings(results: list[Cat3RungSummary]) -> None:
             res.warm_savings_vs_naive_pct = round(
                 ((naive_warm - res.warm_fleet_session_cost_usd) / naive_warm) * 100, 2
             )
-        if ch_cold > 0:
-            res.savings_vs_cached_history_pct = round(
-                ((ch_cold - res.total_session_cost_usd) / ch_cold) * 100, 2
-            )
-        if ch_warm > 0:
-            res.warm_savings_vs_cached_history_pct = round(
-                ((ch_warm - res.warm_fleet_session_cost_usd) / ch_warm) * 100, 2
-            )
 
 
 def _quality_callout(
     summ: Cat3RungSummary,
-    cached: Cat3RungSummary,
+    naive: Cat3RungSummary,
     portfolio: Cat3QualityPortfolio | None,
 ) -> str:
     """Quality sentence for the session callout; number-free when this session was not scored."""
-    sq, cq = summ.quality, cached.quality
-    if sq is None or cq is None:
+    sq, nq = summ.quality, naive.quality
+    if sq is None or nq is None:
         return (
             "Compaction is not free of quality cost: specifics the compacted memory drops can't be recalled "
             "later in the session."
         )
-    early_s, early_c = sq.ledger_by_origin.get("1-3"), cq.ledger_by_origin.get("1-3")
-    if sq.probe_accuracy is not None and cq.probe_accuracy is not None:
+    early_s, early_n = sq.ledger_by_origin.get("1-3"), nq.ledger_by_origin.get("1-3")
+    if sq.probe_accuracy is not None and nq.probe_accuracy is not None:
         text = (
-            f"Quality trade-off: with compaction this version answered {_frac(sq.probe_accuracy)} recall questions "
-            f"about earlier turns vs {_frac(cq.probe_accuracy)} with full history, and its final summary kept "
-            f"{_frac(early_s)} turn 1–3 details vs {_frac(early_c)}"
+            f"Quality trade-off: with the improvement this session answered {_frac(sq.probe_accuracy)} recall "
+            f"questions about earlier turns vs {_frac(nq.probe_accuracy)} without, and its final summary kept "
+            f"{_frac(early_s)} turn 1–3 details vs {_frac(early_n)}"
         )
     else:
         text = (
-            f"Quality trade-off: with compaction the final summary kept {_frac(early_s)} turn 1–3 details vs "
-            f"{_frac(early_c)} with full history (recall probes are not run live)"
+            f"Quality trade-off: with the improvement the final summary kept {_frac(early_s)} turn 1–3 details vs "
+            f"{_frac(early_n)} without (recall probes are not run live)"
         )
     pf_s = _portfolio_rung(portfolio, "prefix_cached_summarized")
-    pf_c = _portfolio_rung(portfolio, "prefix_cached_history")
-    if portfolio is not None and pf_s is not None and pf_c is not None:
+    pf_n = _portfolio_rung(portfolio, "naive_full_history")
+    if portfolio is not None and pf_s is not None and pf_n is not None:
         text += (
-            f"; across the {portfolio.runs}-run rerun ({pf_s.runs} sessions per rung), {_frac(pf_s.probe_accuracy)} vs "
-            f"{_frac(pf_c.probe_accuracy)} recall questions"
+            f"; across the {portfolio.runs}-session rerun ({pf_s.runs} sessions per version), "
+            f"{_frac(pf_s.probe_accuracy)} vs {_frac(pf_n.probe_accuracy)} recall questions"
         )
     return text + "."
 
@@ -552,7 +504,7 @@ async def _run_live_cat3_session_for_rung(
 ) -> tuple[Cat3RungSummary, list[dict[str, Any]]]:
     """Run Turns 1..10 sequentially on Sonnet 5.5 for one rung, returning summary + raw capture records."""
     system_text = build_cat3_system_handbook(rung_id, preset["employee_profile"])
-    use_cache = rung_id in ("prefix_cached_history", "prefix_cached_summarized")
+    use_cache = rung_id == "prefix_cached_summarized"
     summarize = rung_id == "prefix_cached_summarized"
 
     verbatim_turns: list[Cat3ChatTurnEntry] = []
@@ -794,7 +746,6 @@ async def execute_cat3_run(
         creds = credit_shield.resolve_live_credentials(
             http_request,
             need_anthropic=True,
-            need_gemini=False,
         )
         assert creds.anthropic_api_key
 
@@ -896,30 +847,25 @@ async def execute_cat3_run(
         )
 
     naive_res = next((r for r in results if r.rung_id == "naive_full_history" and r.status == "ok"), None)
-    cached_res = next(
-        (r for r in results if r.rung_id == "prefix_cached_history" and r.status == "ok"),
-        None,
-    )
     compacted_res = next(
         (r for r in results if r.rung_id == "prefix_cached_summarized" and r.status == "ok"),
         None,
     )
     measured_prefix = _cached_prefix_tokens(results) or int(preset["approx_handbook_tokens"])
-    if naive_res and cached_res and compacted_res:
+    if naive_res and compacted_res:
         callout = (
-            f"10-Turn Sonnet 5.5 Session FinOps: Uncached Full History costs ${naive_res.cost_per_1k_sessions_usd:.2f}/1k sessions "
-            f"(O(N²) context growth). Enabling Prefix Context Caching (-95% reads on ~{measured_prefix:,}-tok handbook prefix) "
-            f"drops cost to ${cached_res.cost_per_1k_sessions_usd:.2f}/1k (-{cached_res.savings_vs_naive_pct:.1f}% cold, "
-            f"-{cached_res.warm_savings_vs_naive_pct:.1f}% warm fleet), and adding Sliding-Window Memory Compaction "
-            f"({compacted_res.summarizer_calls} Sonnet summarizer calls = ${compacted_res.summarizer_cost_usd * 1000:.2f}/1k overhead included) "
-            f"cuts total session spend further to ${compacted_res.cost_per_1k_sessions_usd:.2f}/1k "
-            f"(-{compacted_res.savings_vs_naive_pct:.1f}% cold / -{compacted_res.warm_savings_vs_naive_pct:.1f}% warm vs Rung 1)."
+            f"10-turn Sonnet 5.5 session: without the improvement (full history, no cache) it costs "
+            f"${naive_res.cost_per_1k_sessions_usd:.2f}/1k sessions. With a cached ~{measured_prefix:,}-tok handbook "
+            f"prefix and sliding-window summaries ({compacted_res.summarizer_calls} Sonnet summarizer calls = "
+            f"${compacted_res.summarizer_cost_usd * 1000:.2f}/1k, included) it costs "
+            f"${compacted_res.cost_per_1k_sessions_usd:.2f}/1k "
+            f"(-{compacted_res.savings_vs_naive_pct:.1f}% billed / -{compacted_res.warm_savings_vs_naive_pct:.1f}% warm)."
         )
-        callout += " " + _quality_callout(compacted_res, cached_res, portfolio)
+        callout += " " + _quality_callout(compacted_res, naive_res, portfolio)
     else:
         callout = (
-            "Category 3 compares Uncached Full History vs Prefix Context Caching vs "
-            "Prefix Caching + Sliding-Window Memory Summarization on Claude Sonnet 5.5."
+            "Category 3 compares a 10-turn Sonnet 5.5 session without the improvement (full history, no cache) "
+            "and with it (cached prefix + sliding-window summaries)."
         )
 
     return Cat3RunResponse(
@@ -960,7 +906,6 @@ async def execute_cat3_chat_turn(
     creds = credit_shield.resolve_live_credentials(
         http_request,
         need_anthropic=True,
-        need_gemini=False,
     )
     assert creds.anthropic_api_key
 
@@ -1015,7 +960,7 @@ async def execute_cat3_chat_turn(
         )
 
     system_text = build_cat3_system_handbook(req.rung_id, preset["employee_profile"])
-    use_cache = req.rung_id in ("prefix_cached_history", "prefix_cached_summarized")
+    use_cache = req.rung_id == "prefix_cached_summarized"
     messages = assemble_cat3_messages(
         verbatim_turns=verbatim_turns,
         memory_summary=memory_summary,

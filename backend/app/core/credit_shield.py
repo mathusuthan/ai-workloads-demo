@@ -12,9 +12,7 @@ from app.core.pricing import rate_card_payload
 @dataclass(frozen=True)
 class ResolvedCredentials:
     anthropic_api_key: str | None
-    gemini_api_key: str | None
     anthropic_source: str  # "byok" | "server_env" | "none"
-    gemini_source: str     # "byok" | "server_env" | "none"
     uses_server_budget: bool
 
 
@@ -40,20 +38,16 @@ class CreditShield:
         self,
         request: Request | None,
         need_anthropic: bool,
-        need_gemini: bool,
     ) -> ResolvedCredentials:
         settings = get_settings()
 
         byok_anthropic = (request.headers.get("X-Anthropic-Api-Key") or "").strip() if request else ""
-        byok_gemini = (request.headers.get("X-Gemini-Api-Key") or "").strip() if request else ""
         passcode = (request.headers.get("X-Author-Passcode") or "").strip() if request else ""
 
         anthropic_key: str | None = byok_anthropic or None
         anthropic_source = "byok" if byok_anthropic else "none"
-        gemini_key: str | None = byok_gemini or None
-        gemini_source = "byok" if byok_gemini else "none"
 
-        needs_server_key = (need_anthropic and not anthropic_key) or (need_gemini and not gemini_key)
+        needs_server_key = need_anthropic and not anthropic_key
         uses_server_budget = False
 
         if needs_server_key:
@@ -80,16 +74,9 @@ class CreditShield:
                 anthropic_source = "server_env"
                 uses_server_budget = True
 
-            if need_gemini and not gemini_key and settings.gemini_api_key:
-                gemini_key = settings.gemini_api_key
-                gemini_source = "server_env"
-                uses_server_budget = True
-
         missing: list[str] = []
         if need_anthropic and not anthropic_key:
             missing.append("ANTHROPIC_API_KEY")
-        if need_gemini and not gemini_key:
-            missing.append("GEMINI_API_KEY")
 
         if missing:
             raise HTTPException(
@@ -103,9 +90,7 @@ class CreditShield:
 
         return ResolvedCredentials(
             anthropic_api_key=anthropic_key,
-            gemini_api_key=gemini_key,
             anthropic_source=anthropic_source,
-            gemini_source=gemini_source,
             uses_server_budget=uses_server_budget,
         )
 
@@ -116,7 +101,6 @@ class CreditShield:
             "default_mode": "replay",
             "server_keys": {
                 "anthropic_configured": bool(settings.anthropic_api_key),
-                "gemini_configured": bool(settings.gemini_api_key),
             },
             "author_passcode_required": bool(settings.author_passcode),
             "daily_budget_usd": settings.daily_live_budget_usd,

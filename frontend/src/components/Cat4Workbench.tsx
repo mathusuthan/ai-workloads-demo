@@ -6,7 +6,6 @@ import {
   BookOpen,
   CheckCircle2,
   Code2,
-  Cpu,
   Database,
   DollarSign,
   FileText,
@@ -24,8 +23,6 @@ import {
   BarChart,
   CartesianGrid,
   Legend,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -52,11 +49,13 @@ interface Cat4WorkbenchProps {
   onRefreshSystemStatus: () => void
 }
 
-const CAT4_RUNGS: Cat4RungId[] = [
-  'naive_full_corpus',
-  'cached_full_corpus_citations',
-  'hybrid_rag_rerank_citations',
-]
+// Without and with the deck improvement (hybrid retrieval paired with context caching)
+const CAT4_RUNGS: Cat4RungId[] = ['naive_full_corpus', 'cached_rerank_hybrid']
+
+const RUNG_BUTTON: Record<Cat4RungId, string> = {
+  naive_full_corpus: 'Without: Whole Corpus',
+  cached_rerank_hybrid: 'With: Retrieval + Caching',
+}
 
 const VOLUME_STEPS = [
   { label: '500 / mo (Boutique Legal)', value: 500 },
@@ -113,9 +112,7 @@ export function Cat4Workbench({
   const [runResponse, setRunResponse] = useState<Cat4RunResponse | null>(null)
 
   const [selectedQuestionIdx, setSelectedQuestionIdx] = useState<number>(0)
-  const [activeRungView, setActiveRungView] = useState<Cat4RungId>(
-    'hybrid_rag_rerank_citations'
-  )
+  const [activeRungView, setActiveRungView] = useState<Cat4RungId>('cached_rerank_hybrid')
   const [openDocId, setOpenDocId] = useState<string>(
     presetsData.documents[0]?.doc_id ?? 'DOC-01'
   )
@@ -190,45 +187,10 @@ export function Cat4Workbench({
     () => runResponse?.results.find((r) => r.rung_id === 'naive_full_corpus'),
     [runResponse]
   )
-  const cachedSummary = useMemo(
-    () => runResponse?.results.find((r) => r.rung_id === 'cached_full_corpus_citations'),
+  const pairedSummary = useMemo(
+    () => runResponse?.results.find((r) => r.rung_id === 'cached_rerank_hybrid'),
     [runResponse]
   )
-  const hybridSummary = useMemo(
-    () => runResponse?.results.find((r) => r.rung_id === 'hybrid_rag_rerank_citations'),
-    [runResponse]
-  )
-
-  // Query-count crossover chart (N = 1 .. 12 queries per Deal Room, $/1k Deal Rooms)
-  const crossoverData = useMemo(() => {
-    if (!naiveSummary || !cachedSummary || !hybridSummary) return []
-    const nQueries = Math.max(1, naiveSummary.queries.length)
-    const naiveAvg = naiveSummary.cold_audit_cost_usd / nQueries
-    const cachedQ1Cold = cachedSummary.queries[0]?.cold_query_cost_usd ?? 0
-    const cachedWarmTail =
-      nQueries > 1
-        ? cachedSummary.queries
-            .slice(1)
-            .reduce((acc, q) => acc + q.warm_query_cost_usd, 0) /
-          (nQueries - 1)
-        : cachedSummary.warm_audit_cost_usd / nQueries
-    const cachedWarmAvg = cachedSummary.warm_audit_cost_usd / nQueries
-    const hybridAvg = hybridSummary.cold_audit_cost_usd / nQueries
-
-    const rows = []
-    for (let n = 1; n <= 12; n += 1) {
-      const coldR2 = cachedQ1Cold + Math.max(0, n - 1) * cachedWarmTail
-      rows.push({
-        label: `${n}Q`,
-        queryCount: n,
-        naive1k: Number((n * naiveAvg * 1000).toFixed(2)),
-        cachedCold1k: Number((coldR2 * 1000).toFixed(2)),
-        cachedWarm1k: Number((n * cachedWarmAvg * 1000).toFixed(2)),
-        hybrid1k: Number((n * hybridAvg * 1000).toFixed(2)),
-      })
-    }
-    return rows
-  }, [naiveSummary, cachedSummary, hybridSummary])
 
   // Component cost breakdown bar chart ($ per 1,000 4-query Deal-Room audits)
   const componentBarData = useMemo(() => {
@@ -237,31 +199,18 @@ export function Cat4Workbench({
       .filter((r) => r.status === 'ok')
       .map((r) => {
         const uncachedInCost = (r.total_uncached_input_tokens / 1_000_000) * 2.0 * 1000
-        const rawWriteCost = (r.total_cache_creation_tokens / 1_000_000) * 2.5 * 1000
-        const rawReadCost = (r.total_cache_read_tokens / 1_000_000) * 0.1 * 1000
         const totAudit1k =
           cacheMode === 'warm_shared_corpus'
             ? r.cost_per_1k_audits_warm_usd
             : r.cost_per_1k_audits_cold_usd
         const outCost1k = (r.total_output_tokens / 1_000_000) * 10.0 * 1000
-        const rerankCost1k = r.reranker_cost_usd * 1000
-        const normalizedPrefix = Math.max(0, totAudit1k - uncachedInCost - outCost1k - rerankCost1k)
+        // Haiku's clause pick (its cached clause block priced for the selected cache view)
+        const pickCost1k = r.reranker_calls > 0 ? Math.max(0, totAudit1k - uncachedInCost - outCost1k) : 0
         return {
-          name:
-            r.rung_id === 'naive_full_corpus'
-              ? '1. Naive Stuffing'
-              : r.rung_id === 'cached_full_corpus_citations'
-                ? '2. Cached Full Corpus'
-                : '3. Hybrid BM25 + Haiku',
-          'Uncached Input': Number(uncachedInCost.toFixed(2)),
-          'Prefix Cache W/R': Number(
-            (r.rung_id === 'cached_full_corpus_citations'
-              ? normalizedPrefix
-              : rawWriteCost + rawReadCost
-            ).toFixed(2)
-          ),
-          'Answer Output': Number(outCost1k.toFixed(2)),
-          'Haiku Reranker': Number(rerankCost1k.toFixed(2)),
+          name: r.rung_id === 'naive_full_corpus' ? 'Without' : 'With',
+          'Sonnet Input': Number(uncachedInCost.toFixed(2)),
+          'Sonnet Output': Number(outCost1k.toFixed(2)),
+          'Haiku Clause Pick': Number(pickCost1k.toFixed(2)),
         }
       })
   }, [runResponse, cacheMode])
@@ -298,7 +247,7 @@ export function Cat4Workbench({
       )
       setAdhocResult(resp.results)
       setAdhocQuestionAsked(resp.question)
-      setActiveRungView('hybrid_rag_rerank_citations')
+      setActiveRungView('cached_rerank_hybrid')
       onRefreshSystemStatus()
     } catch (err) {
       setAdhocError(err instanceof Error ? err.message : 'Failed to run custom query.')
@@ -372,9 +321,9 @@ export function Cat4Workbench({
                 {archetype.title} — {archetype.novamart_product_name}
               </h1>
               <p className="mt-1 text-xs leading-relaxed text-slate-600 sm:text-sm">
-                Compare <strong>Uncached Full-Corpus Stuffing</strong> vs.{' '}
-                <strong>Anthropic DocumentBlock Prefix Caching + Native Citations</strong> vs.{' '}
-                <strong>Hybrid BM25 + Haiku 5.5 Reranking + Native Citations</strong> over a 7-document,
+                Compare the audit <strong>without the improvement</strong> (the whole corpus, uncached, no citations)
+                and <strong>with it</strong> (hybrid retrieval paired with context caching: Haiku 5.5 picks 5 clauses
+                from the cached corpus and Sonnet 5.5 answers over them with native citations) over a 7-document,
                 ~16k–21k-token Indian supplier deal room (Wholesale MSA, Diwali Peak SLA, DPDP Act 2023,
                 BIS/EPR Hazmat, CGST Sec 16(2)(aa) / MSMED 45-Day Rider, MCA Form AOC-4 / CARO 2020 &amp; Side Letter #2).
               </p>
@@ -465,7 +414,7 @@ export function Cat4Workbench({
                 {loadingArena
                   ? 'Running 4-Query Audit...'
                   : creds.mode === 'live'
-                    ? 'Run Live 3-Rung Deal-Room Audit'
+                    ? 'Run Live Deal-Room Audit (Without & With)'
                     : 'Replay Recorded 4-Query Audit'}
               </span>
             </button>
@@ -490,28 +439,17 @@ export function Cat4Workbench({
             )}
           </div>
 
-          {/* 3-Rung Deal-Room Arena Cards */}
-          <section className="grid gap-4 lg:grid-cols-3">
+          {/* Without vs with cards */}
+          <section className="grid gap-4 lg:grid-cols-2">
             {runResponse.results.map((res) => {
               const isNaive = res.rung_id === 'naive_full_corpus'
-              const isCached = res.rung_id === 'cached_full_corpus_citations'
-              const isHybrid = res.rung_id === 'hybrid_rag_rerank_citations'
+              const isPaired = res.rung_id === 'cached_rerank_hybrid'
+              const pickCacheW = res.queries.reduce((a, q) => a + (q.reranker_finops?.cache_creation_tokens ?? 0), 0)
+              const pickCacheR = res.queries.reduce((a, q) => a + (q.reranker_finops?.cache_read_tokens ?? 0), 0)
 
-              const borderTheme = isNaive
-                ? 'border-rose-300'
-                : isCached
-                  ? 'border-blue-300'
-                  : 'border-amber-400 ring-1 ring-amber-200'
-              const headerBg = isNaive
-                ? 'bg-rose-50'
-                : isCached
-                  ? 'bg-blue-50/80'
-                  : 'bg-amber-50/90'
-              const badgeBg = isNaive
-                ? 'bg-rose-600 text-white'
-                : isCached
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-amber-600 text-white'
+              const borderTheme = isNaive ? 'border-rose-300' : 'border-emerald-400 ring-1 ring-emerald-200'
+              const headerBg = isNaive ? 'bg-rose-50' : 'bg-emerald-50/90'
+              const badgeBg = isNaive ? 'bg-rose-600 text-white' : 'bg-emerald-700 text-white'
 
               const cost1kAudits =
                 cacheMode === 'warm_shared_corpus'
@@ -540,7 +478,7 @@ export function Cat4Workbench({
                       <h2 className="mt-2 text-sm font-extrabold text-slate-900">{res.rung_title}</h2>
                       <div className="mt-0.5 font-mono text-[11px] text-slate-600">
                         Anthropic · <strong>{res.model_id}</strong>
-                        {res.reranker_model_id && ` + ${res.reranker_model_id} rerank`}
+                        {res.reranker_model_id && ` + ${res.reranker_model_id} clause pick`}
                       </div>
                     </div>
 
@@ -579,11 +517,13 @@ export function Cat4Workbench({
                           </span>
                         </div>
                         <div>
-                          <span className="block text-[10px] text-slate-500">CACHE W / R</span>
+                          <span className="block text-[10px] text-slate-500">CLAUSE CACHE W / R</span>
                           <span className="font-bold text-slate-900">
-                            {cacheMode === 'warm_shared_corpus'
-                              ? `0 / ${(res.total_cache_creation_tokens + res.total_cache_read_tokens).toLocaleString()}`
-                              : `${res.total_cache_creation_tokens.toLocaleString()} / ${res.total_cache_read_tokens.toLocaleString()}`}
+                            {!isPaired
+                              ? 'no cache'
+                              : cacheMode === 'warm_shared_corpus'
+                                ? `0 / ${(pickCacheW + pickCacheR).toLocaleString()}`
+                                : `${pickCacheW.toLocaleString()} / ${pickCacheR.toLocaleString()}`}
                           </span>
                         </div>
                         <div>
@@ -594,10 +534,10 @@ export function Cat4Workbench({
                         </div>
                         <div>
                           <span className="block text-[10px] text-slate-500">
-                            {isHybrid ? 'HAIKU RERANKER' : 'NATIVE CITATIONS'}
+                            {isPaired ? 'HAIKU CLAUSE PICK' : 'NATIVE CITATIONS'}
                           </span>
                           <span className="font-bold text-slate-900">
-                            {isHybrid
+                            {isPaired
                               ? `${res.reranker_calls} calls ($${(res.reranker_cost_usd * 1000).toFixed(2)}/1k)`
                               : `${res.avg_citations_per_query.toFixed(1)} spans / q`}
                           </span>
@@ -625,7 +565,7 @@ export function Cat4Workbench({
                         )}
                         {res.avg_reranker_recall_pct !== null && (
                           <span className="rounded-md bg-amber-100 px-2 py-0.5 font-bold text-amber-950">
-                            {res.avg_reranker_recall_pct}% of needed clauses kept after rerank
+                            {res.avg_reranker_recall_pct}% of needed clauses among Haiku's picks
                           </span>
                         )}
                       </div>
@@ -652,75 +592,16 @@ export function Cat4Workbench({
             cacheMode={cacheMode}
           />
 
-          {/* Charts: Query-Count Crossover & Cost Component Breakdown */}
-          <section className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h2 className="text-sm font-extrabold text-slate-900">
-                    Queries per Deal Room Crossover ($ / 1,000 Deal Rooms)
-                  </h2>
-                  <p className="text-[11px] text-slate-500">
-                    Cost only. Built from this audit's measured per-question costs; beyond the questions actually asked the
-                    lines are a straight-line projection that assumes the cache stays warm and each extra question costs
-                    the measured average. Answer quality is shown separately above.
-                  </p>
-                </div>
-              </div>
-              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={crossoverData} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
-                    <Tooltip formatter={(val: number) => `$${val.toFixed(2)}`} />
-                    <Legend wrapperStyle={{ fontSize: '11px' }} />
-                    <Line
-                      type="monotone"
-                      dataKey="naive1k"
-                      name="1. Naive Stuffing"
-                      stroke="#dc2626"
-                      strokeWidth={2}
-                      dot={{ r: 3 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="cachedCold1k"
-                      name="2. Cached Corpus (Cold Q1)"
-                      stroke="#2563eb"
-                      strokeWidth={2.5}
-                      dot={{ r: 3 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="cachedWarm1k"
-                      name="2. Cached Corpus (Warm Fleet)"
-                      stroke="#0ea5e9"
-                      strokeDasharray="4 4"
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="hybrid1k"
-                      name="3. Hybrid BM25 + Haiku"
-                      stroke="#d97706"
-                      strokeWidth={2.5}
-                      dot={{ r: 3 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
+          {/* Cost component breakdown */}
+          <section>
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-3">
                 <h2 className="text-sm font-extrabold text-slate-900">
                   4-Query Audit Cost Attribution ($ / 1,000 Audits)
                 </h2>
                 <p className="text-[11px] text-slate-500">
-                  This audit's measured tokens split by component at list rates: uncached input, cache writes and reads,
-                  answer output, and the small-model reranker
+                  This audit's measured tokens split by component at list rates: Sonnet input and answer output, and
+                  Haiku's clause pick (including its cached clause block, priced for the selected cache view)
                 </p>
               </div>
               <div className="h-72 w-full">
@@ -731,10 +612,9 @@ export function Cat4Workbench({
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
                     <Tooltip formatter={(val: number) => `$${val.toFixed(2)}`} />
                     <Legend wrapperStyle={{ fontSize: '11px' }} />
-                    <Bar dataKey="Uncached Input" stackId="a" fill="#f97316" />
-                    <Bar dataKey="Prefix Cache W/R" stackId="a" fill="#3b82f6" />
-                    <Bar dataKey="Answer Output" stackId="a" fill="#1e293b" />
-                    <Bar dataKey="Haiku Reranker" stackId="a" fill="#10b981" />
+                    <Bar dataKey="Sonnet Input" stackId="a" fill="#f97316" />
+                    <Bar dataKey="Sonnet Output" stackId="a" fill="#1e293b" />
+                    <Bar dataKey="Haiku Clause Pick" stackId="a" fill="#10b981" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -746,7 +626,7 @@ export function Cat4Workbench({
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-950 px-5 py-4 text-white">
               <div>
                 <div className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
-                  Interactive Clause Citation Verifier &amp; 3-Stage Retrieval Funnel X-Ray
+                  Interactive Clause Citation Verifier &amp; the Clauses Haiku Picked
                 </div>
                 <h2 className="text-base font-extrabold">
                   Click any inline citation badge [1], [2] to see the contract span it points to — a citation shows where a claim came from, not that it is right
@@ -768,11 +648,7 @@ export function Cat4Workbench({
                         : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                     }`}
                   >
-                    {rid === 'naive_full_corpus'
-                      ? 'Rung 1: Naive'
-                      : rid === 'cached_full_corpus_citations'
-                        ? 'Rung 2: Cached + Cite'
-                        : 'Rung 3: Hybrid RAG'}
+                    {RUNG_BUTTON[rid]}
                   </button>
                 ))}
               </div>
@@ -1006,132 +882,84 @@ export function Cat4Workbench({
                 </div>
               )}
 
-              {/* Rung 3: 3-Stage Hybrid Retrieval Funnel X-Ray (always shown from Hybrid Rung result) */}
+              {/* The clauses Haiku picked for the version with the improvement */}
               {(() => {
-                const hybridSource =
-                  activeSourceSummaryList.find((r) => r.rung_id === 'hybrid_rag_rerank_citations') ??
-                  null
-                const hybridQ = adhocResult
-                  ? hybridSource?.queries[0] ?? null
-                  : hybridSource?.queries[selectedQuestionIdx] ?? hybridSource?.queries[0] ?? null
-                if (!hybridQ || hybridQ.retrieval_funnel.length === 0) return null
-
-                const selectedCount = hybridQ.retrieval_funnel.filter(
-                  (f) => f.stage === 'selected_by_reranker'
-                ).length
-                const prunedRerankCount = hybridQ.retrieval_funnel.filter(
-                  (f) => f.stage === 'pruned_by_reranker'
-                ).length
-                const prunedBm25Count = hybridQ.retrieval_funnel.filter(
-                  (f) => f.stage === 'pruned_by_bm25'
-                ).length
+                const pairedSource = activeSourceSummaryList.find((r) => r.rung_id === 'cached_rerank_hybrid') ?? null
+                const pairedQ = adhocResult
+                  ? pairedSource?.queries[0] ?? null
+                  : pairedSource?.queries[selectedQuestionIdx] ?? pairedSource?.queries[0] ?? null
+                if (!pairedQ || pairedQ.retrieval_funnel.length === 0) return null
+                const picks = pairedQ.retrieval_funnel.filter((f) => f.stage === 'selected_by_reranker')
 
                 return (
                   <div className="space-y-3 border-t border-slate-200 pt-5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <Filter className="h-4 w-4 text-amber-600" />
-                        <div>
-                          <h3 className="text-sm font-extrabold text-slate-900">
-                            Rung 3 Hybrid Retrieval Funnel X-Ray (28 Chunks → 10 BM25 → {selectedCount} Haiku-Reranked → Sonnet Synthesis)
-                          </h3>
-                          <p className="text-[11px] text-slate-500">
-                            Pruned <strong>{hybridQ.context_reduction_pct.toFixed(1)}%</strong> of corpus chars ·{' '}
-                            {hybridQ.reranker_recall_pct !== null && (
-                              <>
-                                Needed clauses kept after rerank: <strong>{hybridQ.reranker_recall_pct}%</strong> ·{' '}
-                              </>
-                            )}
-                            Haiku Rerank Cost:{' '}
-                            <strong>
-                              ${((hybridQ.reranker_finops?.total_cost_usd ?? 0) * 1000).toFixed(2)} / 1k queries
-                            </strong>{' '}
-                            ({selectedCount} selected, {prunedRerankCount} pruned at rerank, {prunedBm25Count} pruned at BM25)
-                          </p>
-                        </div>
+                    <div className="flex items-center gap-2">
+                      <Filter className="h-4 w-4 text-amber-600" />
+                      <div>
+                        <h3 className="text-sm font-extrabold text-slate-900">
+                          Clauses Haiku Picked for This Question ({picks.length} of {presetsData.total_chunks}, Sent to Sonnet)
+                        </h3>
+                        <p className="text-[11px] text-slate-500">
+                          <strong>{pairedQ.context_reduction_pct.toFixed(1)}%</strong> of corpus chars not sent to Sonnet ·{' '}
+                          {pairedQ.reranker_recall_pct !== null && (
+                            <>
+                              Needed clauses among the picks: <strong>{pairedQ.reranker_recall_pct}%</strong> ·{' '}
+                            </>
+                          )}
+                          Haiku clause-pick cost:{' '}
+                          <strong>${((pairedQ.reranker_finops?.total_cost_usd ?? 0) * 1000).toFixed(2)} / 1k queries</strong>
+                        </p>
                       </div>
                     </div>
 
                     <div
                       tabIndex={0}
                       role="region"
-                      aria-labelledby="cat4-funnel-caption"
+                      aria-labelledby="cat4-picks-caption"
                       className="table-wrapper rounded-xl border border-slate-200"
                     >
-                      <table
-                        className="mwg-table min-w-full divide-y divide-slate-200 text-xs"
-                        data-table="cat4-funnel"
-                      >
-                        <caption id="cat4-funnel-caption" className="sr-only">
-                          Category 4 Rung 3 28-chunk retrieval and Haiku 5.5 reranking funnel
+                      <table className="mwg-table min-w-full divide-y divide-slate-200 text-xs" data-table="cat4-picks">
+                        <caption id="cat4-picks-caption" className="sr-only">
+                          Clauses Haiku 5.5 picked from the cached deal-room corpus for this question
                         </caption>
                         <thead className="bg-slate-100 text-[11px] font-bold uppercase tracking-wider text-slate-600">
                           <tr>
-                            <th scope="col" className="px-3 py-2.5 text-left">Chunk ID</th>
+                            <th scope="col" className="px-3 py-2.5 text-left">Pick · Chunk ID</th>
                             <th scope="col" className="px-3 py-2.5 text-left">Document &amp; Clause</th>
-                            <th scope="col" className="px-3 py-2.5 text-right">BM25 Score</th>
-                            <th scope="col" className="px-3 py-2.5 text-left">Stage &amp; Haiku Rationale</th>
-                            <th scope="col" className="px-3 py-2.5 text-right">Gold / Est. Tok</th>
+                            <th scope="col" className="px-3 py-2.5 text-left">Haiku Score &amp; Rationale</th>
+                            <th scope="col" className="px-3 py-2.5 text-right">Expected / Est. Tok</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
-                          {hybridQ.retrieval_funnel.map((row) => {
-                            const isSel = row.stage === 'selected_by_reranker'
-                            const isMid = row.stage === 'pruned_by_reranker'
-                            return (
-                              <tr
-                                key={row.chunk_id}
-                                className={
-                                  isSel
-                                    ? 'bg-emerald-50/40'
-                                    : isMid
-                                      ? 'bg-amber-50/30'
-                                      : 'opacity-70'
-                                }
-                              >
-                                <th scope="row" className="whitespace-nowrap px-3 py-2 text-left font-mono text-[11px] font-bold text-slate-900">
-                                  #{row.bm25_rank} · {row.chunk_id}
-                                </th>
-                                <td className="px-3 py-2 text-[11px] text-slate-700">
-                                  <div className="font-bold text-slate-900">{row.doc_title}</div>
-                                  <div className="text-[10px] text-slate-500">{row.clause_ref}</div>
-                                </td>
-                                <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[11px] font-semibold text-slate-700">
-                                  {row.bm25_score.toFixed(2)}
-                                </td>
-                                <td className="px-3 py-2 text-[11px]">
-                                  <div className="flex flex-wrap items-center gap-1.5">
-                                    <span
-                                      className={`rounded px-2 py-0.5 font-mono text-[10px] font-bold ${
-                                        isSel
-                                          ? 'bg-emerald-100 text-emerald-900'
-                                          : isMid
-                                            ? 'bg-amber-100 text-amber-900'
-                                            : 'bg-slate-100 text-slate-600'
-                                      }`}
-                                    >
-                                      {isSel
-                                        ? `SELECTED (${row.reranker_score}/100)`
-                                        : isMid
-                                          ? 'PRUNED AT RERANK'
-                                          : 'PRUNED AT BM25'}
-                                    </span>
-                                    {row.reranker_rationale && (
-                                      <span className="text-slate-600">{row.reranker_rationale}</span>
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[11px]">
-                                  {row.is_expected_gold && (
-                                    <span className="mr-1.5 inline-flex items-center gap-0.5 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-900">
-                                      <CheckCircle2 className="h-3 w-3" /> Gold
+                          {picks.map((row, i) => (
+                            <tr key={row.chunk_id} className="bg-emerald-50/40">
+                              <th scope="row" className="whitespace-nowrap px-3 py-2 text-left font-mono text-[11px] font-bold text-slate-900">
+                                #{row.pick_rank ?? i + 1} · {row.chunk_id}
+                              </th>
+                              <td className="px-3 py-2 text-[11px] text-slate-700">
+                                <div className="font-bold text-slate-900">{row.doc_title}</div>
+                                <div className="text-[10px] text-slate-500">{row.clause_ref}</div>
+                              </td>
+                              <td className="px-3 py-2 text-[11px]">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {row.reranker_score != null && (
+                                    <span className="rounded bg-emerald-100 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-900">
+                                      {row.reranker_score}/100
                                     </span>
                                   )}
-                                  <span className="text-slate-600">~{row.approx_tokens} tok</span>
-                                </td>
-                              </tr>
-                            )
-                          })}
+                                  {row.reranker_rationale && <span className="text-slate-600">{row.reranker_rationale}</span>}
+                                </div>
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-[11px]">
+                                {row.is_expected_gold && (
+                                  <span className="mr-1.5 inline-flex items-center gap-0.5 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-900">
+                                    <CheckCircle2 className="h-3 w-3" /> Expected
+                                  </span>
+                                )}
+                                <span className="text-slate-600">~{row.approx_tokens} tok</span>
+                              </td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
@@ -1150,7 +978,7 @@ export function Cat4Workbench({
                 </label>
                 <p id="cat4-adhoc-hint" className="mt-1 text-[11px] text-slate-600">
                   {creds.mode === 'live'
-                    ? 'Live API Mode active: runs your custom question simultaneously across Naive Stuffing, Cached DocumentBlocks, and Hybrid BM25 + Haiku Reranking.'
+                    ? 'Live API Mode active: runs your custom question on both versions — without the improvement (whole corpus) and with it (Haiku picks clauses from the cached corpus, Sonnet answers with citations).'
                     : 'Verified Replay Mode ($0) serves the 8 pre-captured golden diligence audits. Switch Credit Shield to Live API Mode in the header to test ad-hoc questions.'}
                 </p>
 
@@ -1191,7 +1019,7 @@ export function Cat4Workbench({
                     className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-4 py-2 text-xs font-extrabold text-white shadow-xs transition hover:bg-amber-700 disabled:opacity-40"
                   >
                     <Send className="h-3.5 w-3.5" />
-                    <span>{loadingAdhoc ? 'Querying 3 Rungs...' : 'Run Across 3 RAG Rungs'}</span>
+                    <span>{loadingAdhoc ? 'Querying Both Versions...' : 'Run on Both Versions'}</span>
                   </button>
                 </div>
               </div>
@@ -1199,7 +1027,7 @@ export function Cat4Workbench({
           </section>
 
           {/* CFO Deal-Room Scale Simulator */}
-          {naiveSummary && cachedSummary && hybridSummary && (
+          {naiveSummary && pairedSummary && (
             <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -1251,8 +1079,8 @@ export function Cat4Workbench({
                 />
               </div>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                {[naiveSummary, cachedSummary, hybridSummary].map((r) => {
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {[naiveSummary, pairedSummary].map((r) => {
                   const perAudit =
                     cacheMode === 'warm_shared_corpus'
                       ? r.warm_audit_cost_usd
@@ -1267,10 +1095,8 @@ export function Cat4Workbench({
                       <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-900">
                         {r.rung_id === 'naive_full_corpus' ? (
                           <Database className="h-3.5 w-3.5 text-rose-600" />
-                        ) : r.rung_id === 'cached_full_corpus_citations' ? (
-                          <Cpu className="h-3.5 w-3.5 text-blue-600" />
                         ) : (
-                          <Filter className="h-3.5 w-3.5 text-amber-600" />
+                          <Filter className="h-3.5 w-3.5 text-emerald-600" />
                         )}
                         <span>{r.rung_title}</span>
                       </div>
@@ -1294,7 +1120,7 @@ export function Cat4Workbench({
         open={inspectorOpen}
         onClose={() => setInspectorOpen(false)}
         title="Category 4 Architecture & SDK Inspector"
-        subtitle="Inspect Anthropic DocumentBlock Caching, Native Citations & Haiku 5.5 Cross-Chunk Reranker"
+        subtitle="Inspect the uncached full-corpus call and the cached-corpus Haiku 5.5 clause pick + Sonnet 5.5 answer with native citations"
         maxWidthClass="max-w-3xl"
       >
         <div className="space-y-4">
@@ -1307,7 +1133,7 @@ export function Cat4Workbench({
             {(
               [
                 ['code', 'Python SDK Comparison'],
-                ['schema', 'Haiku Reranker JSON Schema'],
+                ['schema', 'Haiku Clause-Pick JSON Schema'],
               ] as const
             ).map(([tid, label]) => (
               <button

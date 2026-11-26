@@ -47,11 +47,9 @@ ARCHETYPES_CATALOG = [
             "Catalog Tagging",
         ],
         "architectural_lever": (
-            "Route Tier 1 stateless triage to Flash/Haiku models and ask only for the classification fields, "
-            "not a write-up — the lab's experiment finds those two changes carry the >80% saving, while a strict "
-            "JSON schema guarantees the format at a little extra cost and batching halves the price (computed) — "
-            "or step down to System-1 Decision models (Gemini Decision 1 / Jev) for 0 output tokens on pure "
-            "routing/classification."
+            "Route Tier 1 stateless triage to Flash/Haiku models and ask only for the classification fields "
+            "through a strict JSON schema, not a write-up; the Message Batches API halves the price for work that "
+            "can wait."
         ),
         "novamart_story": (
             "Processes 5M weekly seller feed updates and customer escalations: routes support tickets "

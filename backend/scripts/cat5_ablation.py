@@ -1,23 +1,19 @@
-"""Run the Category 5 six-arm ablation matrix live and append one JSONL record per run.
+"""Run the Category 5 matrix live (the deck's improvement without and with) and append one JSONL record per run.
 
 Usage (from backend/):
     .venv/bin/python scripts/cat5_ablation.py --dry-run
     .venv/bin/python scripts/cat5_ablation.py --repeats 3 --max-usd 25
 
-Append-only and resumable: an (arm, invoice, repeat) key with an `ok` record at the current settings is
-skipped; `error` records stay in the file and their key is retried; records made at other settings
-(caps, prompts/tools, invoice data) are superseded: kept, excluded from analysis, and re-run.
-Wrong vouchers, cap hits and truncated turns are `ok` outcomes and are never dropped or retried.
+Versions (default): raw_free_sonnet (without), bundle_gate_sonnet_cached and bundle_gate_haiku_escalate (with), on all
+12 invoices. Append-only and resumable: an (arm, invoice, repeat) key with a current record (status ok, current
+settings, and every policy-tool call returning what the tool returns now) is skipped; any other key is pending.
+Wrong vouchers, cap hits and truncated turns are `ok` outcomes and are never dropped or retried. The single levers
+tried on the way (`--arms raw_free_sonnet_cached,bundle_sonnet_cached,bundle_haiku_cached`) can be run into
+`--out experiments/cat5_ablation/other_levers/runs.jsonl`.
 
-Full tool results are stored once per sha256 in `tool_results.jsonl` next to the runs file.
-Order: repeat -> invoice -> arm. `--group gate_disagreement` runs inv-06 (the pre-fix gate was wrong there; the
-analysis reports it in its own section and never pools it). The gate was fixed on 2026-11-26: new records carry
-settings.gate_version / bundle_version. On inv-06 a gate-arm record made on the pre-fix gate is kept as before-fix
-evidence (not superseded) and its key is pending again at the current gate; e.g.
-    .venv/bin/python scripts/cat5_ablation.py --invoices inv-06 --arms bundle_gate_sonnet_cached,bundle_gate_haiku_escalate
-runs those 6 keys. Every other record stays current (the fixed gate is byte-identical on the 11 default invoices). A record whose run the v1 loop ended with tool_use blocks left
-unexecuted on a non-truncated turn is superseded and its key is re-run. The budget guard counts the billed cost of every existing record and
-reserves each in-flight run's worst-case estimate; it stops launching runs that could cross --max-usd.
+Full tool results are stored once per sha256 in `tool_results.jsonl` next to the runs file. Order: repeat -> invoice
+-> arm. The budget guard counts the billed cost of every record in the output file and reserves each in-flight run's
+worst-case estimate; it stops launching runs that could cross --max-usd.
 """
 
 from __future__ import annotations
@@ -36,6 +32,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 from app.archetypes.cat5_orchestration.ablation import (  # noqa: E402
     ARM_IDS,
+    ARMS,
     CALL_TIMEOUT_S,
     BudgetGuard,
     RunKey,
@@ -46,15 +43,9 @@ from app.archetypes.cat5_orchestration.ablation import (  # noqa: E402
     load_jsonl,
     plan_matrix,
     select_pending,
-    superseded_records,
-    is_current_settings,
-    is_current_gate,
-    record_gate_version,
-    GATE_VERSION,
-    BUNDLE_VERSION,
 )
 from app.data.cat5_ablation_fixtures import (  # noqa: E402
-    CAT5_ABLATION_GROUPS,
+    CAT5_ABLATION_DEFAULT_INVOICE_IDS,
     CAT5_ABLATION_PRESETS_BY_ID,
 )
 
@@ -90,8 +81,8 @@ def _run_line(rec: dict[str, Any], cost: float) -> str:
 
 async def run_matrix(args: argparse.Namespace) -> int:
     arm_ids = _csv(args.arms) if args.arms else list(ARM_IDS)
-    invoice_ids = _csv(args.invoices) if args.invoices else list(CAT5_ABLATION_GROUPS[args.group])
-    unknown = [a for a in arm_ids if a not in ARM_IDS] + [p for p in invoice_ids if p not in CAT5_ABLATION_PRESETS_BY_ID]
+    invoice_ids = _csv(args.invoices) if args.invoices else list(CAT5_ABLATION_DEFAULT_INVOICE_IDS)
+    unknown = [a for a in arm_ids if a not in ARMS] + [p for p in invoice_ids if p not in CAT5_ABLATION_PRESETS_BY_ID]
     if unknown:
         print(f"Unknown arm/invoice ids: {unknown}", file=sys.stderr)
         return 1
@@ -105,15 +96,10 @@ async def run_matrix(args: argparse.Namespace) -> int:
 
     print(
         f"Matrix: {len(arm_ids)} arms x {len(invoice_ids)} invoices x {args.repeats} repeats = {len(planned)} runs; "
-        f"{len(planned) - len(pending)} done at current settings, {len(pending)} pending. Existing records: {len(existing)} "
-        f"({len(superseded_records(existing))} superseded); billed so far ${guard.spent_usd:.4f} of ${args.max_usd:.2f} cap."
+        f"{len(planned) - len(pending)} done, {len(pending)} pending. Existing records: {len(existing)}; "
+        f"billed so far (this file) ${guard.spent_usd:.4f} of ${args.max_usd:.2f} cap."
     )
-    kept = [r for r in existing if r.get("status") == "ok" and is_current_settings(r) and not is_current_gate(r)]
-    if kept:
-        print(f"Kept as before-fix evidence (gate arm on an invoice where the fixed gate differs, run on "
-              f"{sorted({record_gate_version(r) for r in kept})}; not superseded, key pending at {GATE_VERSION}): {len(kept)}.")
-    print(f"Gate {GATE_VERSION}, bundle {BUNDLE_VERSION} (recorded in each new record's settings).")
-    print(f"Invoices ({'--invoices' if args.invoices else 'group ' + args.group}): {', '.join(invoice_ids)}")
+    print(f"Invoices{' (--invoices)' if args.invoices else ''}: {', '.join(invoice_ids)}")
     print(f"Output: {out_path} (+ {blobs_path_for(out_path).name})")
 
     if args.dry_run:
@@ -218,10 +204,8 @@ async def run_matrix(args: argparse.Namespace) -> int:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repeats", type=int, default=3, help="repeat indices 0..N-1 (default 3)")
-    ap.add_argument("--arms", default="", help=f"comma list (default all: {','.join(ARM_IDS)})")
-    ap.add_argument("--group", default="default", choices=sorted(CAT5_ABLATION_GROUPS),
-                    help="invoice group: default (11 gate-agreed invoices), gate_disagreement (inv-06), all")
-    ap.add_argument("--invoices", default="", help="comma list of preset ids (overrides --group)")
+    ap.add_argument("--arms", default="", help=f"comma list (default: {','.join(ARM_IDS)})")
+    ap.add_argument("--invoices", default="", help="comma list of preset ids (default: all 12)")
     ap.add_argument("--concurrency", type=int, default=4, help="concurrent whole runs (default 4)")
     ap.add_argument("--max-usd", type=float, default=25.0, help="billed-cost cap incl. existing records (default 25)")
     ap.add_argument("--timeout-s", type=float, default=CALL_TIMEOUT_S, help=f"per-call HTTP timeout (default {CALL_TIMEOUT_S:.0f})")

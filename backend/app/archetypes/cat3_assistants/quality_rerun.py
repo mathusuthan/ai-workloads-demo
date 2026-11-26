@@ -59,7 +59,12 @@ from app.models import Cat3ChatTurnEntry
 
 SCHEMA_VERSION = 1
 SONNET_MODEL_ID = "claude-sonnet-5-5"
-RUNG_IDS: tuple[str, ...] = ("naive_full_history", "prefix_cached_history", "prefix_cached_summarized")
+# The two versions the app and every summary show: without and with the deck improvement.
+RUNG_IDS: tuple[str, ...] = ("naive_full_history", "prefix_cached_summarized")
+# Another lever the harness can still run (prefix caching alone); its records live in
+# experiments/cat3_quality/other_levers/ and nothing displayed reads them.
+OTHER_LEVER_RUNG_IDS: tuple[str, ...] = ("prefix_cached_history",)
+HARNESS_RUNG_IDS: tuple[str, ...] = (*RUNG_IDS, *OTHER_LEVER_RUNG_IDS)
 CACHED_RUNGS: frozenset[str] = frozenset({"prefix_cached_history", "prefix_cached_summarized"})
 SUMMARIZED_RUNG = "prefix_cached_summarized"
 
@@ -83,8 +88,8 @@ def _utc_now_iso() -> str:
 
 
 def _rung(rung_id: str) -> str:
-    if rung_id not in RUNG_IDS:
-        raise ValueError(f"Unknown Category 3 rung_id `{rung_id}`; expected one of {list(RUNG_IDS)}")
+    if rung_id not in HARNESS_RUNG_IDS:
+        raise ValueError(f"Unknown Category 3 rung_id `{rung_id}`; expected one of {list(HARNESS_RUNG_IDS)}")
     return rung_id
 
 
@@ -492,48 +497,20 @@ def model_mismatches(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def golden_sessions(golden: dict[str, Any]) -> list[tuple[str, str, list[dict[str, Any]]]]:
-    """[(rung_id, preset_id, turns)] from `replays/cat3_golden_replays.json`."""
-    out: list[tuple[str, str, list[dict[str, Any]]]] = []
-    for pid, pdata in sorted((golden.get("presets") or {}).items()):
-        for rid, turns in (pdata.get("rungs") or {}).items():
-            out.append((rid, pid, list(turns or [])))
-    return out
-
-
-def _golden_scored(golden: dict[str, Any], keys: dict[str, Any]) -> dict[tuple[str, str], list[dict[str, Any]]]:
-    out: dict[tuple[str, str], list[dict[str, Any]]] = {}
-    for rid, pid, turns in golden_sessions(golden):
-        texts = {int(t["turn_number"]): str(t.get("assistant_message") or "") for t in turns}
-        out[(rid, pid)] = score_session(preset_id=pid, turn_texts=texts, probe_answers=None, keys=keys)
-    return out
-
-
-def _golden_data_quality(golden: dict[str, Any]) -> dict[str, Any]:
-    stops, models = [], []
-    for rid, pid, turns in golden_sessions(golden):
-        for t in turns:
-            if t.get("stop_reason") != "end_turn":
-                stops.append({"rung_id": rid, "preset_id": pid, "turn": t.get("turn_number"), "stop_reason": t.get("stop_reason")})
-            if t.get("model_id") != SONNET_MODEL_ID:
-                models.append({"rung_id": rid, "preset_id": pid, "turn": t.get("turn_number"), "model_id": t.get("model_id")})
-    return {"non_end_turn_turns": stops, "model_mismatches": models}
-
-
 def summarise(
     records: Sequence[dict[str, Any]],
     *,
     keys: dict[str, Any],
-    golden: dict[str, Any] | None = None,
     rung_ids: Sequence[str] = RUNG_IDS,
     preset_ids: Sequence[str] | None = None,
     expected_repeats: int | None = None,
     misses_excerpt_chars: int = 600,
     top_spread: int = 15,
 ) -> dict[str, Any]:
-    """Quality + cost summary for rerun records (latest ok per key) and the original golden capture."""
+    """Quality + cost summary for rerun records (latest ok per key)."""
     preset_ids = [p["id"] for p in CAT3_PRESETS] if preset_ids is None else list(preset_ids)
     rung_ids = list(rung_ids)
+    records = [r for r in records if r.get("rung_id") in rung_ids]
 
     latest_ok: dict[RunKey, dict[str, Any]] = {}
     errors: list[dict[str, Any]] = []
@@ -572,47 +549,28 @@ def summarise(
             }
         rerun_rungs[rid] = m
 
-    golden_scored = _golden_scored(golden or {}, keys)
-    original_rungs: dict[str, Any] = {}
-    for rid in rung_ids:
-        cells = {pid: golden_scored[(rid, pid)] for pid in preset_ids if (rid, pid) in golden_scored}
-        original_rungs[rid] = {
-            "quality": quality_metrics(list(cells.values())),
-            "by_preset": {pid: {"quality": quality_metrics([rows])} for pid, rows in cells.items()},
-        }
-
     # Per-fact table
     items = [i for i in all_scored_items(keys) if i["preset_id"] in preset_ids]
     rerun_hits: dict[tuple[str, str], list[bool]] = {}
     for (rid, _pid, _rep), rows in scored.items():
         for row in rows:
             rerun_hits.setdefault((row["fact_id"], rid), []).append(bool(row["hit"]))
-    orig_hits: dict[tuple[str, str], bool] = {}
-    for (rid, _pid), rows in golden_scored.items():
-        for row in rows:
-            orig_hits[(row["fact_id"], rid)] = bool(row["hit"])
     per_fact: list[dict[str, Any]] = []
     for it in items:
         rr = {}
         for rid in rung_ids:
             hs = rerun_hits.get((it["fact_id"], rid), [])
             rr[rid] = {"hits": sum(hs), "n": len(hs), "rate": (sum(hs) / len(hs)) if hs else None}
-        oo = {rid: orig_hits.get((it["fact_id"], rid)) for rid in rung_ids}
-        any_obs = any(v["n"] for v in rr.values()) or any(v is not None for v in oo.values())
-        any_hit = any(v["hits"] for v in rr.values()) or any(v for v in oo.values())
+        any_obs = any(v["n"] for v in rr.values())
+        any_hit = any(v["hits"] for v in rr.values())
         rates = [v["rate"] for v in rr.values() if v["rate"] is not None]
-        orig_rates = [1.0 if v else 0.0 for v in oo.values() if v is not None]
-        spread_basis = "rerun" if rates else ("original" if orig_rates else None)
-        basis = rates or orig_rates
         per_fact.append(
             {
                 **it,
                 "rerun": rr,
-                "original": oo,
                 "observed": any_obs,
                 "never_hit": bool(any_obs and not any_hit),
-                "spread": (max(basis) - min(basis)) if len(basis) >= 2 else None,
-                "spread_basis": spread_basis,
+                "spread": (max(rates) - min(rates)) if len(rates) >= 2 else None,
             }
         )
     spread_rows = sorted(
@@ -677,11 +635,6 @@ def summarise(
             "non_end_turn_calls": non_end_turn_calls([*ok_list, *errors]),
             "model_mismatches": model_mismatches([*ok_list, *errors]),
             "rungs": rerun_rungs,
-        },
-        "original_capture": {
-            "cells": sorted(f"{rid}|{pid}" for rid, pid in golden_scored),
-            "rungs": original_rungs,
-            "data_quality": _golden_data_quality(golden or {}),
         },
         "per_fact": per_fact,
         "never_hit_facts": [f["fact_id"] for f in per_fact if f["never_hit"]],

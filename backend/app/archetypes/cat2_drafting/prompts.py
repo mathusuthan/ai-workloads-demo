@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 def get_unbounded_draft_system_prompt(sub_task: str) -> str:
-    """Rung 1 Anti-Pattern: Open-ended multi-page prose & appendices prompt."""
+    """Without: open-ended long-form prose prompt (no section template, no length caps)."""
     role = (
         "VP Chief-of-Staff at NovaMart Enterprise preparing a comprehensive board briefing or B2B partnership proposal"
         if sub_task == "exec_synthesis"
@@ -23,8 +23,17 @@ def get_unbounded_draft_system_prompt(sub_task: str) -> str:
     )
 
 
+NOT_STATED_IN_SOURCE = "Not stated in source"
+# The action-plan rule for missing owners and dates (one bullet directly after the `action_plan` rule).
+ACTION_PLAN_SOURCE_RULE = (
+    "For each action-plan item, give the owner and the time window only if the source states them. "
+    "If the source does not name an owner, or gives no date or time window, write exactly `Not stated in source` "
+    "in that field. Never supply an owner, team, date or deadline the source does not give."
+)
+
+
 def get_templated_draft_system_prompt(sub_task: str) -> str:
-    """Rung 2 / Rung 3 Calibrated Lever: Strict section template & token/word caps."""
+    """With: section template with length caps (same prompt for Sonnet and Haiku)."""
     doc_focus = (
         "executive operational readout or commercial B2B partnership proposal"
         if sub_task == "exec_synthesis"
@@ -39,6 +48,7 @@ def get_templated_draft_system_prompt(sub_task: str) -> str:
         "- `key_findings`: Exactly 3 high-signal items; each `quantified_evidence` MUST be 20–30 words citing exact numbers; `source_anchor` <=6 words.\n"
         "- `risk_and_compliance_matrix`: Exactly 3 rows; each `exposure_summary` 16–24 words and `mitigation_control` 16–24 words.\n"
         "- `action_plan`: Exactly 3 owned milestones; each `milestone` 16–24 words and `verification_metric` 10–15 words.\n"
+        f"- {ACTION_PLAN_SOURCE_RULE}\n"
         "Emit compact JSON matching the enforced schema without extra filler. Never invent metrics absent from the source bundle."
     )
 
@@ -71,9 +81,8 @@ resp = await client.messages.create(
     messages=[{"role": "user", "content": source_bundle}],
 )""",
     "sonnet_templated": """# RUNG 2 (CALIBRATED LEVER): Strict Section Template + Length Bounds (Sonnet 5.5)
-# Caps array lengths & word budgets (prompt asks for ~1,200–1,600 out tokens). On the 4 graded documents it was cheaper
-# but scored lower on accuracy and coverage than Rung 1, and its required owner/target_window fields were often
-# filled with owners or deadlines the source does not give
+# Caps array lengths & word budgets (prompt asks for ~1,200–1,600 out tokens); an action item's owner or time window
+# is "Not stated in source" when the source gives none
 resp = await client.messages.create(
     model="claude-sonnet-5-5",
     max_tokens=3000,
@@ -83,8 +92,7 @@ resp = await client.messages.create(
     messages=[{"role": "user", "content": source_bundle}],
 )""",
     "haiku_templated": """# RUNG 3 HYBRID ROUTING: Haiku 5.5 First-Draft Template
-# Same section template on Haiku 5.5 ($0.50/M out): lowest cost, and the lowest accuracy grade on the 4 graded
-# documents; a reviewer can regenerate any single section on Sonnet 5.5
+# Same section template on Haiku 5.5 ($0.50/M out); a reviewer can regenerate any single section on Sonnet 5.5
 resp = await client.messages.create(
     model="claude-haiku-5-5",
     max_tokens=3000,

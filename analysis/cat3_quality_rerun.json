@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-25T16:04:02.358738+00:00",
+  "generated_at": "2026-11-26T05:40:02.026010+00:00",
   "keys_version": "2026-11-25.2",
   "normalisation_rules": [
     "1. Lowercase.",
@@ -13,7 +13,6 @@
   ],
   "rung_ids": [
     "naive_full_history",
-    "prefix_cached_history",
     "prefix_cached_summarized"
   ],
   "preset_ids": [
@@ -37,21 +36,19 @@
     }
   },
   "rerun": {
-    "record_count": 18,
-    "ok_runs_used": 18,
+    "record_count": 12,
+    "ok_runs_used": 12,
     "superseded_ok_records": 0,
     "error_records": 0,
     "expected_repeats": 3,
     "matrix": {
-      "expected_runs": 18,
+      "expected_runs": 12,
       "complete": true,
       "balanced": true,
       "missing_keys": [],
       "ok_runs_per_cell": {
         "naive_full_history|desk-01": 3,
         "naive_full_history|desk-02": 3,
-        "prefix_cached_history|desk-01": 3,
-        "prefix_cached_history|desk-02": 3,
         "prefix_cached_summarized|desk-01": 3,
         "prefix_cached_summarized|desk-02": 3
       }
@@ -706,668 +703,6 @@
                   "mean": 21514.333333333332,
                   "min": 21152.0,
                   "max": 21956.0
-                }
-              },
-              "session_compactions": {
-                "mean": 0.0,
-                "min": 0.0,
-                "max": 0.0
-              },
-              "probe_phase_compactions": {
-                "mean": 0.0,
-                "min": 0.0,
-                "max": 0.0
-              }
-            },
-            "error_records": 0
-          }
-        }
-      },
-      "prefix_cached_history": {
-        "quality": {
-          "sessions": 6,
-          "turn_recall": {
-            "turns_1_9": {
-              "hits": 203,
-              "total": 207,
-              "rate": 0.9806763285024155,
-              "wilson95": [
-                0.9513767684768528,
-                0.9924603739574325
-              ]
-            },
-            "turns_1_4": {
-              "hits": 92,
-              "total": 96,
-              "rate": 0.9583333333333334,
-              "wilson95": [
-                0.8977180853334191,
-                0.9836792924637118
-              ]
-            },
-            "turns_5_9": {
-              "hits": 111,
-              "total": 111,
-              "rate": 1.0,
-              "wilson95": [
-                0.9665498953066078,
-                1.0
-              ]
-            }
-          },
-          "ledger_recall": {
-            "overall": {
-              "hits": 110,
-              "total": 147,
-              "rate": 0.7482993197278912,
-              "wilson95": [
-                0.6724302164752695,
-                0.8115216132851112
-              ]
-            },
-            "by_origin": {
-              "origin_1_3": {
-                "hits": 39,
-                "total": 51,
-                "rate": 0.7647058823529411,
-                "wilson95": [
-                  0.632377748398347,
-                  0.8599505116553716
-                ]
-              },
-              "origin_4_6": {
-                "hits": 41,
-                "total": 51,
-                "rate": 0.803921568627451,
-                "wilson95": [
-                  0.6754192051863439,
-                  0.889846574875333
-                ]
-              },
-              "origin_7_9": {
-                "hits": 30,
-                "total": 45,
-                "rate": 0.6666666666666666,
-                "wilson95": [
-                  0.5207048830990042,
-                  0.7864112506566996
-                ]
-              }
-            },
-            "by_source": {
-              "handbook": {
-                "hits": 88,
-                "total": 105,
-                "rate": 0.8380952380952381,
-                "wilson95": [
-                  0.7559378330310743,
-                  0.8963871244740037
-                ]
-              },
-              "session": {
-                "hits": 22,
-                "total": 42,
-                "rate": 0.5238095238095238,
-                "wilson95": [
-                  0.3772246413134498,
-                  0.6664039876929454
-                ]
-              }
-            }
-          },
-          "probe_accuracy": {
-            "overall": {
-              "hits": 36,
-              "total": 36,
-              "rate": 1.0,
-              "wilson95": [
-                0.9035813714055363,
-                1.0
-              ]
-            },
-            "by_origin": {
-              "origin_1_6": {
-                "hits": 24,
-                "total": 24,
-                "rate": 1.0,
-                "wilson95": [
-                  0.8620237953250198,
-                  1.0
-                ]
-              },
-              "origin_7_9": {
-                "hits": 12,
-                "total": 12,
-                "rate": 1.0,
-                "wilson95": [
-                  0.7575059933447592,
-                  1.0
-                ]
-              }
-            }
-          }
-        },
-        "cost": {
-          "runs": 6,
-          "session_billed_usd": {
-            "mean": 0.23965650000000002,
-            "min": 0.205061,
-            "max": 0.2843264
-          },
-          "session_warm_usd": {
-            "mean": 0.21599849999999998,
-            "min": 0.181409,
-            "max": 0.260672
-          },
-          "probe_billed_usd": {
-            "mean": 0.1573055,
-            "min": 0.149745,
-            "max": 0.163068
-          },
-          "probe_warm_usd": {
-            "mean": 0.1573055,
-            "min": 0.149745,
-            "max": 0.163068
-          },
-          "session_billed_per_1k_sessions_usd": 239.65650000000002,
-          "session_warm_per_1k_sessions_usd": 215.99849999999998,
-          "tokens_per_session": {
-            "turn_prompt": {
-              "mean": 161205.5,
-              "min": 157957.0,
-              "max": 164307.0
-            },
-            "turn_output": {
-              "mean": 8088.0,
-              "min": 5274.0,
-              "max": 12679.0
-            },
-            "compaction_prompt": {
-              "mean": 0.0,
-              "min": 0.0,
-              "max": 0.0
-            },
-            "compaction_output": {
-              "mean": 0.0,
-              "min": 0.0,
-              "max": 0.0
-            },
-            "probe_phase_prompt": {
-              "mean": 134188.0,
-              "min": 130101.0,
-              "max": 137361.0
-            },
-            "probe_phase_output": {
-              "mean": 130.5,
-              "min": 75.0,
-              "max": 189.0
-            },
-            "thinking": {
-              "mean": 2882.0,
-              "min": 387.0,
-              "max": 7993.0
-            }
-          },
-          "context_prompt_tokens_at_turn": {
-            "1": {
-              "mean": 10626.0,
-              "min": 10622.0,
-              "max": 10629.0
-            },
-            "3": {
-              "mean": 13156.833333333334,
-              "min": 12988.0,
-              "max": 13289.0
-            },
-            "6": {
-              "mean": 16803.166666666668,
-              "min": 16400.0,
-              "max": 17244.0
-            },
-            "10": {
-              "mean": 21495.5,
-              "min": 20901.0,
-              "max": 21982.0
-            }
-          },
-          "session_compactions": {
-            "mean": 0.0,
-            "min": 0.0,
-            "max": 0.0
-          },
-          "probe_phase_compactions": {
-            "mean": 0.0,
-            "min": 0.0,
-            "max": 0.0
-          }
-        },
-        "error_records": 0,
-        "by_preset": {
-          "desk-01": {
-            "quality": {
-              "sessions": 3,
-              "turn_recall": {
-                "turns_1_9": {
-                  "hits": 101,
-                  "total": 105,
-                  "rate": 0.9619047619047619,
-                  "wilson95": [
-                    0.9061169787394538,
-                    0.9850875406688924
-                  ]
-                },
-                "turns_1_4": {
-                  "hits": 44,
-                  "total": 48,
-                  "rate": 0.9166666666666666,
-                  "wilson95": [
-                    0.8044669820963272,
-                    0.9671162431819081
-                  ]
-                },
-                "turns_5_9": {
-                  "hits": 57,
-                  "total": 57,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.9368611651470209,
-                    0.9999999999999998
-                  ]
-                }
-              },
-              "ledger_recall": {
-                "overall": {
-                  "hits": 67,
-                  "total": 75,
-                  "rate": 0.8933333333333333,
-                  "wilson95": [
-                    0.8033863715352693,
-                    0.9449508723782568
-                  ]
-                },
-                "by_origin": {
-                  "origin_1_3": {
-                    "hits": 25,
-                    "total": 27,
-                    "rate": 0.9259259259259259,
-                    "wilson95": [
-                      0.7663040731697686,
-                      0.9794453459390113
-                    ]
-                  },
-                  "origin_4_6": {
-                    "hits": 21,
-                    "total": 24,
-                    "rate": 0.875,
-                    "wilson95": [
-                      0.6899611872949993,
-                      0.9565566591987655
-                    ]
-                  },
-                  "origin_7_9": {
-                    "hits": 21,
-                    "total": 24,
-                    "rate": 0.875,
-                    "wilson95": [
-                      0.6899611872949993,
-                      0.9565566591987655
-                    ]
-                  }
-                },
-                "by_source": {
-                  "handbook": {
-                    "hits": 50,
-                    "total": 51,
-                    "rate": 0.9803921568627451,
-                    "wilson95": [
-                      0.8969543127385502,
-                      0.9965303073589391
-                    ]
-                  },
-                  "session": {
-                    "hits": 17,
-                    "total": 24,
-                    "rate": 0.7083333333333334,
-                    "wilson95": [
-                      0.5083230633550337,
-                      0.8508535180303913
-                    ]
-                  }
-                }
-              },
-              "probe_accuracy": {
-                "overall": {
-                  "hits": 18,
-                  "total": 18,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8241207763533425,
-                    1.0
-                  ]
-                },
-                "by_origin": {
-                  "origin_1_6": {
-                    "hits": 12,
-                    "total": 12,
-                    "rate": 1.0,
-                    "wilson95": [
-                      0.7575059933447592,
-                      1.0
-                    ]
-                  },
-                  "origin_7_9": {
-                    "hits": 6,
-                    "total": 6,
-                    "rate": 1.0,
-                    "wilson95": [
-                      0.6096657120978346,
-                      1.0
-                    ]
-                  }
-                }
-              }
-            },
-            "cost": {
-              "runs": 3,
-              "session_billed_usd": {
-                "mean": 0.2658950666666667,
-                "min": 0.2496008,
-                "max": 0.2843264
-              },
-              "session_warm_usd": {
-                "mean": 0.24223266666666668,
-                "min": 0.225932,
-                "max": 0.260672
-              },
-              "probe_billed_usd": {
-                "mean": 0.15994493333333334,
-                "min": 0.1538616,
-                "max": 0.163068
-              },
-              "probe_warm_usd": {
-                "mean": 0.15994493333333334,
-                "min": 0.1538616,
-                "max": 0.163068
-              },
-              "session_billed_per_1k_sessions_usd": 265.8950666666667,
-              "session_warm_per_1k_sessions_usd": 242.2326666666667,
-              "tokens_per_session": {
-                "turn_prompt": {
-                  "mean": 163040.0,
-                  "min": 160573.0,
-                  "max": 164307.0
-                },
-                "turn_output": {
-                  "mean": 10348.0,
-                  "min": 8483.0,
-                  "max": 12679.0
-                },
-                "compaction_prompt": {
-                  "mean": 0.0,
-                  "min": 0.0,
-                  "max": 0.0
-                },
-                "compaction_output": {
-                  "mean": 0.0,
-                  "min": 0.0,
-                  "max": 0.0
-                },
-                "probe_phase_prompt": {
-                  "mean": 135769.0,
-                  "min": 132735.0,
-                  "max": 137361.0
-                },
-                "probe_phase_output": {
-                  "mean": 80.33333333333333,
-                  "min": 75.0,
-                  "max": 91.0
-                },
-                "thinking": {
-                  "mean": 5159.0,
-                  "min": 3056.0,
-                  "max": 7993.0
-                }
-              },
-              "context_prompt_tokens_at_turn": {
-                "1": {
-                  "mean": 10625.333333333334,
-                  "min": 10622.0,
-                  "max": 10628.0
-                },
-                "3": {
-                  "mean": 13262.333333333334,
-                  "min": 13240.0,
-                  "max": 13289.0
-                },
-                "6": {
-                  "mean": 17051.0,
-                  "min": 16679.0,
-                  "max": 17244.0
-                },
-                "10": {
-                  "mean": 21704.333333333332,
-                  "min": 21185.0,
-                  "max": 21982.0
-                }
-              },
-              "session_compactions": {
-                "mean": 0.0,
-                "min": 0.0,
-                "max": 0.0
-              },
-              "probe_phase_compactions": {
-                "mean": 0.0,
-                "min": 0.0,
-                "max": 0.0
-              }
-            },
-            "error_records": 0
-          },
-          "desk-02": {
-            "quality": {
-              "sessions": 3,
-              "turn_recall": {
-                "turns_1_9": {
-                  "hits": 102,
-                  "total": 102,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.9637055378535367,
-                    0.9999999999999999
-                  ]
-                },
-                "turns_1_4": {
-                  "hits": 48,
-                  "total": 48,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.9258998703338824,
-                    0.9999999999999999
-                  ]
-                },
-                "turns_5_9": {
-                  "hits": 54,
-                  "total": 54,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.9335864119091037,
-                    1.0
-                  ]
-                }
-              },
-              "ledger_recall": {
-                "overall": {
-                  "hits": 43,
-                  "total": 72,
-                  "rate": 0.5972222222222222,
-                  "wilson95": [
-                    0.48180671684951565,
-                    0.7027888884789509
-                  ]
-                },
-                "by_origin": {
-                  "origin_1_3": {
-                    "hits": 14,
-                    "total": 24,
-                    "rate": 0.5833333333333334,
-                    "wilson95": [
-                      0.3883466586522876,
-                      0.7553239739018824
-                    ]
-                  },
-                  "origin_4_6": {
-                    "hits": 20,
-                    "total": 27,
-                    "rate": 0.7407407407407407,
-                    "wilson95": [
-                      0.5532142868544692,
-                      0.8682962543809281
-                    ]
-                  },
-                  "origin_7_9": {
-                    "hits": 9,
-                    "total": 21,
-                    "rate": 0.42857142857142855,
-                    "wilson95": [
-                      0.24469968925375957,
-                      0.6345344563069328
-                    ]
-                  }
-                },
-                "by_source": {
-                  "handbook": {
-                    "hits": 38,
-                    "total": 54,
-                    "rate": 0.7037037037037037,
-                    "wilson95": [
-                      0.5717242709884697,
-                      0.8086257486782021
-                    ]
-                  },
-                  "session": {
-                    "hits": 5,
-                    "total": 18,
-                    "rate": 0.2777777777777778,
-                    "wilson95": [
-                      0.12499753379553996,
-                      0.5087265656029745
-                    ]
-                  }
-                }
-              },
-              "probe_accuracy": {
-                "overall": {
-                  "hits": 18,
-                  "total": 18,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8241207763533425,
-                    1.0
-                  ]
-                },
-                "by_origin": {
-                  "origin_1_6": {
-                    "hits": 12,
-                    "total": 12,
-                    "rate": 1.0,
-                    "wilson95": [
-                      0.7575059933447592,
-                      1.0
-                    ]
-                  },
-                  "origin_7_9": {
-                    "hits": 6,
-                    "total": 6,
-                    "rate": 1.0,
-                    "wilson95": [
-                      0.6096657120978346,
-                      1.0
-                    ]
-                  }
-                }
-              }
-            },
-            "cost": {
-              "runs": 3,
-              "session_billed_usd": {
-                "mean": 0.21341793333333334,
-                "min": 0.205061,
-                "max": 0.2226256
-              },
-              "session_warm_usd": {
-                "mean": 0.1897643333333333,
-                "min": 0.181409,
-                "max": 0.198976
-              },
-              "probe_billed_usd": {
-                "mean": 0.15466606666666669,
-                "min": 0.149745,
-                "max": 0.1583864
-              },
-              "probe_warm_usd": {
-                "mean": 0.15466606666666669,
-                "min": 0.149745,
-                "max": 0.1583864
-              },
-              "session_billed_per_1k_sessions_usd": 213.41793333333334,
-              "session_warm_per_1k_sessions_usd": 189.76433333333333,
-              "tokens_per_session": {
-                "turn_prompt": {
-                  "mean": 159371.0,
-                  "min": 157957.0,
-                  "max": 160591.0
-                },
-                "turn_output": {
-                  "mean": 5828.0,
-                  "min": 5274.0,
-                  "max": 6502.0
-                },
-                "compaction_prompt": {
-                  "mean": 0.0,
-                  "min": 0.0,
-                  "max": 0.0
-                },
-                "compaction_output": {
-                  "mean": 0.0,
-                  "min": 0.0,
-                  "max": 0.0
-                },
-                "probe_phase_prompt": {
-                  "mean": 132607.0,
-                  "min": 130101.0,
-                  "max": 134511.0
-                },
-                "probe_phase_output": {
-                  "mean": 180.66666666666666,
-                  "min": 170.0,
-                  "max": 189.0
-                },
-                "thinking": {
-                  "mean": 605.0,
-                  "min": 387.0,
-                  "max": 960.0
-                }
-              },
-              "context_prompt_tokens_at_turn": {
-                "1": {
-                  "mean": 10626.666666666666,
-                  "min": 10625.0,
-                  "max": 10629.0
-                },
-                "3": {
-                  "mean": 13051.333333333334,
-                  "min": 12988.0,
-                  "max": 13109.0
-                },
-                "6": {
-                  "mean": 16555.333333333332,
-                  "min": 16400.0,
-                  "max": 16706.0
-                },
-                "10": {
-                  "mean": 21286.666666666668,
-                  "min": 20901.0,
-                  "max": 21573.0
                 }
               },
               "session_compactions": {
@@ -2049,1072 +1384,6 @@
       }
     }
   },
-  "original_capture": {
-    "cells": [
-      "naive_full_history|desk-01",
-      "naive_full_history|desk-02",
-      "prefix_cached_history|desk-01",
-      "prefix_cached_history|desk-02",
-      "prefix_cached_summarized|desk-01",
-      "prefix_cached_summarized|desk-02"
-    ],
-    "rungs": {
-      "naive_full_history": {
-        "quality": {
-          "sessions": 2,
-          "turn_recall": {
-            "turns_1_9": {
-              "hits": 69,
-              "total": 69,
-              "rate": 1.0,
-              "wilson95": [
-                0.9472627418109483,
-                1.0
-              ]
-            },
-            "turns_1_4": {
-              "hits": 32,
-              "total": 32,
-              "rate": 1.0,
-              "wilson95": [
-                0.8928208017449293,
-                1.0
-              ]
-            },
-            "turns_5_9": {
-              "hits": 37,
-              "total": 37,
-              "rate": 1.0,
-              "wilson95": [
-                0.9059421741627975,
-                1.0
-              ]
-            }
-          },
-          "ledger_recall": {
-            "overall": {
-              "hits": 32,
-              "total": 49,
-              "rate": 0.6530612244897959,
-              "wilson95": [
-                0.5131119428697273,
-                0.7707560716546102
-              ]
-            },
-            "by_origin": {
-              "origin_1_3": {
-                "hits": 11,
-                "total": 17,
-                "rate": 0.6470588235294118,
-                "wilson95": [
-                  0.41300363485218694,
-                  0.8269027960275627
-                ]
-              },
-              "origin_4_6": {
-                "hits": 11,
-                "total": 17,
-                "rate": 0.6470588235294118,
-                "wilson95": [
-                  0.41300363485218694,
-                  0.8269027960275627
-                ]
-              },
-              "origin_7_9": {
-                "hits": 10,
-                "total": 15,
-                "rate": 0.6666666666666666,
-                "wilson95": [
-                  0.41713547738519774,
-                  0.8482367556028526
-                ]
-              }
-            },
-            "by_source": {
-              "handbook": {
-                "hits": 26,
-                "total": 35,
-                "rate": 0.7428571428571429,
-                "wilson95": [
-                  0.5793069315616083,
-                  0.8583697293093956
-                ]
-              },
-              "session": {
-                "hits": 6,
-                "total": 14,
-                "rate": 0.42857142857142855,
-                "wilson95": [
-                  0.21380798904474121,
-                  0.6740935542034926
-                ]
-              }
-            }
-          },
-          "probe_accuracy": {
-            "overall": {
-              "hits": 0,
-              "total": 0,
-              "rate": null,
-              "wilson95": null
-            },
-            "by_origin": {
-              "origin_1_6": {
-                "hits": 0,
-                "total": 0,
-                "rate": null,
-                "wilson95": null
-              },
-              "origin_7_9": {
-                "hits": 0,
-                "total": 0,
-                "rate": null,
-                "wilson95": null
-              }
-            }
-          }
-        },
-        "by_preset": {
-          "desk-01": {
-            "quality": {
-              "sessions": 1,
-              "turn_recall": {
-                "turns_1_9": {
-                  "hits": 35,
-                  "total": 35,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.9010990076755959,
-                    0.9999999999999999
-                  ]
-                },
-                "turns_1_4": {
-                  "hits": 16,
-                  "total": 16,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8063923194655637,
-                    1.0
-                  ]
-                },
-                "turns_5_9": {
-                  "hits": 19,
-                  "total": 19,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8318207759473837,
-                    1.0
-                  ]
-                }
-              },
-              "ledger_recall": {
-                "overall": {
-                  "hits": 22,
-                  "total": 25,
-                  "rate": 0.88,
-                  "wilson95": [
-                    0.7004420607907267,
-                    0.9583318284955964
-                  ]
-                },
-                "by_origin": {
-                  "origin_1_3": {
-                    "hits": 8,
-                    "total": 9,
-                    "rate": 0.8888888888888888,
-                    "wilson95": [
-                      0.565000294423344,
-                      0.980109112361455
-                    ]
-                  },
-                  "origin_4_6": {
-                    "hits": 7,
-                    "total": 8,
-                    "rate": 0.875,
-                    "wilson95": [
-                      0.5291118177871464,
-                      0.9775825085499433
-                    ]
-                  },
-                  "origin_7_9": {
-                    "hits": 7,
-                    "total": 8,
-                    "rate": 0.875,
-                    "wilson95": [
-                      0.5291118177871464,
-                      0.9775825085499433
-                    ]
-                  }
-                },
-                "by_source": {
-                  "handbook": {
-                    "hits": 17,
-                    "total": 17,
-                    "rate": 1.0,
-                    "wilson95": [
-                      0.8156818649911483,
-                      1.0
-                    ]
-                  },
-                  "session": {
-                    "hits": 5,
-                    "total": 8,
-                    "rate": 0.625,
-                    "wilson95": [
-                      0.3057423946026273,
-                      0.8631557141764027
-                    ]
-                  }
-                }
-              },
-              "probe_accuracy": {
-                "overall": {
-                  "hits": 0,
-                  "total": 0,
-                  "rate": null,
-                  "wilson95": null
-                },
-                "by_origin": {
-                  "origin_1_6": {
-                    "hits": 0,
-                    "total": 0,
-                    "rate": null,
-                    "wilson95": null
-                  },
-                  "origin_7_9": {
-                    "hits": 0,
-                    "total": 0,
-                    "rate": null,
-                    "wilson95": null
-                  }
-                }
-              }
-            }
-          },
-          "desk-02": {
-            "quality": {
-              "sessions": 1,
-              "turn_recall": {
-                "turns_1_9": {
-                  "hits": 34,
-                  "total": 34,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8984854458466761,
-                    0.9999999999999999
-                  ]
-                },
-                "turns_1_4": {
-                  "hits": 16,
-                  "total": 16,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8063923194655637,
-                    1.0
-                  ]
-                },
-                "turns_5_9": {
-                  "hits": 18,
-                  "total": 18,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8241207763533425,
-                    1.0
-                  ]
-                }
-              },
-              "ledger_recall": {
-                "overall": {
-                  "hits": 10,
-                  "total": 24,
-                  "rate": 0.4166666666666667,
-                  "wilson95": [
-                    0.24467602609811764,
-                    0.6116533413477124
-                  ]
-                },
-                "by_origin": {
-                  "origin_1_3": {
-                    "hits": 3,
-                    "total": 8,
-                    "rate": 0.375,
-                    "wilson95": [
-                      0.13684428582359737,
-                      0.6942576053973728
-                    ]
-                  },
-                  "origin_4_6": {
-                    "hits": 4,
-                    "total": 9,
-                    "rate": 0.4444444444444444,
-                    "wilson95": [
-                      0.18877852109766458,
-                      0.7333487065045069
-                    ]
-                  },
-                  "origin_7_9": {
-                    "hits": 3,
-                    "total": 7,
-                    "rate": 0.42857142857142855,
-                    "wilson95": [
-                      0.15821985525146975,
-                      0.7495416354723428
-                    ]
-                  }
-                },
-                "by_source": {
-                  "handbook": {
-                    "hits": 9,
-                    "total": 18,
-                    "rate": 0.5,
-                    "wilson95": [
-                      0.29031021505169974,
-                      0.7096897849483003
-                    ]
-                  },
-                  "session": {
-                    "hits": 1,
-                    "total": 6,
-                    "rate": 0.16666666666666666,
-                    "wilson95": [
-                      0.03005336974830658,
-                      0.5635028221864702
-                    ]
-                  }
-                }
-              },
-              "probe_accuracy": {
-                "overall": {
-                  "hits": 0,
-                  "total": 0,
-                  "rate": null,
-                  "wilson95": null
-                },
-                "by_origin": {
-                  "origin_1_6": {
-                    "hits": 0,
-                    "total": 0,
-                    "rate": null,
-                    "wilson95": null
-                  },
-                  "origin_7_9": {
-                    "hits": 0,
-                    "total": 0,
-                    "rate": null,
-                    "wilson95": null
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "prefix_cached_history": {
-        "quality": {
-          "sessions": 2,
-          "turn_recall": {
-            "turns_1_9": {
-              "hits": 69,
-              "total": 69,
-              "rate": 1.0,
-              "wilson95": [
-                0.9472627418109483,
-                1.0
-              ]
-            },
-            "turns_1_4": {
-              "hits": 32,
-              "total": 32,
-              "rate": 1.0,
-              "wilson95": [
-                0.8928208017449293,
-                1.0
-              ]
-            },
-            "turns_5_9": {
-              "hits": 37,
-              "total": 37,
-              "rate": 1.0,
-              "wilson95": [
-                0.9059421741627975,
-                1.0
-              ]
-            }
-          },
-          "ledger_recall": {
-            "overall": {
-              "hits": 35,
-              "total": 49,
-              "rate": 0.7142857142857143,
-              "wilson95": [
-                0.575911164922199,
-                0.8215040554118739
-              ]
-            },
-            "by_origin": {
-              "origin_1_3": {
-                "hits": 13,
-                "total": 17,
-                "rate": 0.7647058823529411,
-                "wilson95": [
-                  0.5273820188043501,
-                  0.9044495567791988
-                ]
-              },
-              "origin_4_6": {
-                "hits": 11,
-                "total": 17,
-                "rate": 0.6470588235294118,
-                "wilson95": [
-                  0.41300363485218694,
-                  0.8269027960275627
-                ]
-              },
-              "origin_7_9": {
-                "hits": 11,
-                "total": 15,
-                "rate": 0.7333333333333333,
-                "wilson95": [
-                  0.4804956594401943,
-                  0.8910254667430761
-                ]
-              }
-            },
-            "by_source": {
-              "handbook": {
-                "hits": 30,
-                "total": 35,
-                "rate": 0.8571428571428571,
-                "wilson95": [
-                  0.7062444591340484,
-                  0.9373976892056628
-                ]
-              },
-              "session": {
-                "hits": 5,
-                "total": 14,
-                "rate": 0.35714285714285715,
-                "wilson95": [
-                  0.1634473175355414,
-                  0.612355768960926
-                ]
-              }
-            }
-          },
-          "probe_accuracy": {
-            "overall": {
-              "hits": 0,
-              "total": 0,
-              "rate": null,
-              "wilson95": null
-            },
-            "by_origin": {
-              "origin_1_6": {
-                "hits": 0,
-                "total": 0,
-                "rate": null,
-                "wilson95": null
-              },
-              "origin_7_9": {
-                "hits": 0,
-                "total": 0,
-                "rate": null,
-                "wilson95": null
-              }
-            }
-          }
-        },
-        "by_preset": {
-          "desk-01": {
-            "quality": {
-              "sessions": 1,
-              "turn_recall": {
-                "turns_1_9": {
-                  "hits": 35,
-                  "total": 35,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.9010990076755959,
-                    0.9999999999999999
-                  ]
-                },
-                "turns_1_4": {
-                  "hits": 16,
-                  "total": 16,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8063923194655637,
-                    1.0
-                  ]
-                },
-                "turns_5_9": {
-                  "hits": 19,
-                  "total": 19,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8318207759473837,
-                    1.0
-                  ]
-                }
-              },
-              "ledger_recall": {
-                "overall": {
-                  "hits": 20,
-                  "total": 25,
-                  "rate": 0.8,
-                  "wilson95": [
-                    0.6086904963045967,
-                    0.9113941531319742
-                  ]
-                },
-                "by_origin": {
-                  "origin_1_3": {
-                    "hits": 8,
-                    "total": 9,
-                    "rate": 0.8888888888888888,
-                    "wilson95": [
-                      0.565000294423344,
-                      0.980109112361455
-                    ]
-                  },
-                  "origin_4_6": {
-                    "hits": 5,
-                    "total": 8,
-                    "rate": 0.625,
-                    "wilson95": [
-                      0.3057423946026273,
-                      0.8631557141764027
-                    ]
-                  },
-                  "origin_7_9": {
-                    "hits": 7,
-                    "total": 8,
-                    "rate": 0.875,
-                    "wilson95": [
-                      0.5291118177871464,
-                      0.9775825085499433
-                    ]
-                  }
-                },
-                "by_source": {
-                  "handbook": {
-                    "hits": 17,
-                    "total": 17,
-                    "rate": 1.0,
-                    "wilson95": [
-                      0.8156818649911483,
-                      1.0
-                    ]
-                  },
-                  "session": {
-                    "hits": 3,
-                    "total": 8,
-                    "rate": 0.375,
-                    "wilson95": [
-                      0.13684428582359737,
-                      0.6942576053973728
-                    ]
-                  }
-                }
-              },
-              "probe_accuracy": {
-                "overall": {
-                  "hits": 0,
-                  "total": 0,
-                  "rate": null,
-                  "wilson95": null
-                },
-                "by_origin": {
-                  "origin_1_6": {
-                    "hits": 0,
-                    "total": 0,
-                    "rate": null,
-                    "wilson95": null
-                  },
-                  "origin_7_9": {
-                    "hits": 0,
-                    "total": 0,
-                    "rate": null,
-                    "wilson95": null
-                  }
-                }
-              }
-            }
-          },
-          "desk-02": {
-            "quality": {
-              "sessions": 1,
-              "turn_recall": {
-                "turns_1_9": {
-                  "hits": 34,
-                  "total": 34,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8984854458466761,
-                    0.9999999999999999
-                  ]
-                },
-                "turns_1_4": {
-                  "hits": 16,
-                  "total": 16,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8063923194655637,
-                    1.0
-                  ]
-                },
-                "turns_5_9": {
-                  "hits": 18,
-                  "total": 18,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8241207763533425,
-                    1.0
-                  ]
-                }
-              },
-              "ledger_recall": {
-                "overall": {
-                  "hits": 15,
-                  "total": 24,
-                  "rate": 0.625,
-                  "wilson95": [
-                    0.42709962442674276,
-                    0.7884063244045122
-                  ]
-                },
-                "by_origin": {
-                  "origin_1_3": {
-                    "hits": 5,
-                    "total": 8,
-                    "rate": 0.625,
-                    "wilson95": [
-                      0.3057423946026273,
-                      0.8631557141764027
-                    ]
-                  },
-                  "origin_4_6": {
-                    "hits": 6,
-                    "total": 9,
-                    "rate": 0.6666666666666666,
-                    "wilson95": [
-                      0.3542021355803963,
-                      0.879416181613089
-                    ]
-                  },
-                  "origin_7_9": {
-                    "hits": 4,
-                    "total": 7,
-                    "rate": 0.5714285714285714,
-                    "wilson95": [
-                      0.2504583645276572,
-                      0.8417801447485302
-                    ]
-                  }
-                },
-                "by_source": {
-                  "handbook": {
-                    "hits": 13,
-                    "total": 18,
-                    "rate": 0.7222222222222222,
-                    "wilson95": [
-                      0.4912734343970255,
-                      0.87500246620446
-                    ]
-                  },
-                  "session": {
-                    "hits": 2,
-                    "total": 6,
-                    "rate": 0.3333333333333333,
-                    "wilson95": [
-                      0.09677141110578041,
-                      0.700006684861608
-                    ]
-                  }
-                }
-              },
-              "probe_accuracy": {
-                "overall": {
-                  "hits": 0,
-                  "total": 0,
-                  "rate": null,
-                  "wilson95": null
-                },
-                "by_origin": {
-                  "origin_1_6": {
-                    "hits": 0,
-                    "total": 0,
-                    "rate": null,
-                    "wilson95": null
-                  },
-                  "origin_7_9": {
-                    "hits": 0,
-                    "total": 0,
-                    "rate": null,
-                    "wilson95": null
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "prefix_cached_summarized": {
-        "quality": {
-          "sessions": 2,
-          "turn_recall": {
-            "turns_1_9": {
-              "hits": 69,
-              "total": 69,
-              "rate": 1.0,
-              "wilson95": [
-                0.9472627418109483,
-                1.0
-              ]
-            },
-            "turns_1_4": {
-              "hits": 32,
-              "total": 32,
-              "rate": 1.0,
-              "wilson95": [
-                0.8928208017449293,
-                1.0
-              ]
-            },
-            "turns_5_9": {
-              "hits": 37,
-              "total": 37,
-              "rate": 1.0,
-              "wilson95": [
-                0.9059421741627975,
-                1.0
-              ]
-            }
-          },
-          "ledger_recall": {
-            "overall": {
-              "hits": 30,
-              "total": 49,
-              "rate": 0.6122448979591837,
-              "wilson95": [
-                0.4724599944352045,
-                0.7357098828826433
-              ]
-            },
-            "by_origin": {
-              "origin_1_3": {
-                "hits": 6,
-                "total": 17,
-                "rate": 0.35294117647058826,
-                "wilson95": [
-                  0.1730972039724375,
-                  0.5869963651478132
-                ]
-              },
-              "origin_4_6": {
-                "hits": 13,
-                "total": 17,
-                "rate": 0.7647058823529411,
-                "wilson95": [
-                  0.5273820188043501,
-                  0.9044495567791988
-                ]
-              },
-              "origin_7_9": {
-                "hits": 11,
-                "total": 15,
-                "rate": 0.7333333333333333,
-                "wilson95": [
-                  0.4804956594401943,
-                  0.8910254667430761
-                ]
-              }
-            },
-            "by_source": {
-              "handbook": {
-                "hits": 25,
-                "total": 35,
-                "rate": 0.7142857142857143,
-                "wilson95": [
-                  0.5494506513681738,
-                  0.836734637635653
-                ]
-              },
-              "session": {
-                "hits": 5,
-                "total": 14,
-                "rate": 0.35714285714285715,
-                "wilson95": [
-                  0.1634473175355414,
-                  0.612355768960926
-                ]
-              }
-            }
-          },
-          "probe_accuracy": {
-            "overall": {
-              "hits": 0,
-              "total": 0,
-              "rate": null,
-              "wilson95": null
-            },
-            "by_origin": {
-              "origin_1_6": {
-                "hits": 0,
-                "total": 0,
-                "rate": null,
-                "wilson95": null
-              },
-              "origin_7_9": {
-                "hits": 0,
-                "total": 0,
-                "rate": null,
-                "wilson95": null
-              }
-            }
-          }
-        },
-        "by_preset": {
-          "desk-01": {
-            "quality": {
-              "sessions": 1,
-              "turn_recall": {
-                "turns_1_9": {
-                  "hits": 35,
-                  "total": 35,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.9010990076755959,
-                    0.9999999999999999
-                  ]
-                },
-                "turns_1_4": {
-                  "hits": 16,
-                  "total": 16,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8063923194655637,
-                    1.0
-                  ]
-                },
-                "turns_5_9": {
-                  "hits": 19,
-                  "total": 19,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8318207759473837,
-                    1.0
-                  ]
-                }
-              },
-              "ledger_recall": {
-                "overall": {
-                  "hits": 19,
-                  "total": 25,
-                  "rate": 0.76,
-                  "wilson95": [
-                    0.5657031664457093,
-                    0.8850368630659855
-                  ]
-                },
-                "by_origin": {
-                  "origin_1_3": {
-                    "hits": 5,
-                    "total": 9,
-                    "rate": 0.5555555555555556,
-                    "wilson95": [
-                      0.2666512934954931,
-                      0.8112214789023354
-                    ]
-                  },
-                  "origin_4_6": {
-                    "hits": 7,
-                    "total": 8,
-                    "rate": 0.875,
-                    "wilson95": [
-                      0.5291118177871464,
-                      0.9775825085499433
-                    ]
-                  },
-                  "origin_7_9": {
-                    "hits": 7,
-                    "total": 8,
-                    "rate": 0.875,
-                    "wilson95": [
-                      0.5291118177871464,
-                      0.9775825085499433
-                    ]
-                  }
-                },
-                "by_source": {
-                  "handbook": {
-                    "hits": 15,
-                    "total": 17,
-                    "rate": 0.8823529411764706,
-                    "wilson95": [
-                      0.6566364940511413,
-                      0.9671202262362073
-                    ]
-                  },
-                  "session": {
-                    "hits": 4,
-                    "total": 8,
-                    "rate": 0.5,
-                    "wilson95": [
-                      0.21521606221387757,
-                      0.7847839377861224
-                    ]
-                  }
-                }
-              },
-              "probe_accuracy": {
-                "overall": {
-                  "hits": 0,
-                  "total": 0,
-                  "rate": null,
-                  "wilson95": null
-                },
-                "by_origin": {
-                  "origin_1_6": {
-                    "hits": 0,
-                    "total": 0,
-                    "rate": null,
-                    "wilson95": null
-                  },
-                  "origin_7_9": {
-                    "hits": 0,
-                    "total": 0,
-                    "rate": null,
-                    "wilson95": null
-                  }
-                }
-              }
-            }
-          },
-          "desk-02": {
-            "quality": {
-              "sessions": 1,
-              "turn_recall": {
-                "turns_1_9": {
-                  "hits": 34,
-                  "total": 34,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8984854458466761,
-                    0.9999999999999999
-                  ]
-                },
-                "turns_1_4": {
-                  "hits": 16,
-                  "total": 16,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8063923194655637,
-                    1.0
-                  ]
-                },
-                "turns_5_9": {
-                  "hits": 18,
-                  "total": 18,
-                  "rate": 1.0,
-                  "wilson95": [
-                    0.8241207763533425,
-                    1.0
-                  ]
-                }
-              },
-              "ledger_recall": {
-                "overall": {
-                  "hits": 11,
-                  "total": 24,
-                  "rate": 0.4583333333333333,
-                  "wilson95": [
-                    0.2789133373121099,
-                    0.6492513464108051
-                  ]
-                },
-                "by_origin": {
-                  "origin_1_3": {
-                    "hits": 1,
-                    "total": 8,
-                    "rate": 0.125,
-                    "wilson95": [
-                      0.02241749145005667,
-                      0.4708881822128535
-                    ]
-                  },
-                  "origin_4_6": {
-                    "hits": 6,
-                    "total": 9,
-                    "rate": 0.6666666666666666,
-                    "wilson95": [
-                      0.3542021355803963,
-                      0.879416181613089
-                    ]
-                  },
-                  "origin_7_9": {
-                    "hits": 4,
-                    "total": 7,
-                    "rate": 0.5714285714285714,
-                    "wilson95": [
-                      0.2504583645276572,
-                      0.8417801447485302
-                    ]
-                  }
-                },
-                "by_source": {
-                  "handbook": {
-                    "hits": 10,
-                    "total": 18,
-                    "rate": 0.5555555555555556,
-                    "wilson95": [
-                      0.33716415642042774,
-                      0.7544048187299437
-                    ]
-                  },
-                  "session": {
-                    "hits": 1,
-                    "total": 6,
-                    "rate": 0.16666666666666666,
-                    "wilson95": [
-                      0.03005336974830658,
-                      0.5635028221864702
-                    ]
-                  }
-                }
-              },
-              "probe_accuracy": {
-                "overall": {
-                  "hits": 0,
-                  "total": 0,
-                  "rate": null,
-                  "wilson95": null
-                },
-                "by_origin": {
-                  "origin_1_6": {
-                    "hits": 0,
-                    "total": 0,
-                    "rate": null,
-                    "wilson95": null
-                  },
-                  "origin_7_9": {
-                    "hits": 0,
-                    "total": 0,
-                    "rate": null,
-                    "wilson95": null
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "data_quality": {
-      "non_end_turn_turns": [],
-      "model_mismatches": []
-    }
-  },
   "per_fact": [
     {
       "fact_id": "d1-t1-no-wipe-cs-contained",
@@ -3132,26 +1401,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t1-falconctl-heartbeat",
@@ -3170,26 +1428,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t1-queue-it-iam-fastpass",
@@ -3207,26 +1454,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t1-sla-fastpass",
@@ -3249,26 +1485,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t2-profiles-renew",
@@ -3286,26 +1511,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t2-jamf-reenroll-posture",
@@ -3323,26 +1537,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t2-queue-it-mdm-leave-unlock",
@@ -3360,26 +1563,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t2-sla-30-min",
@@ -3399,26 +1591,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t3-root-ca-v4-fingerprint",
@@ -3436,26 +1617,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t3-split-tunnel-workday-sso",
@@ -3474,26 +1644,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t3-cert-refresh-sase-v4",
@@ -3511,26 +1670,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t3-disable-ipv6-bypass",
@@ -3548,26 +1696,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t4-hr-bon-412c",
@@ -3585,26 +1722,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 2,
-          "n": 3,
-          "rate": 0.6666666666666666
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.33333333333333337,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t4-bonus-factor-1-00",
@@ -3622,26 +1748,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 2,
-          "n": 3,
-          "rate": 0.6666666666666666
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.33333333333333337,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t4-secondary-leave-12-weeks",
@@ -3664,26 +1779,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 2,
-          "n": 3,
-          "rate": 0.6666666666666666
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.33333333333333337,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t4-queue-hr-pay-retro",
@@ -3701,26 +1805,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 2,
-          "n": 3,
-          "rate": 0.6666666666666666
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.33333333333333337,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t5-cutoff-18-00-ist",
@@ -3738,26 +1831,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t5-stale-unpaid-loa-hold",
@@ -3776,26 +1858,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t5-hr-bon-412c",
@@ -3813,26 +1884,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t5-total-owed-64200",
@@ -3850,26 +1910,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t6-threshold-25000",
@@ -3887,26 +1936,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t6-48-business-hours",
@@ -3936,26 +1974,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t6-queue-hr-pay-retro",
@@ -3973,26 +2000,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t6-tds-following-month",
@@ -4017,26 +2033,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t7-annual-cap-35000",
@@ -4054,26 +2059,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t7-single-claim-30000",
@@ -4091,26 +2085,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t7-direct-manager-approval",
@@ -4129,26 +2112,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t8-wd-del-09",
@@ -4166,26 +2138,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t8-24h-auto-delegation",
@@ -4208,26 +2169,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t8-reimbursement-5-business-days",
@@ -4248,26 +2198,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t8-queue-hr-ben-escalations",
@@ -4285,26 +2224,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t9-wd-access-recert",
@@ -4322,26 +2250,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t9-queue-it-iam-groups",
@@ -4359,26 +2276,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t9-sla-60-min",
@@ -4398,26 +2304,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-t9-restore-via-wd-del-09",
@@ -4435,26 +2330,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t1-ykman-fido-info",
@@ -4472,26 +2356,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t1-dual-verification-manager-id",
@@ -4513,26 +2386,15 @@
           "n": 3,
           "rate": 0.3333333333333333
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.6666666666666667,
-      "spread_basis": "rerun"
+      "spread": 0.6666666666666667
     },
     {
       "fact_id": "d2-t1-queue-it-iam-fido2",
@@ -4550,26 +2412,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t1-it-genius-locker",
@@ -4588,26 +2439,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t2-auth-okta-fido2",
@@ -4626,26 +2466,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t2-request-ttl-4h",
@@ -4664,26 +2493,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t2-lease-cap-240",
@@ -4701,26 +2519,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t2-cosign-l7",
@@ -4738,26 +2545,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t3-mtls-90-days",
@@ -4777,26 +2573,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t3-install-ca-v4",
@@ -4814,26 +2599,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t3-queue-it-net-registry",
@@ -4851,26 +2625,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t3-sla-20-min",
@@ -4890,26 +2653,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t4-lift-ceiling-2500",
@@ -4928,26 +2680,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t4-lift-15-30-min",
@@ -4967,26 +2708,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t4-lift-14-days",
@@ -5007,26 +2737,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t4-gstin",
@@ -5044,26 +2763,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t5-gross-363372",
@@ -5081,26 +2789,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t5-tax-113372",
@@ -5118,26 +2815,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t5-clawback-9-months-90843",
@@ -5155,26 +2841,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t6-cofund-70-pct",
@@ -5194,26 +2869,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t6-cutoff-dec-16",
@@ -5241,26 +2905,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t6-masked-last-4",
@@ -5281,26 +2934,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t6-workday-kms-vault",
@@ -5318,26 +2960,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t7-remaining-5200",
@@ -5355,26 +2986,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t7-single-claim-30000",
@@ -5392,26 +3012,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t7-annual-cap-35000",
@@ -5429,26 +3038,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t8-hr-pay-nh-18",
@@ -5466,26 +3064,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t8-on-or-before-15th",
@@ -5508,26 +3095,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 2,
           "n": 3,
           "rate": 0.6666666666666666
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.33333333333333337,
-      "spread_basis": "rerun"
+      "spread": 0.33333333333333337
     },
     {
       "fact_id": "d2-t8-combined-dec-31",
@@ -5553,26 +3129,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t8-hr-pay-adv-14",
@@ -5590,26 +3155,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t9-gate-2-blocks",
@@ -5632,26 +3186,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 2,
           "n": 3,
           "rate": 0.6666666666666666
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.33333333333333337,
-      "spread_basis": "rerun"
+      "spread": 0.33333333333333337
     },
     {
       "fact_id": "d2-t9-tsh-request-create",
@@ -5669,26 +3212,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t9-request-ttl-4h",
@@ -5707,26 +3239,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-t9-cosigner-siddharth",
@@ -5745,26 +3266,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l1-queue-it-iam-fastpass",
@@ -5782,26 +3292,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l1-err-device-posture",
@@ -5820,26 +3319,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 2,
-          "n": 3,
-          "rate": 0.6666666666666666
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.33333333333333337,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l1-days-offline-101",
@@ -5860,26 +3348,15 @@
           "n": 3,
           "rate": 0.3333333333333333
         },
-        "prefix_cached_history": {
-          "hits": 2,
-          "n": 3,
-          "rate": 0.6666666666666666
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": false,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.6666666666666666,
-      "spread_basis": "rerun"
+      "spread": 0.3333333333333333
     },
     {
       "fact_id": "d1-l2-queue-it-mdm-leave-unlock",
@@ -5897,26 +3374,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l2-profiles-renew",
@@ -5934,26 +3400,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l2-prk-slot",
@@ -5971,26 +3426,15 @@
           "n": 3,
           "rate": 0.6666666666666666
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 1.0,
-      "spread_basis": "rerun"
+      "spread": 0.6666666666666666
     },
     {
       "fact_id": "d1-l3-root-ca-v4-fingerprint",
@@ -6009,26 +3453,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 1.0,
-      "spread_basis": "rerun"
+      "spread": 1.0
     },
     {
       "fact_id": "d1-l3-queue-it-net-sase",
@@ -6046,26 +3479,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l3-disable-ipv6-bypass",
@@ -6083,26 +3505,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 2,
           "n": 3,
           "rate": 0.6666666666666666
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.33333333333333337,
-      "spread_basis": "rerun"
+      "spread": 0.33333333333333337
     },
     {
       "fact_id": "d1-l4-deduction-42200",
@@ -6120,26 +3531,15 @@
           "n": 3,
           "rate": 0.6666666666666666
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": false,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.33333333333333337,
-      "spread_basis": "rerun"
+      "spread": 0.33333333333333337
     },
     {
       "fact_id": "d1-l4-bonus-22000",
@@ -6157,26 +3557,15 @@
           "n": 3,
           "rate": 0.6666666666666666
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": false,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.33333333333333337,
-      "spread_basis": "rerun"
+      "spread": 0.33333333333333337
     },
     {
       "fact_id": "d1-l4-hr-bon-412c",
@@ -6194,26 +3583,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l5-sync-lag-404",
@@ -6232,26 +3610,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l5-approval-oct-20",
@@ -6277,26 +3644,15 @@
           "n": 3,
           "rate": 0.0
         },
-        "prefix_cached_history": {
-          "hits": 0,
-          "n": 3,
-          "rate": 0.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": false,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": true,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l6-queue-hr-pay-retro",
@@ -6314,26 +3670,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l6-hr-pay-bridge-48h",
@@ -6351,26 +3696,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l6-usd-770",
@@ -6388,26 +3722,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l7-prior-claim-6500",
@@ -6425,26 +3748,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l7-annual-cap-35000",
@@ -6462,26 +3774,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l7-hr-ben-ergo-26",
@@ -6499,26 +3800,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l8-reimbursement-5-business-days",
@@ -6540,26 +3830,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l8-24h-auto-delegation",
@@ -6582,26 +3861,15 @@
           "n": 3,
           "rate": 0.6666666666666666
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.33333333333333337,
-      "spread_basis": "rerun"
+      "spread": 0.33333333333333337
     },
     {
       "fact_id": "d1-l8-manager-pto-7-business-days",
@@ -6624,26 +3892,15 @@
           "n": 3,
           "rate": 0.0
         },
-        "prefix_cached_history": {
-          "hits": 0,
-          "n": 3,
-          "rate": 0.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": false,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": true,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l9-queue-it-iam-groups",
@@ -6661,26 +3918,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-l9-sla-60-min",
@@ -6701,26 +3947,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-l1-queue-it-iam-fido2",
@@ -6738,26 +3973,15 @@
           "n": 3,
           "rate": 0.6666666666666666
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 1,
           "n": 3,
           "rate": 0.3333333333333333
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.6666666666666667,
-      "spread_basis": "rerun"
+      "spread": 0.3333333333333333
     },
     {
       "fact_id": "d2-l1-mfa-bypass-24h",
@@ -6775,26 +3999,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 2,
-          "n": 3,
-          "rate": 0.6666666666666666
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 1.0,
-      "spread_basis": "rerun"
+      "spread": 1.0
     },
     {
       "fact_id": "d2-l2-it-sec-pam-09",
@@ -6812,26 +4025,15 @@
           "n": 3,
           "rate": 0.6666666666666666
         },
-        "prefix_cached_history": {
-          "hits": 1,
-          "n": 3,
-          "rate": 0.3333333333333333
-        },
         "prefix_cached_summarized": {
           "hits": 1,
           "n": 3,
           "rate": 0.3333333333333333
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": false,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.3333333333333333,
-      "spread_basis": "rerun"
+      "spread": 0.3333333333333333
     },
     {
       "fact_id": "d2-l2-change-ticket",
@@ -6849,26 +4051,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-l2-locker-b4",
@@ -6886,26 +4077,15 @@
           "n": 3,
           "rate": 0.0
         },
-        "prefix_cached_history": {
-          "hits": 2,
-          "n": 3,
-          "rate": 0.6666666666666666
-        },
         "prefix_cached_summarized": {
           "hits": 1,
           "n": 3,
           "rate": 0.3333333333333333
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.6666666666666666,
-      "spread_basis": "rerun"
+      "spread": 0.3333333333333333
     },
     {
       "fact_id": "d2-l3-it-net-mtls-14",
@@ -6923,26 +4103,15 @@
           "n": 3,
           "rate": 0.6666666666666666
         },
-        "prefix_cached_history": {
-          "hits": 1,
-          "n": 3,
-          "rate": 0.3333333333333333
-        },
         "prefix_cached_summarized": {
           "hits": 1,
           "n": 3,
           "rate": 0.3333333333333333
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": false,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.3333333333333333,
-      "spread_basis": "rerun"
+      "spread": 0.3333333333333333
     },
     {
       "fact_id": "d2-l3-queue-it-net-registry",
@@ -6960,26 +4129,15 @@
           "n": 3,
           "rate": 0.3333333333333333
         },
-        "prefix_cached_history": {
-          "hits": 2,
-          "n": 3,
-          "rate": 0.6666666666666666
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.6666666666666666,
-      "spread_basis": "rerun"
+      "spread": 0.3333333333333333
     },
     {
       "fact_id": "d2-l3-install-ca-v4",
@@ -6998,26 +4156,15 @@
           "n": 3,
           "rate": 0.0
         },
-        "prefix_cached_history": {
-          "hits": 0,
-          "n": 3,
-          "rate": 0.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": false,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": true,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-l4-lift-ceiling-2500",
@@ -7036,26 +4183,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-l4-hr-concur-risk",
@@ -7073,26 +4209,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 2,
           "n": 3,
           "rate": 0.6666666666666666
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.33333333333333337,
-      "spread_basis": "rerun"
+      "spread": 0.33333333333333337
     },
     {
       "fact_id": "d2-l4-preauth-usd-1775",
@@ -7110,26 +4235,15 @@
           "n": 3,
           "rate": 0.3333333333333333
         },
-        "prefix_cached_history": {
-          "hits": 0,
-          "n": 3,
-          "rate": 0.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": false,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.3333333333333333,
-      "spread_basis": "rerun"
+      "spread": 0.3333333333333333
     },
     {
       "fact_id": "d2-l5-tax-113372",
@@ -7147,26 +4261,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 1,
           "n": 3,
           "rate": 0.3333333333333333
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.6666666666666667,
-      "spread_basis": "rerun"
+      "spread": 0.6666666666666667
     },
     {
       "fact_id": "d2-l5-hr-rel-518c",
@@ -7184,26 +4287,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 1,
-          "n": 3,
-          "rate": 0.3333333333333333
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": false,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.6666666666666667,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-l5-clawback-90843",
@@ -7221,26 +4313,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 2,
           "n": 3,
           "rate": 0.6666666666666666
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.33333333333333337,
-      "spread_basis": "rerun"
+      "spread": 0.33333333333333337
     },
     {
       "fact_id": "d2-l6-cofund-70-pct",
@@ -7260,26 +4341,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 2,
           "n": 3,
           "rate": 0.6666666666666666
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.33333333333333337,
-      "spread_basis": "rerun"
+      "spread": 0.33333333333333337
     },
     {
       "fact_id": "d2-l6-wd-ben-30d",
@@ -7297,26 +4367,15 @@
           "n": 3,
           "rate": 0.0
         },
-        "prefix_cached_history": {
-          "hits": 2,
-          "n": 3,
-          "rate": 0.6666666666666666
-        },
         "prefix_cached_summarized": {
           "hits": 1,
           "n": 3,
           "rate": 0.3333333333333333
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": false,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.6666666666666666,
-      "spread_basis": "rerun"
+      "spread": 0.3333333333333333
     },
     {
       "fact_id": "d2-l6-cover-500000",
@@ -7335,26 +4394,15 @@
           "n": 3,
           "rate": 0.6666666666666666
         },
-        "prefix_cached_history": {
-          "hits": 2,
-          "n": 3,
-          "rate": 0.6666666666666666
-        },
         "prefix_cached_summarized": {
           "hits": 2,
           "n": 3,
           "rate": 0.6666666666666666
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-l7-chair-18900",
@@ -7372,26 +4420,15 @@
           "n": 3,
           "rate": 0.0
         },
-        "prefix_cached_history": {
-          "hits": 0,
-          "n": 3,
-          "rate": 0.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": false,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": true,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-l7-dock-10900",
@@ -7409,26 +4446,15 @@
           "n": 3,
           "rate": 0.0
         },
-        "prefix_cached_history": {
-          "hits": 0,
-          "n": 3,
-          "rate": 0.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": false,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": true,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-l7-annual-cap-35000",
@@ -7446,26 +4472,15 @@
           "n": 3,
           "rate": 0.3333333333333333
         },
-        "prefix_cached_history": {
-          "hits": 1,
-          "n": 3,
-          "rate": 0.3333333333333333
-        },
         "prefix_cached_summarized": {
           "hits": 1,
           "n": 3,
           "rate": 0.3333333333333333
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-l8-hr-pay-adv-14",
@@ -7483,26 +4498,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-l8-packet-nov-17",
@@ -7528,26 +4532,15 @@
           "n": 3,
           "rate": 0.0
         },
-        "prefix_cached_history": {
-          "hits": 0,
-          "n": 3,
-          "rate": 0.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": false,
-        "prefix_cached_history": false,
-        "prefix_cached_summarized": false
-      },
       "observed": true,
       "never_hit": true,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-l9-tsh-request-create",
@@ -7565,26 +4558,15 @@
           "n": 3,
           "rate": 0.6666666666666666
         },
-        "prefix_cached_history": {
-          "hits": 2,
-          "n": 3,
-          "rate": 0.6666666666666666
-        },
         "prefix_cached_summarized": {
           "hits": 2,
           "n": 3,
           "rate": 0.6666666666666666
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d2-l9-queue-it-pam-prod",
@@ -7602,26 +4584,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 3,
           "n": 3,
           "rate": 1.0
         }
       },
-      "original": {
-        "naive_full_history": true,
-        "prefix_cached_history": true,
-        "prefix_cached_summarized": true
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.0,
-      "spread_basis": "rerun"
+      "spread": 0.0
     },
     {
       "fact_id": "d1-p1-device-serial",
@@ -7639,26 +4610,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 2,
           "n": 3,
           "rate": 0.6666666666666666
         }
       },
-      "original": {
-        "naive_full_history": null,
-        "prefix_cached_history": null,
-        "prefix_cached_summarized": null
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 0.33333333333333337,
-      "spread_basis": "rerun"
+      "spread": 0.33333333333333337
     },
     {
       "fact_id": "d1-p2-prk-slot",
@@ -7676,26 +4636,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": null,
-        "prefix_cached_history": null,
-        "prefix_cached_summarized": null
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 1.0,
-      "spread_basis": "rerun"
+      "spread": 1.0
     },
     {
       "fact_id": "d1-p3-manager-approval-date",
@@ -7723,26 +4672,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": null,
-        "prefix_cached_history": null,
-        "prefix_cached_summarized": null
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 1.0,
-      "spread_basis": "rerun"
+      "spread": 1.0
     },
     {
       "fact_id": "d1-p4-bank-account-last4",
@@ -7760,26 +4698,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": null,
-        "prefix_cached_history": null,
-        "prefix_cached_summarized": null
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 1.0,
-      "spread_basis": "rerun"
+      "spread": 1.0
     },
     {
       "fact_id": "d1-p5-monitor-invoice-number",
@@ -7798,26 +4725,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": null,
-        "prefix_cached_history": null,
-        "prefix_cached_summarized": null
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 1.0,
-      "spread_basis": "rerun"
+      "spread": 1.0
     },
     {
       "fact_id": "d1-p6-restored-jira-group",
@@ -7835,26 +4751,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": null,
-        "prefix_cached_history": null,
-        "prefix_cached_summarized": null
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 1.0,
-      "spread_basis": "rerun"
+      "spread": 1.0
     },
     {
       "fact_id": "d2-p1-yubikey-serial",
@@ -7872,26 +4777,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": null,
-        "prefix_cached_history": null,
-        "prefix_cached_summarized": null
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 1.0,
-      "spread_basis": "rerun"
+      "spread": 1.0
     },
     {
       "fact_id": "d2-p2-proposed-cosigner",
@@ -7912,26 +4806,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": null,
-        "prefix_cached_history": null,
-        "prefix_cached_summarized": null
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 1.0,
-      "spread_basis": "rerun"
+      "spread": 1.0
     },
     {
       "fact_id": "d2-p3-old-cert-expiry",
@@ -7959,26 +4842,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": null,
-        "prefix_cached_history": null,
-        "prefix_cached_summarized": null
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 1.0,
-      "spread_basis": "rerun"
+      "spread": 1.0
     },
     {
       "fact_id": "d2-p4-declined-preauth-usd",
@@ -7996,26 +4868,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": null,
-        "prefix_cached_history": null,
-        "prefix_cached_summarized": null
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 1.0,
-      "spread_basis": "rerun"
+      "spread": 1.0
     },
     {
       "fact_id": "d2-p5-chair-price",
@@ -8033,26 +4894,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": null,
-        "prefix_cached_history": null,
-        "prefix_cached_summarized": null
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 1.0,
-      "spread_basis": "rerun"
+      "spread": 1.0
     },
     {
       "fact_id": "d2-p6-packet-submitted-date",
@@ -8080,26 +4930,15 @@
           "n": 3,
           "rate": 1.0
         },
-        "prefix_cached_history": {
-          "hits": 3,
-          "n": 3,
-          "rate": 1.0
-        },
         "prefix_cached_summarized": {
           "hits": 0,
           "n": 3,
           "rate": 0.0
         }
       },
-      "original": {
-        "naive_full_history": null,
-        "prefix_cached_history": null,
-        "prefix_cached_summarized": null
-      },
       "observed": true,
       "never_hit": false,
-      "spread": 1.0,
-      "spread_basis": "rerun"
+      "spread": 1.0
     }
   ],
   "never_hit_facts": [
@@ -8111,7 +4950,6 @@
     "d2-l8-packet-nov-17"
   ],
   "largest_spread_facts": [
-    "d1-l2-prk-slot",
     "d1-l3-root-ca-v4-fingerprint",
     "d1-p2-prk-slot",
     "d1-p3-manager-approval-date",
@@ -8125,7 +4963,8 @@
     "d2-p4-declined-preauth-usd",
     "d2-p5-chair-price",
     "d2-p6-packet-submitted-date",
-    "d2-l1-queue-it-iam-fido2"
+    "d2-l5-tax-113372",
+    "d2-t1-dual-verification-manager-id"
   ],
   "misses_for_review": [
     {

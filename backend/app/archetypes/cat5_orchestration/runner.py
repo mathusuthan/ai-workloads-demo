@@ -74,7 +74,7 @@ def load_cat5_replays() -> dict[str, Any]:
 
 
 def load_cat5_ablation_portfolio() -> Cat5AblationPortfolio | None:
-    """Six-arm ablation summary (replays/cat5_ablation_summary.json); None if absent or unreadable."""
+    """Without/with experiment summary (replays/cat5_ablation_summary.json); None if absent or unreadable."""
     path = Path(get_settings().replays_dir) / "cat5_ablation_summary.json"
     if not path.is_file():
         return None
@@ -89,7 +89,7 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
     if rung_id == "unbounded_sonnet_loop":
         return (
             "1. Free-Choice Raw-Table Loop (Sonnet 5.5)",
-            "Baseline: Raw Tables, No Cache",
+            "Without the Lever: Raw Tables, No Cache",
             [
                 "The model chooses which raw SELECT * table queries to run (several per turn allowed), does the policy "
                 "arithmetic itself and commits the voucher.",
@@ -99,19 +99,21 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
     if rung_id == "bounded_sonnet_cached_gate":
         return (
             "2. Narrow Query + Cached Policy + Policy Gate",
-            "Narrow Query + Cache + Policy Gate",
+            "With the Lever: Step Budget + Policy Tool",
             [
-                "One projected bundle query replaces the raw table dumps, and the policy manual is sent as a cached prefix.",
-                "The commit tool refuses until the deterministic policy gate (AP-POL-GATE-01) has computed the voucher; "
-                "the committed voucher carries its figures, as this version's instructions require.",
+                "A step budget and the deterministic policy tool (AP-POL-GATE-01): the commit tool refuses until the tool "
+                "has computed the voucher, and the committed voucher carries its figures, as this version's instructions require.",
+                "This design also uses one narrow bundle query in place of the raw table dumps and sends the policy manual "
+                "as a cached prefix.",
             ],
         )
     return (
         "3. Haiku + Policy Gate + Sonnet Escalation",
-        "Tiered Routing + Policy Gate",
+        "With the Lever, Haiku-First",
         [
             "Rung 2's tools and prompt on Haiku 5.5; the run switches to Sonnet 5.5 when the gate flags escalation.",
-            "The gate flags escalation whenever the debit note is above zero or two or more discrepancies combine.",
+            "The gate flags escalation only for a multi-factor dispute: two or more of partial DOA or short receipt, a signed "
+            "amendment, an unauthorized price rise and disallowed freight (the manual's multi-factor rule).",
         ],
     )
 
@@ -267,12 +269,11 @@ def _arm(portfolio: Cat5AblationPortfolio | None, arm_id: str) -> Any:
     return next((a for a in (portfolio.arms if portfolio else []) if a.arm_id == arm_id and a.runs > 0), None)
 
 
-def _lever(portfolio: Cat5AblationPortfolio | None, name: str) -> Any:
-    return next((lv for lv in (portfolio.levers if portfolio else []) if lv.lever == name and lv.available), None)
-
-
-def _gate_disagreement(portfolio: Cat5AblationPortfolio | None) -> Any:
-    return next((g for g in (portfolio.gate_disagreement if portfolio else []) if g.gate_runs or g.no_gate_runs), None)
+def _runs_text(a: Any) -> str:
+    """'36 runs', or '21 of 36 runs, 15 pending' while some runs of the cell are not recorded yet."""
+    if a.pending_runs:
+        return f"{a.runs} of {a.expected_runs} runs, {a.pending_runs} pending"
+    return f"{a.runs} runs"
 
 
 def _apply_measured_claims(results: list[Cat5RungResult], portfolio: Cat5AblationPortfolio | None = None) -> None:
@@ -315,28 +316,14 @@ def _apply_measured_claims(results: list[Cat5RungResult], portfolio: Cat5Ablatio
         gate_text = "The committed voucher carries the deterministic policy gate's figures"
         if ev is not None:
             gate_text += f" (rupee fields {ev.matched_fields}/{ev.total_fields} on this invoice)"
-        lv = _lever(portfolio, "deterministic gate")
-        no_gate, with_gate = _arm(portfolio, "bundle_sonnet_cached"), _arm(portfolio, "bundle_gate_sonnet_cached")
-        gd = _gate_disagreement(portfolio)
-        if lv and no_gate and with_gate and lv.cost_billed_ratio is not None:
+        without, with_s = _arm(portfolio, "raw_free_sonnet"), _arm(portfolio, "bundle_gate_sonnet_cached")
+        if without and with_s and without.cost_per_1k_cold_usd and with_s.cost_per_1k_cold_usd is not None:
             gate_text += (
-                f". In the {with_gate.runs}-run ablation, adding the gate to the same narrow-query setup changed turns "
-                f"{no_gate.turns_mean:.1f} → {with_gate.turns_mean:.1f} and cost per invoice by "
-                f"{(lv.cost_billed_ratio - 1) * 100:+.0f}%, with exact vouchers {no_gate.exact}/{no_gate.runs} → "
-                f"{with_gate.exact}/{with_gate.runs}"
+                f". Across the experiment's invoices, without the budget and tool (rung 1) {without.exact}/{without.runs} "
+                f"vouchers matched at ${without.cost_per_1k_cold_usd:.2f} per 1,000 invoices cold; with them on Sonnet "
+                f"{with_s.exact}/{with_s.runs} at ${with_s.cost_per_1k_cold_usd:.2f} cold / ${with_s.cost_per_1k_warm_usd:.2f} "
+                f"warm ({_runs_text(with_s)})"
             )
-            if gd and gd.gate_runs:
-                was = "was" if gd.gate_fixed_on else "is"
-                gate_text += (
-                    f"; on invoice {gd.invoice_id}, where the gate's own rule {was} wrong, gated runs committed its figures in "
-                    f"{gd.gate_match_gate_output}/{gd.gate_runs} runs"
-                )
-                if gd.gate_fixed_on:
-                    gate_text += f" (the gate has since been fixed, on {gd.gate_fixed_on}"
-                    gate_text += (
-                        f"; re-run on the fixed gate, {gd.after_fix_gate_match_manual}/{gd.after_fix_gate_runs} gated runs "
-                        "matched the manual)" if gd.after_fix_gate_runs else "; not yet re-run on the fixed gate)"
-                    )
         set_note(bounded, 1, gate_text + ".")
     if hybrid:
         set_note(
@@ -346,15 +333,15 @@ def _apply_measured_claims(results: list[Cat5RungResult], portfolio: Cat5Ablatio
             f"ran {hybrid.sonnet_steps} on this invoice "
             f"({'the gate flagged escalation' if hybrid.escalated_to_sonnet else 'no escalation flagged'}).",
         )
-        small, tiered = _arm(portfolio, "bundle_haiku_cached"), _arm(portfolio, "bundle_gate_haiku_escalate")
-        if small and tiered and small.cost_per_1k_billed_usd is not None and tiered.cost_per_1k_billed_usd is not None:
+        tiered = _arm(portfolio, "bundle_gate_haiku_escalate")
+        if tiered and tiered.cost_per_1k_cold_usd is not None:
             set_note(
                 hybrid,
                 1,
-                f"In the ablation, Haiku with the narrow query and no gate committed {small.exact}/{small.runs} exact "
-                f"vouchers at ${small.cost_per_1k_billed_usd:.2f} per 1,000 invoices; adding the gate and escalation gave "
-                f"{tiered.exact}/{tiered.runs} at ${tiered.cost_per_1k_billed_usd:.2f} (escalation fired on "
-                f"{tiered.escalation_fired}/{tiered.runs} runs, because the gate flags every debit note).",
+                f"In the experiment, the Haiku-first version committed {tiered.exact}/{tiered.runs} matching vouchers at "
+                f"${tiered.cost_per_1k_cold_usd:.2f} cold / ${tiered.cost_per_1k_warm_usd:.2f} warm per 1,000 invoices; "
+                f"escalation fired on {tiered.escalation_fired}/{tiered.runs} runs ({_runs_text(tiered)}). The gate flags "
+                "escalation only for a multi-factor dispute (manual 6.2).",
             )
 
 
@@ -377,20 +364,18 @@ def _orchestration_callout(
             f"Haiku + gate + escalation ${hybrid.cost_per_1k_invoices_cold_usd:.2f} cold / "
             f"${hybrid.cost_per_1k_invoices_warm_usd:.2f} warm. Exact vouchers on this invoice: {exact}/3."
         )
-    nq = _lever(portfolio, "narrow query")
-    ms = _lever(portfolio, "model swap without gate")
-    gt = _lever(portfolio, "deterministic gate")
-    ratios_ok = nq and ms and gt and None not in (nq.cost_billed_ratio, ms.cost_billed_ratio, gt.cost_billed_ratio)
-    if portfolio and portfolio.arms and ratios_ok:
-        low = min(a.exact for a in portfolio.arms if a.runs)
-        caps = sum(a.cap_hits for a in portfolio.arms)
+    cells = [_arm(portfolio, a) for a in ("raw_free_sonnet", "bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate")]
+    if all(c is not None and c.cost_per_1k_cold_usd is not None for c in cells):
+        w, ws, wh = cells
+        caps = sum(c.cap_hits for c in cells)
+        pend = sum(c.pending_runs for c in cells)
         parts.append(
-            f"Across {portfolio.pooled_runs} ablation runs ({len(portfolio.arms)} versions × {portfolio.runs_per_arm}) every "
-            f"version committed at least {low}/{portfolio.runs_per_arm} vouchers that matched exactly. The narrow query cut cost "
-            f"{fmt_pct((1 - nq.cost_billed_ratio) * 100)} and the small model a further "
-            f"{fmt_pct((1 - ms.cost_billed_ratio) * 100)}; adding the policy gate raised cost "
-            f"{fmt_pct((gt.cost_billed_ratio - 1) * 100)} with exact vouchers {gt.exact_delta_pp:+.0f} pp; "
-            f"{caps} run{'s' if caps != 1 else ''} hit a step cap."
+            f"Across the experiment ({portfolio.invoice_count_pooled} invoices × {portfolio.repeats} runs per version): "
+            f"without the 4-step budget and policy tool {w.exact}/{w.runs} vouchers matched at ${w.cost_per_1k_cold_usd:.2f} "
+            f"per 1,000 invoices cold; with them (plus one narrow query and the cached manual) on Sonnet "
+            f"{ws.exact}/{ws.runs} at ${ws.cost_per_1k_cold_usd:.2f}, Haiku-first {wh.exact}/{wh.runs} at "
+            f"${wh.cost_per_1k_cold_usd:.2f}; {caps} run{'s' if caps != 1 else ''} hit a step cap"
+            + (f"; {pend} runs pending." if pend else ".")
         )
     if not parts:
         return (
@@ -842,7 +827,6 @@ async def execute_cat5_run(
         creds = credit_shield.resolve_live_credentials(
             http_request,
             need_anthropic=True,
-            need_gemini=False,
         )
         assert creds.anthropic_api_key
 

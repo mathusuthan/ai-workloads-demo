@@ -33,8 +33,7 @@ export function TopNavBar({
   }
 
   const hasLiveServerOrByok =
-    Boolean(creds.anthropicKey || creds.geminiKey) ||
-    Boolean(systemStatus?.server_keys.anthropic_configured && systemStatus?.server_keys.gemini_configured)
+    Boolean(creds.anthropicKey) || Boolean(systemStatus?.server_keys.anthropic_configured)
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950 text-white shadow-sm">
@@ -132,7 +131,7 @@ export function TopNavBar({
         open={shieldOpen}
         onClose={() => setShieldOpen(false)}
         title="Credit Shield & Execution Mode"
-        subtitle="Protect your Anthropic & Gemini API budget with Verified Replay ($0) or BYOK"
+        subtitle="Protect your Anthropic API budget with Verified Replay ($0) or BYOK"
       >
         <form onSubmit={applyShield} className="space-y-5">
           <fieldset className="space-y-2.5">
@@ -159,7 +158,7 @@ export function TopNavBar({
                   <span className="text-sm font-bold text-slate-900">Verified Replay ($0)</span>
                 </div>
                 <p className="mt-1.5 text-xs text-slate-600">
-                  Plays real captured Anthropic &amp; Gemini Decision traces with exact token counts,
+                  Plays real captured Anthropic traces with exact token counts,
                   latencies, and FinOps math at zero API spend.
                 </p>
               </label>
@@ -183,8 +182,8 @@ export function TopNavBar({
                   <span className="text-sm font-bold text-slate-900">Live Provider APIs</span>
                 </div>
                 <p className="mt-1.5 text-xs text-slate-600">
-                  Executes custom payloads live against Claude Sonnet 5.5, Haiku 5.5, and Gemini
-                  Decision 1 using server <code>.env</code> keys or your BYOK keys below.
+                  Executes custom payloads live against Claude Sonnet 5.5 and Haiku 5.5 using the
+                  server <code>.env</code> key or your BYOK key below.
                 </p>
               </label>
             </div>
@@ -208,16 +207,6 @@ export function TopNavBar({
                 >
                   Anthropic Server Key:{' '}
                   {systemStatus.server_keys.anthropic_configured ? 'Configured (.env)' : 'Not Set'}
-                </span>
-                <span
-                  className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium ${
-                    systemStatus.server_keys.gemini_configured
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-slate-200 text-slate-700'
-                  }`}
-                >
-                  Gemini Server Key:{' '}
-                  {systemStatus.server_keys.gemini_configured ? 'Configured (.env)' : 'Not Set'}
                 </span>
               </div>
             </div>
@@ -246,21 +235,6 @@ export function TopNavBar({
                 placeholder="sk-ant-..."
                 value={draftCreds.anthropicKey}
                 onChange={(e) => setDraftCreds({ ...draftCreds, anthropicKey: e.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs focus:border-blue-500 focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="byok-gemini" className="block text-xs font-semibold text-slate-700">
-                Gemini API Key (for <code>gemini-decision-1</code>)
-              </label>
-              <input
-                id="byok-gemini"
-                type="password"
-                autoComplete="off"
-                placeholder="AIza..."
-                value={draftCreds.geminiKey}
-                onChange={(e) => setDraftCreds({ ...draftCreds, geminiKey: e.target.value })}
                 className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs focus:border-blue-500 focus:outline-none"
               />
             </div>

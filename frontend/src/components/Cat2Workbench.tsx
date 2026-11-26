@@ -50,7 +50,6 @@ import type {
   StructuredDraftRiskRow,
 } from '../types'
 import { Cat2QualityPanel } from './Cat2QualityPanel'
-import { Cat2TemplateFixPanel } from './Cat2TemplateFixPanel'
 import { NativeModal } from './NativeModal'
 
 interface Cat2WorkbenchProps {
@@ -60,7 +59,7 @@ interface Cat2WorkbenchProps {
   onRefreshSystemStatus: () => void
 }
 
-const CAT2_RUNGS: Cat2RungId[] = ['sonnet_unbounded', 'sonnet_templated', 'haiku_templated']
+const CAT2_RUNGS: Cat2RungId[] = ['sonnet_unbounded', 'haiku_unbounded', 'sonnet_templated', 'haiku_templated']
 
 const VOLUME_STEPS = [
   { label: '1k / mo (Exec Pilot)', value: 1_000 },
@@ -402,37 +401,20 @@ export function Cat2Workbench({
       })
     }
 
-    if (byId.sonnet_unbounded?.status === 'ok') {
-      pushRow(
-        'sonnet_unbounded',
-        '1. Sonnet 5.5 Unbounded',
-        'Sonnet Unbounded',
-        '#DC2626',
-        byId.sonnet_unbounded.finops
-      )
-    }
-    if (byId.sonnet_templated?.status === 'ok') {
-      pushRow(
-        'sonnet_templated',
-        '2. Sonnet 5.5 Templated',
-        'Sonnet Templated',
-        '#2563EB',
-        byId.sonnet_templated.finops
-      )
-    }
-    if (byId.haiku_templated?.status === 'ok') {
-      pushRow(
-        'haiku_templated',
-        '3. Haiku 5.5 Draft',
-        'Haiku 5.5 Draft',
-        '#0F766E',
-        byId.haiku_templated.finops
-      )
+    const versions: Array<[Cat2RungId, string, string, string]> = [
+      ['sonnet_unbounded', 'Sonnet 5.5 · without template (unbounded)', 'Sonnet unbounded', '#DC2626'],
+      ['haiku_unbounded', 'Haiku 5.5 · without template (unbounded)', 'Haiku unbounded', '#F97316'],
+      ['sonnet_templated', 'Sonnet 5.5 · with section template', 'Sonnet template', '#2563EB'],
+      ['haiku_templated', 'Haiku 5.5 · with section template', 'Haiku template', '#0F766E'],
+    ]
+    for (const [id, name, shortLabel, color] of versions) {
+      const r = byId[id]
+      if (r?.status === 'ok') pushRow(id, name, shortLabel, color, r.finops)
     }
     if (runResponse.haiku_batch_comparator) {
       pushRow(
         'haiku_batch',
-        '3B. Haiku 5.5 Batch (-50%)',
+        'Haiku 5.5 · with section template, Batch (-50%)',
         'Haiku Batch (-50%)',
         '#0284C7',
         runResponse.haiku_batch_comparator
@@ -574,7 +556,7 @@ export function Cat2Workbench({
             }`}
           >
             <Sparkles className="h-3.5 w-3.5" />
-            3-Rung Synthesis &amp; 5x Output-Tax Arena
+            Without vs With Section Template · Output-Tax Arena
           </button>
 
           <button
@@ -606,7 +588,7 @@ export function Cat2Workbench({
         </div>
       )}
 
-      {/* TAB PANEL 1: 3-RUNG SYNTHESIS ARENA (zero padding/border directly on tabpanel) */}
+      {/* TAB PANEL 1: WITHOUT VS WITH TEMPLATE ARENA (zero padding/border directly on tabpanel) */}
       <div role="tabpanel" aria-labelledby="cat2-tab-arena" hidden={activeView !== 'arena'}>
         <div className="space-y-6">
           {/* Preset Picker + Source Bundle Editor */}
@@ -698,10 +680,10 @@ export function Cat2Workbench({
                 )}
                 <span>
                   {loadingArena
-                    ? 'Synthesizing 3 Rungs...'
+                    ? 'Drafting 4 versions...'
                     : creds.mode === 'live'
-                      ? 'Run Live 3-Rung Synthesis Arena'
-                      : 'Run 3-Rung Synthesis Arena'}
+                      ? 'Run Live: Without vs With Template'
+                      : 'Run: Without vs With Template'}
                 </span>
               </button>
             </div>
@@ -714,13 +696,16 @@ export function Cat2Workbench({
                 {runResponse.output_tax_callout}
               </div>
 
-              {/* 3-Rung Comparison Cards */}
-              <div className="grid gap-4 lg:grid-cols-3">
+              {/* Without / with template cards, Sonnet and Haiku */}
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {runResponse.results.map((res) => {
                   const f = res.finops
-                  const isUnbounded = res.rung_id === 'sonnet_unbounded'
+                  const isUnbounded = res.rung_id.endsWith('_unbounded')
                   const isTemplatedSonnet = res.rung_id === 'sonnet_templated'
-                  const borderTheme = isUnbounded
+                  const isPending = res.status === 'pending'
+                  const borderTheme = isPending
+                    ? 'border-slate-200 border-dashed'
+                    : isUnbounded
                     ? 'border-rose-300'
                     : isTemplatedSonnet
                       ? 'border-blue-300'
@@ -759,7 +744,14 @@ export function Cat2Workbench({
                           </div>
                         </div>
 
-                        {res.status === 'error' ? (
+                        {isPending ? (
+                          <div className="p-4 text-xs text-slate-600">
+                            <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500 ring-1 ring-slate-200">
+                              run pending
+                            </span>
+                            <p className="mt-2 leading-relaxed">{res.error_message}</p>
+                          </div>
+                        ) : res.status === 'error' ? (
                           <div className="p-4 text-xs text-rose-700">{res.error_message}</div>
                         ) : (
                           <div className="space-y-4 p-4">
@@ -777,8 +769,10 @@ export function Cat2Workbench({
                                   }`}
                                 >
                                   {isUnbounded
-                                    ? 'Baseline (1.0x)'
-                                    : `-${res.savings_vs_unbounded_pct.toFixed(1)}% vs Rung 1`}
+                                    ? 'Without template (baseline)'
+                                    : res.savings_vs_unbounded_pct > 0
+                                      ? `-${res.savings_vs_unbounded_pct.toFixed(1)}% vs unbounded (same model)`
+                                      : 'unbounded draft pending'}
                                 </div>
                               </div>
                               <div>
@@ -826,7 +820,7 @@ export function Cat2Workbench({
                               <div className="rounded-xl border border-rose-200 bg-rose-50/40 p-3">
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-[11px] font-bold text-rose-900">
-                                    Unbounded Monolithic Markdown ({f.output_tokens} out tok)
+                                    Unbounded long-form draft ({f.output_tokens} out tok)
                                   </span>
                                   <button
                                     type="button"
@@ -918,9 +912,6 @@ export function Cat2Workbench({
               {/* Draft quality vs cost (blind-judge summary in replay mode; free checks only in live mode) */}
               <Cat2QualityPanel results={runResponse.results} portfolio={runResponse.quality_portfolio} />
 
-              {/* Measured follow-up beside the app's rungs (the app keeps the original template) */}
-              <Cat2TemplateFixPanel fix={runResponse.template_fix} />
-
               {/* Category 2 FinOps HUD: Input vs 5x Output Weight */}
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
@@ -930,7 +921,7 @@ export function Cat2Workbench({
                       Category 2 FinOps HUD · Output-Dominated Cost Mechanics
                     </div>
                     <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">
-                      Why 5x Output Pricing Makes Section Templates Essential
+                      Output Is Priced at 5x Input: Where Each Version's Cost Goes
                     </h2>
                   </div>
 
@@ -1102,7 +1093,7 @@ export function Cat2Workbench({
                 </h2>
                 <p className="mt-0.5 text-xs text-slate-600">
                   Approve &amp; lock verified sections, inline-edit copy directly, or regenerate{' '}
-                  <strong>only one unlocked section</strong> instead of paying for a full ~3,200-token rewrite.
+                  <strong>only one unlocked section</strong> instead of paying for a full template re-draft.
                 </p>
               </div>
 
@@ -1116,7 +1107,7 @@ export function Cat2Workbench({
                       : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
                   }`}
                 >
-                  Load Rung 2 Draft (Sonnet 5.5)
+                  Load Sonnet 5.5 template draft
                 </button>
                 <button
                   type="button"
@@ -1127,7 +1118,7 @@ export function Cat2Workbench({
                       : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
                   }`}
                 >
-                  Load Rung 3 First Draft (Haiku 5.5)
+                  Load Haiku 5.5 template draft
                 </button>
               </div>
             </div>
@@ -1162,12 +1153,12 @@ export function Cat2Workbench({
                   ${hitlTotals.surgicalTotal.toFixed(4)}
                 </div>
                 <div className="text-[10px] text-slate-400">
-                  Single-section schema output only
+                  Section regeneration calls (input + output)
                 </div>
               </div>
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  vs. Naive Full-Draft Re-Prompts
+                  vs. Full Template Re-Drafts (same model)
                 </div>
                 <div className="mt-0.5 font-mono text-lg font-extrabold text-rose-300">
                   {hitlTotals.count > 0 ? `$${hitlTotals.naiveTotal.toFixed(4)}` : '$0.0000'}

@@ -1,6 +1,5 @@
-"""Category 1 seven-arm ablation: arms, prompts, call paths (through the app's wrappers with a fake SDK), planning,
-resume/superseded/budget, Gemini errors, extraction planning/blinding/parsing, scoring, agreement maths, the
-original-capture group and the analysis. No network."""
+"""Category 1 four-cell experiment: arms, prompts, call paths (through the app's wrappers with a fake SDK), planning,
+resume/superseded/budget, extraction planning/blinding/parsing, scoring and the analysis. No network."""
 
 from __future__ import annotations
 
@@ -17,13 +16,11 @@ from typing import Any
 import pytest
 
 from app.archetypes.cat1_triage import ablation as ab
-from app.archetypes.cat1_triage.accuracy import extract_prose_predictions
 from app.archetypes.cat1_triage.prompts import get_haiku_calibrated_system_prompt, get_sonnet_naive_system_prompt
-from app.archetypes.cat1_triage.schemas import get_questions_for_subtask, get_schema_for_subtask
+from app.archetypes.cat1_triage.schemas import get_schema_for_subtask
 from app.archetypes.cat2_drafting import quality_scoring as qs
 from app.core import anthropic_service as svc
 from app.core.anthropic_service import AnthropicRawResult
-from app.core.gemini_decision_service import GeminiDecisionRawResult
 
 BACKEND = Path(__file__).resolve().parent.parent
 
@@ -98,12 +95,10 @@ def _raw(model_id: str, *, text: str = "", structured=None, stop: str = "end_tur
 
 
 class FakeCalls:
-    """Injectable CallPaths: prose returns ground-truth `field: value` text; schema returns the ground truth;
-    gemini raises unless told otherwise."""
+    """Injectable CallPaths: prose returns ground-truth `field: value` text; schema returns the ground truth."""
 
-    def __init__(self, *, gemini_ok: bool = False, fail_prose_ids=(), truncate_report: bool = False) -> None:
+    def __init__(self, *, fail_prose_ids=(), truncate_report: bool = False) -> None:
         self.log: list[tuple[str, dict[str, Any]]] = []
-        self.gemini_ok = gemini_ok
         self.fail_prose_ids = set(fail_prose_ids)
         self.truncate_report = truncate_report
 
@@ -128,23 +123,8 @@ class FakeCalls:
         model = ab.SONNET if kw["model_key"] == "sonnet" else ab.HAIKU
         return _raw(model, text=json.dumps(so), structured=so, out=90, think=12 if kw["model_key"] == "sonnet" else 0)
 
-    async def gemini(self, **kw):
-        self.log.append(("gemini", kw))
-        if not self.gemini_ok:
-            raise RuntimeError("GEMINI_API_KEY is not set")
-        item = self._item(kw["payload"])
-        gt = item["ground_truth"]
-        if item["sub_task"] == "support_triage":
-            sev = {"P3_LOW": 0, "P2_MEDIUM": 1, "P1_HIGH": 2, "P0_CRITICAL": 3}[gt["priority"]]
-            summ = {"queue": gt["queue"], "auto_action": gt["auto_action"], "severity": float(sev), "contains_sensitive_pii": gt["contains_pii"]}
-        else:
-            summ = {"leaf_category": gt["leaf_category"], "compliance_status": gt["compliance_status"], "hazmat_compliance_risk": 1.0,
-                    "has_factual_contradiction": gt["contradiction_detected"]}
-        return GeminiDecisionRawResult(model_id=ab.GEMINI, latency_ms=50, input_tokens=max(1, round(len(kw["payload"]) / 3.8)), output_tokens=0,
-                                       structured_summary=summ, decision_probabilities={}, request_questions=kw["questions"])
-
     def paths(self) -> ab.CallPaths:
-        return ab.CallPaths(prose=self.prose, schema=self.schema, gemini=self.gemini)
+        return ab.CallPaths(prose=self.prose, schema=self.schema)
 
 
 def _run_all(calls: FakeCalls, plan=None, max_usd: float = 100.0) -> list[dict[str, Any]]:
@@ -182,14 +162,12 @@ class FakeJudge:
 
 
 def test_arm_settings():
-    assert ab.ARM_IDS == ("sonnet_report", "sonnet_classify_text", "sonnet_schema", "haiku_report", "haiku_classify_text", "haiku_schema", "gemini_decision")
+    assert ab.ARM_IDS == ("sonnet_report", "sonnet_schema", "haiku_report", "haiku_schema")
+    assert [a.arm_id for a in ab.OTHER_LEVER_ARMS] == ["sonnet_classify_text", "haiku_classify_text"]
     assert ab.CAPS == {"report": 8192, "classify_text": 1024, "schema": 512}
     assert ab.MAX_RETRIES == 0
-    for a in ab.ARMS:
+    for a in (*ab.ARMS, *ab.OTHER_LEVER_ARMS):
         st = ab.current_settings(a.arm_id, "support_triage")
-        if a.model_key == "gemini":
-            assert st["model_intended"] == "gemini-decision-1" and "max_tokens" not in st
-            continue
         assert st["max_tokens"] == ab.CAPS[a.task]
         assert st["thinking"] == ({"type": "between_tools"} if a.model_key == "sonnet" else {"type": "disabled"})
         assert st["max_retries"] == 0 and st["timeout_s"] > 0
@@ -279,51 +257,28 @@ def test_calibrated_default_still_falls_back_to_tool_use_on_bad_json(monkeypatch
 
 
 def test_app_call_paths_send_the_planned_settings(fake_sdk):
-    calls = ab.make_app_call_paths("k", None)
+    calls = ab.make_app_call_paths("k")
     item = ab.ITEM_BY_ID["sku-02"]
     recs = [asyncio.run(ab.execute_run(p, calls=calls)) for p in ab.plan_runs(1, item_ids=["sku-02"])]
     by = {r["arm_id"]: r for r in recs}
     sent = {(c["model"], c["max_tokens"], "output_config" in c): c for c in fake_sdk.calls}
-    assert len(fake_sdk.calls) == 6  # gemini never reaches the Anthropic SDK
+    assert len(fake_sdk.calls) == 4
     assert all(cl.get("max_retries") == 0 for cl in fake_sdk.clients)
-    assert sorted(cl["timeout"] for cl in fake_sdk.clients) == sorted([300.0, 120.0, 60.0] * 2)
+    assert sorted(cl["timeout"] for cl in fake_sdk.clients) == sorted([300.0, 60.0] * 2)
     s_rep = sent[("claude-sonnet-5-5", 8192, False)]
     h_rep = sent[("claude-haiku-5-5", 8192, False)]
     assert s_rep["system"] == h_rep["system"] == get_sonnet_naive_system_prompt("sku_tagging")
-    s_cls = sent[("claude-sonnet-5-5", 1024, False)]
-    h_cls = sent[("claude-haiku-5-5", 1024, False)]
-    assert s_cls["system"] == h_cls["system"] == ab.classify_text_system_prompt("sku_tagging")
     s_sch = sent[("claude-sonnet-5-5", 512, True)]
     h_sch = sent[("claude-haiku-5-5", 512, True)]
     # Sonnet-schema = Haiku-schema prompt and schema; each model keeps its own thinking
     assert s_sch["system"] == h_sch["system"] == get_haiku_calibrated_system_prompt("sku_tagging")
     assert s_sch["output_config"] == h_sch["output_config"] == {"format": {"type": "json_schema", "schema": get_schema_for_subtask("sku_tagging")}}
     assert s_sch["thinking"] == {"type": "between_tools"} and h_sch["thinking"] == {"type": "disabled"}
-    assert s_rep["thinking"] == s_cls["thinking"] == {"type": "between_tools"} and h_rep["thinking"] == h_cls["thinking"] == {"type": "disabled"}
+    assert s_rep["thinking"] == {"type": "between_tools"} and h_rep["thinking"] == {"type": "disabled"}
     for c in fake_sdk.calls:
         assert c["messages"] == [{"role": "user", "content": item["payload"]}]
         assert "cache_control" not in json.dumps(c, default=str)
-    assert by["gemini_decision"]["status"] == "error" and "GEMINI_API_KEY" in by["gemini_decision"]["error_message"]
-    assert all(by[a]["status"] == "ok" and by[a]["model_matches"] for a in ab.ARM_IDS if a != "gemini_decision")
-
-
-def test_app_gemini_path_calls_the_app_function_unchanged(monkeypatch):
-    import app.core.gemini_decision_service as gds
-
-    seen = []
-
-    async def fake(payload_text, questions, api_key):
-        seen.append((payload_text, questions, api_key))
-        return GeminiDecisionRawResult(model_id="gemini-decision-1", latency_ms=5, input_tokens=400, output_tokens=0,
-                                       structured_summary={"queue": "replacements"}, decision_probabilities={"queue": {}})
-
-    monkeypatch.setattr(gds, "run_gemini_decision", fake)
-    calls = ab.make_app_call_paths("k", "gk")
-    p = next(x for x in ab.plan_runs(1, item_ids=["tkt-01"]) if x["arm_id"] == "gemini_decision")
-    rec = asyncio.run(ab.execute_run(p, calls=calls))
-    assert seen == [(ab.ITEM_BY_ID["tkt-01"]["payload"], get_questions_for_subtask("support_triage"), "gk")]
-    assert rec["status"] == "ok" and rec["decision"]["structured_summary"] == {"queue": "replacements"}
-    assert rec["decision"]["input_tokens_possibly_estimated"] is False
+    assert all(by[a]["status"] == "ok" and by[a]["model_matches"] for a in ab.ARM_IDS)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -331,44 +286,31 @@ def test_app_gemini_path_calls_the_app_function_unchanged(monkeypatch):
 # --------------------------------------------------------------------------------------------------
 
 
-def test_run_plan_252_balanced_ordered():
+def test_run_plan_144_balanced_ordered():
     plan = ab.plan_runs()
-    assert len(plan) == 252 and len({p["run_id"] for p in plan}) == 252
+    assert len(plan) == 144 and len({p["run_id"] for p in plan}) == 144
     assert Counter(p["arm_id"] for p in plan) == {a: 36 for a in ab.ARM_IDS}
-    assert Counter(p["item_id"] for p in plan) == {i: 21 for i in ab.ITEM_IDS}
-    assert Counter(p["item_group"] for p in plan) == {"preset": 126, "batch": 126}
+    assert Counter(p["item_id"] for p in plan) == {i: 12 for i in ab.ITEM_IDS}
+    assert Counter(p["item_group"] for p in plan) == {"preset": 72, "batch": 72}
     keys = [(p["repeat_index"], ab.ITEM_IDS.index(p["item_id"]), ab.ARM_IDS.index(p["arm_id"])) for p in plan]
     assert keys == sorted(keys)
-    assert plan[0]["run_id"] == "sonnet_report:tkt-01:r0" and plan[6]["arm_id"] == "gemini_decision"
-    assert [p["repeat_index"] for p in plan[:84]] == [0] * 84
+    assert plan[0]["run_id"] == "sonnet_report:tkt-01:r0" and plan[3]["arm_id"] == "haiku_schema"
+    assert [p["repeat_index"] for p in plan[:48]] == [0] * 48
 
 
-def test_full_fake_run_scores_perfectly_and_gemini_errors_are_not_retried_elsewhere():
-    calls = FakeCalls(gemini_ok=False)
+def test_full_fake_run_scores_perfectly():
+    calls = FakeCalls()
     recs = _run_all(calls)
-    assert len(recs) == 252
-    assert Counter(kind for kind, _ in calls.log) == {"prose": 144, "schema": 72, "gemini": 36}
-    gem = [r for r in recs if r["arm_id"] == "gemini_decision"]
-    assert all(r["status"] == "error" and r["structured_output"] is None and r["raw_text"] is None for r in gem)
-    assert all(r["status"] == "ok" for r in recs if r["arm_id"] != "gemini_decision")
+    assert len(recs) == 144
+    assert Counter(kind for kind, _ in calls.log) == {"prose": 72, "schema": 72}
+    assert all(r["status"] == "ok" for r in recs)
     assert all("usd" not in k and "cost" not in k for r in recs for k in r)
-    # Gemini errors stay pending; nothing else does
-    pending = ab.select_pending(ab.plan_runs(), recs)
-    assert {p["arm_id"] for p in pending} == {"gemini_decision"} and len(pending) == 36
+    assert ab.select_pending(ab.plan_runs(), recs) == []
     res = ab.analyse(recs, [])
-    assert res["data_quality"]["gemini"] == {"records": 36, "ok": 0, "planned": 36}
     assert res["arms"]["haiku_schema"]["accuracy"]["field_accuracy"]["rate"] == 1.0
     assert res["arms"]["sonnet_schema"]["accuracy"]["field_accuracy"]["rate"] == 1.0
-    assert res["arms"]["gemini_decision"]["accuracy"] is None
+    assert res["arms"]["sonnet_report"]["accuracy"] is None  # write-ups need the reader model's extraction
     assert res["arms"]["sonnet_schema"]["thinking_tokens"]["median"] == 12
-
-
-def test_gemini_ok_path_scored_like_the_app():
-    recs = _run_all(FakeCalls(gemini_ok=True), plan=[p for p in ab.plan_runs() if p["arm_id"] == "gemini_decision"])
-    assert all(r["status"] == "ok" and r["decision"]["input_tokens_possibly_estimated"] for r in recs)
-    res = ab.analyse(recs, [])
-    assert res["arms"]["gemini_decision"]["accuracy"]["field_accuracy"] ["rate"] == 1.0
-    assert res["arms"]["gemini_decision"]["input_tokens_possibly_estimated"] == 36
 
 
 def test_truncated_runs_are_flagged_never_dropped():
@@ -382,7 +324,7 @@ def test_truncated_runs_are_flagged_never_dropped():
 
 def test_errors_retried_resume_and_superseded():
     plan = ab.plan_runs(1, item_ids=["tkt-01", "sku-01"])
-    recs = _run_all(FakeCalls(fail_prose_ids={"tkt-01"}, gemini_ok=True), plan=plan)
+    recs = _run_all(FakeCalls(fail_prose_ids={"tkt-01"}), plan=plan)
     failed = {r["run_id"] for r in recs if r["status"] == "error"}
     assert failed == {f"{a}:tkt-01:r0" for a in ab.FREE_TEXT_ARMS}
     assert {p["run_id"] for p in ab.select_pending(plan, recs)} == failed
@@ -403,14 +345,14 @@ def test_cost_guard_stops_launching_and_counts_recorded_spend(golden):
     plan = ab.plan_runs()
     est0 = ab.estimate_run(plan[0], golden)["worst_case_usd"]
     recs: list[dict[str, Any]] = []
-    calls = FakeCalls(gemini_ok=True)
+    calls = FakeCalls()
     res = asyncio.run(ab.run_plan(plan, calls=calls.paths(), guard=ab.CostGuard(est0 * 1.01), on_record=recs.append, concurrency=1, golden=golden))
-    assert res["budget_stopped"] and res["launched"] >= 1 and res["skipped_budget"] == 252 - res["launched"]
+    assert res["budget_stopped"] and res["launched"] >= 1 and res["skipped_budget"] == 144 - res["launched"]
     assert len(recs) == res["launched"]
     g = ab.CostGuard(1.0, recs)
     assert g.spent_usd == pytest.approx(sum(ab.run_cost_usd(r) for r in recs)) and g.spent_usd > 0
     est = ab.estimate_run_plan(plan, golden)
-    assert est["total"]["runs"] == 252 and est["total"]["worst_case_usd"] < ab.DEFAULT_RUN_MAX_USD
+    assert est["total"]["runs"] == 144 and est["total"]["worst_case_usd"] < ab.DEFAULT_RUN_MAX_USD
     assert est["by_arm"]["sonnet_report"]["worst_case_usd"] > est["by_arm"]["haiku_report"]["worst_case_usd"]
 
 
@@ -420,9 +362,10 @@ def test_cost_guard_stops_launching_and_counts_recorded_spend(golden):
 
 
 def test_extraction_planning_and_blinding(golden):
-    runs = ab.latest_ok_current(_run_all(FakeCalls(gemini_ok=True)))
-    plan = ab.plan_extractions(ab.extraction_targets(runs, golden))
-    assert Counter(p["source"] for p in plan) == {"run": 144, "golden": 24, "schema_check": 20}
+    runs = ab.latest_ok_current(_run_all(FakeCalls()))
+    plan = ab.plan_extractions(ab.extraction_targets(runs))
+    assert Counter(p["source"] for p in plan) == {"run": 72}
+    assert {runs[p["target_id"]]["arm_id"] for p in plan} == set(ab.FREE_TEXT_ARMS)
     assert len({p["call_id"] for p in plan}) == len(plan)
     assert ab.blinding_report(plan, runs) == {}
     for p in plan:
@@ -547,55 +490,6 @@ def test_score_values_uses_the_app_evaluator():
     s = ab.score_values("tkt-02", "support_triage", pred)
     assert (s["matched"], s["total"], s["exact"]) == (ev.matched_count, ev.total_fields, ev.exact_match)
     assert s["fields"]["priority"]["matched"] is False
-    text = "Queue: replacements. Priority: P1 high."
-    r = ab.score_regex("tkt-01", "support_triage", text)
-    assert {f: v["actual"] for f, v in r["fields"].items()} == {k: extract_prose_predictions(text, "support_triage").get(k) for k in r["fields"]}
-
-
-def test_regex_vs_judge_agreement_maths():
-    fields = ["a", "b", "c", "d", "e", "f"]
-    regex = {"a": "x", "b": "x", "c": None, "d": "x", "e": None, "f": True}
-    judge = {"a": "x", "b": "y", "c": "x", "d": None, "e": None, "f": True}
-    ag = ab.extractor_agreement(regex, judge, fields)
-    assert ag == {"fields": 6, "agree": 3, "same_value": 2, "different_value": 1, "regex_only": 1, "judge_only": 1, "neither": 1}
-    assert ab.extractor_agreement({}, {}, []) == {"fields": 0, "agree": 0, "same_value": 0, "different_value": 0, "regex_only": 0, "judge_only": 0, "neither": 0}
-
-
-def test_schema_check_sample_is_seeded_and_from_schema_arms():
-    runs = ab.latest_ok_current(_run_all(FakeCalls(gemini_ok=True)))
-    s1 = ab.schema_check_sample(runs)
-    s2 = ab.schema_check_sample(dict(reversed(list(runs.items()))))
-    assert [r["run_id"] for r in s1] == [r["run_id"] for r in s2] and len(s1) == 20
-    assert {r["arm_id"] for r in s1} <= {"sonnet_schema", "haiku_schema"}
-    txt = ab.render_structured_as_text(s1[0]["structured_output"], s1[0]["sub_task"])
-    assert all(re.match(r"^[a-z_]+: \S", line) for line in txt.splitlines())
-
-
-# --------------------------------------------------------------------------------------------------
-# Original capture group
-# --------------------------------------------------------------------------------------------------
-
-
-def test_golden_capture_group(golden):
-    g = ab.golden_prose_responses(golden)
-    assert len(g) == 24 and Counter(x["arm_id"] for x in g) == {"sonnet_report": 12, "haiku_report": 12}
-    pre = {x["item_id"]: x for x in g if x["arm_id"] == "sonnet_report"}
-    assert pre["tkt-01"]["raw_text"] == golden["presets"]["tkt-01"]["rungs"]["sonnet_naive"]["raw_text_preview"]
-    assert pre["tkt-04"]["raw_text"] == golden["batch_items"]["tkt-04"]["sonnet_raw_text"]
-    hk = {x["item_id"]: x for x in g if x["arm_id"] == "haiku_report"}
-    assert hk["sku-04"]["raw_text"] == golden["batch_items"]["sku-04"]["haiku_naive_raw_text"]
-    assert sum(x["truncated"] for x in g if x["arm_id"] == "sonnet_report") == 11
-    assert sum(x["truncated"] for x in g if x["arm_id"] == "haiku_report") == 8
-    res = ab.analyse([], [], golden=golden)
-    oc = res["original_capture"]
-    assert oc["sonnet_report"]["regex_accuracy"]["field_accuracy"]["total"] == 42 and oc["sonnet_report"]["judge_accuracy"] is None
-    assert oc["haiku_schema"]["responses"] == 12 and oc["haiku_schema"]["max_output_tokens_vs_cap"] == {"max": 135, "cap": 256}
-    # judged golden responses: regex and judge both reported, with agreement
-    plan = [p for p in ab.plan_extractions(ab.extraction_targets({}, golden)) if p["source"] == "golden"]
-    ext = [asyncio.run(ab.execute_extraction(p, judge_call=FakeJudge())) for p in plan]
-    res2 = ab.analyse([], ext, golden=golden)
-    o2 = res2["original_capture"]["haiku_report"]
-    assert o2["judged"] == 12 and o2["judge_accuracy"] is not None and o2["extractor_agreement"]["fields"] == 42
 
 
 # --------------------------------------------------------------------------------------------------
@@ -603,36 +497,36 @@ def test_golden_capture_group(golden):
 # --------------------------------------------------------------------------------------------------
 
 
-def test_analysis_without_records(golden):
-    res = ab.analyse([], [], golden=golden)
-    assert res["data_quality"]["ok_current_runs"] == 0 and len(res["data_quality"]["missing_runs"]) == 252
+def test_analysis_without_records():
+    res = ab.analyse([], [])
+    assert res["data_quality"]["ok_current_runs"] == 0 and len(res["data_quality"]["missing_runs"]) == 144
     assert all(res["arms"][a]["runs"] == 0 for a in ab.ARM_IDS)
     md = ab.render_markdown(res)
-    assert "# Category 1 seven-arm ablation" in md and "## Levers" in md and "## For lead review" in md
+    assert md.startswith("# Category 1: write-up vs classification with JSON schema")
+    assert "## Differences between the four cells" in md and "## For lead review" in md
     json.dumps(res, default=str)
 
 
-def test_analysis_with_records_and_judge(golden):
-    recs = _run_all(FakeCalls(gemini_ok=True))
+def test_analysis_with_records_and_judge():
+    recs = _run_all(FakeCalls())
     runs = ab.latest_ok_current(recs)
-    plan = ab.plan_extractions(ab.extraction_targets(runs, golden))
+    plan = ab.plan_extractions(ab.extraction_targets(runs))
     ext = [asyncio.run(ab.execute_extraction(p, judge_call=FakeJudge())) for p in plan]
-    res = ab.analyse(recs, ext, golden=golden)
+    res = ab.analyse(recs, ext)
     for a in ab.ARM_IDS:
         assert res["arms"][a]["runs"] == 36
         assert res["arms"][a]["accuracy"]["field_accuracy"]["rate"] == 1.0, a
         assert set(res["arms"][a]["by_sub_task"]) == {"support_triage", "sku_tagging"}
-    st = res["arms"]["sonnet_classify_text"]
-    assert st["judge_value_counts"] == {"stated": 126, "not_stated": 0, "ambiguous": 0}
-    assert st["regex_accuracy"] is not None and st["extractor_agreement"]["fields"] == 126
-    assert res["schema_check"]["judged"] == 20 and res["schema_check"]["agree"] == res["schema_check"]["fields"] > 0
+    assert res["arms"]["sonnet_report"]["judge_value_counts"] == {"stated": 126, "not_stated": 0, "ambiguous": 0}
     assert res["review"]["structured_misses"] == [] and res["data_quality"]["extraction_evidence_not_verbatim"] == []
+    assert {x["lever"] for x in res["levers"]} == {"write-up → schema (sonnet)", "write-up → schema (haiku)", "Sonnet → Haiku (report)",
+                                                    "Sonnet → Haiku (schema)", "whole stack: Sonnet write-up → Haiku schema"}
     lv = {x["lever"]: x for x in res["levers"]}
     assert lv["Sonnet → Haiku (schema)"]["cost_to"] < lv["Sonnet → Haiku (schema)"]["cost_from"]
     assert res["arms"]["haiku_schema"]["batch_cost_per_1k_items_usd_computed"] == pytest.approx(res["arms"]["haiku_schema"]["cost_per_1k_items_usd"] / 2)
     assert res["deck_profile"]["fit"] is not None
     md = ab.render_markdown(res)
-    assert "`gemini_decision` | 36 |" in md
+    assert "| `haiku_schema` | 36 |" in md and "gemini" not in md.lower()
 
 
 def test_scripts_dry_runs_make_no_calls(tmp_path, capsys):
@@ -645,7 +539,7 @@ def test_scripts_dry_runs_make_no_calls(tmp_path, capsys):
     out = tmp_path / "runs.jsonl"
     assert mod.main(["run", "--dry-run", "--out", str(out)], calls=Boom()) == 0
     txt = capsys.readouterr().out
-    assert "Planned 252 runs" in txt and "Dry run: no API calls made." in txt and not out.exists()
+    assert "Planned 144 runs" in txt and "Dry run: no API calls made." in txt and not out.exists()
 
     async def never(**kw):
         raise AssertionError("no call expected")
@@ -653,28 +547,28 @@ def test_scripts_dry_runs_make_no_calls(tmp_path, capsys):
     eout = tmp_path / "ext.jsonl"
     assert mod.main(["extract", "--dry-run", "--runs", str(out), "--out", str(eout)], judge_call=never) == 0
     txt = capsys.readouterr().out
-    assert "Planned 188 extraction calls" in txt and "188/188 planned prompts clean" in txt and not eout.exists()
+    assert "Planned 72 extraction calls" in txt and "72/72 planned prompts clean" in txt and not eout.exists()
 
 
 def test_scripts_live_path_with_fakes(tmp_path, capsys):
     mod = _load_script("cat1_ablation")
     out = tmp_path / "runs.jsonl"
-    calls = FakeCalls(gemini_ok=False)
+    calls = FakeCalls(fail_prose_ids={"tkt-01"})
     assert mod.main(["run", "--out", str(out), "--max-usd", "100", "--concurrency", "6"], calls=calls.paths()) == 0
     lines = [json.loads(x) for x in out.read_text().splitlines()]
-    assert len(lines) == 252 and sum(r["status"] == "error" for r in lines) == 36
-    # resume: only the Gemini errors are retried
-    calls2 = FakeCalls(gemini_ok=True)
+    assert len(lines) == 144 and sum(r["status"] == "error" for r in lines) == 6
+    # resume: only the errors are retried
+    calls2 = FakeCalls()
     assert mod.main(["run", "--out", str(out), "--max-usd", "100"], calls=calls2.paths()) == 0
-    assert Counter(k for k, _ in calls2.log) == {"gemini": 36}
+    assert Counter(k for k, _ in calls2.log) == {"prose": 6}
     eout = tmp_path / "ext.jsonl"
     judge = FakeJudge()
     assert mod.main(["extract", "--runs", str(out), "--out", str(eout), "--max-usd", "1000"], judge_call=judge) == 0
-    assert len(judge.calls) == 188
+    assert len(judge.calls) == 72
     an = _load_script("analyze_cat1_ablation")
     md, js = tmp_path / "a.md", tmp_path / "a.json"
     assert an.main(["--runs", str(out), "--extractions", str(eout), "--out-md", str(md)]) == 0
     data = json.loads(js.read_text())
-    assert data["data_quality"]["gemini"]["ok"] == 36 and data["data_quality"]["extraction_ok_current"] == 188
-    assert md.read_text().startswith("# Category 1 seven-arm ablation")
+    assert data["data_quality"]["ok_current_runs"] == 144 and data["data_quality"]["extraction_ok_current"] == 72
+    assert md.read_text().startswith("# Category 1: write-up vs classification with JSON schema")
     assert an.main(["--runs", str(tmp_path / "none.jsonl"), "--extractions", str(tmp_path / "none2.jsonl"), "--out-md", str(tmp_path / "e.md")]) == 0

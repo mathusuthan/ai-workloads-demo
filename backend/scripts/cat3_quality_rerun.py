@@ -31,6 +31,7 @@ os.environ.setdefault(
 )
 
 from app.archetypes.cat3_assistants.quality_rerun import (  # noqa: E402
+    HARNESS_RUNG_IDS,
     RUNG_IDS,
     BudgetGuard,
     RunKey,
@@ -93,7 +94,7 @@ async def run_matrix(args: argparse.Namespace) -> int:
     presets = {p["id"]: p for p in CAT3_PRESETS}
     rung_ids = _csv(args.rungs) if args.rungs else list(RUNG_IDS)
     preset_ids = _csv(args.presets) if args.presets else list(presets)
-    unknown = [r for r in rung_ids if r not in RUNG_IDS] + [p for p in preset_ids if p not in presets]
+    unknown = [r for r in rung_ids if r not in HARNESS_RUNG_IDS] + [p for p in preset_ids if p not in presets]
     if unknown:
         print(f"Unknown rung/preset ids: {unknown}", file=sys.stderr)
         return 1
@@ -187,7 +188,12 @@ async def run_matrix(args: argparse.Namespace) -> int:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repeats", type=int, default=3, help="repeat indices 0..N-1 (default 3)")
-    ap.add_argument("--rungs", default="", help=f"comma list (default all: {','.join(RUNG_IDS)})")
+    ap.add_argument(
+        "--rungs",
+        default="",
+        help=f"comma list (default the two displayed versions: {','.join(RUNG_IDS)}; prefix_cached_history is "
+        "another lever — write it to experiments/cat3_quality/other_levers/runs.jsonl with --out)",
+    )
     ap.add_argument("--presets", default="", help="comma list of sessions (default all: desk-01,desk-02)")
     ap.add_argument("--concurrency", type=int, default=3, help="concurrent whole runs (default 3)")
     ap.add_argument("--max-usd", type=float, default=15.0, help="billed-cost cap incl. existing records")

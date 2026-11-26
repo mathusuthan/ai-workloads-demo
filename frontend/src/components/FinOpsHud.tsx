@@ -12,10 +12,23 @@ import {
   YAxis,
 } from 'recharts'
 import { DollarSign, TrendingDown } from 'lucide-react'
-import type { Cat1RunResponse } from '../types'
+import type { Cat1RunResponse, FinOpsBreakdown } from '../types'
 
 interface FinOpsHudProps {
   runResponse: Cat1RunResponse
+}
+
+interface ComparisonRow {
+  id: string
+  name: string
+  shortLabel: string
+  costPer1k: number
+  chartValue: number
+  inputCost1k: number
+  outputCost1k: number
+  monthlyUsd: number
+  annualUsd: number
+  color: string
 }
 
 const VOLUME_STEPS = [
@@ -34,127 +47,39 @@ export function FinOpsHud({ runResponse }: FinOpsHudProps) {
 
   const comparisons = useMemo(() => {
     const byId = Object.fromEntries(runResponse.results.map((r) => [r.rung_id, r]))
-    const rows: Array<{
-      id: string
-      name: string
-      shortLabel: string
-      costPer1k: number
-      chartValue: number
-      inputCost1k: number
-      outputCost1k: number
-      monthlyUsd: number
-      annualUsd: number
-      color: string
-    }> = []
+    const rows: ComparisonRow[] = []
 
-    const s = byId.sonnet_naive
-    if (s && s.status === 'ok') {
-      const c1k = s.finops.cost_per_1k_usd
+    const push = (id: string, name: string, shortLabel: string, f: FinOpsBreakdown | null | undefined, color: string) => {
+      if (!f) return
+      const c1k = f.cost_per_1k_usd
       rows.push({
-        id: 'sonnet',
-        name: '1A. Sonnet 5.5 write-up',
-        shortLabel: 'Sonnet write-up',
+        id,
+        name,
+        shortLabel,
         costPer1k: c1k,
         chartValue: scaleMode === 'log' ? Math.max(0.01, c1k) : c1k,
-        inputCost1k: Number((s.finops.input_cost_usd * 1000).toFixed(4)),
-        outputCost1k: Number((s.finops.output_cost_usd * 1000).toFixed(4)),
-        monthlyUsd: s.finops.total_cost_usd * monthlyVol,
-        annualUsd: s.finops.total_cost_usd * monthlyVol * 12,
-        color: '#E11D48',
+        inputCost1k: Number((f.input_cost_usd * 1000).toFixed(4)),
+        outputCost1k: Number((f.output_cost_usd * 1000).toFixed(4)),
+        monthlyUsd: f.total_cost_usd * monthlyVol,
+        annualUsd: f.total_cost_usd * monthlyVol * 12,
+        color,
       })
     }
+    const ok = (id: string) => (byId[id] && byId[id].status === 'ok' ? byId[id].finops : null)
 
-    const hn = byId.haiku_naive
-    if (hn && hn.status === 'ok') {
-      const c1k = hn.finops.cost_per_1k_usd
-      rows.push({
-        id: 'haiku_naive',
-        name: '1B. Haiku 5.5 write-up',
-        shortLabel: 'Haiku write-up',
-        costPer1k: c1k,
-        chartValue: scaleMode === 'log' ? Math.max(0.01, c1k) : c1k,
-        inputCost1k: Number((hn.finops.input_cost_usd * 1000).toFixed(4)),
-        outputCost1k: Number((hn.finops.output_cost_usd * 1000).toFixed(4)),
-        monthlyUsd: hn.finops.total_cost_usd * monthlyVol,
-        annualUsd: hn.finops.total_cost_usd * monthlyVol * 12,
-        color: '#D97706',
-      })
-    }
-
-    const h = byId.haiku_calibrated
-    if (h && h.status === 'ok') {
-      const c1k = h.finops.cost_per_1k_usd
-      rows.push({
-        id: 'haiku',
-        name: '2. Haiku 5.5 classification + schema',
-        shortLabel: 'Haiku schema',
-        costPer1k: c1k,
-        chartValue: scaleMode === 'log' ? Math.max(0.01, c1k) : c1k,
-        inputCost1k: Number((h.finops.input_cost_usd * 1000).toFixed(4)),
-        outputCost1k: Number((h.finops.output_cost_usd * 1000).toFixed(4)),
-        monthlyUsd: h.finops.total_cost_usd * monthlyVol,
-        annualUsd: h.finops.total_cost_usd * monthlyVol * 12,
-        color: '#2563EB',
-      })
-    }
-
-    const hb = runResponse.haiku_batch_comparator
-    if (hb) {
-      const c1k = hb.cost_per_1k_usd
-      rows.push({
-        id: 'haiku_batch',
-        name: '3. Haiku 5.5 Batch API (computed)',
-        shortLabel: 'Haiku Batch*',
-        costPer1k: c1k,
-        chartValue: scaleMode === 'log' ? Math.max(0.01, c1k) : c1k,
-        inputCost1k: Number((hb.input_cost_usd * 1000).toFixed(4)),
-        outputCost1k: Number((hb.output_cost_usd * 1000).toFixed(4)),
-        monthlyUsd: hb.total_cost_usd * monthlyVol,
-        annualUsd: hb.total_cost_usd * monthlyVol * 12,
-        color: '#0284C7',
-      })
-    }
-
-    const g = byId.gemini_decision
-    if (g && g.status === 'ok') {
-      const c1k = g.finops.cost_per_1k_usd
-      rows.push({
-        id: 'gemini_decision',
-        name: '4. Gemini Decision 1 (0 Out)',
-        shortLabel: 'Gemini Dec-1',
-        costPer1k: c1k,
-        chartValue: scaleMode === 'log' ? Math.max(0.01, c1k) : c1k,
-        inputCost1k: Number((g.finops.input_cost_usd * 1000).toFixed(4)),
-        outputCost1k: 0,
-        monthlyUsd: g.finops.total_cost_usd * monthlyVol,
-        annualUsd: g.finops.total_cost_usd * monthlyVol * 12,
-        color: '#4F46E5',
-      })
-    }
-
-    const j = runResponse.jev_comparator
-    if (j) {
-      const c1k = j.cost_per_1k_usd
-      rows.push({
-        id: 'jev',
-        name: '5. TypeSafe Jev (Rate Ref)',
-        shortLabel: 'Jev (Ref)',
-        costPer1k: c1k,
-        chartValue: scaleMode === 'log' ? Math.max(0.01, c1k) : c1k,
-        inputCost1k: c1k,
-        outputCost1k: 0,
-        monthlyUsd: j.estimated_cost_usd * monthlyVol,
-        annualUsd: j.estimated_cost_usd * monthlyVol * 12,
-        color: '#059669',
-      })
-    }
+    push('sonnet_naive', 'Without · Sonnet 5.5 write-up', 'Sonnet write-up', ok('sonnet_naive'), '#E11D48')
+    push('haiku_naive', 'Without · Haiku 5.5 write-up', 'Haiku write-up', ok('haiku_naive'), '#D97706')
+    push('sonnet_calibrated', 'With · Sonnet 5.5 JSON schema', 'Sonnet schema', ok('sonnet_calibrated'), '#4F46E5')
+    push('sonnet_batch', 'With · Sonnet 5.5 Batch API (computed, not run)', 'Sonnet Batch*', runResponse.sonnet_batch_comparator, '#818CF8')
+    push('haiku_calibrated', 'With · Haiku 5.5 JSON schema', 'Haiku schema', ok('haiku_calibrated'), '#2563EB')
+    push('haiku_batch', 'With · Haiku 5.5 Batch API (computed, not run)', 'Haiku Batch*', runResponse.haiku_batch_comparator, '#0284C7')
 
     return rows
   }, [runResponse, monthlyVol, scaleMode])
 
-  const naiveMonthly = comparisons[0]?.monthlyUsd ?? 0
-  const decisionMonthly = comparisons.find((c) => c.id === 'gemini_decision')?.monthlyUsd ?? 0
-  const annualSaved = Math.max(0, (naiveMonthly - decisionMonthly) * 12)
+  const naiveMonthly = comparisons.find((c) => c.id === 'sonnet_naive')?.monthlyUsd ?? 0
+  const haikuSchemaMonthly = comparisons.find((c) => c.id === 'haiku_calibrated')?.monthlyUsd
+  const annualSaved = haikuSchemaMonthly == null ? 0 : Math.max(0, (naiveMonthly - haikuSchemaMonthly) * 12)
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -168,7 +93,7 @@ export function FinOpsHud({ runResponse }: FinOpsHudProps) {
             Scaling This Exact Payload Across NovaMart Enterprise Volume
           </h2>
           <p className="mt-0.5 text-[11px] text-slate-500">
-            Costs come from this item’s measured tokens. *The Batch API price is computed at 50% of the live price, not run.
+            Costs come from this item’s measured tokens. *The Batch API prices of the two “with” rungs are computed at 50% of the live price, not run.
           </p>
         </div>
 
@@ -206,7 +131,7 @@ export function FinOpsHud({ runResponse }: FinOpsHudProps) {
           {annualSaved > 0 && (
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 font-mono text-xs font-bold text-emerald-900">
               <TrendingDown className="h-3.5 w-3.5" />
-              Annualized Savings (Rung 1 → Rung 3): $
+              Annualized Savings (Sonnet write-up → Haiku schema): $
               {annualSaved.toLocaleString(undefined, { maximumFractionDigits: 0 })}/yr
             </span>
           )}
@@ -288,7 +213,7 @@ export function FinOpsHud({ runResponse }: FinOpsHudProps) {
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={comparisons.filter((c) => c.id !== 'jev')}
+                data={comparisons}
                 margin={{ top: 10, right: 20, left: 0, bottom: 8 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />

@@ -1,11 +1,14 @@
-"""Score Category 4 quality-rerun sessions and the original golden capture; write the analysis report.
+"""Score the Category 4 quality-rerun sessions (without vs with the deck improvement); write the analysis report.
+
+Without = full corpus, no cache, no citations (`naive_full_corpus`); with = hybrid retrieval paired with context
+caching: Haiku picks 5 clauses from the cached corpus and Sonnet answers with citations (`cached_rerank_hybrid`).
 
 Usage (from backend/):
     .venv/bin/python scripts/analyze_cat4_quality.py
     .venv/bin/python scripts/analyze_cat4_quality.py --runs path/runs.jsonl --judgements path/judgements.jsonl
 
-Works with zero rerun records and without judgements (the "original capture" tables come from
-replays/cat4_golden_replays.json). Writes <project>/analysis/cat4_quality_rerun.md and .json. Factual tables only.
+Works with zero rerun records and without judgements. Writes <project>/analysis/cat4_quality_rerun.md and .json.
+Factual tables only.
 """
 
 from __future__ import annotations
@@ -25,11 +28,9 @@ from app.archetypes.cat4_rag.quality_rerun import (  # noqa: E402
     JUDGEMENTS_PATH,
     RERANK_MAX_TOKENS,
     RERANK_TIMEOUT_S,
-    RUNG_IDS,
     RUNS_PATH,
     SYNTH_MAX_TOKENS,
     SYNTH_TIMEOUT_S,
-    load_golden,
     load_jsonl,
     load_quality_keys,
     scope_line,
@@ -40,10 +41,8 @@ from app.archetypes.cat4_rag.quality_rerun import (  # noqa: E402
 DEFAULT_OUT_MD = PROJECT_DIR / "analysis" / "cat4_quality_rerun.md"
 
 SHORT = {
-    "naive_full_corpus": "R1 naive",
-    "cached_full_corpus_citations": "R2 cached+cite",
-    "hybrid_rag_rerank_citations": "R3 BM25+rerank",
-    "cached_rerank_hybrid": "R4 cached-rerank",
+    "naive_full_corpus": "Without",
+    "cached_rerank_hybrid": "With",
 }
 
 
@@ -92,7 +91,6 @@ def _contam_rows(groups: list[tuple[str, dict[str, Any]]]) -> list[list[str]]:
                      _p(g.get("value_contaminated_unattributed_answers")), _p(g["citation_contaminated_answers"]),
                      _p(g.get("answers_whose_synthesis_saw_distractor_text")),
                      _p(g["citations_at_deccan"]) if cit else "—", _p(g["citations_at_distractor"]) if cit else "—",
-                     _p(r["recall_after_bm25"]) if r.get("recall_after_bm25") else "—",
                      _p(r["recall_after_rerank"]) if r.get("recall_after_rerank") else "—",
                      _p(r.get("distractors_selected")) if r else "—",
                      f"{r.get('backfilled', 0)} / {r.get('invalid_picks', 0)}" if r else "—"])
@@ -101,7 +99,7 @@ def _contam_rows(groups: list[tuple[str, dict[str, Any]]]) -> list[list[str]]:
 
 CONTAM_HEAD = ["group", "contaminated answers", "…distractor value stated", "…value stated without naming the other supplier",
                "…distractor chunk cited", "synthesis saw distractor text (exposure)", "citations at Deccan",
-               "citations at distractors", "expected recall after BM25", "expected recall after rerank",
+               "citations at distractors", "expected clauses among Haiku's picks",
                "distractor chunks selected", "backfilled / invalid picks"]
 
 
@@ -153,9 +151,10 @@ JUDGE_HEAD = ["group", "judged", "correctness mean (1–5)", "completeness mean 
 
 
 def _glabel(g: dict[str, Any]) -> str:
-    """Group label; a non-original answer format is named (original-format labels are unchanged)."""
-    fmt = g.get("answer_format") or "original"
-    return f"{SHORT[g['rung_id']]} · s{g['scale']}" + ("" if fmt == "original" else f" · {fmt}")
+    return f"{SHORT[g['rung_id']]} · {CORPUS_LABEL.get(int(g['scale']), g['scale'])}"
+
+
+CORPUS_LABEL = {1: "corpus 1× (7 docs)", 3: "corpus 3× (21 docs)"}
 
 
 def _absence_rows(groups: list[tuple[str, dict[str, Any]]]) -> list[list[str]]:
@@ -181,47 +180,25 @@ ABSENCE_HEAD = ["group", "answers", "answers saying the documents lack something
                 "correctness mean", "key-fact recall"]
 
 
-def _detector_validation_lines(v: dict[str, Any] | None) -> list[str]:
-    if not v:
-        return ["No rerun records to validate the detector on.", ""]
-    L = [f"Known absence claims: the judge's material errors on the two retrieval rungs (original answer format) whose "
-         f"quoted claim matches the validation report's keyword rule — {v['known_claims']}. Detector flags "
-         f"{v['detected']}/{v['known_claims']}" + (f" ({v['recall'] * 100:.0f}%)" if v["recall"] is not None else "")
-         + f"; by form: {', '.join(f'{k} {n}' for k, n in sorted(v['detected_by_form'].items())) or '—'}.", ""]
-    if v["missed"]:
-        L += ["Missed:", ""] + [f"- {m['rung_id']} s{m['scale']} r{m['repeat_index']} {m['question']}: {m['claim_quote']}" for m in v["missed"]] + [""]
-    hits = v["cached_full_corpus_corpus_form_hits"]
-    L += [f"Documents-lack claims the detector finds in cached full-corpus answers (that rung saw every clause; the judge "
-          f"reported a material error on {sum(1 for h in hits if h['judge_material_errors'])} of these answers): {len(hits)}.", ""]
-    L += [f"- s{h['scale']} r{h['repeat_index']} {h['question']}: {h['sentence']}" for h in hits] + [""]
-    return L
-
-
-def _break_even_rows(rows: list[dict[str, Any]]) -> list[list[str]]:
-    return [[f"{SHORT[r['a']]} vs {SHORT[r['b']]}", _usd(r["premium_a_usd"]), _usd(r["per_question_a_usd"]),
-             _usd(r["premium_b_usd"]), _usd(r["per_question_b_usd"]),
-             "—" if r["n_star"] is None else f"{r['n_star']:.2f}", r["verdict"]] for r in rows]
-
-
-BE_HEAD = ["A vs B", "A one-off cache-write premium", "A warm $/question", "B premium", "B warm $/question", "N*", "result"]
-
-
 def render(summary: dict[str, Any], args: argparse.Namespace, n_judgements: int) -> str:
-    rr, oc = summary["rerun"], summary["original_capture"]
-    L: list[str] = ["# Category 4 quality rerun — multi-document RAG", ""]
-    L += [f"Generated {summary['generated_at']} · answer key `{summary['keys_version']}` · rerun records {rr['record_count']} "
-          f"(ok sessions used {rr['ok_sessions_used']}, superseded {rr['superseded_record_count']}) · judgements {n_judgements} ({summary['judge']['ok']} ok, judge {JUDGE_MODEL}, "
-          f"spend ${summary['judge']['spend_usd']:.4f})", ""]
-    L += ["Sources: `" + str(args.runs) + "`, `" + str(args.judgements) + "`, `replays/cat4_golden_replays.json`, "
+    rr = summary["rerun"]
+    L: list[str] = ["# Category 4 — without vs with hybrid retrieval paired with context caching", ""]
+    L += ["Without: the whole corpus as uncached plain text, no citations; Sonnet 5.5 answers. With: Haiku 5.5 picks 5 "
+          "clauses from the cached corpus and Sonnet 5.5 answers over them with native citations. Both corpus sizes: 1× "
+          "(the app's 7-document deal room) and 3× (21 documents: two other suppliers' look-alike contracts added).", ""]
+    L += [f"Generated {summary['generated_at']} · answer key `{summary['keys_version']}` · sessions {rr['ok_sessions_used']} · "
+          f"judgements {n_judgements} (judge {JUDGE_MODEL}, spend ${summary['judge']['spend_usd']:.4f})", ""]
+    L += ["Sources: `" + str(args.runs) + "`, `" + str(args.judgements) + "`, "
           "`app/data/cat4_quality_keys.json`. Every answer is scored; zero-citation, truncated and contaminated answers are "
           "reported, never dropped. Rates show hits/total (rate) [Wilson 95%]. Costs come from recorded tokens via "
           "`compute_run_finops` (billed = as recorded; cold = the cached call writes its whole prefix on question 1 of the "
           "session and reads after; warm = every cached-prefix token read).", ""]
-    L += [f"Question scope line (rerun only): every rerun question is asked as `{scope_line()}` followed by a blank "
-          "line and the original question — identically for all four rungs and both scales, in the synthesis message, the "
-          "reranker query (rungs 3 and 4) and the BM25 query (rung 3). The original capture (golden replays) was asked "
-          "WITHOUT it, so original-capture vs rerun differences include this change. The judge sees each answer's question "
-          "as asked.", ""]
+    L += [f"Question scope line: every question is asked as `{scope_line()}` followed by a blank line and the question "
+          "— identically for both versions and both corpus sizes, in the synthesis message and Haiku's clause-pick query. "
+          "The judge sees each answer's question as asked.", ""]
+    L += ["Synthesis prompts: without the improvement (whole corpus) the app prompt; with it (picked clauses only) the same "
+          "prompt with two lines telling the model to say when something is not in the text provided "
+          "(`app/archetypes/cat4_rag/answer_formats.py`).", ""]
     L += [f"Settings: synthesis max_tokens {SYNTH_MAX_TOKENS} (timeout {SYNTH_TIMEOUT_S:.0f} s), rerank max_tokens "
           f"{RERANK_MAX_TOKENS} (timeout {RERANK_TIMEOUT_S:.0f} s), max_retries 0. Session = 8 questions in order: "
           + ", ".join(f"{p}/{q['question_id']}" for p, q in session_questions()) + ".", ""]
@@ -235,44 +212,13 @@ def render(summary: dict[str, Any], args: argparse.Namespace, n_judgements: int)
                 [[s, str(c["documents"]), str(c["chunks"]), f"{c['chars']:,}", f"{c['estimated_tokens']:,}", str(c["ratio_to_base_chars"])]
                  for s, c in summary["corpus"].items()])
 
-    g_groups = [(SHORT[r], oc["groups"][r]) for r in RUNG_IDS if r in oc["groups"]]
-    L += ["## Original capture (golden replays, scale 1, n = 1 per rung × question)", ""]
-    L += ["One answer per rung and question, captured once; audit-02's cached prefix was already warm from audit-01. "
-          "Small n: read the intervals.", ""]
-    L += _table(QUALITY_HEAD, _quality_rows(g_groups))
-    L += ["### Original capture per question (key-fact hits / facts; citations)", ""]
-    qrows = []
-    for pid, q in session_questions():
-        key = f"{pid}/{q['question_id']}"
-        row = [key]
-        for r in RUNG_IDS:
-            if r not in oc["groups"]:
-                continue
-            s = oc["groups"][r]["per_question"].get(key)
-            if not s:
-                row.append("—")
-                continue
-            fr = s["fact_recall"]
-            cit = "" if s["citation_count"] is None else f"; {s['citation_count']} cites, cited-chunk recall {s['expected_chunk_recall']['hits']}/{s['expected_chunk_recall']['total']}"
-            missed = [f["fact_id"] for f in s["facts"] if not f["hit"]]
-            row.append(f"{fr['hits']}/{fr['total']}{cit}" + (f"; missed {', '.join(missed)}" if missed else ""))
-        qrows.append(row)
-    L += _table(["question", *[SHORT[r] for r in RUNG_IDS if r in oc["groups"]]], qrows)
-    L += ["### Original capture cost per question (USD)", ""]
-    L += _table(COST_HEAD, _cost_rows(g_groups))
-    L += _table(TOKEN_HEAD, _token_rows(g_groups))
-    L += ["### Original capture break-even (warm $/question + one-off cache-write premium)", ""]
-    L += _table(BE_HEAD, _break_even_rows(oc["break_even"])) if oc["break_even"] else ["No comparable pairs.", ""]
-    L += ["### Original capture judge", ""]
-    L += _table(JUDGE_HEAD, _judge_rows(g_groups))
-
-    L += ["## Rerun (rung × scale)", ""]
+    L += ["## Without vs with (version × corpus size)", ""]
     groups = [(_glabel(g), g) for g in rr["groups"].values()]
     if not groups:
         L += ["No ok rerun sessions yet (`scripts/cat4_quality_rerun.py` has not been run, or every session errored).", ""]
     else:
         L += ["### Quality", ""] + _table(QUALITY_HEAD, _quality_rows(groups))
-        L += ["### Contamination and retrieval", ""]
+        L += ["### Contamination and clause picks", ""]
         L += ["Contaminated = the answer states a distractor supplier's value for a keyed fact, or cites a distractor chunk. "
               "'Without naming the other supplier' drops values whose 150-char neighbourhood names that supplier or one of "
               "its document ids (typically an explicit exclusion). Exposure = the synthesis prompt contained distractor "
@@ -283,22 +229,10 @@ def render(summary: dict[str, Any], args: argparse.Namespace, n_judgements: int)
         L += ["Deterministic detector over each answer: a sentence saying the documents / deal room / contracts / text "
               "contain, specify or state no X (documents-lack form), or that X is not in the text provided / the excerpts "
               "(not-in-text-provided form). The judge column counts answers whose material errors include such a "
-              "claim about a term the documents do contain. Answer formats: "
-              + ", ".join(f"`{f}`" for f in summary.get("answer_formats") or ["original"]) + ".", ""]
+              "claim about a term the documents do contain.", ""]
         L += _table(ABSENCE_HEAD, _absence_rows(groups))
         L += ["### Cost per question (USD, mean over answers)", ""] + _table(COST_HEAD, _cost_rows(groups))
         L += ["### Tokens per call", ""] + _table(TOKEN_HEAD, _token_rows(groups))
-        L += ["### Break-even (questions sharing one cache write)", ""]
-        L += ["cost_r(N) = P_r + N·c_r with P_r = measured one-off premium of writing the cached prefix (prefix tokens × "
-              "(write − read) rate) and c_r = measured warm cost per question. N* = (P_a − P_b) / (c_b − c_a).", ""]
-        for scale, rows in rr["break_even"].items():
-            L += [f"Scale {scale}:", ""] + (_table(BE_HEAD, _break_even_rows(rows)) if rows else ["No comparable pairs yet.", ""])
-        has_variant = any((g.get("answer_format") or "original") != "original" for _, g in groups)
-        if has_variant and rr.get("break_even_adopted") and rr["break_even_adopted"] != rr["break_even"]:
-            L += ["Adopted answer formats (what the app and its portfolio use: retrieval versions on their scoped_absence "
-                  "sessions, full-corpus versions on the original):", ""]
-            for scale, rows in rr["break_even_adopted"].items():
-                L += [f"Scale {scale} (adopted):", ""] + (_table(BE_HEAD, _break_even_rows(rows)) if rows else ["No comparable pairs yet.", ""])
         L += ["### Per question", ""]
         prow = []
         for v in rr["per_question"].values():
@@ -317,15 +251,11 @@ def render(summary: dict[str, Any], args: argparse.Namespace, n_judgements: int)
         z = v.get("zero_citation_answers")
         if z and z["hits"]:
             zero.append([_glabel(v), v["question"], f"{z['hits']}/{z['total']}"])
-    for r, g in oc["groups"].items():
-        for qk, s in g["per_question"].items():
-            if s["zero_citations"]:
-                zero.append([f"{SHORT[r]} · golden", qk, "1/1"])
-    L += _table(["group", "question", "zero-citation answers"], zero) if zero else ["No zero-citation answers on a citation rung.", ""]
+    L += _table(["group", "question", "zero-citation answers"], zero) if zero else ["No zero-citation answers with the improvement.", ""]
     ca = summary["for_lead_review"]["contaminated_answers"]
     if ca:
         L += _table(["source", "group", "question", "distractor values", "distractor chunks cited"],
-                    [[c["source"], f"{SHORT[c['rung_id']]} · s{c['scale']} r{c['repeat_index']}", c["question"],
+                    [[c["source"], f"{SHORT[c['rung_id']]} · {CORPUS_LABEL.get(int(c['scale']), c['scale'])} r{c['repeat_index']}", c["question"],
                       "; ".join(f"{v['value']} ({v['supplier']}, {v['fact_id']}"
                                 + (", other supplier named nearby" if v.get("attributed_to_distractor") else "") + ")"
                                 for v in c["distractor_values"]) or "—",
@@ -333,7 +263,6 @@ def render(summary: dict[str, Any], args: argparse.Namespace, n_judgements: int)
     else:
         L += ["No contaminated answers.", ""]
 
-    L += ["## Absence-claim detector validation", ""] + _detector_validation_lines(summary.get("absence_detector_validation"))
     L += ["## For lead review", ""]
     L += ["Items a person should read before quoting any number from this file.", ""]
     me = summary["for_lead_review"]["material_errors"]
@@ -350,32 +279,21 @@ def render(summary: dict[str, Any], args: argparse.Namespace, n_judgements: int)
         for c in ca:
             for v in c["distractor_values"]:
                 tag = " — other supplier named within 150 chars" if v.get("attributed_to_distractor") else ""
-                L.append(f"- {c['source']} {SHORT[c['rung_id']]} s{c['scale']} r{c['repeat_index']} {c['question']}: "
+                L.append(f"- {c['source']} {SHORT[c['rung_id']]} · {CORPUS_LABEL.get(int(c['scale']), c['scale'])} r{c['repeat_index']} {c['question']}: "
                          f"`{v['value']}` ({v['supplier']}{tag}) — …{(v.get('answer_excerpt') or '(not located in raw text)').replace(chr(10), ' ')}…")
         L.append("")
-    L += ["- The answer key was written from the question texts and Deccan chunks only; one dry pass over the golden "
+    L += ["- The answer key was written from the question texts and Deccan chunks only; one dry pass over recorded "
           "answers added format variants (see key `meta.format_variants_added`).",
-          "- Golden capture: audit-02 questions read a cache written by audit-01 (no write), n = 1 per cell.",
-          "- BM25 phrase bonuses and chunk keywords in `retriever.py` / fixtures were tuned on these questions and Deccan values; "
-          "rung 3 retrieval recall is optimistic for unseen questions.",
-          "- Four original questions (audit-01/q2, q3; audit-02/q3, q4) do not name the supplier; the rerun's scope line names it. "
-          "Golden answers were scored on the unscoped questions.",
+          "- The chunk boundaries and headings Haiku picks from were written for these documents; the share of expected "
+          "clauses among its picks may be lower for unseen questions.",
+          "- Four questions (audit-01/q2, q3; audit-02/q3, q4) do not name the supplier; the scope line names it.",
           "- The contamination detector cannot flag a distractor value that also occurs in Deccan's own documents; such values are excluded.",
           ""]
 
     L += ["## Data quality", ""]
     dq = rr["data_quality"]
-    labels = {"superseded_sessions": "superseded: recorded at a different output cap (excluded from every table)"}
-    for name, items in dq.items():
-        if not isinstance(items, list):
-            L.append(f"- {labels.get(name, name.replace('_', ' '))}: {'n/a (no judgements)' if items is None else items}")
-            continue
-        L.append(f"- {labels.get(name, name.replace('_', ' '))}: {len(items)}")
-        for it in items[:15]:
-            L.append(f"  - {json.dumps(it, ensure_ascii=False)}")
-        if len(items) > 15:
-            L.append(f"  - … {len(items) - 15} more (see JSON)")
-    L.append("")
+    counts = {name.replace("_", " "): (len(v) if isinstance(v, list) else v) for name, v in dq.items()}
+    L += ["Counts over the sessions and judgements above: " + "; ".join(f"{k} {'n/a' if v is None else v}" for k, v in counts.items()) + ".", ""]
     return "\n".join(L)
 
 
@@ -383,12 +301,11 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--runs", default=str(RUNS_PATH))
     ap.add_argument("--judgements", default=str(JUDGEMENTS_PATH))
-    ap.add_argument("--golden", default=str(BACKEND_DIR / "replays" / "cat4_golden_replays.json"))
     ap.add_argument("--out-md", default=str(DEFAULT_OUT_MD))
     args = ap.parse_args(argv)
     records = load_jsonl(args.runs)
     judgements = load_jsonl(args.judgements)
-    summary = summarise(records, keys=load_quality_keys(), golden=load_golden(args.golden), judgements=judgements)
+    summary = summarise(records, keys=load_quality_keys(), judgements=judgements)
     out_md = Path(args.out_md)
     out_md.parent.mkdir(parents=True, exist_ok=True)
     out_md.write_text(render(summary, args, len(judgements)), encoding="utf-8")

@@ -1,14 +1,15 @@
 """Orchestrates the Category 1 four-rung arena and 12-item batch (replay and live).
 
-The golden replays are repeat 0 of the seven-version ablation (scripts/build_cat1_golden_from_ablation.py); the
-ablation summary (replays/cat1_ablation_summary.json) is attached to every response as `ablation_portfolio`.
+Four rungs: Sonnet 5.5 and Haiku 5.5, each without the improvement (four-part write-up, free text) and with it
+(classification with a strict JSON schema). The golden replays are repeat 0 of the four-cell experiment
+(scripts/build_cat1_golden_from_ablation.py); its summary (replays/cat1_ablation_summary.json) is attached to every
+response as `ablation_portfolio`.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-import statistics
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -17,9 +18,8 @@ from fastapi import HTTPException, Request
 from app.config import get_settings
 from app.core.anthropic_service import run_haiku_calibrated, run_haiku_naive, run_sonnet_naive
 from app.core.credit_shield import credit_shield
-from app.core.gemini_decision_service import run_gemini_decision
 from app.core.measured_claims import fmt_pct, pct_cut, set_note
-from app.core.pricing import compute_jev_reference, compute_run_finops
+from app.core.pricing import compute_run_finops
 from app.core.trace_store import (
     TracePartition,
     TraceRecord,
@@ -47,20 +47,21 @@ from app.archetypes.cat1_triage.prompts import (
     get_haiku_calibrated_system_prompt,
     get_sonnet_naive_system_prompt,
 )
-from app.archetypes.cat1_triage.schemas import (
-    get_questions_for_subtask,
-    get_schema_for_subtask,
-)
+from app.archetypes.cat1_triage.schemas import get_schema_for_subtask
 
 
 CAT1_CATEGORY = "cat1_classification_routing"
 RUNG_TO_PATTERN: dict[str, str] = {
     "sonnet_naive": "naive_chatbot",
     "haiku_naive": "naive_unconstrained_prose",
+    "sonnet_calibrated": "strict_json_schema",
     "haiku_calibrated": "strict_json_schema",
-    "gemini_decision": "system1_decisions_api",
 }
 PROSE_RUNGS = ("sonnet_naive", "haiku_naive")
+SCHEMA_RUNGS = ("sonnet_calibrated", "haiku_calibrated")
+RUNG_ORDER = ("sonnet_naive", "haiku_naive", "sonnet_calibrated", "haiku_calibrated")
+SONNET_FALLBACKS = ["claude-sonnet-5-5", "claude-sonnet-4-6"]
+HAIKU_FALLBACKS = ["claude-haiku-5-5", "claude-haiku-4-5"]
 # Live path: the caps, timeouts and retry setting the ablation ran with (ablation.CAPS / TIMEOUTS_S / MAX_RETRIES).
 # The old 2,048-token write-up cap cut off 19 of the 24 stored write-ups; no ablation run reached these caps.
 CAT1_PROSE_MAX_TOKENS = 8192
@@ -71,6 +72,7 @@ CAT1_MAX_RETRIES = 0
 THINKING_BY_RUNG: dict[str, dict[str, str]] = {
     "sonnet_naive": {"type": "between_tools"},
     "haiku_naive": {"type": "disabled"},
+    "sonnet_calibrated": {"type": "between_tools"},
     "haiku_calibrated": {"type": "disabled"},
 }
 
@@ -80,7 +82,6 @@ READER_MODEL_NOTE = (
     "off the write-up and was right — whether the write-up is usable as a classification."
 )
 STRUCTURED_NOTE = "Fields compared directly with the ground truth."
-GEMINI_NOTE = "Decisions mapped to the ground-truth fields (priority from the 0–3 severity score), as the app does."
 
 
 def build_cat1_request_envelope(
@@ -89,7 +90,7 @@ def build_cat1_request_envelope(
     payload_text: str,
     request_params_override: dict[str, Any] | None = None,
 ) -> TraceRequestEnvelope:
-    """Build exact request envelope sent to Anthropic or Gemini Decisions API."""
+    """Build the exact request envelope sent to Anthropic."""
     if rung_id in PROSE_RUNGS:
         return TraceRequestEnvelope(
             provider="Anthropic",
@@ -99,26 +100,17 @@ def build_cat1_request_envelope(
             or {"max_tokens": CAT1_PROSE_MAX_TOKENS, "endpoint": "messages.create", "thinking": THINKING_BY_RUNG[rung_id]},
             input_payload=payload_text,
         )
-    if rung_id == "haiku_calibrated":
-        return TraceRequestEnvelope(
-            provider="Anthropic",
-            endpoint="messages.create",
-            system_instruction=get_haiku_calibrated_system_prompt(sub_task),
-            parameters=request_params_override
-            or {
-                "max_tokens": CAT1_SCHEMA_MAX_TOKENS,
-                "thinking": {"type": "disabled"},
-                "output_config": {"format": {"type": "json_schema"}},
-            },
-            json_schema=get_schema_for_subtask(sub_task),
-            input_payload=payload_text,
-        )
     return TraceRequestEnvelope(
-        provider="Google Gemini Decisions API",
-        endpoint="v1beta/decisions",
-        system_instruction=None,
-        parameters=request_params_override or {"api_version": "v1beta"},
-        decision_questions=get_questions_for_subtask(sub_task),
+        provider="Anthropic",
+        endpoint="messages.create",
+        system_instruction=get_haiku_calibrated_system_prompt(sub_task),
+        parameters=request_params_override
+        or {
+            "max_tokens": CAT1_SCHEMA_MAX_TOKENS,
+            "thinking": THINKING_BY_RUNG[rung_id],
+            "output_config": {"format": {"type": "json_schema"}},
+        },
+        json_schema=get_schema_for_subtask(sub_task),
         input_payload=payload_text,
     )
 
@@ -194,7 +186,7 @@ def load_golden_replays() -> dict[str, Any]:
 
 
 def load_cat1_ablation_portfolio() -> Cat1AblationPortfolio | None:
-    """Seven-version ablation summary (replays/cat1_ablation_summary.json); None if absent or unreadable."""
+    """Four-cell experiment summary (replays/cat1_ablation_summary.json); None if absent or unreadable."""
     path = Path(get_settings().replays_dir) / "cat1_ablation_summary.json"
     if not path.is_file():
         return None
@@ -208,36 +200,23 @@ def _arm(portfolio: Cat1AblationPortfolio | None, arm_id: str) -> Any:
     return next((a for a in (portfolio.arms if portfolio else []) if a.arm_id == arm_id and a.runs > 0), None)
 
 
-def _lever(portfolio: Cat1AblationPortfolio | None, lever: str) -> Any:
-    return next((lv for lv in (portfolio.levers if portfolio else []) if lv.lever == lever and lv.cost_change_pct is not None), None)
+def live_prose_accuracy_note(portfolio: Cat1AblationPortfolio | None = None) -> str:
+    """Why a live write-up has no accuracy: reading it needs a reader model, which the app does not call."""
+    return "Not scored live: reading a write-up needs a reader model, which the app does not call."
 
 
-def _signed_pct(x: float) -> str:
-    return f"+{fmt_pct(x)}" if x > 0 else f"−{fmt_pct(-x)}"
-
-
-def live_prose_accuracy_note(portfolio: Cat1AblationPortfolio | None) -> str:
-    """Why a live write-up has no accuracy: the app has no reader model, and the keyword matcher is unreliable."""
-    base = "Not scored live: reading a write-up needs a reader model, which the app does not call."
-    rows = {r.arm_id: r for r in (portfolio.scoring_comparison if portfolio else []) if r.difference_pp is not None}
-    cls = [rows[a].difference_pp for a in ("sonnet_classify_text", "haiku_classify_text") if a in rows]
-    rep = [rows[a].difference_pp for a in ("sonnet_report", "haiku_report") if a in rows]
-    if not cls or not rep:
-        return base + " The keyword matcher the app used before was found unreliable in the experiment."
-    lo, hi = min(rep), max(rep)
-    over = f"by {hi:.0f} points" if round(lo) == round(hi) else f"by {lo:.0f}–{hi:.0f} points"
-    return (base + f" In the experiment the keyword matcher the app used before under-scored plain-text classifications by about "
-            f"{-statistics.fmean(cls):.0f} points and over-scored write-ups {over}, so it is not shown.")
+_SONNET_RATE = "$2.00/M in · $10.00/M out"
+_HAIKU_RATE = "$0.10/M in · $0.50/M out"
 
 
 def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
     """Number-free fallback copy; `_apply_measured_claims` replaces the result-dependent sentences."""
     if rung_id == "sonnet_naive":
         return (
-            "Rung 1A · Sonnet 5.5 write-up (free text)",
-            "Baseline: Four-Part Write-Up",
+            "Without · Sonnet 5.5 four-part write-up (free text)",
+            "Without the Improvement · Sonnet",
             [
-                "Single-pass call on Sonnet 5.5 ($2.00/M in · $10.00/M out) with today's write-up prompt: analysis, routing, "
+                f"Single-pass call on Sonnet 5.5 ({_SONNET_RATE}) with today's write-up prompt: analysis, routing, "
                 "risks and next steps in free text. The prompt never lists the allowed labels.",
                 # replaced with the measured output size by _apply_measured_claims
                 "Output tokens at $10/M dominate the cost of a write-up.",
@@ -245,87 +224,51 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
         )
     if rung_id == "haiku_naive":
         return (
-            "Rung 1B · Haiku 5.5 write-up (free text)",
-            "Model Swap Only: Same Write-Up",
+            "Without · Haiku 5.5 four-part write-up (free text)",
+            "Without the Improvement · Haiku",
             [
-                "Same single-pass messages.create call and prompt on Haiku 5.5 ($0.10/M in · $0.50/M out), thinking disabled.",
-                # replaced with the measured saving by _apply_measured_claims
-                "The model swap cuts cost vs Sonnet 5.5, but the answer is still a long write-up, not the classification fields.",
+                f"Same single-pass call and prompt on Haiku 5.5 ({_HAIKU_RATE}), thinking disabled. "
+                "The prompt never lists the allowed labels.",
+                # replaced with the measured output size by _apply_measured_claims
+                "The answer is still a long write-up, not the classification fields.",
             ],
         )
-    if rung_id == "haiku_calibrated":
-        return (
-            "Rung 2 · Haiku 5.5 classification + JSON schema",
-            "Ask for the Classification: Haiku + Schema",
-            [
-                "Asks Claude Haiku 5.5 ($0.10/M in · $0.50/M out, thinking disabled) for the classification fields only, "
-                "through an enforced JSON schema.",
-                # replaced with the measured output size and saving by _apply_measured_claims
-                "Answering only the fields keeps the output to a short typed record.",
-                # replaced with the experiment's attribution by _apply_measured_claims
-                "Most of the saving comes from asking for the classification instead of a write-up; the schema guarantees the format.",
-                "Companion <1ms deterministic regex gate masks raw PII without LLM echo.",
-            ],
-        )
+    model, rate, thinking = (
+        ("Sonnet 5.5", _SONNET_RATE, "thinking between tools") if rung_id == "sonnet_calibrated"
+        else ("Haiku 5.5", _HAIKU_RATE, "thinking disabled")
+    )
     return (
-        "Rung 3 · Gemini Decision 1 (System-1 API)",
-        "Beyond Generative: 0 Output Tokens",
+        f"With · {model} classification with strict JSON schema",
+        f"With the Improvement · {model.split()[0]}",
         [
-            "Non-autoregressive forward pass ($0.10/M in · $0.00 out; rate not verified) across all questions at once.",
-            "Shared input billed once; returns calibrated probabilities & confidence. Its questions differ from the JSON "
-            "schema: priority comes from a 0–3 severity score.",
-            "Boundary: cannot rewrite text for inline PII masking — pairs with <1ms regex gate.",
+            f"Asks {model} ({rate}, {thinking}) for the classification fields only, through an enforced JSON schema.",
+            # replaced with the measured output size and saving by _apply_measured_claims
+            "Answering only the fields keeps the output to a short typed record.",
+            "Companion <1ms deterministic regex gate masks raw PII without LLM echo.",
         ],
     )
 
 
+_WITHOUT_FOR = {"sonnet_calibrated": "sonnet_naive", "haiku_calibrated": "haiku_naive"}
+
+
 def _apply_measured_claims(results: list[RungExecutionResult], portfolio: Cat1AblationPortfolio | None = None) -> None:
-    """Rewrite result-dependent rung notes with numbers measured on this run and in the ablation."""
+    """Rewrite result-dependent rung notes with numbers measured on this run."""
     ok = {r.rung_id: r for r in results if r.status == "ok"}
-    sonnet, h_prose, h_schema = ok.get("sonnet_naive"), ok.get("haiku_naive"), ok.get("haiku_calibrated")
-    if sonnet:
-        set_note(
-            sonnet,
-            1,
-            f"Writes {sonnet.finops.output_tokens:,} output tokens on this item; output is "
-            f"{fmt_pct(sonnet.finops.output_cost_share_pct)} of its cost.",
-        )
-    if h_prose and sonnet:
-        set_note(
-            h_prose,
-            1,
-            f"Model swap alone cuts {fmt_pct(h_prose.savings_vs_naive_pct)} vs the Sonnet 5.5 write-up on this item, yet "
-            f"the write-up still emits {h_prose.finops.output_tokens:,} output tokens.",
-        )
-    if h_schema:
-        text = f"The classification-only answer is {h_schema.finops.output_tokens:,} output tokens"
-        cut = pct_cut(h_prose.finops.total_cost_usd, h_schema.finops.total_cost_usd) if h_prose else None
-        if h_prose and cut is not None:
-            text += (
-                f" vs {h_prose.finops.output_tokens:,} for the Haiku write-up, cutting cost {fmt_pct(cut)} on the same model"
-            )
-        if sonnet:
-            text += f" ({fmt_pct(h_schema.savings_vs_naive_pct)} vs the Sonnet write-up)"
-        set_note(h_schema, 1, text + ".")
-        ask_h = _lever(portfolio, "write-up → classification-only text (haiku)")
-        ask_s = _lever(portfolio, "write-up → classification-only text (sonnet)")
-        sch = _lever(portfolio, "text → schema (haiku)")
-        swap = _lever(portfolio, "Sonnet → Haiku (schema)")
-        readable = portfolio.classification_text_readable if portfolio else {}
-        if ask_h and ask_s and sch and swap:
-            acc = "no change in accuracy" if abs(sch.accuracy_change_pp or 0) < 0.05 else f"{sch.accuracy_change_pp:+.1f} points of accuracy"
-            fmt_note = (f" What it buys is a guaranteed format; all {readable['every_field_stated']} plain-text classification answers "
-                        "were readable in the experiment."
-                        if readable.get("answers") and readable.get("every_field_stated") == readable.get("answers")
-                        else " What it buys is a guaranteed format.")
-            set_note(
-                h_schema,
-                2,
-                f"Across {portfolio.ok_runs} experiment runs the saving comes from asking for the classification instead of a "
-                f"write-up ({_signed_pct(ask_h.cost_change_pct)} on Haiku, {_signed_pct(ask_s.cost_change_pct)} on Sonnet) and from "
-                f"the smaller model ({_signed_pct(swap.cost_change_pct)}). The JSON schema itself cost {_signed_pct(sch.cost_change_pct)} "
-                f"over the same classification asked as plain text, with {acc}." + fmt_note,
-            )
+    for rid in PROSE_RUNGS:
+        r = ok.get(rid)
+        if r:
+            set_note(r, 1, f"Writes {r.finops.output_tokens:,} output tokens on this item; output is "
+                           f"{fmt_pct(r.finops.output_cost_share_pct)} of its cost.")
+    for rid, without_id in _WITHOUT_FOR.items():
+        r, w = ok.get(rid), ok.get(without_id)
+        if not r:
+            continue
+        text = f"The classification-only answer is {r.finops.output_tokens:,} output tokens"
+        cut = pct_cut(w.finops.total_cost_usd, r.finops.total_cost_usd) if w else None
+        if w and cut is not None:
+            text += f" vs {w.finops.output_tokens:,} for the write-up on the same model, cutting cost {fmt_pct(cut)}"
+        set_note(r, 1, text + ".")
 
 
 def _build_rung_result(
@@ -400,8 +343,8 @@ def score_rung(
 ) -> None:
     """Set `res.accuracy` (or `res.accuracy_note` when a write-up cannot be scored).
 
-    Schema and Gemini rungs: the structured output, as before. Write-ups: the reader model's stored extraction (replay);
-    a live write-up has no reader extraction and is not scored (the keyword matcher was found unreliable)."""
+    Schema rungs: the structured output. Write-ups: the reader model's stored extraction (replay); a live write-up has
+    no reader extraction and is not scored."""
     if res.rung_id in PROSE_RUNGS:
         values = (reader_extraction or {}).get("values")
         if values is None:
@@ -428,7 +371,7 @@ def score_rung(
         raw_text=res.raw_text_preview,
     )
     ev.method = "structured_output"
-    ev.method_note = GEMINI_NOTE if res.rung_id == "gemini_decision" else STRUCTURED_NOTE
+    ev.method_note = STRUCTURED_NOTE
     res.accuracy = ev
 
 
@@ -439,48 +382,36 @@ def _typical_sonnet_writeup_output(portfolio: Cat1AblationPortfolio | None) -> i
 
 
 async def _live_rung(
-    rung_id: str, payload_text: str, sub_task: str, api_keys: tuple[str | None, str | None]
+    rung_id: str, payload_text: str, sub_task: str, anthropic_key: str | None
 ) -> tuple[RungExecutionResult, tuple[dict[str, Any] | None, str | None, int]]:
-    """One live rung at the ablation's settings; errors become error results."""
-    anthropic_key, gemini_key = api_keys
+    """One live rung at the experiment's settings; errors become error results."""
+    is_sonnet = rung_id in ("sonnet_naive", "sonnet_calibrated")
     try:
+        assert anthropic_key
         if rung_id in PROSE_RUNGS:
-            assert anthropic_key
             fn = run_sonnet_naive if rung_id == "sonnet_naive" else run_haiku_naive
             raw = await fn(payload_text, sub_task, anthropic_key, max_tokens=CAT1_PROSE_MAX_TOKENS,
                            timeout_s=CAT1_PROSE_TIMEOUT_S, max_retries=CAT1_MAX_RETRIES)
-            res = _build_rung_result(rung_id=rung_id, model_id=raw.model_id, provider="Anthropic", latency_ms=raw.latency_ms,
-                                     input_tokens=raw.input_tokens, output_tokens=raw.output_tokens, structured_output=raw.structured,
-                                     raw_text_preview=raw.raw_text, stop_reason=raw.stop_reason, thinking_tokens=raw.thinking_tokens,
-                                     max_tokens=CAT1_PROSE_MAX_TOKENS)
-            return res, (raw.request_params, raw.stop_reason, raw.thinking_tokens)
-        if rung_id == "haiku_calibrated":
-            assert anthropic_key
-            raw = await run_haiku_calibrated(payload_text, sub_task, get_schema_for_subtask(sub_task), anthropic_key,
-                                             max_tokens=CAT1_SCHEMA_MAX_TOKENS, timeout_s=CAT1_SCHEMA_TIMEOUT_S,
-                                             max_retries=CAT1_MAX_RETRIES, allow_tool_fallback=False)
-            res = _build_rung_result(rung_id=rung_id, model_id=raw.model_id, provider="Anthropic", latency_ms=raw.latency_ms,
-                                     input_tokens=raw.input_tokens, output_tokens=raw.output_tokens, structured_output=raw.structured,
-                                     raw_text_preview=raw.raw_text, stop_reason=raw.stop_reason, thinking_tokens=raw.thinking_tokens,
-                                     max_tokens=CAT1_SCHEMA_MAX_TOKENS)
-            return res, (raw.request_params, raw.stop_reason, raw.thinking_tokens)
-        assert gemini_key
-        dec = await run_gemini_decision(payload_text, get_questions_for_subtask(sub_task), gemini_key)
-        res = _build_rung_result(rung_id="gemini_decision", model_id=dec.model_id, provider="Google Gemini Decisions API",
-                                 latency_ms=dec.latency_ms, input_tokens=dec.input_tokens, output_tokens=dec.output_tokens,
-                                 structured_output=dec.structured_summary, decision_probabilities=dec.decision_probabilities)
-        # The decisions API has no stop reason; none is invented.
-        return res, ({"api_version": "v1beta"}, None, 0)
+            cap = CAT1_PROSE_MAX_TOKENS
+        else:
+            settings = get_settings()
+            raw = await run_haiku_calibrated(
+                payload_text, sub_task, get_schema_for_subtask(sub_task), anthropic_key,
+                model=settings.anthropic_sonnet_model if is_sonnet else settings.anthropic_haiku_model,
+                fallback_models=SONNET_FALLBACKS if is_sonnet else HAIKU_FALLBACKS,
+                max_tokens=CAT1_SCHEMA_MAX_TOKENS, thinking=THINKING_BY_RUNG[rung_id], timeout_s=CAT1_SCHEMA_TIMEOUT_S,
+                max_retries=CAT1_MAX_RETRIES, allow_tool_fallback=False)
+            cap = CAT1_SCHEMA_MAX_TOKENS
+        res = _build_rung_result(rung_id=rung_id, model_id=raw.model_id, provider="Anthropic", latency_ms=raw.latency_ms,
+                                 input_tokens=raw.input_tokens, output_tokens=raw.output_tokens, structured_output=raw.structured,
+                                 raw_text_preview=raw.raw_text, stop_reason=raw.stop_reason, thinking_tokens=raw.thinking_tokens,
+                                 max_tokens=cap)
+        return res, (raw.request_params, raw.stop_reason, raw.thinking_tokens)
     except Exception as exc:
-        fallback_model = (
-            "claude-sonnet-5-5"
-            if rung_id == "sonnet_naive"
-            else ("claude-haiku-5-5" if rung_id in ("haiku_naive", "haiku_calibrated") else "gemini-decision-1")
-        )
         res = _build_rung_result(
             rung_id=rung_id,
-            model_id=fallback_model,
-            provider="Anthropic" if rung_id != "gemini_decision" else "Google Gemini Decisions API",
+            model_id="claude-sonnet-5-5" if is_sonnet else "claude-haiku-5-5",
+            provider="Anthropic",
             latency_ms=0,
             input_tokens=0,
             output_tokens=0,
@@ -549,15 +480,11 @@ async def execute_cat1_run(
             replay_meta[rung_id] = (preset_trace.get("provenance") or {}).get(rung_id) or {}
         mode_used = "replay"
     else:
-        need_anthropic = any(r in ("sonnet_naive", "haiku_naive", "haiku_calibrated") for r in req.rungs)
-        need_gemini = "gemini_decision" in req.rungs
         creds = credit_shield.resolve_live_credentials(
             http_request,
-            need_anthropic=need_anthropic,
-            need_gemini=need_gemini,
+            need_anthropic=True,
         )
-        keys = (creds.anthropic_api_key, creds.gemini_api_key)
-        pairs = list(await asyncio.gather(*(_live_rung(r, payload_text, sub_task, keys) for r in req.rungs)))
+        pairs = list(await asyncio.gather(*(_live_rung(r, payload_text, sub_task, creds.anthropic_api_key) for r in req.rungs)))
         results = [p[0] for p in pairs]
         for res, extra in pairs:
             if res.status == "ok":
@@ -616,28 +543,15 @@ async def execute_cat1_run(
             extra_metadata=extra_meta,
         )
 
-    haiku_res = next((r for r in results if r.rung_id == "haiku_calibrated" and r.status == "ok"), None)
-    haiku_batch = (
-        compute_run_finops(
-            "claude-haiku-5-5-batch",
-            haiku_res.finops.input_tokens,
-            haiku_res.finops.output_tokens,
-        )
-        if haiku_res
-        else None
-    )
-
-    gemini_res = next((r for r in results if r.rung_id == "gemini_decision" and r.status == "ok"), None)
-    jev_input = gemini_res.finops.input_tokens if gemini_res else ref_input_tokens
-    jev_comp = compute_jev_reference(jev_input, naive_cost)
+    def _batch(rung_id: str, model_id: str) -> Any:
+        r = next((x for x in results if x.rung_id == rung_id and x.status == "ok"), None)
+        return compute_run_finops(model_id, r.finops.input_tokens, r.finops.output_tokens) if r else None
 
     boundary_note = (
-        "System-1 Boundary: Gemini Decision 1 & Jev classify queue, severity, and PII presence "
-        "(0 output tokens, $0.04–$0.10/M in; rates not verified), but cannot rewrite text. Companion <1ms regex scrubbing "
-        "masks Aadhaar IDs, payment cards, PAN IDs, emails, and phones inline — or escalate only flagged tickets to Haiku."
+        "PII boundary: a deterministic <1ms regex gate masks Aadhaar IDs, payment cards, PAN IDs, emails, and phones "
+        "inline before any model sees the text."
         if sub_task == "support_triage"
-        else "System-1 Boundary: Gemini Decision 1 & Jev handle leaf taxonomy, contradiction gating, and "
-        "hazmat risk scoring with 0 output tokens. Escalate to Haiku only when free-text attribute extraction is needed."
+        else "Catalog boundary: the classification fields gate publishing; free-text attribute rewriting is out of scope."
     )
 
     return Cat1RunResponse(
@@ -647,44 +561,13 @@ async def execute_cat1_run(
         input_char_count=len(payload_text),
         estimated_input_tokens=ref_input_tokens,
         results=results,
-        haiku_batch_comparator=haiku_batch,
-        jev_comparator=jev_comp,
+        haiku_batch_comparator=_batch("haiku_calibrated", "claude-haiku-5-5-batch"),
+        sonnet_batch_comparator=_batch("sonnet_calibrated", "claude-sonnet-5-5-batch"),
         pii_redaction=pii_result,
         system1_boundary_note=boundary_note,
         ground_truth=ground_truth,
         ablation_portfolio=portfolio,
     )
-
-
-def _legacy_batch_rungs(b: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """Flat batch-item replay (the first capture's layout) -> per-rung records."""
-    s_raw = b.get("sonnet_raw_text") or ""
-    hn_raw = b.get("haiku_naive_raw_text") or ""
-    in_tok = int(b["input_tokens"])
-    s_in = int(b.get("sonnet_input_tokens", in_tok))
-    return {
-        "sonnet_naive": {"model_id": "claude-sonnet-5-5", "provider": "Anthropic", "latency_ms": int(b.get("sonnet_latency_ms", 0)),
-                         "input_tokens": s_in, "output_tokens": int(b.get("sonnet_output_tokens", 0)),
-                         "structured_output": {"mode": "unstructured_chat_prose", "char_length": len(s_raw)}, "raw_text_preview": s_raw},
-        "haiku_naive": {"model_id": "claude-haiku-5-5", "provider": "Anthropic", "latency_ms": int(b.get("haiku_naive_latency_ms", 0)),
-                        "input_tokens": int(b.get("haiku_naive_input_tokens", s_in)), "output_tokens": int(b.get("haiku_naive_output_tokens", 0)),
-                        "structured_output": {"mode": "unstructured_chat_prose", "char_length": len(hn_raw)}, "raw_text_preview": hn_raw},
-        "haiku_calibrated": {"model_id": "claude-haiku-5-5", "provider": "Anthropic", "latency_ms": int(b["haiku_latency_ms"]),
-                             "input_tokens": in_tok, "output_tokens": int(b["haiku_output_tokens"]),
-                             "structured_output": b["haiku_decision"], "raw_text_preview": json.dumps(b["haiku_decision"])},
-        "gemini_decision": {"model_id": "gemini-decision-1", "provider": "Google Gemini Decisions API", "latency_ms": int(b["gemini_latency_ms"]),
-                            "input_tokens": int(b.get("gemini_input_tokens", s_in)), "output_tokens": 0,
-                            "structured_output": b["gemini_decision"], "decision_probabilities": None,
-                            "gemini_confidence": b.get("gemini_confidence")},
-    }
-
-
-def _gemini_confidence(g_rung: RungExecutionResult, fallback: float | None = None) -> float:
-    probs = g_rung.decision_probabilities or {}
-    confs = [float(v.get("confidence", 0.0)) for v in probs.values() if isinstance(v, dict)]
-    if confs:
-        return round(sum(confs) / len(confs), 3)
-    return float(fallback or 0.0)
 
 
 async def execute_cat1_batch(
@@ -697,7 +580,7 @@ async def execute_cat1_batch(
     else:
         selected_items = all_items
     portfolio = load_cat1_ablation_portfolio()
-    order = ("sonnet_naive", "haiku_naive", "haiku_calibrated", "gemini_decision")
+    order = RUNG_ORDER
 
     batch_results: list[BatchItemResult] = []
     batch_run_group_id = str(uuid4())
@@ -724,8 +607,8 @@ async def execute_cat1_batch(
         return evals
 
     def _item_result(item: dict[str, Any], pii: PiiRedactionResult, rungs_map: dict[str, RungExecutionResult],
-                     evals: dict[str, RungAccuracyEvaluation | None], g_conf: float) -> BatchItemResult:
-        h, g = rungs_map["haiku_calibrated"], rungs_map["gemini_decision"]
+                     evals: dict[str, RungAccuracyEvaluation | None]) -> BatchItemResult:
+        h, ss = rungs_map["haiku_calibrated"], rungs_map["sonnet_calibrated"]
 
         def pct(rid: str) -> float | None:
             ev = evals.get(rid)
@@ -738,13 +621,14 @@ async def execute_cat1_batch(
         return BatchItemResult(
             item_id=item["id"], title=item["title"], sub_task=item["sub_task"],
             input_tokens=h.finops.input_tokens, haiku_output_tokens=h.finops.output_tokens,
-            haiku_decision=h.structured_output, gemini_decision=g.structured_output, gemini_confidence=g_conf,
-            pii_redactions=pii.total_redactions, haiku_latency_ms=h.latency_ms, gemini_latency_ms=g.latency_ms,
+            haiku_decision=h.structured_output, sonnet_schema_output_tokens=ss.finops.output_tokens,
+            sonnet_schema_decision=ss.structured_output, pii_redactions=pii.total_redactions,
+            haiku_latency_ms=h.latency_ms, sonnet_schema_latency_ms=ss.latency_ms,
             ground_truth=dict(item.get("ground_truth") or {}),
             sonnet_accuracy_pct=pct("sonnet_naive"), haiku_naive_accuracy_pct=pct("haiku_naive"),
-            haiku_accuracy_pct=pct("haiku_calibrated") or 0.0, gemini_accuracy_pct=pct("gemini_decision") or 0.0,
+            sonnet_schema_accuracy_pct=pct("sonnet_calibrated"), haiku_accuracy_pct=pct("haiku_calibrated"),
             sonnet_exact=exact("sonnet_naive"), haiku_naive_exact=exact("haiku_naive"),
-            haiku_exact=bool(exact("haiku_calibrated")), gemini_exact=bool(exact("gemini_decision")),
+            sonnet_schema_exact=exact("sonnet_calibrated"), haiku_exact=exact("haiku_calibrated"),
         )
 
     if req.mode == "replay":
@@ -755,36 +639,33 @@ async def execute_cat1_batch(
             iid, sub = item["id"], item["sub_task"]
             gt = dict(item.get("ground_truth") or {})
             pii = scrub_pii_deterministic(item["payload"])
-            src = preset_replays.get(iid) or extra_replays[iid]
-            stored = src.get("rungs") or _legacy_batch_rungs(src)
+            stored = (preset_replays.get(iid) or extra_replays[iid])["rungs"]
             rungs_map = {rid: rung_result_from_replay(rid, stored[rid]) for rid in order}
             readers = {rid: stored[rid].get("reader_extraction") for rid in order}
             extras = {rid: (stored[rid].get("request_params"), stored[rid].get("stop_reason"), int(stored[rid].get("thinking_tokens") or 0))
                       for rid in order}
             evals = _score(sub, gt, rungs_map, readers)
-            g_conf = _gemini_confidence(rungs_map["gemini_decision"], stored["gemini_decision"].get("gemini_confidence") or src.get("gemini_confidence"))
             batch_trace_payloads.append((item, pii, [rungs_map[r] for r in order], extras))
-            batch_results.append(_item_result(item, pii, rungs_map, evals, g_conf))
+            batch_results.append(_item_result(item, pii, rungs_map, evals))
         mode_used = "replay"
     else:
         creds = credit_shield.resolve_live_credentials(
             http_request,
             need_anthropic=True,
-            need_gemini=True,
         )
-        assert creds.anthropic_api_key and creds.gemini_api_key
-        keys = (creds.anthropic_api_key, creds.gemini_api_key)
+        assert creds.anthropic_api_key
+        key = creds.anthropic_api_key
         sem = asyncio.Semaphore(4)
 
         async def _eval_item(item: dict[str, Any]) -> tuple[dict[str, Any], PiiRedactionResult, dict[str, RungExecutionResult], dict[str, tuple]]:
             async with sem:
-                pairs = await asyncio.gather(*(_live_rung(r, item["payload"], item["sub_task"], keys) for r in order))
+                pairs = await asyncio.gather(*(_live_rung(r, item["payload"], item["sub_task"], key) for r in order))
             return item, scrub_pii_deterministic(item["payload"]), {r: p[0] for r, p in zip(order, pairs)}, {r: p[1] for r, p in zip(order, pairs)}
 
         for item, pii, rungs_map, extras in await asyncio.gather(*(_eval_item(it) for it in selected_items)):
             evals = _score(item["sub_task"], dict(item.get("ground_truth") or {}), rungs_map, {})
             batch_trace_payloads.append((item, pii, [rungs_map[r] for r in order], extras))
-            batch_results.append(_item_result(item, pii, rungs_map, evals, _gemini_confidence(rungs_map["gemini_decision"])))
+            batch_results.append(_item_result(item, pii, rungs_map, evals))
             spend += sum(r.finops.total_cost_usd for r in rungs_map.values() if r.status == "ok")
         if creds.uses_server_budget:
             credit_shield.record_server_spend(spend)
@@ -819,42 +700,44 @@ async def execute_cat1_batch(
         vals = [getattr(rl[[r.rung_id for r in rl].index(rid)].finops, field) for _, _, rl, _ in batch_trace_payloads]
         return round(sum(vals) / count) if vals else 0
 
-    avg_in = round(sum(it.input_tokens for it in batch_results) / count)
-    avg_h_out = round(sum(it.haiku_output_tokens for it in batch_results) / count)
-    avg_s_in, avg_s_out = _avg("sonnet_naive", "input_tokens"), _avg("sonnet_naive", "output_tokens")
-    avg_hn_in, avg_hn_out = _avg("haiku_naive", "input_tokens"), _avg("haiku_naive", "output_tokens")
-    avg_g_in = _avg("gemini_decision", "input_tokens")
-
     def _acc_stats(rid: str) -> tuple[float | None, float | None]:
         t = tally[rid]
         if t["fields"] == 0:
             return None, None
         return round((t["matched"] / t["fields"]) * 100, 1), round((t["exact"] / t["items"]) * 100, 1)
 
-    s_f_pct, s_e_pct = _acc_stats("sonnet_naive")
-    hn_f_pct, hn_e_pct = _acc_stats("haiku_naive")
-    h_f_pct, h_e_pct = _acc_stats("haiku_calibrated")
-    g_f_pct, g_e_pct = _acc_stats("gemini_decision")
-    prose_lbl = "Free text · read by a reader model" if s_f_pct is not None else "Free text · not scored live"
+    acc = {rid: _acc_stats(rid) for rid in order}
+    prose_scored = acc["sonnet_naive"][0] is not None
+    prose_lbl = "Free text · read by a reader model" if prose_scored else "Free text · not scored live"
+    writeup_note = ("Fields read by a reader model from the stored write-up. The write-up prompt never lists the allowed labels: "
+                    "this counts fields where one allowed label could be read off the write-up and was right "
+                    "(usable as a classification)."
+                    if prose_scored else live_prose_accuracy_note(portfolio))
+    schema_note = "Classification fields through the enforced schema, compared directly with the ground truth."
 
+    # (rung, label, model, batch model or None, scope note, schema label, rollup note, scoring method)
     tiers_spec = [
-        ("sonnet_naive", "1A. Sonnet 5.5 write-up (free text)", "claude-sonnet-5-5", avg_s_in, avg_s_out, "Four-part write-up; the prompt never lists the allowed labels", s_f_pct, s_e_pct, prose_lbl),
-        ("haiku_naive", "1B. Haiku 5.5 write-up (free text)", "claude-haiku-5-5", avg_hn_in, avg_hn_out, "Model swap only: the same write-up prompt on the small model", hn_f_pct, hn_e_pct, prose_lbl),
-        ("haiku_realtime", "2. Haiku 5.5 classification + JSON schema", "claude-haiku-5-5", avg_in, avg_h_out, "Classification fields only, enforced schema, thinking disabled", h_f_pct, h_e_pct, "Enforced JSON schema"),
-        ("haiku_batch", "3. Haiku 5.5 via Batch API (computed)", "claude-haiku-5-5-batch", avg_in, avg_h_out, "Same calls priced at the 50% Batch API rate — computed, not run", h_f_pct, h_e_pct, "Enforced JSON schema (price computed)"),
-        ("gemini_decision", "4. Gemini Decision 1 (System-1)", "gemini-decision-1", avg_g_in, 0, "0 output tokens + regex PII gate · $0.10/M input (rate not verified)", g_f_pct, g_e_pct, "Closed-set decisions API"),
-        ("typesafe_jev", "5. TypeSafe Jev (Rate Card Ref)", "typesafe-jev", avg_s_in, 0, "FinOps benchmark · $0.042/M input · $0 output", None, None, "Rate-card ref (unexecuted)"),
+        ("sonnet_naive", "Sonnet 5.5 · without: four-part write-up", "claude-sonnet-5-5", None,
+         "Four-part write-up in free text; the prompt never lists the allowed labels", prose_lbl, writeup_note, "reader_model"),
+        ("haiku_naive", "Haiku 5.5 · without: four-part write-up", "claude-haiku-5-5", None,
+         "Same write-up prompt on Haiku 5.5", prose_lbl, writeup_note, "reader_model"),
+        ("sonnet_calibrated", "Sonnet 5.5 · with: classification + strict JSON schema", "claude-sonnet-5-5", "claude-sonnet-5-5-batch",
+         "Classification fields only, enforced schema", "Enforced JSON schema", schema_note, "structured_output"),
+        ("haiku_calibrated", "Haiku 5.5 · with: classification + strict JSON schema", "claude-haiku-5-5", "claude-haiku-5-5-batch",
+         "Classification fields only, enforced schema, thinking disabled", "Enforced JSON schema", schema_note, "structured_output"),
     ]
 
-    naive_finops = compute_run_finops("claude-sonnet-5-5", avg_s_in, avg_s_out)
+    base = compute_run_finops("claude-sonnet-5-5", _avg("sonnet_naive", "input_tokens"), _avg("sonnet_naive", "output_tokens")).total_cost_usd
     cfo_rows: list[CfoScaleRow] = []
-    for tid, label, mid, tin, tout, scope_note, f_acc, e_acc, schema_lbl in tiers_spec:
+    accuracy_rollup: list[ModelAccuracyRollup] = []
+    for rid, label, mid, batch_mid, scope_note, schema_lbl, roll_note, method in tiers_spec:
+        tin, tout = _avg(rid, "input_tokens"), _avg(rid, "output_tokens")
         f = compute_run_finops(mid, tin, tout)
-        base = naive_finops.total_cost_usd
-        savings = round(((base - f.total_cost_usd) / base) * 100, 2) if base > 0 else 0.0
+        fb = compute_run_finops(batch_mid, tin, tout) if batch_mid else None
+        f_acc, e_acc = acc[rid]
         cfo_rows.append(
             CfoScaleRow(
-                tier_id=tid,
+                tier_id=rid,
                 label=label,
                 model_id=mid,
                 avg_input_tokens=tin,
@@ -863,60 +746,46 @@ async def execute_cat1_batch(
                 monthly_100k_usd=f.monthly_cost_at_100k_usd,
                 monthly_1m_usd=round(f.total_cost_usd * 1_000_000, 2),
                 annual_12m_usd=f.annual_cost_at_1m_per_mo_usd,
-                savings_vs_naive_pct=savings,
+                savings_vs_naive_pct=round(((base - f.total_cost_usd) / base) * 100, 2) if base > 0 else 0.0,
                 scope_note=scope_note,
                 field_accuracy_pct=f_acc,
                 exact_match_pct=e_acc,
                 schema_compliance_label=schema_lbl,
+                batch_cost_per_1k_usd=fb.cost_per_1k_usd if fb else None,
+                batch_monthly_1m_usd=round(fb.total_cost_usd * 1_000_000, 2) if fb else None,
             )
         )
-
-    hn_x = (cfo_rows[0].cost_per_1k_usd / cfo_rows[1].cost_per_1k_usd) if cfo_rows[1].cost_per_1k_usd else None
-    writeup_note = ("Fields read by a reader model from the stored write-up. The write-up prompt never lists the allowed labels: "
-                    "this counts fields where one allowed label could be read off the write-up and was right."
-                    if s_f_pct is not None else live_prose_accuracy_note(portfolio))
-
-    def _rollup(rid: str, label: str, model_id: str, schema_pct: float, f_pct: float | None, e_pct: float | None, cost: float,
-                notes: str, method: str) -> ModelAccuracyRollup:
         t = tally[rid]
-        return ModelAccuracyRollup(rung_id=rid, label=label, model_id=model_id, schema_compliance_pct=schema_pct,
-                                   fields_matched=t["matched"], fields_total=t["fields"], field_accuracy_pct=f_pct,
-                                   exact_items_matched=t["exact"], items_total=t["items"], exact_match_pct=e_pct,
-                                   cost_per_1k_usd=cost, notes=notes, scoring_method=method if t["fields"] else "not_scored")
-
-    accuracy_rollup = [
-        _rollup("sonnet_naive", "1A. Sonnet 5.5 write-up", "claude-sonnet-5-5", 0.0, s_f_pct, s_e_pct, cfo_rows[0].cost_per_1k_usd,
-                writeup_note, "reader_model"),
-        _rollup("haiku_naive", "1B. Haiku 5.5 write-up", "claude-haiku-5-5", 0.0, hn_f_pct, hn_e_pct, cfo_rows[1].cost_per_1k_usd,
-                (f"{hn_x:.0f}× cheaper than the Sonnet write-up on these items; same write-up prompt. " if hn_x else "") + writeup_note,
-                "reader_model"),
-        _rollup("haiku_calibrated", "2. Haiku 5.5 classification + JSON schema", "claude-haiku-5-5", 100.0, h_f_pct, h_e_pct,
-                cfo_rows[2].cost_per_1k_usd,
-                "Classification fields through the enforced schema, compared directly. The Batch API price (50%) is computed, not run.",
-                "structured_output"),
-        _rollup("gemini_decision", "4. Gemini Decision 1", "gemini-decision-1", 100.0, g_f_pct, g_e_pct, cfo_rows[4].cost_per_1k_usd,
-                "Closed-set decisions with probabilities and 0 output tokens; priority mapped from a 0–3 severity score.",
-                "structured_output"),
-    ]
+        accuracy_rollup.append(
+            ModelAccuracyRollup(rung_id=rid, label=label, model_id=mid, schema_compliance_pct=100.0 if batch_mid else 0.0,
+                                fields_matched=t["matched"], fields_total=t["fields"], field_accuracy_pct=f_acc,
+                                exact_items_matched=t["exact"], items_total=t["items"], exact_match_pct=e_acc,
+                                cost_per_1k_usd=f.cost_per_1k_usd, notes=roll_note,
+                                scoring_method=method if t["fields"] else "not_scored")
+        )
 
     by_tier = {r.tier_id: r for r in cfo_rows}
 
     def _acc_txt(p: float | None, what: str) -> str:
         return f"{p:.1f}% {what}" if p is not None else "not scored live"
 
+    def _with_txt(rid: str) -> str:
+        r = by_tier[rid]
+        return (f"${r.monthly_1m_usd:,.2f}/mo ({_acc_txt(r.field_accuracy_pct, 'fields correct')}; "
+                f"Batch API price ${r.batch_monthly_1m_usd:,.2f}/mo, computed)")
+
     return Cat1BatchResponse(
         mode_used=mode_used,  # type: ignore[arg-type]
         total_items=len(batch_results),
-        avg_input_tokens=avg_in,
+        avg_input_tokens=round(sum(it.input_tokens for it in batch_results) / count),
         items=batch_results,
         cfo_comparison=cfo_rows,
         summary_callout=(
-            f"At NovaMart scale (1M intake events/month, {avg_s_in} write-up / {avg_in} schema prompt tokens per item): "
-            f"the Sonnet 5.5 write-up costs ${by_tier['sonnet_naive'].monthly_1m_usd:,.2f}/mo "
-            f"({_acc_txt(s_f_pct, 'of fields usable as a classification')}); "
-            f"Haiku 5.5 classification + JSON schema ${by_tier['haiku_realtime'].monthly_1m_usd:,.2f}/mo "
-            f"({_acc_txt(h_f_pct, 'fields correct')}; Batch API price ${by_tier['haiku_batch'].monthly_1m_usd:,.2f}/mo, computed); "
-            f"Gemini Decision 1 ${by_tier['gemini_decision'].monthly_1m_usd:,.2f}/mo ({_acc_txt(g_f_pct, 'fields correct')})."
+            f"At NovaMart scale (1M intake events/month): without the improvement, the four-part write-up costs "
+            f"${by_tier['sonnet_naive'].monthly_1m_usd:,.2f}/mo on Sonnet 5.5 and ${by_tier['haiku_naive'].monthly_1m_usd:,.2f}/mo on "
+            f"Haiku 5.5 ({_acc_txt(by_tier['sonnet_naive'].field_accuracy_pct, 'of fields usable as a classification')} on Sonnet). "
+            f"With classification + strict JSON schema: Sonnet 5.5 {_with_txt('sonnet_calibrated')}; "
+            f"Haiku 5.5 {_with_txt('haiku_calibrated')}."
         ),
         accuracy_rollup=accuracy_rollup,
         ablation_portfolio=portfolio,

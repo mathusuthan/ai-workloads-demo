@@ -3,14 +3,12 @@
     "source": "cat1_ablation_repeat0",
     "source_files": {
       "runs": "experiments/cat1_ablation/runs.jsonl",
-      "extractions": "experiments/cat1_ablation/extractions.jsonl",
-      "original_capture": "replays/cat1_original_capture.json"
+      "extractions": "experiments/cat1_ablation/extractions.jsonl"
     },
-    "selection_rule": "fixed pre-declared mapping: repeat_index 0 of sonnet_report -> sonnet_naive, haiku_report -> haiku_naive, haiku_schema -> haiku_calibrated, gemini_decision -> gemini_decision on all 12 items (not selected by outcome)",
-    "settings_note": "Write-up rungs ran at max_tokens 8192, the schema rung at 512; thinking as the app sets it (Sonnet between_tools, Haiku disabled); max_retries 0; stop_reason values are as returned by the API (the decisions API has none).",
+    "selection_rule": "fixed pre-declared mapping: repeat_index 0 of sonnet_report -> sonnet_naive, haiku_report -> haiku_naive, sonnet_schema -> sonnet_calibrated, haiku_schema -> haiku_calibrated on all 12 items (not selected by outcome)",
+    "settings_note": "Write-up rungs ran at max_tokens 8192, the schema rung at 512; thinking as the app sets it (Sonnet between_tools, Haiku disabled); max_retries 0; stop_reason values are as returned by the API.",
     "accuracy_note": "Write-up rungs carry the reader model's extraction (`reader_extraction`); the app scores replayed write-ups from it. The write-up prompt never lists the allowed labels, so this measures whether one allowed label can be read off the write-up and is right.",
-    "original_capture": "replays/cat1_original_capture.json (verbatim copy of the golden replays before this rebuild)",
-    "rebuilt_at": "2026-11-26T04:09:19Z"
+    "rebuilt_at": "2026-11-26T05:40:51Z"
   },
   "presets": {
     "tkt-01": {
@@ -136,6 +134,43 @@
             "note": "Read by a model that was not under test and never saw the right answer; it reports what the response says (an allowed label, not_stated or ambiguous) with a verbatim quote."
           }
         },
+        "sonnet_calibrated": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 2036,
+          "input_tokens": 2066,
+          "output_tokens": 96,
+          "thinking_tokens": 0,
+          "stop_reason": "end_turn",
+          "truncated": false,
+          "max_tokens": 512,
+          "request_params": {
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "output_config": {
+              "format": {
+                "type": "json_schema"
+              }
+            }
+          },
+          "structured_output": {
+            "queue": "replacements",
+            "priority": "P1_HIGH",
+            "contains_pii": true,
+            "pii_categories": [
+              "PAYMENT_CARD",
+              "EMAIL",
+              "PHONE"
+            ],
+            "auto_action": "auto_replace",
+            "reason_code": "TRANSIT_DAMAGE"
+          },
+          "raw_text_preview": "{\"queue\":\"replacements\",\"priority\":\"P1_HIGH\",\"contains_pii\":true,\"pii_categories\":[\"PAYMENT_CARD\",\"EMAIL\",\"PHONE\"],\"auto_action\":\"auto_replace\",\"reason_code\":\"TRANSIT_DAMAGE\"}",
+          "decision_probabilities": null,
+          "schema_parse_ok": true
+        },
         "haiku_calibrated": {
           "model_id": "claude-haiku-5-5",
           "provider": "Anthropic",
@@ -172,77 +207,6 @@
           "raw_text_preview": "{\"queue\":\"replacements\",\"priority\":\"P1_HIGH\",\"contains_pii\":true,\"pii_categories\":[\"EMAIL\",\"PHONE\",\"PAYMENT_CARD\"],\"auto_action\":\"auto_replace\",\"reason_code\":\"TRANSIT_DAMAGE\"}",
           "decision_probabilities": null,
           "schema_parse_ok": true
-        },
-        "gemini_decision": {
-          "model_id": "gemini-decision-1",
-          "provider": "Google Gemini Decisions API",
-          "latency_ms": 810,
-          "input_tokens": 1472,
-          "output_tokens": 0,
-          "thinking_tokens": 0,
-          "stop_reason": null,
-          "truncated": false,
-          "max_tokens": null,
-          "request_params": {
-            "api_version": "v1beta"
-          },
-          "structured_output": {
-            "contains_sensitive_pii": true,
-            "severity": 1.916,
-            "auto_action": "auto_replace",
-            "queue": "replacements"
-          },
-          "raw_text_preview": null,
-          "decision_probabilities": {
-            "contains_sensitive_pii": {
-              "type": "noul",
-              "value": true,
-              "p_true": 0.9782,
-              "confidence": 0.9782
-            },
-            "severity": {
-              "type": "score",
-              "value": 1.916,
-              "confidence": 0.705,
-              "probabilities": {
-                "1": 0.1774,
-                "3": 0.1096,
-                "2": 0.705,
-                "0": 0.008
-              },
-              "legend": {
-                "0": "P3 Low: Routine inquiry, zero financial loss, no compliance or safety exposure.",
-                "2": "P1 High: Broken merchandise, legal/regulatory threat, or blocked seller payout.",
-                "3": "P0 Critical: Active account takeover, fraud drain, or immediate financial/security loss.",
-                "1": "P2 Medium: Standard delivery or billing delay, normal SLA handling."
-              }
-            },
-            "auto_action": {
-              "type": "choice",
-              "value": "auto_replace",
-              "confidence": 0.5205,
-              "probabilities": {
-                "auto_replace": 0.5205,
-                "hold_and_audit": 0.0481,
-                "route_specialist": 0.4057,
-                "escalate_security": 0.0257
-              }
-            },
-            "queue": {
-              "type": "choice",
-              "value": "replacements",
-              "confidence": 0.8801,
-              "probabilities": {
-                "general_support": 0.0055,
-                "shipping_logistics": 0.0069,
-                "replacements": 0.8801,
-                "trust_and_safety": 0.0084,
-                "billing_payouts": 0.0992
-              }
-            }
-          },
-          "endpoint": "v1beta/decisions",
-          "input_tokens_possibly_estimated": false
         }
       },
       "provenance": {
@@ -288,6 +252,29 @@
             "output_format": "free_text"
           }
         },
+        "sonnet_calibrated": {
+          "arm_id": "sonnet_schema",
+          "run_id": "sonnet_schema:tkt-01:r0",
+          "repeat_index": 0,
+          "started_at": "2026-11-26T03:54:05.753096+00:00",
+          "settings_sha256": "b11e0909e683ab1c93d202574f172832d01dc443b2630a0a5ccd4812abcc756b",
+          "system_prompt_sent_sha256": "f917f73012308baf2b81294fac9484dcc530f3cda76da7675c1caee4b6b5e76f",
+          "settings": {
+            "arm_id": "sonnet_schema",
+            "model_intended": "claude-sonnet-5-5",
+            "call_path": "anthropic_service.run_haiku_calibrated",
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "timeout_s": 60.0,
+            "max_retries": 0,
+            "system_prompt_sha256": "f917f73012308baf2b81294fac9484dcc530f3cda76da7675c1caee4b6b5e76f",
+            "output_format": "json_schema",
+            "schema_sha256": "16744b276ba8964feb21f5c1ec394eea3c5aec7476c10f6125ea2763ff580b6c",
+            "allow_tool_fallback": false
+          }
+        },
         "haiku_calibrated": {
           "arm_id": "haiku_schema",
           "run_id": "haiku_schema:tkt-01:r0",
@@ -309,22 +296,6 @@
             "output_format": "json_schema",
             "schema_sha256": "16744b276ba8964feb21f5c1ec394eea3c5aec7476c10f6125ea2763ff580b6c",
             "allow_tool_fallback": false
-          }
-        },
-        "gemini_decision": {
-          "arm_id": "gemini_decision",
-          "run_id": "gemini_decision:tkt-01:r0",
-          "repeat_index": 0,
-          "started_at": "2026-11-26T03:54:06.828559+00:00",
-          "settings_sha256": "70715fca44b17f6f54d71c71aa4bf8ae6aa8888958dcf8d59c4e27185dd380ee",
-          "system_prompt_sent_sha256": null,
-          "settings": {
-            "arm_id": "gemini_decision",
-            "model_intended": "gemini-decision-1",
-            "call_path": "gemini_decision_service.run_gemini_decision",
-            "questions_sha256": "7d34c1fd07bc10aef2ed51e9d4f235c98eda3791f9946d6464c7e6672f564c52",
-            "timeouts": "app defaults (SDK; REST fallback 30 s)",
-            "max_retries": "app/SDK default"
           }
         }
       }
@@ -452,6 +423,45 @@
             "note": "Read by a model that was not under test and never saw the right answer; it reports what the response says (an allowed label, not_stated or ambiguous) with a verbatim quote."
           }
         },
+        "sonnet_calibrated": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 2823,
+          "input_tokens": 1843,
+          "output_tokens": 125,
+          "thinking_tokens": 0,
+          "stop_reason": "end_turn",
+          "truncated": false,
+          "max_tokens": 512,
+          "request_params": {
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "output_config": {
+              "format": {
+                "type": "json_schema"
+              }
+            }
+          },
+          "structured_output": {
+            "queue": "billing_payouts",
+            "priority": "P1_HIGH",
+            "contains_pii": true,
+            "pii_categories": [
+              "AADHAAR",
+              "PAYMENT_CARD",
+              "EMAIL",
+              "PHONE",
+              "TAX_PAN_ID"
+            ],
+            "auto_action": "hold_and_audit",
+            "reason_code": "SETTLEMENT_HOLD_LEGAL"
+          },
+          "raw_text_preview": "{\"queue\":\"billing_payouts\",\"priority\":\"P1_HIGH\",\"contains_pii\":true,\"pii_categories\":[\"AADHAAR\",\"PAYMENT_CARD\",\"EMAIL\",\"PHONE\",\"TAX_PAN_ID\"],\"auto_action\":\"hold_and_audit\",\"reason_code\":\"SETTLEMENT_HOLD_LEGAL\"}",
+          "decision_probabilities": null,
+          "schema_parse_ok": true
+        },
         "haiku_calibrated": {
           "model_id": "claude-haiku-5-5",
           "provider": "Anthropic",
@@ -490,77 +500,6 @@
           "raw_text_preview": "{\"queue\":\"billing_payouts\",\"priority\":\"P0_CRITICAL\",\"contains_pii\":true,\"pii_categories\":[\"AADHAAR\",\"PAYMENT_CARD\",\"EMAIL\",\"PHONE\",\"TAX_PAN_ID\"],\"auto_action\":\"escalate_security\",\"reason_code\":\"SETTLEMENT_HOLD_LEGAL\"}",
           "decision_probabilities": null,
           "schema_parse_ok": true
-        },
-        "gemini_decision": {
-          "model_id": "gemini-decision-1",
-          "provider": "Google Gemini Decisions API",
-          "latency_ms": 468,
-          "input_tokens": 1318,
-          "output_tokens": 0,
-          "thinking_tokens": 0,
-          "stop_reason": null,
-          "truncated": false,
-          "max_tokens": null,
-          "request_params": {
-            "api_version": "v1beta"
-          },
-          "structured_output": {
-            "queue": "billing_payouts",
-            "contains_sensitive_pii": true,
-            "severity": 2.043,
-            "auto_action": "hold_and_audit"
-          },
-          "raw_text_preview": null,
-          "decision_probabilities": {
-            "queue": {
-              "type": "choice",
-              "value": "billing_payouts",
-              "confidence": 0.9753,
-              "probabilities": {
-                "billing_payouts": 0.9753,
-                "trust_and_safety": 0.0207,
-                "replacements": 0.001,
-                "shipping_logistics": 0.001,
-                "general_support": 0.002
-              }
-            },
-            "contains_sensitive_pii": {
-              "type": "noul",
-              "value": true,
-              "p_true": 0.9567,
-              "confidence": 0.9567
-            },
-            "severity": {
-              "type": "score",
-              "value": 2.043,
-              "confidence": 0.754,
-              "probabilities": {
-                "3": 0.1483,
-                "1": 0.0905,
-                "0": 0.0072,
-                "2": 0.754
-              },
-              "legend": {
-                "3": "P0 Critical: Active account takeover, fraud drain, or immediate financial/security loss.",
-                "2": "P1 High: Broken merchandise, legal/regulatory threat, or blocked seller payout.",
-                "0": "P3 Low: Routine inquiry, zero financial loss, no compliance or safety exposure.",
-                "1": "P2 Medium: Standard delivery or billing delay, normal SLA handling."
-              }
-            },
-            "auto_action": {
-              "type": "choice",
-              "value": "hold_and_audit",
-              "confidence": 0.9028,
-              "probabilities": {
-                "hold_and_audit": 0.9028,
-                "escalate_security": 0.0262,
-                "route_specialist": 0.0658,
-                "auto_replace": 0.0051
-              }
-            }
-          },
-          "endpoint": "v1beta/decisions",
-          "input_tokens_possibly_estimated": false
         }
       },
       "provenance": {
@@ -606,6 +545,29 @@
             "output_format": "free_text"
           }
         },
+        "sonnet_calibrated": {
+          "arm_id": "sonnet_schema",
+          "run_id": "sonnet_schema:tkt-02:r0",
+          "repeat_index": 0,
+          "started_at": "2026-11-26T03:54:07.800773+00:00",
+          "settings_sha256": "b11e0909e683ab1c93d202574f172832d01dc443b2630a0a5ccd4812abcc756b",
+          "system_prompt_sent_sha256": "f917f73012308baf2b81294fac9484dcc530f3cda76da7675c1caee4b6b5e76f",
+          "settings": {
+            "arm_id": "sonnet_schema",
+            "model_intended": "claude-sonnet-5-5",
+            "call_path": "anthropic_service.run_haiku_calibrated",
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "timeout_s": 60.0,
+            "max_retries": 0,
+            "system_prompt_sha256": "f917f73012308baf2b81294fac9484dcc530f3cda76da7675c1caee4b6b5e76f",
+            "output_format": "json_schema",
+            "schema_sha256": "16744b276ba8964feb21f5c1ec394eea3c5aec7476c10f6125ea2763ff580b6c",
+            "allow_tool_fallback": false
+          }
+        },
         "haiku_calibrated": {
           "arm_id": "haiku_schema",
           "run_id": "haiku_schema:tkt-02:r0",
@@ -627,22 +589,6 @@
             "output_format": "json_schema",
             "schema_sha256": "16744b276ba8964feb21f5c1ec394eea3c5aec7476c10f6125ea2763ff580b6c",
             "allow_tool_fallback": false
-          }
-        },
-        "gemini_decision": {
-          "arm_id": "gemini_decision",
-          "run_id": "gemini_decision:tkt-02:r0",
-          "repeat_index": 0,
-          "started_at": "2026-11-26T03:54:10.642374+00:00",
-          "settings_sha256": "70715fca44b17f6f54d71c71aa4bf8ae6aa8888958dcf8d59c4e27185dd380ee",
-          "system_prompt_sent_sha256": null,
-          "settings": {
-            "arm_id": "gemini_decision",
-            "model_intended": "gemini-decision-1",
-            "call_path": "gemini_decision_service.run_gemini_decision",
-            "questions_sha256": "7d34c1fd07bc10aef2ed51e9d4f235c98eda3791f9946d6464c7e6672f564c52",
-            "timeouts": "app defaults (SDK; REST fallback 30 s)",
-            "max_retries": "app/SDK default"
           }
         }
       }
@@ -770,6 +716,43 @@
             "note": "Read by a model that was not under test and never saw the right answer; it reports what the response says (an allowed label, not_stated or ambiguous) with a verbatim quote."
           }
         },
+        "sonnet_calibrated": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 2069,
+          "input_tokens": 1859,
+          "output_tokens": 104,
+          "thinking_tokens": 0,
+          "stop_reason": "end_turn",
+          "truncated": false,
+          "max_tokens": 512,
+          "request_params": {
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "output_config": {
+              "format": {
+                "type": "json_schema"
+              }
+            }
+          },
+          "structured_output": {
+            "queue": "trust_and_safety",
+            "priority": "P0_CRITICAL",
+            "contains_pii": true,
+            "pii_categories": [
+              "EMAIL",
+              "PHONE",
+              "PAYMENT_CARD"
+            ],
+            "auto_action": "escalate_security",
+            "reason_code": "ACCOUNT_TAKEOVER"
+          },
+          "raw_text_preview": "{\"queue\":\"trust_and_safety\",\"priority\":\"P0_CRITICAL\",\"contains_pii\":true,\"pii_categories\":[\"EMAIL\",\"PHONE\",\"PAYMENT_CARD\"],\"auto_action\":\"escalate_security\",\"reason_code\":\"ACCOUNT_TAKEOVER\"}",
+          "decision_probabilities": null,
+          "schema_parse_ok": true
+        },
         "haiku_calibrated": {
           "model_id": "claude-haiku-5-5",
           "provider": "Anthropic",
@@ -806,77 +789,6 @@
           "raw_text_preview": "{\"queue\":\"trust_and_safety\",\"priority\":\"P0_CRITICAL\",\"contains_pii\":true,\"pii_categories\":[\"EMAIL\",\"PHONE\",\"PAYMENT_CARD\"],\"auto_action\":\"escalate_security\",\"reason_code\":\"ACCOUNT_TAKEOVER\"}",
           "decision_probabilities": null,
           "schema_parse_ok": true
-        },
-        "gemini_decision": {
-          "model_id": "gemini-decision-1",
-          "provider": "Google Gemini Decisions API",
-          "latency_ms": 449,
-          "input_tokens": 1376,
-          "output_tokens": 0,
-          "thinking_tokens": 0,
-          "stop_reason": null,
-          "truncated": false,
-          "max_tokens": null,
-          "request_params": {
-            "api_version": "v1beta"
-          },
-          "structured_output": {
-            "severity": 2.989,
-            "contains_sensitive_pii": true,
-            "queue": "trust_and_safety",
-            "auto_action": "escalate_security"
-          },
-          "raw_text_preview": null,
-          "decision_probabilities": {
-            "severity": {
-              "type": "score",
-              "value": 2.989,
-              "confidence": 0.9896,
-              "probabilities": {
-                "3": 0.9896,
-                "0": 0.0002,
-                "2": 0.0096,
-                "1": 0.0006
-              },
-              "legend": {
-                "1": "P2 Medium: Standard delivery or billing delay, normal SLA handling.",
-                "3": "P0 Critical: Active account takeover, fraud drain, or immediate financial/security loss.",
-                "0": "P3 Low: Routine inquiry, zero financial loss, no compliance or safety exposure.",
-                "2": "P1 High: Broken merchandise, legal/regulatory threat, or blocked seller payout."
-              }
-            },
-            "contains_sensitive_pii": {
-              "type": "noul",
-              "value": true,
-              "p_true": 0.9749,
-              "confidence": 0.9749
-            },
-            "queue": {
-              "type": "choice",
-              "value": "trust_and_safety",
-              "confidence": 1.0,
-              "probabilities": {
-                "shipping_logistics": 0.0,
-                "replacements": 0.0,
-                "trust_and_safety": 1.0,
-                "billing_payouts": 0.0,
-                "general_support": 0.0
-              }
-            },
-            "auto_action": {
-              "type": "choice",
-              "value": "escalate_security",
-              "confidence": 0.9717,
-              "probabilities": {
-                "route_specialist": 0.0109,
-                "auto_replace": 0.0027,
-                "escalate_security": 0.9717,
-                "hold_and_audit": 0.0147
-              }
-            }
-          },
-          "endpoint": "v1beta/decisions",
-          "input_tokens_possibly_estimated": false
         }
       },
       "provenance": {
@@ -922,6 +834,29 @@
             "output_format": "free_text"
           }
         },
+        "sonnet_calibrated": {
+          "arm_id": "sonnet_schema",
+          "run_id": "sonnet_schema:tkt-03:r0",
+          "repeat_index": 0,
+          "started_at": "2026-11-26T03:54:13.788012+00:00",
+          "settings_sha256": "b11e0909e683ab1c93d202574f172832d01dc443b2630a0a5ccd4812abcc756b",
+          "system_prompt_sent_sha256": "f917f73012308baf2b81294fac9484dcc530f3cda76da7675c1caee4b6b5e76f",
+          "settings": {
+            "arm_id": "sonnet_schema",
+            "model_intended": "claude-sonnet-5-5",
+            "call_path": "anthropic_service.run_haiku_calibrated",
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "timeout_s": 60.0,
+            "max_retries": 0,
+            "system_prompt_sha256": "f917f73012308baf2b81294fac9484dcc530f3cda76da7675c1caee4b6b5e76f",
+            "output_format": "json_schema",
+            "schema_sha256": "16744b276ba8964feb21f5c1ec394eea3c5aec7476c10f6125ea2763ff580b6c",
+            "allow_tool_fallback": false
+          }
+        },
         "haiku_calibrated": {
           "arm_id": "haiku_schema",
           "run_id": "haiku_schema:tkt-03:r0",
@@ -943,22 +878,6 @@
             "output_format": "json_schema",
             "schema_sha256": "16744b276ba8964feb21f5c1ec394eea3c5aec7476c10f6125ea2763ff580b6c",
             "allow_tool_fallback": false
-          }
-        },
-        "gemini_decision": {
-          "arm_id": "gemini_decision",
-          "run_id": "gemini_decision:tkt-03:r0",
-          "repeat_index": 0,
-          "started_at": "2026-11-26T03:54:21.383020+00:00",
-          "settings_sha256": "70715fca44b17f6f54d71c71aa4bf8ae6aa8888958dcf8d59c4e27185dd380ee",
-          "system_prompt_sent_sha256": null,
-          "settings": {
-            "arm_id": "gemini_decision",
-            "model_intended": "gemini-decision-1",
-            "call_path": "gemini_decision_service.run_gemini_decision",
-            "questions_sha256": "7d34c1fd07bc10aef2ed51e9d4f235c98eda3791f9946d6464c7e6672f564c52",
-            "timeouts": "app defaults (SDK; REST fallback 30 s)",
-            "max_retries": "app/SDK default"
           }
         }
       }
@@ -1086,6 +1005,38 @@
             "note": "Read by a model that was not under test and never saw the right answer; it reports what the response says (an allowed label, not_stated or ambiguous) with a verbatim quote."
           }
         },
+        "sonnet_calibrated": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 1937,
+          "input_tokens": 1904,
+          "output_tokens": 96,
+          "thinking_tokens": 0,
+          "stop_reason": "end_turn",
+          "truncated": false,
+          "max_tokens": 512,
+          "request_params": {
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "output_config": {
+              "format": {
+                "type": "json_schema"
+              }
+            }
+          },
+          "structured_output": {
+            "leaf_category": "apparel_ethnic_kurtas",
+            "hazmat_class": "NONE",
+            "compliance_status": "SUPPRESS_CONTRADICTED_FACET",
+            "contradiction_detected": true,
+            "primary_material_tag": "polyester_viscose_blend"
+          },
+          "raw_text_preview": "{\"leaf_category\":\"apparel_ethnic_kurtas\",\"hazmat_class\":\"NONE\",\"compliance_status\":\"SUPPRESS_CONTRADICTED_FACET\",\"contradiction_detected\":true,\"primary_material_tag\":\"polyester_viscose_blend\"}",
+          "decision_probabilities": null,
+          "schema_parse_ok": true
+        },
         "haiku_calibrated": {
           "model_id": "claude-haiku-5-5",
           "provider": "Anthropic",
@@ -1117,76 +1068,6 @@
           "raw_text_preview": "{\"leaf_category\":\"apparel_ethnic_kurtas\",\"hazmat_class\":\"NONE\",\"compliance_status\":\"SUPPRESS_CONTRADICTED_FACET\",\"contradiction_detected\":true,\"primary_material_tag\":\"polyester_viscose_blend\"}",
           "decision_probabilities": null,
           "schema_parse_ok": true
-        },
-        "gemini_decision": {
-          "model_id": "gemini-decision-1",
-          "provider": "Google Gemini Decisions API",
-          "latency_ms": 673,
-          "input_tokens": 1302,
-          "output_tokens": 0,
-          "thinking_tokens": 0,
-          "stop_reason": null,
-          "truncated": false,
-          "max_tokens": null,
-          "request_params": {
-            "api_version": "v1beta"
-          },
-          "structured_output": {
-            "has_factual_contradiction": true,
-            "compliance_status": "SUPPRESS_CONTRADICTED_FACET",
-            "hazmat_compliance_risk": 2.127,
-            "leaf_category": "apparel_ethnic_kurtas"
-          },
-          "raw_text_preview": null,
-          "decision_probabilities": {
-            "has_factual_contradiction": {
-              "type": "noul",
-              "value": true,
-              "p_true": 0.987,
-              "confidence": 0.987
-            },
-            "compliance_status": {
-              "type": "choice",
-              "value": "SUPPRESS_CONTRADICTED_FACET",
-              "confidence": 0.9997,
-              "probabilities": {
-                "HOLD_MISSING_CERT": 0.0002,
-                "SUPPRESS_CONTRADICTED_FACET": 0.9997,
-                "APPROVED_AUTO_PUBLISH": 0.0001
-              }
-            },
-            "hazmat_compliance_risk": {
-              "type": "score",
-              "value": 2.127,
-              "confidence": 0.8024,
-              "probabilities": {
-                "3": 0.1629,
-                "1": 0.0333,
-                "2": 0.8024,
-                "0": 0.0015
-              },
-              "legend": {
-                "0": "Level 0: Benign non-hazardous SKU with fully verified factual metadata.",
-                "3": "Level 3: High-capacity lithium-ion / air-freight hazmat or dangerous misrepresentation requiring strict block.",
-                "1": "Level 1: Minor fragile handling requirement or incomplete non-safety attribute.",
-                "2": "Level 2: Material misrepresentation or missing regional electrical/safety cert requiring publish hold."
-              }
-            },
-            "leaf_category": {
-              "type": "choice",
-              "value": "apparel_ethnic_kurtas",
-              "confidence": 0.9996,
-              "probabilities": {
-                "audio_bluetooth_speakers": 0.0001,
-                "home_ceramic_dinnerware": 0.0001,
-                "apparel_ethnic_kurtas": 0.9996,
-                "electronics_power_banks": 0.0001,
-                "kitchen_espresso_grinders": 0.0001
-              }
-            }
-          },
-          "endpoint": "v1beta/decisions",
-          "input_tokens_possibly_estimated": false
         }
       },
       "provenance": {
@@ -1232,6 +1113,29 @@
             "output_format": "free_text"
           }
         },
+        "sonnet_calibrated": {
+          "arm_id": "sonnet_schema",
+          "run_id": "sonnet_schema:sku-01:r0",
+          "repeat_index": 0,
+          "started_at": "2026-11-26T03:54:25.930757+00:00",
+          "settings_sha256": "57c3fd83f0e88f3359a8a11d6c43d763705f6ffec9def246195748b15b6e8087",
+          "system_prompt_sent_sha256": "77a7d7ce803bde7295fa554f10877c83ee2ee24208067f4754348a3db550937d",
+          "settings": {
+            "arm_id": "sonnet_schema",
+            "model_intended": "claude-sonnet-5-5",
+            "call_path": "anthropic_service.run_haiku_calibrated",
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "timeout_s": 60.0,
+            "max_retries": 0,
+            "system_prompt_sha256": "77a7d7ce803bde7295fa554f10877c83ee2ee24208067f4754348a3db550937d",
+            "output_format": "json_schema",
+            "schema_sha256": "c908e844a4472bab5b7e408350b87221be41c0b356669b1c7c6802614139270e",
+            "allow_tool_fallback": false
+          }
+        },
         "haiku_calibrated": {
           "arm_id": "haiku_schema",
           "run_id": "haiku_schema:sku-01:r0",
@@ -1253,22 +1157,6 @@
             "output_format": "json_schema",
             "schema_sha256": "c908e844a4472bab5b7e408350b87221be41c0b356669b1c7c6802614139270e",
             "allow_tool_fallback": false
-          }
-        },
-        "gemini_decision": {
-          "arm_id": "gemini_decision",
-          "run_id": "gemini_decision:sku-01:r0",
-          "repeat_index": 0,
-          "started_at": "2026-11-26T03:54:32.243966+00:00",
-          "settings_sha256": "e21bcaeb81f11509520224c94cbed0b01e721ba2b728a48e7eabd44f9fc48b05",
-          "system_prompt_sent_sha256": null,
-          "settings": {
-            "arm_id": "gemini_decision",
-            "model_intended": "gemini-decision-1",
-            "call_path": "gemini_decision_service.run_gemini_decision",
-            "questions_sha256": "a0c53aa3ad2cab7682e28888da2574030767e1d32a8b76bacc504785cf098047",
-            "timeouts": "app defaults (SDK; REST fallback 30 s)",
-            "max_retries": "app/SDK default"
           }
         }
       }
@@ -1396,6 +1284,38 @@
             "note": "Read by a model that was not under test and never saw the right answer; it reports what the response says (an allowed label, not_stated or ambiguous) with a verbatim quote."
           }
         },
+        "sonnet_calibrated": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 2355,
+          "input_tokens": 1861,
+          "output_tokens": 96,
+          "thinking_tokens": 0,
+          "stop_reason": "end_turn",
+          "truncated": false,
+          "max_tokens": 512,
+          "request_params": {
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "output_config": {
+              "format": {
+                "type": "json_schema"
+              }
+            }
+          },
+          "structured_output": {
+            "leaf_category": "electronics_power_banks",
+            "hazmat_class": "LITHIUM_ION_DECLARED",
+            "compliance_status": "HOLD_MISSING_CERT",
+            "contradiction_detected": true,
+            "primary_material_tag": "lithium_polymer_abs"
+          },
+          "raw_text_preview": "{\"leaf_category\":\"electronics_power_banks\",\"hazmat_class\":\"LITHIUM_ION_DECLARED\",\"compliance_status\":\"HOLD_MISSING_CERT\",\"contradiction_detected\":true,\"primary_material_tag\":\"lithium_polymer_abs\"}",
+          "decision_probabilities": null,
+          "schema_parse_ok": true
+        },
         "haiku_calibrated": {
           "model_id": "claude-haiku-5-5",
           "provider": "Anthropic",
@@ -1427,76 +1347,6 @@
           "raw_text_preview": "{\"leaf_category\": \"electronics_power_banks\", \"hazmat_class\": \"LITHIUM_ION_DECLARED\", \"compliance_status\": \"HOLD_MISSING_CERT\", \"contradiction_detected\": true, \"primary_material_tag\": \"lithium_polymer_abs\"}",
           "decision_probabilities": null,
           "schema_parse_ok": true
-        },
-        "gemini_decision": {
-          "model_id": "gemini-decision-1",
-          "provider": "Google Gemini Decisions API",
-          "latency_ms": 478,
-          "input_tokens": 1327,
-          "output_tokens": 0,
-          "thinking_tokens": 0,
-          "stop_reason": null,
-          "truncated": false,
-          "max_tokens": null,
-          "request_params": {
-            "api_version": "v1beta"
-          },
-          "structured_output": {
-            "compliance_status": "HOLD_MISSING_CERT",
-            "hazmat_compliance_risk": 2.943,
-            "leaf_category": "electronics_power_banks",
-            "has_factual_contradiction": true
-          },
-          "raw_text_preview": null,
-          "decision_probabilities": {
-            "compliance_status": {
-              "type": "choice",
-              "value": "HOLD_MISSING_CERT",
-              "confidence": 0.9335,
-              "probabilities": {
-                "HOLD_MISSING_CERT": 0.9335,
-                "APPROVED_AUTO_PUBLISH": 0.0027,
-                "SUPPRESS_CONTRADICTED_FACET": 0.0637
-              }
-            },
-            "hazmat_compliance_risk": {
-              "type": "score",
-              "value": 2.943,
-              "confidence": 0.9469,
-              "probabilities": {
-                "2": 0.0498,
-                "1": 0.0031,
-                "3": 0.9469,
-                "0": 0.0002
-              },
-              "legend": {
-                "3": "Level 3: High-capacity lithium-ion / air-freight hazmat or dangerous misrepresentation requiring strict block.",
-                "0": "Level 0: Benign non-hazardous SKU with fully verified factual metadata.",
-                "1": "Level 1: Minor fragile handling requirement or incomplete non-safety attribute.",
-                "2": "Level 2: Material misrepresentation or missing regional electrical/safety cert requiring publish hold."
-              }
-            },
-            "leaf_category": {
-              "type": "choice",
-              "value": "electronics_power_banks",
-              "confidence": 0.9999,
-              "probabilities": {
-                "audio_bluetooth_speakers": 0.0001,
-                "apparel_ethnic_kurtas": 0.0,
-                "kitchen_espresso_grinders": 0.0,
-                "electronics_power_banks": 0.9999,
-                "home_ceramic_dinnerware": 0.0
-              }
-            },
-            "has_factual_contradiction": {
-              "type": "noul",
-              "value": true,
-              "p_true": 0.5267,
-              "confidence": 0.5267
-            }
-          },
-          "endpoint": "v1beta/decisions",
-          "input_tokens_possibly_estimated": false
         }
       },
       "provenance": {
@@ -1542,6 +1392,29 @@
             "output_format": "free_text"
           }
         },
+        "sonnet_calibrated": {
+          "arm_id": "sonnet_schema",
+          "run_id": "sonnet_schema:sku-02:r0",
+          "repeat_index": 0,
+          "started_at": "2026-11-26T03:54:35.027811+00:00",
+          "settings_sha256": "57c3fd83f0e88f3359a8a11d6c43d763705f6ffec9def246195748b15b6e8087",
+          "system_prompt_sent_sha256": "77a7d7ce803bde7295fa554f10877c83ee2ee24208067f4754348a3db550937d",
+          "settings": {
+            "arm_id": "sonnet_schema",
+            "model_intended": "claude-sonnet-5-5",
+            "call_path": "anthropic_service.run_haiku_calibrated",
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "timeout_s": 60.0,
+            "max_retries": 0,
+            "system_prompt_sha256": "77a7d7ce803bde7295fa554f10877c83ee2ee24208067f4754348a3db550937d",
+            "output_format": "json_schema",
+            "schema_sha256": "c908e844a4472bab5b7e408350b87221be41c0b356669b1c7c6802614139270e",
+            "allow_tool_fallback": false
+          }
+        },
         "haiku_calibrated": {
           "arm_id": "haiku_schema",
           "run_id": "haiku_schema:sku-02:r0",
@@ -1563,22 +1436,6 @@
             "output_format": "json_schema",
             "schema_sha256": "c908e844a4472bab5b7e408350b87221be41c0b356669b1c7c6802614139270e",
             "allow_tool_fallback": false
-          }
-        },
-        "gemini_decision": {
-          "arm_id": "gemini_decision",
-          "run_id": "gemini_decision:sku-02:r0",
-          "repeat_index": 0,
-          "started_at": "2026-11-26T03:54:39.659960+00:00",
-          "settings_sha256": "e21bcaeb81f11509520224c94cbed0b01e721ba2b728a48e7eabd44f9fc48b05",
-          "system_prompt_sent_sha256": null,
-          "settings": {
-            "arm_id": "gemini_decision",
-            "model_intended": "gemini-decision-1",
-            "call_path": "gemini_decision_service.run_gemini_decision",
-            "questions_sha256": "a0c53aa3ad2cab7682e28888da2574030767e1d32a8b76bacc504785cf098047",
-            "timeouts": "app defaults (SDK; REST fallback 30 s)",
-            "max_retries": "app/SDK default"
           }
         }
       }
@@ -1706,6 +1563,38 @@
             "note": "Read by a model that was not under test and never saw the right answer; it reports what the response says (an allowed label, not_stated or ambiguous) with a verbatim quote."
           }
         },
+        "sonnet_calibrated": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 1695,
+          "input_tokens": 1915,
+          "output_tokens": 91,
+          "thinking_tokens": 0,
+          "stop_reason": "end_turn",
+          "truncated": false,
+          "max_tokens": 512,
+          "request_params": {
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "output_config": {
+              "format": {
+                "type": "json_schema"
+              }
+            }
+          },
+          "structured_output": {
+            "leaf_category": "kitchen_espresso_grinders",
+            "hazmat_class": "NONE",
+            "compliance_status": "APPROVED_AUTO_PUBLISH",
+            "contradiction_detected": false,
+            "primary_material_tag": "stainless_steel_burr"
+          },
+          "raw_text_preview": "{\"leaf_category\":\"kitchen_espresso_grinders\",\"hazmat_class\":\"NONE\",\"compliance_status\":\"APPROVED_AUTO_PUBLISH\",\"contradiction_detected\":false,\"primary_material_tag\":\"stainless_steel_burr\"}",
+          "decision_probabilities": null,
+          "schema_parse_ok": true
+        },
         "haiku_calibrated": {
           "model_id": "claude-haiku-5-5",
           "provider": "Anthropic",
@@ -1737,76 +1626,6 @@
           "raw_text_preview": "{\"leaf_category\":\"kitchen_espresso_grinders\",\"hazmat_class\":\"NONE\",\"compliance_status\":\"APPROVED_AUTO_PUBLISH\",\"contradiction_detected\":false,\"primary_material_tag\":\"stainless_steel_burr\"}",
           "decision_probabilities": null,
           "schema_parse_ok": true
-        },
-        "gemini_decision": {
-          "model_id": "gemini-decision-1",
-          "provider": "Google Gemini Decisions API",
-          "latency_ms": 335,
-          "input_tokens": 1343,
-          "output_tokens": 0,
-          "thinking_tokens": 0,
-          "stop_reason": null,
-          "truncated": false,
-          "max_tokens": null,
-          "request_params": {
-            "api_version": "v1beta"
-          },
-          "structured_output": {
-            "leaf_category": "kitchen_espresso_grinders",
-            "compliance_status": "APPROVED_AUTO_PUBLISH",
-            "has_factual_contradiction": false,
-            "hazmat_compliance_risk": 0.112
-          },
-          "raw_text_preview": null,
-          "decision_probabilities": {
-            "leaf_category": {
-              "type": "choice",
-              "value": "kitchen_espresso_grinders",
-              "confidence": 1.0,
-              "probabilities": {
-                "home_ceramic_dinnerware": 0.0,
-                "audio_bluetooth_speakers": 0.0,
-                "kitchen_espresso_grinders": 1.0,
-                "apparel_ethnic_kurtas": 0.0,
-                "electronics_power_banks": 0.0
-              }
-            },
-            "compliance_status": {
-              "type": "choice",
-              "value": "APPROVED_AUTO_PUBLISH",
-              "confidence": 0.9979,
-              "probabilities": {
-                "HOLD_MISSING_CERT": 0.0008,
-                "SUPPRESS_CONTRADICTED_FACET": 0.0013,
-                "APPROVED_AUTO_PUBLISH": 0.9979
-              }
-            },
-            "has_factual_contradiction": {
-              "type": "noul",
-              "value": false,
-              "p_true": 0.0161,
-              "confidence": 0.9839
-            },
-            "hazmat_compliance_risk": {
-              "type": "score",
-              "value": 0.112,
-              "confidence": 0.9022,
-              "probabilities": {
-                "1": 0.086,
-                "3": 0.0021,
-                "0": 0.9022,
-                "2": 0.0096
-              },
-              "legend": {
-                "2": "Level 2: Material misrepresentation or missing regional electrical/safety cert requiring publish hold.",
-                "0": "Level 0: Benign non-hazardous SKU with fully verified factual metadata.",
-                "3": "Level 3: High-capacity lithium-ion / air-freight hazmat or dangerous misrepresentation requiring strict block.",
-                "1": "Level 1: Minor fragile handling requirement or incomplete non-safety attribute."
-              }
-            }
-          },
-          "endpoint": "v1beta/decisions",
-          "input_tokens_possibly_estimated": false
         }
       },
       "provenance": {
@@ -1852,6 +1671,29 @@
             "output_format": "free_text"
           }
         },
+        "sonnet_calibrated": {
+          "arm_id": "sonnet_schema",
+          "run_id": "sonnet_schema:sku-03:r0",
+          "repeat_index": 0,
+          "started_at": "2026-11-26T03:54:40.874826+00:00",
+          "settings_sha256": "57c3fd83f0e88f3359a8a11d6c43d763705f6ffec9def246195748b15b6e8087",
+          "system_prompt_sent_sha256": "77a7d7ce803bde7295fa554f10877c83ee2ee24208067f4754348a3db550937d",
+          "settings": {
+            "arm_id": "sonnet_schema",
+            "model_intended": "claude-sonnet-5-5",
+            "call_path": "anthropic_service.run_haiku_calibrated",
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "timeout_s": 60.0,
+            "max_retries": 0,
+            "system_prompt_sha256": "77a7d7ce803bde7295fa554f10877c83ee2ee24208067f4754348a3db550937d",
+            "output_format": "json_schema",
+            "schema_sha256": "c908e844a4472bab5b7e408350b87221be41c0b356669b1c7c6802614139270e",
+            "allow_tool_fallback": false
+          }
+        },
         "haiku_calibrated": {
           "arm_id": "haiku_schema",
           "run_id": "haiku_schema:sku-03:r0",
@@ -1874,59 +1716,12 @@
             "schema_sha256": "c908e844a4472bab5b7e408350b87221be41c0b356669b1c7c6802614139270e",
             "allow_tool_fallback": false
           }
-        },
-        "gemini_decision": {
-          "arm_id": "gemini_decision",
-          "run_id": "gemini_decision:sku-03:r0",
-          "repeat_index": 0,
-          "started_at": "2026-11-26T03:54:45.106503+00:00",
-          "settings_sha256": "e21bcaeb81f11509520224c94cbed0b01e721ba2b728a48e7eabd44f9fc48b05",
-          "system_prompt_sent_sha256": null,
-          "settings": {
-            "arm_id": "gemini_decision",
-            "model_intended": "gemini-decision-1",
-            "call_path": "gemini_decision_service.run_gemini_decision",
-            "questions_sha256": "a0c53aa3ad2cab7682e28888da2574030767e1d32a8b76bacc504785cf098047",
-            "timeouts": "app defaults (SDK; REST fallback 30 s)",
-            "max_retries": "app/SDK default"
-          }
         }
       }
     }
   },
   "batch_items": {
     "tkt-04": {
-      "input_tokens": 934,
-      "haiku_output_tokens": 89,
-      "haiku_latency_ms": 1202,
-      "haiku_decision": {
-        "queue": "shipping_logistics",
-        "priority": "P2_MEDIUM",
-        "contains_pii": true,
-        "pii_categories": [
-          "EMAIL",
-          "PHONE"
-        ],
-        "auto_action": "route_specialist",
-        "reason_code": "DELIVERY_DELAY"
-      },
-      "gemini_decision": {
-        "contains_sensitive_pii": true,
-        "auto_action": "route_specialist",
-        "severity": 1.049,
-        "queue": "shipping_logistics"
-      },
-      "gemini_input_tokens": 642,
-      "gemini_latency_ms": 508,
-      "gemini_confidence": 0.864,
-      "sonnet_raw_text": "# Escalation Analysis: NM-CS-2026-885102\n\n## 1. Executive Summary\n\nCustomer Rahul Verma placed order NM-ORD-99301122 (Ergonomic Mesh Office Chair, $279.00). The shipment has been stuck in \"LABEL CREATED - AWAITING CARRIER PICKUP\" status at fulfillment node FBO-DAL-02 for 5 consecutive business days, meaning a shipping label was generated but no carrier has scanned the package into their network.\n\n**Key facts:**\n- No physical damage reported\n- No account security concern (no unauthorized login)\n- The customer is requesting two specific deliverables: (a) a carrier dock scan trace and (b) an updated ETA before Friday\n- The request is specific, reasonable, and time-bound, which signals a customer who is frustrated but still constructive\n\n**Likely root cause (hypothesis, not confirmed):** A label-created status persisting 5 business days typically indicates the package was never physically handed to the carrier, was staged but missed pickup, or the carrier scan failed to sync. This points to a node-level handoff failure at FBO-DAL-02 rather than a transit delay.\n\n## 2. Routing Recommendation\n\n**Recommended queue:** Fulfillment Operations / Carrier Exceptions (FBO-DAL-02 node escalation), with Customer Care retaining ownership of customer communication.\n\n**Recommended priority:** P2 (High)\n\n**Step-by-step reasoning:**\n\n1. **Issue type:** This is a logistics/handoff exception, not a billing, product quality, or account issue. Customer Care alone cannot resolve it because only the fulfillment node and carrier can confirm physical package location.\n2. **Duration:** 5 business days with no carrier scan exceeds a normal pickup window by a wide margin. This is an anomaly, not normal latency.\n3. **Package-at-risk indicator:** A package that has never been scanned into carrier custody may be misplaced, mis-staged, or sitting unprocessed. Each additional day increases the risk of a failed delivery promise.\n4. **Customer deadline:** The customer stated a Friday cutoff. This creates a hard SLA-like window that elevates urgency above routine \"where is my order\" inquiries.\n5. **Why not P1:** No safety issue, no damage, no security risk, no evidence of a systemic outage, and the order value ($279.00) is moderate. P1 should be reserved for those conditions.\n6. **Escalation trigger to P1:** If other orders from FBO-DAL-02 show the same stall pattern, reclassify as a node-wide incident and escalate immediately.\n\n## 3. PII Audit\n\n| # | Element | Location in Thread | Type | Sensitivity |\n|---|---------|--------------------|------|-------------|\n| 1 | Rahul Verma | customer field | Full name | Direct identifier |\n| 2 | rahul.v@demo.example | customer field | Email address | Direct identifier |\n| 3 | 408-555-0122 | customer field | Phone number | Direct identifier |\n| 4 | NM-ORD-99301122 | body | Order number | Indirect identifier (links to customer account and purchase history) |\n| 5 | NM-CS-2026-885102 | header | Ticket ID | Internal reference (low risk, but linkable) |\n\n**Elements checked and not found:** No physical address, payment card data, government ID, date of birth, account password, or login credentials appear in this thread.\n\n**Notes:**\n- The email domain (demo.example) and phone prefix (555-01xx) appear to be reserved/test-style values. If this is a live ticket, treat all fields as real PII regardless.\n- The order number is not PII in isolation, but combined with name and contact data it creates a re-identifiable record.\n\n**Redacted summary (safe for broader sharing, e.g., carrier or node teams):**\n\n> Customer [REDACTED-NAME] (contact details on file) reports order [ORDER-REF-ON-FILE] for an Ergonomic Mesh Office Chair ($279.00) has shown \"LABEL CREATED - AWAITING CARRIER PICKUP\" at node FBO-DAL-02 for 5 consecutive business days. No damage reported; no account security concerns. Customer requests a carrier dock scan trace and updated ETA by Friday.\n\n**Data-handling guidance:** When contacting FBO-DAL-02 or the carrier, share only the order/tracking reference and package details. They do not need the customer's name, email, or phone to perform a trace.\n\n## 4. Suggested Next Steps and Agent Talking Points\n\n### Recommended actions\n\n1. **Immediate (today):** Open a carrier exception / node inquiry with FBO-DAL-02 requesting physical confirmation that the package is on-site, staged, and its current location.\n2. **Request carrier trace:** Ask the carrier for dock scan history and confirm whether a pickup was ever scheduled or attempted for this label.\n3. **Check for pattern:** Query other orders at FBO-DAL-02 with the same status and age to rule out a node-wide pickup failure.\n4. **Decision point (within 24 hours):** If the package is located, get it handed to the carrier with a firm scan and a realistic ETA. If it cannot be located or confirmed, initiate a replacement shipment from an alternate node or a refund, and give the customer the choice.\n5. **Set expectations honestly:** Do not promise a Friday delivery until the carrier confirms custody. Promise a status update by a specific time instead.\n6. **Follow up proactively:** Contact the customer once the trace result is in, even if the news is incomplete.\n7. **Close the loop:** Document root cause and flag the label-to-pickup gap for process review.\n\n### Draft empathy talking points\n\n**Opening:**\n> \"Thank you for your patience, Mr. Verma. I can see your chair has been showing as awaiting pickup for five business days, and I understand how frustrating that is when you're expecting a delivery. That's longer than it should be, and I'm going to work on it right now.\"\n\n**Acknowledging his request:**\n> \"You asked for a carrier scan trace and an updated delivery estimate before Friday. That's a fair request. I've escalated this to our fulfillment team to physically confirm where your package is, and I'm requesting the carrier's scan history.\"\n\n**Setting honest expectations:**\n> \"I don't want to give you a delivery date I can't stand behind. Right now the package hasn't been scanned by the carrier, so the most accurate thing I can tell you is that I'll have a confirmed update for you by [specific time/date].\"\n\n**Offering a safety net:**\n> \"If we can't confirm your package is moving soon, I'll make sure you have options, including a replacement shipment or a refund, so you're not left waiting.\"\n\n**Closing:**\n> \"I'll personally follow up with you as soon as I hear back. Is this the best way to reach you?\"\n\n**Avoid:** Blaming the carrier before confirming facts, promising a Friday delivery without carrier confirmation, or asking the customer to re-provide information already on the ticket.\n\n**Summary:** P2 fulfillment/carrier exception, likely a handoff failure at FBO-DAL-02. Five PII elements identified. Next move is a node-level physical check and carrier trace, with an honest status commitment to the customer before Friday.",
-      "sonnet_input_tokens": 336,
-      "sonnet_output_tokens": 2456,
-      "sonnet_latency_ms": 19752,
-      "haiku_naive_raw_text": "**(1) Executive Summary**\n\nTicket NM-CS-2026-885102 concerns order NM-ORD-99301122 (Ergonomic Mesh Office Chair, $279.00). The package has remained at status \"LABEL CREATED - AWAITING CARRIER PICKUP\" at fulfillment node FBO-DAL-02 for five consecutive business days, indicating a stalled handoff to the carrier rather than a transit or delivery failure. The customer has not reported damage or account compromise. He requests a carrier dock scan trace and an updated ETA before Friday. The core risk is a fulfillment-to-carrier handoff failure that may be affecting other orders at the same node, so the issue should be checked beyond this single ticket.\n\n**(2) Routing and Priority**\n\nRecommended queue: Fulfillment Exceptions / Carrier Escalations (with Customer Care as the customer-facing owner).\nRecommended priority: P2 (High).\n\nReasoning:\n- Step 1: Order status has been stalled for five business days, which exceeds the typical pickup window and is a clear exception, not a normal delay.\n- Step 2: The stall is at a fulfillment node (FBO-DAL-02), so the root cause is likely operational (label not scanned, manifest error, dock staging issue), not a customer-side problem. That points to the fulfillment exceptions team.\n- Step 3: The customer has a concrete deadline (Friday) and has requested a specific artifact (dock scan trace), which requires carrier-side data. This needs a carrier liaison.\n- Step 4: No damage, no security issue, and a single order value of $279 keep it from P1. However, a five-day node-level stall could affect multiple orders, which justifies P2 rather than P3.\n- Step 5: Recommend a node-level check of FBO-DAL-02 for other orders stuck in the same status.\n\n**(3) PII Audit**\n\nElements found in the thread:\n1. Customer full name: \"Rahul Verma\"\n2. Email address: rahul.v@demo.example\n3. Phone number: 408-555-0122\n4. Order number: NM-ORD-99301122 (linked to customer account; treat as identifying)\n5. Ticket ID: NM-CS-2026-885102 (internal identifier; low sensitivity but linked to PII)\n\nNot present: payment card data, address, government ID, account password, or login details. The \"no unauthorized login\" statement references account security but contains no credentials.\n\nRedacted summary for shared/non-PII-cleared channels:\n\"Customer [REDACTED] reports order [ORDER-ID REDACTED] (ergonomic office chair, $279.00) stalled at 'Label Created – Awaiting Carrier Pickup' at fulfillment node FBO-DAL-02 for five business days. No damage or account security concerns. Customer requests carrier dock scan trace and updated ETA by Friday.\"\n\n**(4) Next Steps and Agent Talking Points**\n\nSuggested next steps:\n1. Verify the order's status and label in the fulfillment system; confirm the label's carrier and tracking number.\n2. Query carrier systems for dock scan history and any exception codes for the tracking number.\n3. Check FBO-DAL-02 for other orders in the same stalled status to identify a node-level issue.\n4. Set an internal target to provide the customer with a confirmed ETA or a clear next-step update by Thursday, ahead of his Friday deadline.\n5. If the carrier cannot produce a scan trace, offer a replacement shipment or refund per policy, and document the decision.\n6. Log the outcome and any node-level findings in the ticket.\n\nDraft empathy talking points:\n- \"Mr. Verma, I'm sorry your chair has been sitting at our facility for five days instead of moving toward you. That's not the experience we want you to have.\"\n- \"I understand you need a firm answer before Friday, and I'm working on getting you the carrier scan history and a confirmed delivery estimate.\"\n- \"I've flagged this for our fulfillment team, and I'm checking whether anything else is affected so this is resolved properly.\"\n- \"I'll update you by [specific time/date] whether or not the package has moved, so you're never left guessing.\"\n- Avoid promising a specific delivery date until the carrier confirms pickup status.",
-      "haiku_naive_input_tokens": 336,
-      "haiku_naive_output_tokens": 1420,
-      "haiku_naive_latency_ms": 7658,
       "sub_task": "support_triage",
       "rungs": {
         "sonnet_naive": {
@@ -2049,6 +1844,42 @@
             "note": "Read by a model that was not under test and never saw the right answer; it reports what the response says (an allowed label, not_stated or ambiguous) with a verbatim quote."
           }
         },
+        "sonnet_calibrated": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 1668,
+          "input_tokens": 934,
+          "output_tokens": 89,
+          "thinking_tokens": 0,
+          "stop_reason": "end_turn",
+          "truncated": false,
+          "max_tokens": 512,
+          "request_params": {
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "output_config": {
+              "format": {
+                "type": "json_schema"
+              }
+            }
+          },
+          "structured_output": {
+            "queue": "shipping_logistics",
+            "priority": "P2_MEDIUM",
+            "contains_pii": true,
+            "pii_categories": [
+              "EMAIL",
+              "PHONE"
+            ],
+            "auto_action": "route_specialist",
+            "reason_code": "DELIVERY_DELAY"
+          },
+          "raw_text_preview": "{\"queue\":\"shipping_logistics\",\"priority\":\"P2_MEDIUM\",\"contains_pii\":true,\"pii_categories\":[\"EMAIL\",\"PHONE\"],\"auto_action\":\"route_specialist\",\"reason_code\":\"DELIVERY_DELAY\"}",
+          "decision_probabilities": null,
+          "schema_parse_ok": true
+        },
         "haiku_calibrated": {
           "model_id": "claude-haiku-5-5",
           "provider": "Anthropic",
@@ -2084,77 +1915,6 @@
           "raw_text_preview": "{\"queue\":\"shipping_logistics\",\"priority\":\"P2_MEDIUM\",\"contains_pii\":true,\"pii_categories\":[\"EMAIL\",\"PHONE\"],\"auto_action\":\"route_specialist\",\"reason_code\":\"DELIVERY_DELAY\"}",
           "decision_probabilities": null,
           "schema_parse_ok": true
-        },
-        "gemini_decision": {
-          "model_id": "gemini-decision-1",
-          "provider": "Google Gemini Decisions API",
-          "latency_ms": 508,
-          "input_tokens": 642,
-          "output_tokens": 0,
-          "thinking_tokens": 0,
-          "stop_reason": null,
-          "truncated": false,
-          "max_tokens": null,
-          "request_params": {
-            "api_version": "v1beta"
-          },
-          "structured_output": {
-            "contains_sensitive_pii": true,
-            "auto_action": "route_specialist",
-            "severity": 1.049,
-            "queue": "shipping_logistics"
-          },
-          "raw_text_preview": null,
-          "decision_probabilities": {
-            "contains_sensitive_pii": {
-              "type": "noul",
-              "value": true,
-              "p_true": 0.832,
-              "confidence": 0.832
-            },
-            "auto_action": {
-              "type": "choice",
-              "value": "route_specialist",
-              "confidence": 0.8478,
-              "probabilities": {
-                "route_specialist": 0.8478,
-                "auto_replace": 0.1028,
-                "escalate_security": 0.015,
-                "hold_and_audit": 0.0344
-              }
-            },
-            "severity": {
-              "type": "score",
-              "value": 1.049,
-              "confidence": 0.7754,
-              "probabilities": {
-                "1": 0.7754,
-                "2": 0.1192,
-                "3": 0.0116,
-                "0": 0.0938
-              },
-              "legend": {
-                "2": "P1 High: Broken merchandise, legal/regulatory threat, or blocked seller payout.",
-                "1": "P2 Medium: Standard delivery or billing delay, normal SLA handling.",
-                "3": "P0 Critical: Active account takeover, fraud drain, or immediate financial/security loss.",
-                "0": "P3 Low: Routine inquiry, zero financial loss, no compliance or safety exposure."
-              }
-            },
-            "queue": {
-              "type": "choice",
-              "value": "shipping_logistics",
-              "confidence": 0.9992,
-              "probabilities": {
-                "billing_payouts": 0.0,
-                "general_support": 0.0002,
-                "shipping_logistics": 0.9992,
-                "trust_and_safety": 0.0002,
-                "replacements": 0.0003
-              }
-            }
-          },
-          "endpoint": "v1beta/decisions",
-          "input_tokens_possibly_estimated": false
         }
       },
       "provenance": {
@@ -2200,6 +1960,29 @@
             "output_format": "free_text"
           }
         },
+        "sonnet_calibrated": {
+          "arm_id": "sonnet_schema",
+          "run_id": "sonnet_schema:tkt-04:r0",
+          "repeat_index": 0,
+          "started_at": "2026-11-26T03:54:52.411126+00:00",
+          "settings_sha256": "b11e0909e683ab1c93d202574f172832d01dc443b2630a0a5ccd4812abcc756b",
+          "system_prompt_sent_sha256": "f917f73012308baf2b81294fac9484dcc530f3cda76da7675c1caee4b6b5e76f",
+          "settings": {
+            "arm_id": "sonnet_schema",
+            "model_intended": "claude-sonnet-5-5",
+            "call_path": "anthropic_service.run_haiku_calibrated",
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "timeout_s": 60.0,
+            "max_retries": 0,
+            "system_prompt_sha256": "f917f73012308baf2b81294fac9484dcc530f3cda76da7675c1caee4b6b5e76f",
+            "output_format": "json_schema",
+            "schema_sha256": "16744b276ba8964feb21f5c1ec394eea3c5aec7476c10f6125ea2763ff580b6c",
+            "allow_tool_fallback": false
+          }
+        },
         "haiku_calibrated": {
           "arm_id": "haiku_schema",
           "run_id": "haiku_schema:tkt-04:r0",
@@ -2222,56 +2005,10 @@
             "schema_sha256": "16744b276ba8964feb21f5c1ec394eea3c5aec7476c10f6125ea2763ff580b6c",
             "allow_tool_fallback": false
           }
-        },
-        "gemini_decision": {
-          "arm_id": "gemini_decision",
-          "run_id": "gemini_decision:tkt-04:r0",
-          "repeat_index": 0,
-          "started_at": "2026-11-26T03:54:55.157321+00:00",
-          "settings_sha256": "70715fca44b17f6f54d71c71aa4bf8ae6aa8888958dcf8d59c4e27185dd380ee",
-          "system_prompt_sent_sha256": null,
-          "settings": {
-            "arm_id": "gemini_decision",
-            "model_intended": "gemini-decision-1",
-            "call_path": "gemini_decision_service.run_gemini_decision",
-            "questions_sha256": "7d34c1fd07bc10aef2ed51e9d4f235c98eda3791f9946d6464c7e6672f564c52",
-            "timeouts": "app defaults (SDK; REST fallback 30 s)",
-            "max_retries": "app/SDK default"
-          }
         }
       }
     },
     "tkt-05": {
-      "input_tokens": 881,
-      "haiku_output_tokens": 83,
-      "haiku_latency_ms": 1450,
-      "haiku_decision": {
-        "queue": "billing_payouts",
-        "priority": "P2_MEDIUM",
-        "contains_pii": true,
-        "pii_categories": [
-          "EMAIL"
-        ],
-        "auto_action": "route_specialist",
-        "reason_code": "POLICY_INQUIRY"
-      },
-      "gemini_decision": {
-        "queue": "billing_payouts",
-        "contains_sensitive_pii": false,
-        "auto_action": "route_specialist",
-        "severity": 1.192
-      },
-      "gemini_input_tokens": 607,
-      "gemini_latency_ms": 646,
-      "gemini_confidence": 0.868,
-      "sonnet_raw_text": "NovaMart Enterprise Operations: Escalation Analysis\n\nTicket: NM-CS-2026-885319 | Order: NM-ORD-99100441\n\n---\n\n1. Executive Summary\n\nNovaCorp Procurement was billed $3,420.00 on a corporate account order without the tax-exempt treatment their uploaded certificate (EX-99120) should have triggered. Their accounting team is requesting a credit memo and a corrected invoice in the current billing cycle.\n\nThis is most likely a tax-exemption application failure, not a pricing dispute. The likely root causes to confirm:\n- The certificate was uploaded but never validated or linked to the account\n- The certificate was linked but not applied to this order or ship-to jurisdiction\n- The certificate is expired, incomplete, or doesn't cover the relevant state\n\nThe customer's ask is specific and reasonable, and the billing-cycle deadline makes this time-sensitive.\n\n---\n\n2. Routing and Priority\n\nRecommended queue: Enterprise Billing / Tax Compliance. Secondary: Account Management, for awareness only.\n\nRecommended priority: High (not Critical).\n\nReasoning:\n1. Issue type: Tax-exemption misapplication is a billing and tax compliance matter, which belongs with the team that can inspect certificate status and issue credit memos. Tier 1 can't resolve it.\n2. Customer segment: This is a corporate procurement account, so the relationship value and contractual billing expectations are higher than for consumer tickets.\n3. Financial exposure: The amount in question is $3,420.00 in tax. The invoice total isn't specified, so the actual tax overcharge may be smaller. Either way it's material for AP reconciliation.\n4. Time constraint: The customer wants the correction in the current billing cycle. Missing it creates reconciliation problems on their side and likely a second round of contact.\n5. Why not Critical: No service outage, no data exposure, no legal deadline stated, and a clear remediation path exists.\n\nSuggested internal SLA: First response within 4 business hours, resolution (credit memo issued) before the current cycle closes.\n\n---\n\n3. PII and Sensitive Data Audit\n\nElements found:\n\n| Element | Value in ticket | Classification | Action |\n|---|---|---|---|\n| Business email | ap@novacorp-demo.example | Business contact (role-based mailbox) | Low sensitivity. Retain in the ticket header, mask in broader summaries. |\n| Company name | NovaCorp Procurement | Business entity | Not personal data. No redaction needed. |\n| Tax-exempt certificate ID | EX-99120 | Tax compliance identifier | Moderate sensitivity. Treat as a confidential account document reference. Don't paste into public or cross-team channels, and reference by ID only. |\n| Order number | NM-ORD-99100441 | Internal transaction ID | Not PII. Retain. |\n| Ticket ID | NM-CS-2026-885319 | Internal identifier | Not PII. Retain. |\n| Dollar amount | $3,420.00 | Financial transaction data | Business-confidential, not PII. Retain. |\n\nNot present: No named individuals, phone numbers, physical addresses, payment card data, bank details, or government IDs (such as a tax ID/EIN). Note that the certificate document itself likely contains an EIN or state tax ID, so the agent should not copy its contents into the ticket.\n\nCleaned/redacted summary (safe for broad internal sharing):\n\n> Corporate buyer (a***@novacorp-demo.example) reports Order NM-ORD-99100441 ($3,420.00) was billed without applying an uploaded tax-exempt certificate [cert ID on file]. Accounting requests a credit memo reissue and invoice adjustment in the current billing cycle.\n\nHandling note: Ask the customer not to send certificate images or tax IDs via plain email. Use the secure document portal.\n\n---\n\n4. Suggested Next Steps\n\nImmediate (agent / Billing team):\n1. Verify certificate status for EX-99120: confirm it's on file, validated, not expired, and covers the ship-to state(s).\n2. Check account linkage: confirm the certificate is attached to the corporate billing entity and not just the uploader's user profile.\n3. Review order tax calculation for NM-ORD-99100441 to determine whether exemption logic failed or was never triggered.\n4. Determine overcharge amount: isolate the tax line from the $3,420.00 total, since the credit memo should cover only the erroneously charged tax.\n5. Issue the credit memo and a corrected invoice, and confirm they land in the current cycle.\n6. Check for related orders: look for other recent NovaCorp orders billed without exemption, and offer a proactive correction if found.\n\nPreventive:\n7. Flag the root cause (validation gap vs. linkage vs. calculation bug) to the Tax Engine team if it appears systemic.\n\nCustomer communication:\n8. Send an acknowledgment promptly with a committed timeline for the credit memo.\n9. Confirm the corrected documents once issued.\n\n---\n\nDraft Empathy Talking Points\n\nOpening:\n> \"Thank you for flagging this. I understand your accounting team needs this corrected within the current billing cycle, and I want to make sure that happens.\"\n\nAcknowledging the error:\n> \"You uploaded your tax-exempt certificate, so tax shouldn't have been applied to this order. I'm sorry for the extra reconciliation work this has caused your team.\"\n\nSetting expectations:\n> \"I've escalated this to our Billing and Tax Compliance team, who can verify the certificate and issue the credit memo. You can expect an update from us by [time], and I'll confirm once the corrected invoice is issued.\"\n\nClosing:\n> \"I'll also check your recent orders to make sure the exemption was applied consistently, so you don't have to raise this again. Is there anything else your accounting team needs from us for their records?\"\n\nTone guidance: Be direct and accountable, with no deflection or blame on the customer's upload process. This is an AP-professional audience, so lead with specifics (order number, timeline, deliverable) rather than extended apologies.",
-      "sonnet_input_tokens": 283,
-      "sonnet_output_tokens": 2049,
-      "sonnet_latency_ms": 16278,
-      "haiku_naive_raw_text": "**(1) Executive Summary**\n\nNovaCorp Procurement (corporate buyer account) reports that Order NM-ORD-99100441 ($3,420.00) was billed without applying their uploaded tax-exempt certificate (EX-99120). They request a credit memo reissue and invoice adjustment within the current billing cycle. The issue is a tax-exemption billing error on a corporate account, with a clear, time-bound financial request. Likely root causes to verify: the certificate was uploaded but not linked to the account or order, its status is pending or expired, or the tax engine did not pick up the exemption at checkout.\n\n**(2) Routing and Priority**\n\nRecommended queue: Billing & Tax Adjustments (Enterprise Accounts), with a secondary notification to Tax Compliance for certificate validation.\n\nRecommended priority: P2 (High). Reasoning:\n- Financial impact is material ($3,420.00) and the customer is an enterprise account, so it is not low priority.\n- The customer has a deadline (current billing cycle), which raises urgency beyond a standard P3.\n- It is not P1: no outage, no data exposure, no fraud or security signal, and the root cause is a billing configuration or validation issue with a known remedy.\n- Escalate to P1 if the billing cycle closes within 24 hours or if the certificate verification reveals a systemic tax-engine defect affecting other orders.\n\nNext actions for the queue: confirm certificate EX-99120 status and validity, confirm whether the exemption was linked to the account at order time, and check for other orders on this account since the upload date.\n\n**(3) PII Audit and Redaction**\n\nPII elements identified in the thread:\n1. Email address: ap@novacorp-demo.example (buyer contact, accounts payable mailbox). Personal-identifying in context. Treat as PII.\n2. Buyer organization name: NovaCorp Procurement. Business name, not personal PII, but tied to a named contact channel. Retain for routing; not sensitive.\n3. Order number: NM-ORD-99100441. Transaction identifier, linkable to the customer account. Treat as confidential business data.\n4. Tax-exempt certificate number: EX-99120. Sensitive. Exemption identifiers can be used to claim tax benefits and should be restricted to Tax Compliance and Billing.\n5. Ticket ID: NM-CS-2026-885319. Internal identifier, not PII.\n6. Transaction amount: $3,420.00. Financial data, confidential, not personal.\n\nRedacted summary for broad circulation:\n\"Enterprise buyer [ACCOUNT-REDACTED] reports order [ORDER-REDACTED] (amount [AMOUNT-REDACTED]) was billed without applying a valid tax-exemption certificate [CERT-REDACTED]. Requesting credit memo reissue and invoice adjustment this billing cycle.\"\n\nHandling note: keep the unredacted contact email and certificate number within the ticket system only. Do not paste them into chat channels, external emails, or general reporting.\n\n**(4) Next Steps and Agent Talking Points**\n\nNext steps:\n1. Verify certificate EX-99120: validity, expiration, jurisdiction, and whether it was approved.\n2. Check the account record to confirm the certificate is linked and active, and identify the failure point (upload, approval, or checkout application).\n3. Pull the order's tax calculation log to see why exemption was not applied.\n4. Coordinate with Billing to prepare the credit memo and invoice adjustment, confirming the amount ($3,420.00 or the verified tax portion only, depending on what was actually overcharged).\n5. Confirm the adjustment will post within the current billing cycle and get a target date.\n6. Scan other orders on the account since the certificate upload for the same error.\n7. Send the customer a written confirmation with the adjustment timeline.\n8. Log root cause and, if systemic, open an engineering defect.\n\nDraft empathy talking points for the agent:\n- \"Thank you for flagging this and for uploading your certificate promptly. I understand this affects your accounts payable close, and I'm treating it as a priority.\"\n- \"You're right that the exemption should have been applied. I'm sorry for the extra work this has created for your team.\"\n- \"I've started the verification on the certificate and the order, and I'm working with our billing team to issue the credit memo and adjustment within your current cycle.\"\n- \"I'll send you a written update with the adjustment reference and expected posting date as soon as it's confirmed.\"\n- Avoid promising a specific amount until the tax portion is verified, and avoid speculating about the cause before the logs are reviewed.",
-      "haiku_naive_input_tokens": 283,
-      "haiku_naive_output_tokens": 1539,
-      "haiku_naive_latency_ms": 8264,
       "sub_task": "support_triage",
       "rungs": {
         "sonnet_naive": {
@@ -2394,6 +2131,41 @@
             "note": "Read by a model that was not under test and never saw the right answer; it reports what the response says (an allowed label, not_stated or ambiguous) with a verbatim quote."
           }
         },
+        "sonnet_calibrated": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 1293,
+          "input_tokens": 881,
+          "output_tokens": 83,
+          "thinking_tokens": 0,
+          "stop_reason": "end_turn",
+          "truncated": false,
+          "max_tokens": 512,
+          "request_params": {
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "output_config": {
+              "format": {
+                "type": "json_schema"
+              }
+            }
+          },
+          "structured_output": {
+            "queue": "billing_payouts",
+            "priority": "P2_MEDIUM",
+            "contains_pii": true,
+            "pii_categories": [
+              "EMAIL"
+            ],
+            "auto_action": "route_specialist",
+            "reason_code": "POLICY_INQUIRY"
+          },
+          "raw_text_preview": "{\"queue\":\"billing_payouts\",\"priority\":\"P2_MEDIUM\",\"contains_pii\":true,\"pii_categories\":[\"EMAIL\"],\"auto_action\":\"route_specialist\",\"reason_code\":\"POLICY_INQUIRY\"}",
+          "decision_probabilities": null,
+          "schema_parse_ok": true
+        },
         "haiku_calibrated": {
           "model_id": "claude-haiku-5-5",
           "provider": "Anthropic",
@@ -2428,77 +2200,6 @@
           "raw_text_preview": "{\"queue\":\"billing_payouts\",\"priority\":\"P2_MEDIUM\",\"contains_pii\":true,\"pii_categories\":[\"EMAIL\"],\"auto_action\":\"route_specialist\",\"reason_code\":\"POLICY_INQUIRY\"}",
           "decision_probabilities": null,
           "schema_parse_ok": true
-        },
-        "gemini_decision": {
-          "model_id": "gemini-decision-1",
-          "provider": "Google Gemini Decisions API",
-          "latency_ms": 646,
-          "input_tokens": 607,
-          "output_tokens": 0,
-          "thinking_tokens": 0,
-          "stop_reason": null,
-          "truncated": false,
-          "max_tokens": null,
-          "request_params": {
-            "api_version": "v1beta"
-          },
-          "structured_output": {
-            "queue": "billing_payouts",
-            "contains_sensitive_pii": false,
-            "auto_action": "route_specialist",
-            "severity": 1.192
-          },
-          "raw_text_preview": null,
-          "decision_probabilities": {
-            "queue": {
-              "type": "choice",
-              "value": "billing_payouts",
-              "confidence": 0.9958,
-              "probabilities": {
-                "trust_and_safety": 0.0016,
-                "replacements": 0.0007,
-                "billing_payouts": 0.9958,
-                "shipping_logistics": 0.0002,
-                "general_support": 0.0016
-              }
-            },
-            "contains_sensitive_pii": {
-              "type": "noul",
-              "value": false,
-              "p_true": 0.0391,
-              "confidence": 0.9609
-            },
-            "auto_action": {
-              "type": "choice",
-              "value": "route_specialist",
-              "confidence": 0.8473,
-              "probabilities": {
-                "route_specialist": 0.8473,
-                "escalate_security": 0.013,
-                "auto_replace": 0.0089,
-                "hold_and_audit": 0.1308
-              }
-            },
-            "severity": {
-              "type": "score",
-              "value": 1.192,
-              "confidence": 0.6691,
-              "probabilities": {
-                "1": 0.6691,
-                "0": 0.0848,
-                "3": 0.0308,
-                "2": 0.2152
-              },
-              "legend": {
-                "0": "P3 Low: Routine inquiry, zero financial loss, no compliance or safety exposure.",
-                "2": "P1 High: Broken merchandise, legal/regulatory threat, or blocked seller payout.",
-                "1": "P2 Medium: Standard delivery or billing delay, normal SLA handling.",
-                "3": "P0 Critical: Active account takeover, fraud drain, or immediate financial/security loss."
-              }
-            }
-          },
-          "endpoint": "v1beta/decisions",
-          "input_tokens_possibly_estimated": false
         }
       },
       "provenance": {
@@ -2544,6 +2245,29 @@
             "output_format": "free_text"
           }
         },
+        "sonnet_calibrated": {
+          "arm_id": "sonnet_schema",
+          "run_id": "sonnet_schema:tkt-05:r0",
+          "repeat_index": 0,
+          "started_at": "2026-11-26T03:54:57.332829+00:00",
+          "settings_sha256": "b11e0909e683ab1c93d202574f172832d01dc443b2630a0a5ccd4812abcc756b",
+          "system_prompt_sent_sha256": "f917f73012308baf2b81294fac9484dcc530f3cda76da7675c1caee4b6b5e76f",
+          "settings": {
+            "arm_id": "sonnet_schema",
+            "model_intended": "claude-sonnet-5-5",
+            "call_path": "anthropic_service.run_haiku_calibrated",
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "timeout_s": 60.0,
+            "max_retries": 0,
+            "system_prompt_sha256": "f917f73012308baf2b81294fac9484dcc530f3cda76da7675c1caee4b6b5e76f",
+            "output_format": "json_schema",
+            "schema_sha256": "16744b276ba8964feb21f5c1ec394eea3c5aec7476c10f6125ea2763ff580b6c",
+            "allow_tool_fallback": false
+          }
+        },
         "haiku_calibrated": {
           "arm_id": "haiku_schema",
           "run_id": "haiku_schema:tkt-05:r0",
@@ -2566,54 +2290,10 @@
             "schema_sha256": "16744b276ba8964feb21f5c1ec394eea3c5aec7476c10f6125ea2763ff580b6c",
             "allow_tool_fallback": false
           }
-        },
-        "gemini_decision": {
-          "arm_id": "gemini_decision",
-          "run_id": "gemini_decision:tkt-05:r0",
-          "repeat_index": 0,
-          "started_at": "2026-11-26T03:55:01.321147+00:00",
-          "settings_sha256": "70715fca44b17f6f54d71c71aa4bf8ae6aa8888958dcf8d59c4e27185dd380ee",
-          "system_prompt_sent_sha256": null,
-          "settings": {
-            "arm_id": "gemini_decision",
-            "model_intended": "gemini-decision-1",
-            "call_path": "gemini_decision_service.run_gemini_decision",
-            "questions_sha256": "7d34c1fd07bc10aef2ed51e9d4f235c98eda3791f9946d6464c7e6672f564c52",
-            "timeouts": "app defaults (SDK; REST fallback 30 s)",
-            "max_retries": "app/SDK default"
-          }
         }
       }
     },
     "tkt-06": {
-      "input_tokens": 859,
-      "haiku_output_tokens": 71,
-      "haiku_latency_ms": 1408,
-      "haiku_decision": {
-        "queue": "general_support",
-        "priority": "P3_LOW",
-        "contains_pii": false,
-        "pii_categories": [],
-        "auto_action": "route_specialist",
-        "reason_code": "POLICY_INQUIRY"
-      },
-      "gemini_decision": {
-        "queue": "general_support",
-        "severity": 0.169,
-        "contains_sensitive_pii": false,
-        "auto_action": "route_specialist"
-      },
-      "gemini_input_tokens": 581,
-      "gemini_latency_ms": 841,
-      "gemini_confidence": 0.954,
-      "sonnet_raw_text": "# Ticket Analysis: NM-CS-2026-885490\n\n## 1. Executive Summary\n\nA prospective customer is mid-purchase-decision on the NovaMart Essentials Tailored Wool Coat (SKU: NM-APP-3301) and has two pre-checkout questions:\n\n1. **Sizing:** Does the coat fit true to size when worn over a heavy sweater (i.e., should they size up for layering)?\n2. **Gift-wrapping and timing:** Is expedited gift-wrapping available, and can it be fulfilled in time for **Thursday delivery**?\n\nThis is a **pre-sale conversion inquiry**, not a complaint or service failure. There is no order, payment issue, or dissatisfaction. The customer is likely buying a gift on a deadline, so a fast, accurate answer is directly tied to whether the sale completes.\n\n## 2. Routing Recommendation\n\n**Queue:** Pre-Sales Product Support (Apparel), with a handoff to Fulfillment/Gift Services if the delivery commitment cannot be verified from standard policy\n**Priority:** **Medium-High (time-sensitive pre-sale)**\n\n**Step-by-step reasoning:**\n\n1. **Issue type:** Product fit and service availability questions with no order attached. This belongs in pre-sales, not order support, returns, or escalations.\n2. **No risk indicators:** There is no financial dispute, safety concern, legal language, account issue, or seller complaint.\n3. **Why not Low priority:** The customer has a hard deadline (Thursday) and is at the decision point. A delayed response likely means a lost sale or an abandoned cart.\n4. **Why not High/Urgent:** No existing customer is harmed, and no SLA breach or compliance exposure exists.\n5. **Dependency to flag:** The gift-wrap and Thursday-delivery answer depends on the customer's delivery location, shipping method, and today's date relative to cutoff times. The agent should confirm these rather than promise a date from general policy.\n\n## 3. PII Audit\n\n| Element Reviewed | Found? | Notes |\n|---|---|---|\n| Customer name | No | Not present in the ticket |\n| Email address | No | Not present |\n| Phone number | No | Not present |\n| Physical/shipping address | No | Not present (only \"Thursday delivery\" timing) |\n| Payment information | No | None, and the customer is pre-checkout |\n| Order number or account ID | No | No order exists yet |\n| Government/other sensitive IDs | No | None |\n\n**Result:** No PII detected in the submitted text. The only identifier is the internal ticket ID (NM-CS-2026-885490), which is an operational reference, not personal data. Nothing requires redaction.\n\n**Cleaned summary (safe for logging/sharing):**\n> Pre-checkout shopper asks (a) whether Tailored Wool Coat NM-APP-3301 fits true to size over a heavy sweater and (b) whether expedited gift-wrapping can meet a Thursday delivery.\n\n**Handling note:** The agent will likely need a delivery ZIP/postal code or similar detail to verify timing. Collect only what is necessary, and avoid recording it in free-text notes beyond what the workflow requires.\n\n## 4. Suggested Next Steps\n\n**Agent actions:**\n1. **Sizing:** Check the product page size chart and fit notes for NM-APP-3301, and any review-based fit guidance. For a tailored cut, layering over a heavy sweater typically means recommending sizing up, but confirm against the actual garment measurements instead of assuming.\n2. **Gift-wrap and Thursday delivery:** Verify whether expedited gift-wrap is offered for this SKU, what the order cutoff is for Thursday delivery, and which shipping tier is required. Ask for the delivery location to confirm.\n3. **Close the loop:** Provide a clear yes/no on Thursday feasibility, including what the customer must do (order by X time, select Y shipping). If Thursday isn't achievable, offer the best alternatives such as an earlier shipping tier, a gift receipt, or a digital gift note.\n4. **Return policy:** Briefly mention the exchange/return policy for size uncertainty, since it reduces purchase hesitation.\n\n**Draft talking points (empathy and tone):**\n- \"Thanks for reaching out before ordering. Getting the fit right matters, especially for a gift, so I'm glad to help.\"\n- \"Since you plan to wear it over a heavy sweater, here's what I'd recommend for sizing...\"\n- \"I understand the Thursday timing is important. Here's exactly what we need to do to make that work...\"\n- \"If anything about the size isn't perfect, our exchange process is simple, so you can order with confidence.\"\n\n**Flags for the agent:**\n- Do not guarantee Thursday delivery without verifying cutoff times and the shipping tier.\n- Do not state fit as fact if garment measurements or fit notes aren't available. Give the guidance with appropriate confidence.\n\nLet me know if you'd like a ready-to-send customer reply drafted from these points.",
-      "sonnet_input_tokens": 261,
-      "sonnet_output_tokens": 1703,
-      "sonnet_latency_ms": 13821,
-      "haiku_naive_raw_text": "**(1) Executive Summary**\n\nA shopper is considering the NovaMart Essentials Tailored Wool Coat (SKU NM-APP-3301) and has two pre-checkout questions: (a) whether the coat fits true to size when worn over a heavy sweater, and (b) whether expedited gift-wrapping is available for delivery by Thursday. This is a pre-purchase product and logistics inquiry with no account problem, no payment issue, and no complaint. Resolution requires product fit guidance and a delivery/gift-wrap eligibility check.\n\n**(2) Routing Recommendation**\n\n- **Queue:** Pre-Sales Product Support (with a secondary check by Fulfillment/Logistics for the Thursday delivery window and gift-wrap availability)\n- **Priority:** Standard (P3). Reasoning: no revenue-blocking defect, no account lockout, no safety concern; however, the Thursday delivery deadline creates a time sensitivity, so I'd recommend responding within the same business day to protect the sale. Upgrade to P2 if the shopper reports the Thursday window is a hard requirement and the order is at risk.\n\nStep-by-step reasoning:\n1. Classified as pre-purchase inquiry (no existing order).\n2. Two distinct questions identified: product sizing and logistics/gift-wrap.\n3. Sizing questions route to Product Support; delivery-date and gift-wrap eligibility require a Fulfillment check, since carrier cutoffs and gift-wrap capacity vary.\n4. No fraud, safety, or compliance flags.\n5. Time-sensitive delivery language raises urgency one level, to same-day response.\n\n**(3) PII Audit**\n\nElements found in the thread as provided:\n- **Ticket ID** (NM-CS-2026-885490): internal reference, not personal data, retain as-is.\n- **SKU** (NM-APP-3301): product identifier, not personal data.\n- **Shopper identity:** none provided (no name, email, account ID, or address in the thread).\n- **Delivery location/address:** not provided.\n- **Other personal details** (e.g., body measurements implied by \"fit over a heavy sweater\"): this is a general fit context, not a measurement or identifier; treat any specific body measurements the shopper later shares as sensitive and avoid repeating them in notes beyond what's needed.\n\nResult: No direct PII present. Cleaned summary is identical to the executive summary above.\n\n**(4) Next Steps and Agent Talking Points**\n\nSuggested actions:\n1. Check the product's size chart and fit notes for NM-APP-3301; confirm whether the product page or internal fit data indicates true-to-size, runs large, or runs small, and whether layering guidance exists.\n2. Confirm with Fulfillment: whether expedited gift-wrap is offered for this SKU/destination, the order cutoff time required for Thursday delivery, and carrier service options for that date.\n3. Reply to the shopper with fit guidance and the logistics answer, including the order cutoff time if one applies.\n4. If the shopper wants to proceed, offer a sizing alternative (e.g., one size up for heavy layering) if the product notes support it.\n\nDraft empathy talking points:\n- \"Thanks for reaching out before ordering. Layering is a great question, and we want you to end up with a coat you'll love.\"\n- \"I've checked the fit details for this coat and the gift-wrap and delivery options so you know exactly what to expect for Thursday.\"\n- \"If it's helpful, I can share our sizing guidance for layering and let you know the latest order time that still gets your delivery there on time.\"\n- Close with: \"Please let me know if there's anything else I can help you decide on.\"",
-      "haiku_naive_input_tokens": 261,
-      "haiku_naive_output_tokens": 1227,
-      "haiku_naive_latency_ms": 7171,
       "sub_task": "support_triage",
       "rungs": {
         "sonnet_naive": {
@@ -2736,6 +2416,39 @@
             "note": "Read by a model that was not under test and never saw the right answer; it reports what the response says (an allowed label, not_stated or ambiguous) with a verbatim quote."
           }
         },
+        "sonnet_calibrated": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 2247,
+          "input_tokens": 859,
+          "output_tokens": 71,
+          "thinking_tokens": 0,
+          "stop_reason": "end_turn",
+          "truncated": false,
+          "max_tokens": 512,
+          "request_params": {
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "output_config": {
+              "format": {
+                "type": "json_schema"
+              }
+            }
+          },
+          "structured_output": {
+            "queue": "general_support",
+            "priority": "P3_LOW",
+            "contains_pii": false,
+            "pii_categories": [],
+            "auto_action": "route_specialist",
+            "reason_code": "POLICY_INQUIRY"
+          },
+          "raw_text_preview": "{\"queue\":\"general_support\",\"priority\":\"P3_LOW\",\"contains_pii\":false,\"pii_categories\":[],\"auto_action\":\"route_specialist\",\"reason_code\":\"POLICY_INQUIRY\"}",
+          "decision_probabilities": null,
+          "schema_parse_ok": true
+        },
         "haiku_calibrated": {
           "model_id": "claude-haiku-5-5",
           "provider": "Anthropic",
@@ -2768,77 +2481,6 @@
           "raw_text_preview": "{\"queue\":\"general_support\",\"priority\":\"P3_LOW\",\"contains_pii\":false,\"pii_categories\":[],\"auto_action\":\"route_specialist\",\"reason_code\":\"POLICY_INQUIRY\"}",
           "decision_probabilities": null,
           "schema_parse_ok": true
-        },
-        "gemini_decision": {
-          "model_id": "gemini-decision-1",
-          "provider": "Google Gemini Decisions API",
-          "latency_ms": 841,
-          "input_tokens": 581,
-          "output_tokens": 0,
-          "thinking_tokens": 0,
-          "stop_reason": null,
-          "truncated": false,
-          "max_tokens": null,
-          "request_params": {
-            "api_version": "v1beta"
-          },
-          "structured_output": {
-            "queue": "general_support",
-            "severity": 0.169,
-            "contains_sensitive_pii": false,
-            "auto_action": "route_specialist"
-          },
-          "raw_text_preview": null,
-          "decision_probabilities": {
-            "queue": {
-              "type": "choice",
-              "value": "general_support",
-              "confidence": 0.998,
-              "probabilities": {
-                "trust_and_safety": 0.0002,
-                "replacements": 0.0002,
-                "billing_payouts": 0.0004,
-                "shipping_logistics": 0.0012,
-                "general_support": 0.998
-              }
-            },
-            "severity": {
-              "type": "score",
-              "value": 0.169,
-              "confidence": 0.8464,
-              "probabilities": {
-                "1": 0.1405,
-                "3": 0.0018,
-                "0": 0.8464,
-                "2": 0.0113
-              },
-              "legend": {
-                "0": "P3 Low: Routine inquiry, zero financial loss, no compliance or safety exposure.",
-                "1": "P2 Medium: Standard delivery or billing delay, normal SLA handling.",
-                "2": "P1 High: Broken merchandise, legal/regulatory threat, or blocked seller payout.",
-                "3": "P0 Critical: Active account takeover, fraud drain, or immediate financial/security loss."
-              }
-            },
-            "contains_sensitive_pii": {
-              "type": "noul",
-              "value": false,
-              "p_true": 0.01,
-              "confidence": 0.99
-            },
-            "auto_action": {
-              "type": "choice",
-              "value": "route_specialist",
-              "confidence": 0.9825,
-              "probabilities": {
-                "hold_and_audit": 0.0067,
-                "auto_replace": 0.0065,
-                "route_specialist": 0.9825,
-                "escalate_security": 0.0043
-              }
-            }
-          },
-          "endpoint": "v1beta/decisions",
-          "input_tokens_possibly_estimated": false
         }
       },
       "provenance": {
@@ -2884,6 +2526,29 @@
             "output_format": "free_text"
           }
         },
+        "sonnet_calibrated": {
+          "arm_id": "sonnet_schema",
+          "run_id": "sonnet_schema:tkt-06:r0",
+          "repeat_index": 0,
+          "started_at": "2026-11-26T03:55:01.970647+00:00",
+          "settings_sha256": "b11e0909e683ab1c93d202574f172832d01dc443b2630a0a5ccd4812abcc756b",
+          "system_prompt_sent_sha256": "f917f73012308baf2b81294fac9484dcc530f3cda76da7675c1caee4b6b5e76f",
+          "settings": {
+            "arm_id": "sonnet_schema",
+            "model_intended": "claude-sonnet-5-5",
+            "call_path": "anthropic_service.run_haiku_calibrated",
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "timeout_s": 60.0,
+            "max_retries": 0,
+            "system_prompt_sha256": "f917f73012308baf2b81294fac9484dcc530f3cda76da7675c1caee4b6b5e76f",
+            "output_format": "json_schema",
+            "schema_sha256": "16744b276ba8964feb21f5c1ec394eea3c5aec7476c10f6125ea2763ff580b6c",
+            "allow_tool_fallback": false
+          }
+        },
         "haiku_calibrated": {
           "arm_id": "haiku_schema",
           "run_id": "haiku_schema:tkt-06:r0",
@@ -2906,53 +2571,10 @@
             "schema_sha256": "16744b276ba8964feb21f5c1ec394eea3c5aec7476c10f6125ea2763ff580b6c",
             "allow_tool_fallback": false
           }
-        },
-        "gemini_decision": {
-          "arm_id": "gemini_decision",
-          "run_id": "gemini_decision:tkt-06:r0",
-          "repeat_index": 0,
-          "started_at": "2026-11-26T03:55:05.214373+00:00",
-          "settings_sha256": "70715fca44b17f6f54d71c71aa4bf8ae6aa8888958dcf8d59c4e27185dd380ee",
-          "system_prompt_sent_sha256": null,
-          "settings": {
-            "arm_id": "gemini_decision",
-            "model_intended": "gemini-decision-1",
-            "call_path": "gemini_decision_service.run_gemini_decision",
-            "questions_sha256": "7d34c1fd07bc10aef2ed51e9d4f235c98eda3791f9946d6464c7e6672f564c52",
-            "timeouts": "app defaults (SDK; REST fallback 30 s)",
-            "max_retries": "app/SDK default"
-          }
         }
       }
     },
     "sku-04": {
-      "input_tokens": 896,
-      "haiku_output_tokens": 106,
-      "haiku_latency_ms": 1397,
-      "haiku_decision": {
-        "leaf_category": "home_ceramic_dinnerware",
-        "hazmat_class": "FRAGILE_GLASS_CERAMIC",
-        "compliance_status": "APPROVED_AUTO_PUBLISH",
-        "contradiction_detected": false,
-        "primary_material_tag": "stoneware_ceramic"
-      },
-      "gemini_decision": {
-        "leaf_category": "home_ceramic_dinnerware",
-        "compliance_status": "APPROVED_AUTO_PUBLISH",
-        "hazmat_compliance_risk": 0.929,
-        "has_factual_contradiction": false
-      },
-      "gemini_input_tokens": 633,
-      "gemini_latency_ms": 400,
-      "gemini_confidence": 0.955,
-      "sonnet_raw_text": "# Catalog Merchandising Review: ING-HOME-2026-209114\n\n## 1. Target Marketplace Category Taxonomy\n\n**Recommended path:** `Home & Kitchen > Kitchen & Dining > Dinnerware & Serveware > Coffee & Tea Cups > Espresso Cups`\n\n**Reasoning:**\n- **Primary function:** 90ml capacity is the standard espresso/demitasse volume. This is distinct from the standard coffee mug (240-350ml) and teacup categories, so it shouldn't be routed to generic \"Mugs\" or \"Drinkware.\"\n- **Set configuration:** \"Set of 4\" should be captured as a structured variant/pack-size attribute (`pack_quantity: 4`), not just left in the title. This supports faceted filtering and unit-price comparison.\n- **Alternate/secondary browse nodes (if the platform supports multi-node assignment):**\n  - `Kitchen & Dining > Coffee, Tea & Espresso > Cups & Mugs`\n  - `Home & Kitchen > Dinnerware > Stoneware` (as a material-driven browse path)\n- **Not recommended:** Bar & Wine > Glassware, Small Appliances > Espresso Machine Accessories (the latter would be misleading, since these are consumable-use vessels and not machine parts).\n\n## 2. Factual Contradictions & Hazmat/Compliance Risks\n\n**Contradictions detected: None.** The title, material field, and OCR'd box label are internally consistent:\n- Title says \"Stoneware Ceramic\" → Material field says \"High-fired Stoneware Ceramic\" → Box label says \"100% Stoneware Ceramic.\" ✅\n- No conflicting claims (e.g., no \"porcelain,\" \"glass,\" or \"bone china\" language that would indicate a material mismatch).\n- \"Dishwasher & Microwave Safe\" is plausible for high-fired stoneware, though see the notes below.\n\n**Hazmat / dangerous goods:** None indicated. The feed confirms no batteries, and ceramic cups carry no inherent hazmat classification (no lithium, flammables, aerosols, or pressurized contents). No hazmat flag is required.\n\n**Compliance considerations to verify (not contradictions, but standard for food-contact ceramics):**\n\n| Area | Why it matters | Suggested action |\n|---|---|---|\n| **Food-contact safety (lead/cadmium leaching)** | Glazed ceramics intended for food/beverage use are subject to leachate limits (e.g., FDA in the US; California Prop 65 disclosure rules; EU/other regional equivalents if applicable). | Request a compliance document or test report from the seller. The feed doesn't evidence it. |\n| **Prop 65 labeling** | Ceramic glazes are a common Prop 65 trigger if CA-shipped. | Confirm whether a warning applies or if the seller provides an exemption statement. |\n| **\"Microwave safe\" claim substantiation** | This is a performance/safety claim. Metallic glaze accents or trapped moisture in porous unglazed foot-rings can cause issues. | Ask the seller whether the claim covers glaze and any decorative finishes. |\n| **\"Matte\" finish and dishwasher durability** | Some matte glazes degrade or stain with repeated dishwasher cycles. | Low risk for compliance, but relevant for review/return rates. |\n\nNote: These are verification items, not defects. I'm flagging them because the feed provides claims without supporting documentation.\n\n## 3. Recommended Publishing Status\n\n**Recommended status: ✅ Approve for publication, conditional on a routine compliance document check.**\n\n- **Clean for publication:** No attribute contradictions, no hazmat flags, no restricted-category triggers.\n- **Condition:** If NovaMart policy requires food-contact compliance documentation for ceramic drinkware at onboarding, confirm that is on file before the listing goes live. If the seller is already verified or the product line has an existing compliance record, no hold is needed.\n- **Fulfillment routing:** Flag as **Fragile** and route to **corrugated drop-pack** handling per the feed's own instruction. Recommend verifying the drop-test certification (e.g., ISTA 3A/6A-type standard, or NovaMart's equivalent) for the 4-piece configuration, since multi-piece ceramic sets have a higher breakage risk from inter-piece contact.\n\nIf compliance documentation is missing and required by policy: **Hold in \"Pending Documentation,\" not Reject.** The product itself is clean.\n\n## 4. Rewritten Merchandising Recommendations for Catalog Ops\n\n**Structured attribute normalization:**\n- `product_type`: Espresso Cup\n- `pack_quantity`: 4\n- `capacity`: 90 ml (also populate 3.0 fl oz if the storefront serves US customers)\n- `material`: Stoneware (Ceramic)\n- `finish`: Matte\n- `care_instructions`: Dishwasher Safe; Microwave Safe\n- `handling_flag`: Fragile\n- `hazmat`: None | `battery_required`: No\n\n**Title (cleaned, search-optimized):**\n> *CraftKiln Matte Stoneware Espresso Cups, Set of 4 (90ml / 3 oz), Dishwasher & Microwave Safe*\n\nRationale: Leads with brand, keeps the high-intent keyword \"Espresso Cups,\" and surfaces the pack count and capacity early. Removing the redundant \"Ceramic\" (since stoneware is ceramic) shortens the title without losing meaning. Add fl oz for US shoppers.\n\n**Bullet point suggestions:**\n1. **Authentic Espresso Size:** 90ml (3 oz) capacity designed for espresso shots, ristretto, and macchiatos.\n2. **High-Fired Stoneware:** Durable, dense body with a smooth matte finish.\n3. **Set of 4:** Complete set for entertaining or everyday use.\n4. **Easy Care:** Dishwasher and microwave safe for convenient cleanup and reheating.\n5. **Gift-Ready & Protected:** Shipped in protective packaging. Handle with care.\n\n**Operational notes for ops:**\n- Route to **fragile / corrugated drop-pack** fulfillment profile.\n- Consider enabling **breakage-protection or enhanced packaging** badges if available.\n- Request **additional imagery**: scale shot against an espresso machine or hand, plus a nested/stacked view, to reduce size-expectation returns (90ml is smaller than many shoppers expect).\n- Add a **size clarifier** in the description (\"Demitasse-size, smaller than a standard coffee mug\") to preempt \"item smaller than expected\" complaints.\n\n**Summary:** Clean, consistent feed. Publish with standard fragile routing, with only a routine food-contact compliance document check as a possible gating item.",
-      "sonnet_input_tokens": 310,
-      "sonnet_output_tokens": 2335,
-      "sonnet_latency_ms": 19259,
-      "haiku_naive_raw_text": "**NovaMart Catalog Merchandising Review**\n**SKU Ingestion ID:** ING-HOME-2026-209114\n**Product:** CraftKiln Matte Stoneware Ceramic Espresso Cups, Set of 4 (90ml)\n\n---\n\n### 1. Target Marketplace Category Taxonomy and Reasoning\n\n**Recommended primary category:** Home & Kitchen > Kitchen & Dining > Drinkware & Serveware > Coffee & Espresso Cups\n**Recommended secondary category:** Home & Kitchen > Kitchen & Dining > Dinnerware > Cups & Mugs (cross-listing, if NovaMart supports dual placement)\n**Attribute tags:** Material: Stoneware Ceramic; Pieces: 4; Capacity: 90 ml; Finish: Matte; Care: Dishwasher Safe, Microwave Safe\n\n**Reasoning:**\n- The item is a set of four espresso-sized vessels (90 ml), which places it squarely in the espresso/coffee cup subcategory rather than general mugs (typically 240–350 ml).\n- The title and material field align with the stoneware ceramic dinnerware and drinkware taxonomy.\n- The \"Set of 4\" format supports a bundled-set attribute filter, which improves discoverability for gift and tableware shoppers.\n- The \"Matte\" finish is a style attribute and should be exposed as a filterable variant attribute, not used as a category driver.\n\n---\n\n### 2. Factual Contradictions and Hazmat/Compliance Risks\n\n**Contradictions:** None identified. The title, material field, and box OCR are consistent (stoneware ceramic, dishwasher and microwave safe, 90 ml espresso format). The ingestion note confirms no battery contradictions.\n\n**Hazmat / Compliance Assessment:**\n- **Batteries / lithium:** None. Not applicable.\n- **Glaze and lead/cadmium compliance:** Ceramic tableware sold for food contact is subject to leachable lead and cadmium limits (e.g., US FDA guidance for ceramicware, California Prop 65 notices where applicable, and EU food-contact requirements). The feed does not include a food-safety compliance certificate or glaze test report. **This is a documentation gap, not a confirmed hazard.** Request a Certificate of Conformance or lab report from the seller before publication.\n- **Prop 65:** Ceramic items commonly carry a Prop 65 warning for lead. The listing should be checked against seller-provided testing to determine whether a warning is required for California sales.\n- **Microwave and dishwasher claims:** Stated on the box, so they are seller claims. Ensure they are supported by the seller's product testing, as these are care claims customers rely on for safety (e.g., thermal shock on matte glazes).\n- **Shipping/transport:** The \"Fragile\" labeling and drop-pack routing requirement is a logistics note, not a hazmat issue. Ceramics are not regulated as hazardous materials for transport.\n\n**Risk rating:** Low-to-moderate, driven entirely by the missing food-contact compliance documentation.\n\n---\n\n### 3. Recommended Publishing Status\n\n**Status: HOLD: Conditionally Approve Pending Compliance Documentation**\n\n- Do not publish until the seller supplies: (a) food-contact compliance evidence for glaze/body (lead and cadmium leach testing), and (b) confirmation of Prop 65 warning requirement for the California market.\n- Once documentation is verified, status may move to **Approved for Publication**.\n- Fragile handling flag must be applied to the SKU before listing goes live.\n\n---\n\n### 4. Rewritten Merchandising Recommendations for Catalog Ops\n\n**Suggested listing title:**\nCraftKiln Matte Stoneware Espresso Cups, Set of 4, 90 ml, Dishwasher & Microwave Safe\n\n**Suggested bullet points:**\n- Set of 4 handcrafted-style matte stoneware espresso cups, each holding 90 ml, ideal for shots, ristretto, and small-portion coffee service.\n- Made from high-fired stoneware ceramic for durability and a smooth, matte finish.\n- Dishwasher and microwave safe for everyday convenience (per manufacturer care guidance).\n- Sized for espresso-style servings; for larger coffee or tea, consider our 240–350 ml mug collection.\n- Packed in protective drop-resistant packaging. Handle with care on arrival.\n\n*Note: Remove \"handcrafted\" unless the seller can substantiate hand-finishing. It is an unverified claim in the current feed.*\n\n**Suggested search keywords:** stoneware espresso cups, 90ml coffee cups, matte ceramic cups, espresso set of 4, dishwasher safe espresso cups, microwave safe ceramic cups, gift espresso set\n\n**Shipping and handling:**\n- Routing: Fragile corrugated drop-pack (as specified).\n- Add fragile handling and \"Handle With Care\" packaging callout to the listing.\n- Recommend inner dividers or cell packaging to prevent handle and rim chipping in transit.\n\n**Ops action items:**\n1. Request food-contact compliance certificate and glaze lead/cadmium test report from seller.\n2. Confirm Prop 65 status and add warning language if required.\n3. Verify dishwasher and microwave claims against seller test data.\n4. Remove or substantiate \"handcrafted\" wording.\n5. Apply fragile logistics flag and drop-pack routing.\n6. Upon document approval, move SKU from HOLD to Approved for Publication.",
-      "haiku_naive_input_tokens": 310,
-      "haiku_naive_output_tokens": 1901,
-      "haiku_naive_latency_ms": 10100,
       "sub_task": "sku_tagging",
       "rungs": {
         "sonnet_naive": {
@@ -3075,6 +2697,38 @@
             "note": "Read by a model that was not under test and never saw the right answer; it reports what the response says (an allowed label, not_stated or ambiguous) with a verbatim quote."
           }
         },
+        "sonnet_calibrated": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 2221,
+          "input_tokens": 896,
+          "output_tokens": 106,
+          "thinking_tokens": 0,
+          "stop_reason": "end_turn",
+          "truncated": false,
+          "max_tokens": 512,
+          "request_params": {
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "output_config": {
+              "format": {
+                "type": "json_schema"
+              }
+            }
+          },
+          "structured_output": {
+            "leaf_category": "home_ceramic_dinnerware",
+            "hazmat_class": "FRAGILE_GLASS_CERAMIC",
+            "compliance_status": "APPROVED_AUTO_PUBLISH",
+            "contradiction_detected": false,
+            "primary_material_tag": "stoneware_ceramic"
+          },
+          "raw_text_preview": "{\"leaf_category\":\"home_ceramic_dinnerware\",\"hazmat_class\":\"FRAGILE_GLASS_CERAMIC\",\"compliance_status\":\"APPROVED_AUTO_PUBLISH\",\"contradiction_detected\":false,\"primary_material_tag\":\"stoneware_ceramic\"}",
+          "decision_probabilities": null,
+          "schema_parse_ok": true
+        },
         "haiku_calibrated": {
           "model_id": "claude-haiku-5-5",
           "provider": "Anthropic",
@@ -3106,76 +2760,6 @@
           "raw_text_preview": "{\"leaf_category\":\"home_ceramic_dinnerware\",\"hazmat_class\":\"FRAGILE_GLASS_CERAMIC\",\"compliance_status\":\"APPROVED_AUTO_PUBLISH\",\"contradiction_detected\":false,\"primary_material_tag\":\"stoneware_ceramic\"}",
           "decision_probabilities": null,
           "schema_parse_ok": true
-        },
-        "gemini_decision": {
-          "model_id": "gemini-decision-1",
-          "provider": "Google Gemini Decisions API",
-          "latency_ms": 400,
-          "input_tokens": 633,
-          "output_tokens": 0,
-          "thinking_tokens": 0,
-          "stop_reason": null,
-          "truncated": false,
-          "max_tokens": null,
-          "request_params": {
-            "api_version": "v1beta"
-          },
-          "structured_output": {
-            "leaf_category": "home_ceramic_dinnerware",
-            "compliance_status": "APPROVED_AUTO_PUBLISH",
-            "hazmat_compliance_risk": 0.929,
-            "has_factual_contradiction": false
-          },
-          "raw_text_preview": null,
-          "decision_probabilities": {
-            "leaf_category": {
-              "type": "choice",
-              "value": "home_ceramic_dinnerware",
-              "confidence": 0.9997,
-              "probabilities": {
-                "apparel_ethnic_kurtas": 0.0,
-                "home_ceramic_dinnerware": 0.9997,
-                "kitchen_espresso_grinders": 0.0002,
-                "audio_bluetooth_speakers": 0.0,
-                "electronics_power_banks": 0.0
-              }
-            },
-            "compliance_status": {
-              "type": "choice",
-              "value": "APPROVED_AUTO_PUBLISH",
-              "confidence": 0.9927,
-              "probabilities": {
-                "APPROVED_AUTO_PUBLISH": 0.9927,
-                "SUPPRESS_CONTRADICTED_FACET": 0.0055,
-                "HOLD_MISSING_CERT": 0.0018
-              }
-            },
-            "hazmat_compliance_risk": {
-              "type": "score",
-              "value": 0.929,
-              "confidence": 0.855,
-              "probabilities": {
-                "3": 0.0064,
-                "1": 0.855,
-                "2": 0.0276,
-                "0": 0.1111
-              },
-              "legend": {
-                "3": "Level 3: High-capacity lithium-ion / air-freight hazmat or dangerous misrepresentation requiring strict block.",
-                "2": "Level 2: Material misrepresentation or missing regional electrical/safety cert requiring publish hold.",
-                "0": "Level 0: Benign non-hazardous SKU with fully verified factual metadata.",
-                "1": "Level 1: Minor fragile handling requirement or incomplete non-safety attribute."
-              }
-            },
-            "has_factual_contradiction": {
-              "type": "noul",
-              "value": false,
-              "p_true": 0.0267,
-              "confidence": 0.9733
-            }
-          },
-          "endpoint": "v1beta/decisions",
-          "input_tokens_possibly_estimated": false
         }
       },
       "provenance": {
@@ -3221,6 +2805,29 @@
             "output_format": "free_text"
           }
         },
+        "sonnet_calibrated": {
+          "arm_id": "sonnet_schema",
+          "run_id": "sonnet_schema:sku-04:r0",
+          "repeat_index": 0,
+          "started_at": "2026-11-26T03:55:06.940561+00:00",
+          "settings_sha256": "57c3fd83f0e88f3359a8a11d6c43d763705f6ffec9def246195748b15b6e8087",
+          "system_prompt_sent_sha256": "77a7d7ce803bde7295fa554f10877c83ee2ee24208067f4754348a3db550937d",
+          "settings": {
+            "arm_id": "sonnet_schema",
+            "model_intended": "claude-sonnet-5-5",
+            "call_path": "anthropic_service.run_haiku_calibrated",
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "timeout_s": 60.0,
+            "max_retries": 0,
+            "system_prompt_sha256": "77a7d7ce803bde7295fa554f10877c83ee2ee24208067f4754348a3db550937d",
+            "output_format": "json_schema",
+            "schema_sha256": "c908e844a4472bab5b7e408350b87221be41c0b356669b1c7c6802614139270e",
+            "allow_tool_fallback": false
+          }
+        },
         "haiku_calibrated": {
           "arm_id": "haiku_schema",
           "run_id": "haiku_schema:sku-04:r0",
@@ -3243,53 +2850,10 @@
             "schema_sha256": "c908e844a4472bab5b7e408350b87221be41c0b356669b1c7c6802614139270e",
             "allow_tool_fallback": false
           }
-        },
-        "gemini_decision": {
-          "arm_id": "gemini_decision",
-          "run_id": "gemini_decision:sku-04:r0",
-          "repeat_index": 0,
-          "started_at": "2026-11-26T03:55:10.882560+00:00",
-          "settings_sha256": "e21bcaeb81f11509520224c94cbed0b01e721ba2b728a48e7eabd44f9fc48b05",
-          "system_prompt_sent_sha256": null,
-          "settings": {
-            "arm_id": "gemini_decision",
-            "model_intended": "gemini-decision-1",
-            "call_path": "gemini_decision_service.run_gemini_decision",
-            "questions_sha256": "a0c53aa3ad2cab7682e28888da2574030767e1d32a8b76bacc504785cf098047",
-            "timeouts": "app defaults (SDK; REST fallback 30 s)",
-            "max_retries": "app/SDK default"
-          }
         }
       }
     },
     "sku-05": {
-      "input_tokens": 879,
-      "haiku_output_tokens": 104,
-      "haiku_latency_ms": 1398,
-      "haiku_decision": {
-        "leaf_category": "audio_bluetooth_speakers",
-        "hazmat_class": "LITHIUM_ION_DECLARED",
-        "compliance_status": "APPROVED_AUTO_PUBLISH",
-        "contradiction_detected": false,
-        "primary_material_tag": "lithium_polymer_abs"
-      },
-      "gemini_decision": {
-        "compliance_status": "APPROVED_AUTO_PUBLISH",
-        "leaf_category": "audio_bluetooth_speakers",
-        "has_factual_contradiction": false,
-        "hazmat_compliance_risk": 1.3
-      },
-      "gemini_input_tokens": 643,
-      "gemini_latency_ms": 697,
-      "gemini_confidence": 0.834,
-      "sonnet_raw_text": "# Catalog Review: ING-AUD-2026-308215 (SoundPulse Go 30W Waterproof Bluetooth Speaker)\n\n**A caveat on scope:** The feed excerpt you provided is thin. I can see the title, battery declaration, UN38.3 flag, FCC ID, and a blanket \"spec claims match label OCR\" note, but I don't have the raw OCR text, the full spec sheet, image assets, or the seller's category/brand fields. Where I'm inferring rather than reading, I say so. I also haven't independently verified the certification attachment or FCC record; I'm working from the feed flags as stated.\n\n## 1. Target Marketplace Category\n\n**Recommended path:** Electronics > Audio > Portable Speakers > Bluetooth Speakers\n\n**Reasoning:**\n- The title establishes the core product type (Bluetooth speaker) and two merchandising-relevant attributes (30W output, waterproof).\n- A 5200mAh battery plus an FCC ID is consistent with a rechargeable wireless portable speaker, not a wired/home audio component.\n- I'd route to the portable/outdoor subcategory rather than generic \"Speakers\" if your taxonomy splits them.\n\n**Attributes to populate for faceted search:** Connectivity (Bluetooth, version TBD), power output (30W), battery capacity, water/dust rating (IP rating, see below), power source (rechargeable), and brand/model.\n\n## 2. Contradiction and Compliance Risk Analysis\n\n**Math check on the battery declaration: passes.**\n- 5200 mAh × 3.7 V = 19,240 mWh = **19.24 Wh**. The declared figure is arithmetically correct.\n- 19.24 Wh is **below the 100 Wh threshold** that triggers the stricter air-transport limits for large lithium-ion batteries, so it falls in the standard consumer-size category. Whether the pack is rated as a single cell or multiple cells in series/parallel doesn't change the Wh figure, but it does matter for how the cert should be read (see below).\n\n**Items that look clean:**\n- UN38.3 is flagged as attached and verified for 2026. That's the correct transport-safety test summary for lithium batteries.\n- FCC ID 2A9SP-GO30 is present, which is expected for a Bluetooth radio device. The grantee code prefix (2A9SP) and product code are plausible in format.\n\n**Items I can't confirm from this feed (flag for ops, not as defects):**\n1. **\"Waterproof\" is an unqualified claim.** The title says waterproof but no IP rating (e.g., IPX7) is shown in what you gave me. \"Waterproof\" without a rating is a common source of misleading-claims complaints and returns. I'd require an explicit IP rating in the structured spec before keeping that word in the title. This is the most actionable gap.\n2. **\"30W\" is ambiguous.** Speaker wattage is often peak/PMPO vs. continuous RMS. Confirm which it is, since it affects claim accuracy and comparison shopping. This isn't a contradiction, just something to verify.\n3. **UN38.3 scope match.** A verified cert only protects you if the tested cell/pack matches the product. I'd confirm the cert's model/cell identification corresponds to this 5200mAh pack and not a sibling SKU. \"Verified\" in the feed tells me a check passed, not what the check compared.\n4. **Cert recency.** \"2026\" is fine, but UN38.3 summaries should reference the tested battery model and test date; worth confirming the date isn't retroactive to a different build.\n5. **FCC record match.** Worth a quick lookup to confirm 2A9SP-GO30 resolves to a Bluetooth speaker from this seller/brand and not a different device.\n\n**Hazmat shipping note:** Lithium-ion batteries contained in/with equipment are generally regulated as dangerous goods for air transport (UN3481). At 19.24 Wh this should route through standard lithium-ion handling, not the stricter large-battery path. Confirm your fulfillment/hazmat flag is set accordingly so it ships via compliant lanes.\n\n**Net assessment:** No hard contradiction found in the data provided. The risks are claim-precision gaps (waterproof, wattage) and verifying that the cert and FCC records actually map to this exact product.\n\n## 3. Recommended Publishing Status\n\n**Conditional approval, hold for two quick checks, rather than a hard block.**\n\n- **Publish-ready once:** (a) an IP rating is supplied and the title is corrected accordingly, and (b) the UN38.3 summary and FCC record are confirmed to map to this model.\n- **If the seller can't substantiate a waterproof rating:** publish with \"waterproof\" removed from the title and description rather than rejecting the whole listing.\n- **Hazmat flag:** set lithium-ion (contained in equipment) before go-live.\n\nIf your policy treats \"cert attached + verified\" as sufficient for auto-approval, this could go live now with the waterproof wording softened as a precaution. I'd lean toward the conditional hold given how often unrated \"waterproof\" claims create downstream issues.\n\n## 4. Merchandising Recommendations for Catalog Ops\n\n**Title rewrite (once IP rating is confirmed):**\n> SoundPulse Go 30W Portable Bluetooth Speaker, [IPX#] Waterproof\n\n*(Replace [IPX#] with the verified rating. If unverified, use: \"SoundPulse Go 30W Portable Bluetooth Speaker.\")*\n\n**Structured attributes to require:**\n- IP rating (specific value, not just \"waterproof\")\n- Output power with type (RMS vs. peak)\n- Bluetooth version\n- Battery: 5200mAh / 3.7V / 19.24Wh, Lithium-Ion\n- Estimated playtime (seller to substantiate)\n- Compliance: FCC ID 2A9SP-GO30, UN38.3 on file\n\n**Content guidance:**\n- Lead bullets with verifiable specs (IP rating, battery capacity, output) before lifestyle claims.\n- Avoid unsubstantiated superlatives (\"ultimate,\" \"best bass\") unless backed by seller documentation.\n- Include the lithium battery disclosure in the standard compliance field, not buried in copy.\n\n**Ops follow-ups:**\n1. Request IP test report or rating documentation from the seller.\n2. Cross-check UN38.3 summary model number against the SKU.\n3. Look up the FCC ID to confirm device match.\n4. Set hazmat shipping attribute for lithium-ion in equipment.\n\nIf you can send the raw OCR text, full spec sheet, and image set, I can tighten this review and either confirm the conditional status or clear it for publication.",
-      "sonnet_input_tokens": 293,
-      "sonnet_output_tokens": 2272,
-      "sonnet_latency_ms": 22695,
-      "haiku_naive_raw_text": "**NovaMart Catalog Ingestion Review**\n**SKU Ingestion ID:** ING-AUD-2026-308215\n**Product:** SoundPulse Go 30W Waterproof Bluetooth Speaker\n\n---\n\n### 1. Target Marketplace Category Taxonomy and Reasoning\n\n**Recommended primary category:** Electronics > Audio > Portable Speakers > Bluetooth Speakers\n**Recommended subcategory path:** Outdoor & Portable Audio > Waterproof / Ruggedized Speakers\n\n**Reasoning:**\n- The title and feature set (Bluetooth, waterproof, 30W output) clearly place this in portable wireless speakers rather than home audio systems, soundbars, or car audio.\n- \"Waterproof\" is a sub-attribute that should be captured as a filterable attribute (e.g., IP rating), not left only in the title. The IP rating is not present in the feed and should be requested from the seller.\n- The 30W figure should be recorded as an attribute with a clarifying label. Peak and RMS power are often conflated in marketing. If the seller means peak output, the listing should say so.\n- Lithium-ion battery content places the item in a hazmat-aware subcategory. Attribute tagging should reflect this so that shipping and compliance filters apply.\n\n**Attributes to populate:**\n- Connectivity: Bluetooth (version not stated; request it)\n- Water/dust rating: Missing (request IP rating)\n- Battery: 5200mAh, 3.7V, 19.24Wh, Li-ion\n- Wireless range, playtime, charging port type, and dimensions/weight: Missing\n\n---\n\n### 2. Factual Contradictions and Hazmat/Compliance Risks\n\n**Factual check:**\n- Math verification: 5200mAh × 3.7V = 19.24Wh. This is internally consistent.\n- The feed states all spec claims match label OCR. I have not independently verified the label image, so this is accepted as stated by the submission, pending spot-check.\n\n**Hazmat / compliance assessment:**\n- **Watt-hour rating of 19.24Wh** is below the 100Wh threshold generally used for lithium-ion cells in consumer goods under IATA and UN 38.3 frameworks. This level is typically shippable as a non-restricted or lithium-ion \"contained in equipment\" shipment, but carrier packaging and labeling requirements still apply.\n- **UN 38.3 certification:** The feed lists it as \"ATTACHED_VERIFIED_2026.\" The attachment itself should be checked to confirm: the test report reference number, the cell/battery model it covers (it must match this SKU's battery, not a different cell), the test lab accreditation, and the validity date. Listing a placeholder or a certificate for a different battery is a common failure.\n- **FCC ID 2A9SP-GO30:** The grantee code format is plausible, but the FCC ID must be looked up in the FCC Equipment Authorization database to confirm it is active, the grantee matches the seller, and the product model matches. An unverified FCC ID is a compliance risk for US sales.\n- **Shipping classification:** Lithium-ion products should carry the correct Class 9 hazmat flag in the shipping profile. If the flag is missing, the listing should not be published for fulfillment through carriers that restrict lithium batteries.\n\n**Contradictions found:** None within the submitted data. The risks above are verification gaps, not confirmed errors.\n\n---\n\n### 3. Recommended Publishing Status\n\n**Status: HOLD: Conditional Approval Pending Verification**\n\nDo not publish yet. Publish once these items are cleared:\n1. Open and verify the UN 38.3 attachment (test report number, matching battery model, lab accreditation, validity).\n2. Verify the FCC ID in the FCC database against the seller and model.\n3. Confirm the Li-ion hazmat shipping flag is set in the fulfillment profile.\n4. Obtain the IP rating and Bluetooth version so the \"waterproof\" claim is substantiated.\n5. Spot-check the label OCR against the physical label image.\n\nIf items 1–3 clear and the IP rating is provided, the listing can move to **Approved for Publication with Hazmat Shipping Restrictions**.\n\n---\n\n### 4. Rewritten Merchandising Recommendations for Catalog Ops\n\n**Title (revised for clarity and searchability):**\nSoundPulse Go 30W Portable Bluetooth Speaker, Waterproof (IP Rating: [TBD])\n\n**Bullet points:**\n- 30W output (specify peak or RMS in the spec sheet)\n- Waterproof design rated [IP rating TBD]; confirm before using the word \"waterproof\" in marketing copy\n- 5200mAh rechargeable lithium-ion battery (19.24Wh), UN 38.3 certified\n- Bluetooth [version TBD] wireless connectivity with range of [TBD]\n- Playtime of [TBD] hours at moderate volume\n\n**Compliance notes for ops team:**\n- Flag as lithium-ion battery product in all shipping and fulfillment systems.\n- Include the battery hazard statement required by the marketplace.\n- Store the UN 38.3 report and FCC grant in the compliance file, linked to ING-AUD-2026-308215.\n\n**Copy guidance:**\n- Avoid unqualified \"waterproof\" claims. Use the specific IP rating once confirmed.\n- Clarify whether \"30W\" refers to peak or RMS output. Unqualified wattage claims are a frequent source of buyer complaints and marketplace policy flags.\n\n---\n\n**Summary:** The data is internally consistent and the battery math checks out. The listing should be held until the UN 38.3 attachment, FCC ID, hazmat shipping flag, and IP rating are independently verified. Once those clear, it is suitable for publication with lithium-ion shipping restrictions applied.",
-      "haiku_naive_input_tokens": 293,
-      "haiku_naive_output_tokens": 1980,
-      "haiku_naive_latency_ms": 9689,
       "sub_task": "sku_tagging",
       "rungs": {
         "sonnet_naive": {
@@ -3412,6 +2976,38 @@
             "note": "Read by a model that was not under test and never saw the right answer; it reports what the response says (an allowed label, not_stated or ambiguous) with a verbatim quote."
           }
         },
+        "sonnet_calibrated": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 2030,
+          "input_tokens": 879,
+          "output_tokens": 104,
+          "thinking_tokens": 0,
+          "stop_reason": "end_turn",
+          "truncated": false,
+          "max_tokens": 512,
+          "request_params": {
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "output_config": {
+              "format": {
+                "type": "json_schema"
+              }
+            }
+          },
+          "structured_output": {
+            "leaf_category": "audio_bluetooth_speakers",
+            "hazmat_class": "LITHIUM_ION_DECLARED",
+            "compliance_status": "APPROVED_AUTO_PUBLISH",
+            "contradiction_detected": false,
+            "primary_material_tag": "lithium_polymer_abs"
+          },
+          "raw_text_preview": "{\"leaf_category\":\"audio_bluetooth_speakers\",\"hazmat_class\":\"LITHIUM_ION_DECLARED\",\"compliance_status\":\"APPROVED_AUTO_PUBLISH\",\"contradiction_detected\":false,\"primary_material_tag\":\"lithium_polymer_abs\"}",
+          "decision_probabilities": null,
+          "schema_parse_ok": true
+        },
         "haiku_calibrated": {
           "model_id": "claude-haiku-5-5",
           "provider": "Anthropic",
@@ -3443,76 +3039,6 @@
           "raw_text_preview": "{\"leaf_category\":\"audio_bluetooth_speakers\",\"hazmat_class\":\"LITHIUM_ION_DECLARED\",\"compliance_status\":\"APPROVED_AUTO_PUBLISH\",\"contradiction_detected\":false,\"primary_material_tag\":\"lithium_polymer_abs\"}",
           "decision_probabilities": null,
           "schema_parse_ok": true
-        },
-        "gemini_decision": {
-          "model_id": "gemini-decision-1",
-          "provider": "Google Gemini Decisions API",
-          "latency_ms": 697,
-          "input_tokens": 643,
-          "output_tokens": 0,
-          "thinking_tokens": 0,
-          "stop_reason": null,
-          "truncated": false,
-          "max_tokens": null,
-          "request_params": {
-            "api_version": "v1beta"
-          },
-          "structured_output": {
-            "compliance_status": "APPROVED_AUTO_PUBLISH",
-            "leaf_category": "audio_bluetooth_speakers",
-            "has_factual_contradiction": false,
-            "hazmat_compliance_risk": 1.3
-          },
-          "raw_text_preview": null,
-          "decision_probabilities": {
-            "compliance_status": {
-              "type": "choice",
-              "value": "APPROVED_AUTO_PUBLISH",
-              "confidence": 0.9983,
-              "probabilities": {
-                "HOLD_MISSING_CERT": 0.0004,
-                "SUPPRESS_CONTRADICTED_FACET": 0.0013,
-                "APPROVED_AUTO_PUBLISH": 0.9983
-              }
-            },
-            "leaf_category": {
-              "type": "choice",
-              "value": "audio_bluetooth_speakers",
-              "confidence": 1.0,
-              "probabilities": {
-                "apparel_ethnic_kurtas": 0.0,
-                "kitchen_espresso_grinders": 0.0,
-                "electronics_power_banks": 0.0,
-                "audio_bluetooth_speakers": 1.0,
-                "home_ceramic_dinnerware": 0.0
-              }
-            },
-            "has_factual_contradiction": {
-              "type": "noul",
-              "value": false,
-              "p_true": 0.0142,
-              "confidence": 0.9858
-            },
-            "hazmat_compliance_risk": {
-              "type": "score",
-              "value": 1.3,
-              "confidence": 0.352,
-              "probabilities": {
-                "1": 0.2514,
-                "2": 0.1415,
-                "3": 0.2551,
-                "0": 0.352
-              },
-              "legend": {
-                "2": "Level 2: Material misrepresentation or missing regional electrical/safety cert requiring publish hold.",
-                "3": "Level 3: High-capacity lithium-ion / air-freight hazmat or dangerous misrepresentation requiring strict block.",
-                "1": "Level 1: Minor fragile handling requirement or incomplete non-safety attribute.",
-                "0": "Level 0: Benign non-hazardous SKU with fully verified factual metadata."
-              }
-            }
-          },
-          "endpoint": "v1beta/decisions",
-          "input_tokens_possibly_estimated": false
         }
       },
       "provenance": {
@@ -3558,6 +3084,29 @@
             "output_format": "free_text"
           }
         },
+        "sonnet_calibrated": {
+          "arm_id": "sonnet_schema",
+          "run_id": "sonnet_schema:sku-05:r0",
+          "repeat_index": 0,
+          "started_at": "2026-11-26T03:55:11.968884+00:00",
+          "settings_sha256": "57c3fd83f0e88f3359a8a11d6c43d763705f6ffec9def246195748b15b6e8087",
+          "system_prompt_sent_sha256": "77a7d7ce803bde7295fa554f10877c83ee2ee24208067f4754348a3db550937d",
+          "settings": {
+            "arm_id": "sonnet_schema",
+            "model_intended": "claude-sonnet-5-5",
+            "call_path": "anthropic_service.run_haiku_calibrated",
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "timeout_s": 60.0,
+            "max_retries": 0,
+            "system_prompt_sha256": "77a7d7ce803bde7295fa554f10877c83ee2ee24208067f4754348a3db550937d",
+            "output_format": "json_schema",
+            "schema_sha256": "c908e844a4472bab5b7e408350b87221be41c0b356669b1c7c6802614139270e",
+            "allow_tool_fallback": false
+          }
+        },
         "haiku_calibrated": {
           "arm_id": "haiku_schema",
           "run_id": "haiku_schema:sku-05:r0",
@@ -3580,53 +3129,10 @@
             "schema_sha256": "c908e844a4472bab5b7e408350b87221be41c0b356669b1c7c6802614139270e",
             "allow_tool_fallback": false
           }
-        },
-        "gemini_decision": {
-          "arm_id": "gemini_decision",
-          "run_id": "gemini_decision:sku-05:r0",
-          "repeat_index": 0,
-          "started_at": "2026-11-26T03:55:15.423658+00:00",
-          "settings_sha256": "e21bcaeb81f11509520224c94cbed0b01e721ba2b728a48e7eabd44f9fc48b05",
-          "system_prompt_sent_sha256": null,
-          "settings": {
-            "arm_id": "gemini_decision",
-            "model_intended": "gemini-decision-1",
-            "call_path": "gemini_decision_service.run_gemini_decision",
-            "questions_sha256": "a0c53aa3ad2cab7682e28888da2574030767e1d32a8b76bacc504785cf098047",
-            "timeouts": "app defaults (SDK; REST fallback 30 s)",
-            "max_retries": "app/SDK default"
-          }
         }
       }
     },
     "sku-06": {
-      "input_tokens": 867,
-      "haiku_output_tokens": 105,
-      "haiku_latency_ms": 1967,
-      "haiku_decision": {
-        "leaf_category": "kitchen_espresso_grinders",
-        "hazmat_class": "HIGH_VOLTAGE_COMMERCIAL",
-        "compliance_status": "HOLD_MISSING_CERT",
-        "contradiction_detected": false,
-        "primary_material_tag": "stainless_steel_burr"
-      },
-      "gemini_decision": {
-        "has_factual_contradiction": false,
-        "compliance_status": "HOLD_MISSING_CERT",
-        "leaf_category": "kitchen_espresso_grinders",
-        "hazmat_compliance_risk": 2.103
-      },
-      "gemini_input_tokens": 624,
-      "gemini_latency_ms": 446,
-      "gemini_confidence": 0.929,
-      "sonnet_raw_text": "# Catalog Review: ING-KIT-2026-511908\n\n**Recommended status: HOLD (do not publish).** The feed itself flags the hold, and I agree with it. Details below, including what I can and can't conclude from this feed.\n\n---\n\n## 1. Target Category Taxonomy & Reasoning\n\n**Proposed placement (provisional):**\n`Home & Kitchen > Kitchen Appliances > Food Preparation > Grinders & Mills`\nwith a secondary decision pending on whether it also belongs in `Commercial Kitchen Equipment > Countertop Prep Equipment`.\n\n**Reasoning:**\n- The title bundles two distinct product functions: a grinder (food prep or possibly spice/coffee/meat) and an induction prep station (a heating/cooking appliance). These normally live in different leaf categories (food preparation vs. cooktops/induction).\n- \"Commercial\" in the title may be a marketing term rather than a certified classification. Without a verified commercial rating (e.g., NSF listing), we shouldn't place it in a commercial-only category where buyers expect that compliance.\n- The feed doesn't say what the grinder grinds (meat, grain, coffee, spices). That determines the leaf category and the applicable safety/food-contact requirements.\n\n**Cannot finalize until:** the grinder's intended material and the actual form factor (one combined unit vs. two bundled units) are confirmed with the seller.\n\n---\n\n## 2. Contradictions & Compliance Risks\n\n**What the feed actually shows:**\n\n| Issue | Detail | Severity |\n|---|---|---|\n| Missing voltage rating | Not in spec feed; rating plate photo is blurry | **Blocker** |\n| Empty UL/BIS certificate field | No safety certification on file | **Blocker** |\n| Unreadable rating plate | Can't independently verify any electrical claims | **Blocker** |\n\n**Why these matter (reasoning, not confirmed defects):**\n- A 3500W appliance draws substantial current. At 230V that's roughly 15A. At 120V it's roughly 29A, which exceeds a standard 15/20A household circuit. The same wattage figure implies very different safety profiles depending on the missing voltage, so the listing could mislead buyers on whether it's usable on their circuit.\n- Combining a high-power heating element (induction) with a motorized grinder raises electrical-safety stakes: moisture exposure, thermal management, and insulation all need certification.\n- UL applies to US/Canada; BIS applies to India. Which certification is required depends on the target market and the shipping destination. The feed doesn't state either, so we can't determine which one is missing or whether both are.\n\n**Potential contradictions to probe (not established by this feed):**\n- Is \"3500W\" the grinder motor, the induction element, or the combined peak draw? The spec says \"3500W heavy-duty motor,\" but the title attributes it to the whole station.\n- Does \"commercial\" match the claimed power and certifications?\n\nI'm not asserting any of these are false; the feed simply lacks the data to confirm or rule them out.\n\n---\n\n## 3. Recommended Publishing Status\n\n**HOLD, with these release conditions:**\n\n1. **Clear rating plate image** showing voltage, frequency, wattage, and model/serial, or a manufacturer spec sheet with the same.\n2. **Valid safety certificate** (UL, BIS, or the applicable regional equivalent), with certificate number, model number match, and expiry date verified against the issuing body's database rather than just accepting an uploaded PDF.\n3. **Clarified product definition:** single combined appliance vs. bundle, what the grinder processes, and what the 3500W figure refers to.\n4. **Target market confirmation** so the correct certification regime is applied.\n\n**Do not** allow a \"publish with warning\" workaround. For a high-wattage electrical appliance, missing voltage and certification are fundamental to buyer safety, not cosmetic gaps.\n\n---\n\n## 4. Merchandising Recommendations for Catalog Ops\n\n**Seller outreach (send now):**\n- Request: clear rating plate photo, certificate with number, voltage spec, product configuration details, and intended target market.\n- Set a response deadline, with auto-delist of the draft if unanswered.\n\n**Title cleanup (apply only after verification):**\n- The current title stacks marketing language (\"TurboChef,\" \"Commercial\") that may imply brand affiliation or certification we haven't verified. Check brand authorization if TurboChef is a registered brand, as it is a known commercial cooking brand and this could be a brand-misuse flag.\n- Suggested structure once confirmed: `[Verified Brand] [Product Type] [Voltage]V [Wattage]W [Key Function]`, with no unverified \"Commercial\" claim.\n\n**Attribute requirements before publish:**\n- Voltage (V), frequency (Hz), wattage (W), plug type, certification type + number, grinder material compatibility, capacity, country of origin.\n\n**Internal flags:**\n- Brand-authorization check on \"TurboChef.\"\n- Route to compliance for electrical-appliance review rather than standard catalog QA.\n- If the seller has other SKUs with missing certification fields, consider a seller-level audit.\n\n---\n\n**Summary:** The feed gives us a hold instruction and three missing critical data points. I've avoided inferring the product's true specs from the title alone. Once the seller supplies verifiable voltage and certification, this can be re-reviewed and categorized properly.",
-      "sonnet_input_tokens": 281,
-      "sonnet_output_tokens": 1824,
-      "sonnet_latency_ms": 18265,
-      "haiku_naive_raw_text": "**SKU Analysis Report: ING-KIT-2026-511908**\n\n**1. Target Marketplace Category Taxonomy and Reasoning**\n\nProposed primary category: Home & Kitchen > Kitchen Appliances > Food Processors & Grinders > Commercial/Countertop Grinders.\n\nSecondary consideration: Commercial Foodservice Equipment > Food Prep Equipment > Grinders, if NovaMart operates a B2B channel. The title combines a grinder with an \"Induction Prep Station,\" which is a hybrid that does not fit cleanly into a single category. The induction element suggests a cooking appliance, which would move the listing toward Kitchen Appliances > Cooktops & Induction Units. Ops should confirm whether the product is a grinder, an induction unit, or a combined kit before category assignment is finalized, because a combined kit may require separate listings or a bundle classification.\n\nReasoning: The title and spec sheet emphasize motor power and grinding function, which supports the grinder category. The word \"Induction\" and the \"Prep Station\" framing introduce a heating function not documented anywhere in the spec sheet.\n\n**2. Factual Contradictions and Compliance/Hazmat Risks**\n\n- **Missing voltage rating (critical):** Voltage is omitted from the feed and the rating plate photo is illegible. A 3500W load is incompatible with a single standard voltage assumption, since 110–120V and 220–240V markets draw very different currents, and wrong-voltage listings create real electrical fire and shock risk. Voltage must be verified from the physical rating plate or manufacturer documentation before publication.\n- **Missing safety certification (critical):** The UL (North America) and BIS (India) certificate fields are empty. Countertop motorized food equipment and any induction heating element require electrical safety certification in most NovaMart markets. Listing without this exposes buyers and NovaMart to regulatory and liability risk and may violate marketplace policy.\n- **Undocumented induction function:** The title claims an induction prep station, but no induction specifications (heating wattage, temperature range, cookware requirements, or induction-specific safety features such as auto-shutoff and overheat protection) appear in the spec sheet. This is a factual gap and a potential misrepresentation.\n- **Mixed-function ambiguity:** A grinder and an induction unit carry different hazard profiles (blade and pinch hazards versus heat and electromagnetic considerations). Safety warnings and certifications for each must be confirmed separately.\n- **Brand/claim review:** \"TurboChef\" may be a registered trademark of an unrelated company (TurboChef Technologies is an established commercial oven brand). Brand authorization should be verified to avoid trademark and false-association issues.\n\n**3. Recommended Publishing Status**\n\n**HOLD: Do not publish.** Status should remain blocked until all of the following are verified:\n- Voltage rating confirmed from a legible rating plate or manufacturer documentation\n- UL and/or BIS certificate numbers provided and validated against certifying-body databases\n- Induction specifications provided, or the induction claim removed from the title\n- Brand authorization or trademark clearance confirmed\n- Product function (grinder, induction unit, or combined kit) clarified\n\nOnce these clear, the listing can move to pending review with the corrected category and specifications.\n\n**4. Rewritten Merchandising Recommendations for Catalog Ops**\n\nHold the existing title. Once verified, a compliant title might read: \"[Verified Brand] 3500W Commercial Countertop Grinder, [Voltage]V, UL/BIS Certified,\" with a separate listing or clearly scoped bundle note for any induction component, for example: \"Includes Induction Prep Station Module: [wattage]W, [temp range]°C, auto-shutoff.\"\n\nRequired fields to complete before republishing:\n- Voltage (exact value and region compatibility)\n- Power consumption and motor specifications\n- Certification numbers and expiry dates (UL/BIS, as applicable)\n- Induction specs and included cookware requirements (if applicable)\n- Safety warnings specific to grinding blades and heating elements\n- Brand name confirmed as authorized\n- Clear product images with a legible rating plate\n\nAvoid unverified claims such as \"commercial-grade\" or \"professional\" unless supported by manufacturer documentation. Image requirements: a clear photo of the rating plate, a photo of the certification label, and a photo of the induction surface if applicable.\n\nNext step for ops: request the rating plate photo, certificate numbers, and induction specs from the seller, and return this SKU to review once received.",
-      "haiku_naive_input_tokens": 281,
-      "haiku_naive_output_tokens": 1540,
-      "haiku_naive_latency_ms": 8570,
       "sub_task": "sku_tagging",
       "rungs": {
         "sonnet_naive": {
@@ -3749,6 +3255,38 @@
             "note": "Read by a model that was not under test and never saw the right answer; it reports what the response says (an allowed label, not_stated or ambiguous) with a verbatim quote."
           }
         },
+        "sonnet_calibrated": {
+          "model_id": "claude-sonnet-5-5",
+          "provider": "Anthropic",
+          "latency_ms": 1802,
+          "input_tokens": 867,
+          "output_tokens": 105,
+          "thinking_tokens": 0,
+          "stop_reason": "end_turn",
+          "truncated": false,
+          "max_tokens": 512,
+          "request_params": {
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "output_config": {
+              "format": {
+                "type": "json_schema"
+              }
+            }
+          },
+          "structured_output": {
+            "leaf_category": "kitchen_espresso_grinders",
+            "hazmat_class": "HIGH_VOLTAGE_COMMERCIAL",
+            "compliance_status": "HOLD_MISSING_CERT",
+            "contradiction_detected": false,
+            "primary_material_tag": "stainless_steel_burr"
+          },
+          "raw_text_preview": "{\"leaf_category\":\"kitchen_espresso_grinders\",\"hazmat_class\":\"HIGH_VOLTAGE_COMMERCIAL\",\"compliance_status\":\"HOLD_MISSING_CERT\",\"contradiction_detected\":false,\"primary_material_tag\":\"stainless_steel_burr\"}",
+          "decision_probabilities": null,
+          "schema_parse_ok": true
+        },
         "haiku_calibrated": {
           "model_id": "claude-haiku-5-5",
           "provider": "Anthropic",
@@ -3780,76 +3318,6 @@
           "raw_text_preview": "{\"leaf_category\":\"kitchen_espresso_grinders\",\"hazmat_class\":\"HIGH_VOLTAGE_COMMERCIAL\",\"compliance_status\":\"HOLD_MISSING_CERT\",\"contradiction_detected\":false,\"primary_material_tag\":\"stainless_steel_burr\"}",
           "decision_probabilities": null,
           "schema_parse_ok": true
-        },
-        "gemini_decision": {
-          "model_id": "gemini-decision-1",
-          "provider": "Google Gemini Decisions API",
-          "latency_ms": 446,
-          "input_tokens": 624,
-          "output_tokens": 0,
-          "thinking_tokens": 0,
-          "stop_reason": null,
-          "truncated": false,
-          "max_tokens": null,
-          "request_params": {
-            "api_version": "v1beta"
-          },
-          "structured_output": {
-            "has_factual_contradiction": false,
-            "compliance_status": "HOLD_MISSING_CERT",
-            "leaf_category": "kitchen_espresso_grinders",
-            "hazmat_compliance_risk": 2.103
-          },
-          "raw_text_preview": null,
-          "decision_probabilities": {
-            "has_factual_contradiction": {
-              "type": "noul",
-              "value": false,
-              "p_true": 0.1312,
-              "confidence": 0.8688
-            },
-            "compliance_status": {
-              "type": "choice",
-              "value": "HOLD_MISSING_CERT",
-              "confidence": 0.9999,
-              "probabilities": {
-                "HOLD_MISSING_CERT": 0.9999,
-                "SUPPRESS_CONTRADICTED_FACET": 0.0001,
-                "APPROVED_AUTO_PUBLISH": 0.0
-              }
-            },
-            "leaf_category": {
-              "type": "choice",
-              "value": "kitchen_espresso_grinders",
-              "confidence": 0.996,
-              "probabilities": {
-                "home_ceramic_dinnerware": 0.0006,
-                "apparel_ethnic_kurtas": 0.0008,
-                "electronics_power_banks": 0.0015,
-                "audio_bluetooth_speakers": 0.0011,
-                "kitchen_espresso_grinders": 0.996
-              }
-            },
-            "hazmat_compliance_risk": {
-              "type": "score",
-              "value": 2.103,
-              "confidence": 0.8519,
-              "probabilities": {
-                "0": 0.0005,
-                "1": 0.0218,
-                "3": 0.1258,
-                "2": 0.8519
-              },
-              "legend": {
-                "2": "Level 2: Material misrepresentation or missing regional electrical/safety cert requiring publish hold.",
-                "0": "Level 0: Benign non-hazardous SKU with fully verified factual metadata.",
-                "3": "Level 3: High-capacity lithium-ion / air-freight hazmat or dangerous misrepresentation requiring strict block.",
-                "1": "Level 1: Minor fragile handling requirement or incomplete non-safety attribute."
-              }
-            }
-          },
-          "endpoint": "v1beta/decisions",
-          "input_tokens_possibly_estimated": false
         }
       },
       "provenance": {
@@ -3895,6 +3363,29 @@
             "output_format": "free_text"
           }
         },
+        "sonnet_calibrated": {
+          "arm_id": "sonnet_schema",
+          "run_id": "sonnet_schema:sku-06:r0",
+          "repeat_index": 0,
+          "started_at": "2026-11-26T03:55:18.507062+00:00",
+          "settings_sha256": "57c3fd83f0e88f3359a8a11d6c43d763705f6ffec9def246195748b15b6e8087",
+          "system_prompt_sent_sha256": "77a7d7ce803bde7295fa554f10877c83ee2ee24208067f4754348a3db550937d",
+          "settings": {
+            "arm_id": "sonnet_schema",
+            "model_intended": "claude-sonnet-5-5",
+            "call_path": "anthropic_service.run_haiku_calibrated",
+            "max_tokens": 512,
+            "thinking": {
+              "type": "between_tools"
+            },
+            "timeout_s": 60.0,
+            "max_retries": 0,
+            "system_prompt_sha256": "77a7d7ce803bde7295fa554f10877c83ee2ee24208067f4754348a3db550937d",
+            "output_format": "json_schema",
+            "schema_sha256": "c908e844a4472bab5b7e408350b87221be41c0b356669b1c7c6802614139270e",
+            "allow_tool_fallback": false
+          }
+        },
         "haiku_calibrated": {
           "arm_id": "haiku_schema",
           "run_id": "haiku_schema:sku-06:r0",
@@ -3916,22 +3407,6 @@
             "output_format": "json_schema",
             "schema_sha256": "c908e844a4472bab5b7e408350b87221be41c0b356669b1c7c6802614139270e",
             "allow_tool_fallback": false
-          }
-        },
-        "gemini_decision": {
-          "arm_id": "gemini_decision",
-          "run_id": "gemini_decision:sku-06:r0",
-          "repeat_index": 0,
-          "started_at": "2026-11-26T03:55:23.465915+00:00",
-          "settings_sha256": "e21bcaeb81f11509520224c94cbed0b01e721ba2b728a48e7eabd44f9fc48b05",
-          "system_prompt_sent_sha256": null,
-          "settings": {
-            "arm_id": "gemini_decision",
-            "model_intended": "gemini-decision-1",
-            "call_path": "gemini_decision_service.run_gemini_decision",
-            "questions_sha256": "a0c53aa3ad2cab7682e28888da2574030767e1d32a8b76bacc504785cf098047",
-            "timeouts": "app defaults (SDK; REST fallback 30 s)",
-            "max_retries": "app/SDK default"
           }
         }
       }

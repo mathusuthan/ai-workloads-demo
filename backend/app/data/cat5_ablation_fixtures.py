@@ -6,9 +6,8 @@ ablation harness inserts them into a connection that was first seeded by the app
 
 Every new invoice carries a worked derivation (inputs -> each rupee field -> decision -> routing)
 written by hand from SOP-AP-3WAY-2026.v4 (`AP_POLICY_MANUAL_MARKDOWN`). The ground truth is that hand
-derivation, not the deterministic gate's output. `tests/test_cat5_ablation.py` compares the two:
-invoices where they agree form the default matrix; the others are listed in
-`CAT5_ABLATION_EXCLUDED_PENDING_REVIEW` with the manual text, the derivation and the gate output.
+derivation, not the deterministic gate's output; `tests/test_cat5_ablation.py` checks that the gate
+agrees with it on every invoice (voucher and escalation).
 """
 
 from __future__ import annotations
@@ -524,7 +523,7 @@ _HAND: dict[str, dict[str, Any]] = {
             "debit_note_deduction_inr": "2,155,000.00 - 2,155,000.00 = 0.00",
             "gst": "Case A (MATCHED_VERIFIED): payout = ROUND(2,155,000 x 0.18, 2) = 387,900.00; escrow 0.00",
             "decision": "Case A and debit note 0 -> APPROVE_CLEAN",
-            "escalation": "Gate rule (discrepancies >= 2 or debit > 0): 0 discrepancies, debit 0 -> no escalation.",
+            "escalation": "Manual 6.2 (multi-factor rule): no factor (no DOA or shortage, no amendment, no price rise, no freight) -> no escalation.",
             "routing": "GL 210100 principal 2,155,000.00 (T+43); GL 142810 input GST 387,900.00; no exception queue.",
         },
     },
@@ -541,7 +540,7 @@ _HAND: dict[str, dict[str, Any]] = {
             "authorized_gst_payout_inr": 442872.0,
             "gst_escrow_holdback_inr": 0.0,
             "debit_note_deduction_inr": 39600.0,
-            "expected_escalation": True,
+            "expected_escalation": False,
         },
         "derivation": {
             "inputs": [
@@ -558,7 +557,7 @@ _HAND: dict[str, dict[str, Any]] = {
             "debit_note_deduction_inr": "2,500,000.00 - 2,460,400.00 = 39,600.00",
             "gst": "Case A: payout = ROUND(2,460,400 x 0.18, 2) = 442,872.00; escrow 0.00",
             "decision": "Case A with debit note > 0 -> APPROVE_PARTIAL_DEBIT_NOTE",
-            "escalation": "Gate rule: 1 discrepancy (DOA) but debit 39,600 > 0 -> escalation required.",
+            "escalation": "Manual 6.2 (multi-factor rule): one factor, partial DOA (L1 24 units rejected) -> not multi-factor -> no escalation.",
             "routing": "GL 210100 principal 2,460,400.00; GL 142810 GST 442,872.00; GL 520900 debit note 39,600.00; queue AP-DEBIT-RECON (SLA 12h).",
         },
     },
@@ -575,7 +574,7 @@ _HAND: dict[str, dict[str, Any]] = {
             "authorized_gst_payout_inr": 658080.0,
             "gst_escrow_holdback_inr": 0.0,
             "debit_note_deduction_inr": 22800.0,
-            "expected_escalation": True,
+            "expected_escalation": False,
         },
         "derivation": {
             "inputs": [
@@ -592,7 +591,7 @@ _HAND: dict[str, dict[str, Any]] = {
             "debit_note_deduction_inr": "3,678,800.00 - 3,656,000.00 = 22,800.00",
             "gst": "Case A: payout = ROUND(3,656,000 x 0.18, 2) = 658,080.00; escrow 0.00",
             "decision": "Case A with debit note > 0 -> APPROVE_PARTIAL_DEBIT_NOTE",
-            "escalation": "Gate rule applied to these figures: debit 22,800 > 0 -> escalation required.",
+            "escalation": "Manual 6.2 (multi-factor rule): one factor, an unauthorized line price hike (L1 billed inside the 1.5% band on a PO that is not index-linked, paid at the PO rate) -> no escalation.",
             "routing": "GL 210100 principal 3,656,000.00; GL 142810 GST 658,080.00; GL 520900 debit note 22,800.00; queue AP-DEBIT-RECON.",
         },
     },
@@ -609,7 +608,7 @@ _HAND: dict[str, dict[str, Any]] = {
             "authorized_gst_payout_inr": 460800.0,
             "gst_escrow_holdback_inr": 0.0,
             "debit_note_deduction_inr": 64000.0,
-            "expected_escalation": True,
+            "expected_escalation": False,
         },
         "derivation": {
             "inputs": [
@@ -627,7 +626,7 @@ _HAND: dict[str, dict[str, Any]] = {
             "debit_note_deduction_inr": "2,624,000.00 - 2,560,000.00 = 64,000.00",
             "gst": "Case A: payout = ROUND(2,560,000 x 0.18, 2) = 460,800.00; escrow 0.00",
             "decision": "Case A with debit note > 0 -> APPROVE_PARTIAL_DEBIT_NOTE",
-            "escalation": "Gate rule: 1 discrepancy (unauthorised hike), debit 64,000 > 0 -> escalation required.",
+            "escalation": "Manual 6.2 (multi-factor rule): one factor, an unauthorized line price hike (L1 +5%, no amendment) -> no escalation.",
             "routing": "GL 210100 principal 2,560,000.00; GL 142810 GST 460,800.00; GL 520900 debit note 64,000.00; queue AP-DEBIT-RECON.",
         },
     },
@@ -662,7 +661,7 @@ _HAND: dict[str, dict[str, Any]] = {
             "debit_note_deduction_inr": "3,321,500.00 - 3,321,500.00 = 0.00",
             "gst": "Case A: payout = ROUND(3,321,500 x 0.18, 2) = 597,870.00; escrow 0.00",
             "decision": "Case A and debit note 0 -> APPROVE_CLEAN",
-            "escalation": "Gate rule: 1 discrepancy (amendment applied), debit 0 -> no escalation.",
+            "escalation": "Manual 6.2 (multi-factor rule): one factor, a signed contract amendment (L1 AMD-HYD-2645-A covers the billed rate) -> no escalation.",
             "routing": "GL 210100 principal 3,321,500.00; GL 142810 GST 597,870.00; voucher links AMD-HYD-2645-A (7.2); no exception queue.",
         },
     },
@@ -679,7 +678,7 @@ _HAND: dict[str, dict[str, Any]] = {
             "authorized_gst_payout_inr": 809640.0,
             "gst_escrow_holdback_inr": 0.0,
             "debit_note_deduction_inr": 9500.0,
-            "expected_escalation": True,
+            "expected_escalation": False,
         },
         "derivation": {
             "inputs": [
@@ -696,7 +695,7 @@ _HAND: dict[str, dict[str, Any]] = {
             "debit_note_deduction_inr": "4,507,500.00 - 4,498,000.00 = 9,500.00",
             "gst": "Case A: payout = ROUND(4,498,000 x 0.18, 2) = 809,640.00; escrow 0.00",
             "decision": "Case A with debit note > 0 -> APPROVE_PARTIAL_DEBIT_NOTE",
-            "escalation": "Gate rule: 1 discrepancy (freight), debit 9,500 > 0 -> escalation required.",
+            "escalation": "Manual 6.2 (multi-factor rule): one factor, disallowed freight (9,500 above the 18,000 cap, no waiver) -> no escalation.",
             "routing": "GL 210100 principal 4,498,000.00; GL 142810 GST 809,640.00; GL 520900 debit note 9,500.00 (disallowed freight); queue AP-DEBIT-RECON.",
         },
     },
@@ -731,7 +730,7 @@ _HAND: dict[str, dict[str, Any]] = {
             "debit_note_deduction_inr": "3,118,000.00 - 3,118,000.00 = 0.00",
             "gst": "Case B (PENDING_FILING_MISMATCH with ACTIVE_VERIFIED IRN; 3.2 keys on GSTR-2B status, not MSE status): payout 0.00; escrow = ROUND(3,118,000 x 0.05, 2) = 155,900.00",
             "decision": "Case B with zero commercial deduction -> APPROVE_WITH_GST_ESCROW (the memo's request to release GST is not a policy input)",
-            "escalation": "Gate rule: 0 discrepancies, debit 0 -> no escalation.",
+            "escalation": "Manual 6.2 (multi-factor rule): no factor (GST escrow is not a commercial factor; 6.2 names APPROVE_WITH_GST_ESCROW as a case that completes on Haiku) -> no escalation.",
             "routing": "GL 210100 principal 3,118,000.00; GL 219450 escrow 155,900.00 (Rule 37A cure window); queue AP-GST-ESCROW (SLA 24h).",
         },
     },
@@ -768,7 +767,7 @@ _HAND: dict[str, dict[str, Any]] = {
             "debit_note_deduction_inr": "0.00 (4.1; the 2.4 invariant applies only when not blocked)",
             "gst": "payout 0.00; escrow 0.00 (4.1)",
             "decision": "BLOCK_EXCEPTION_HOLD",
-            "escalation": "Hard block -> no Sonnet escalation (6.2: BLOCK cases complete on Haiku; the gate returns escalation_required false).",
+            "escalation": "Hard block -> no escalation (6.2: BLOCK_EXCEPTION_HOLD cases complete end-to-end on Haiku).",
             "routing": "No GL release; queue AP-FRAUD-IRN-HOLD (P1 SLA 4h) for Forensic Tax & Internal Audit review.",
         },
     },
@@ -804,7 +803,7 @@ _HAND: dict[str, dict[str, Any]] = {
             "debit_note_deduction_inr": "5,069,000.00 - 4,862,520.00 = 206,480.00 (check: 138,000 + 31,500 + 28,980 + 8,000 = 206,480)",
             "gst": "Case B: payout 0.00; escrow = ROUND(4,862,520 x 0.18, 2) = 875,253.60",
             "decision": "Case B with commercial deductions -> APPROVE_PARTIAL_DEBIT_NOTE (3.2: note both split escrow and debit note)",
-            "escalation": "Gate rule: discrepancies = L1 short (1) + L2 hike (1) + L3 amendment (1) + L3 DOA (1) + freight (1) = 5 >= 2; debit > 0 -> escalation required.",
+            "escalation": "Manual 6.2 (multi-factor rule): four factor kinds -- quantity shortage / partial DOA (L1 380 of 400 accepted, L3 12 DOA), unauthorized price hike (L2 +3%, amendment B is a draft), signed amendment (L3 AMD-HYD-3774-A), disallowed freight (8,000) -> multi-factor -> escalation.",
             "routing": "GL 210100 principal 4,862,520.00; GL 219450 escrow 875,253.60; GL 520900 debit note 206,480.00; queues AP-DEBIT-RECON and AP-GST-ESCROW; voucher links AMD-HYD-3774-A.",
         },
     },
@@ -832,6 +831,7 @@ def _new_preset(spec: dict[str, Any]) -> dict[str, Any]:
             "optimal_tool_calls": 3,
         },
         "derivation": copy.deepcopy(hand["derivation"]),
+        "escalation_derivation": hand["derivation"]["escalation"],
         "source": "cat5_ablation_fixtures (hand-derived)",
     }
 
@@ -843,10 +843,20 @@ _ORIGINAL_EXTRAS: dict[str, dict[str, str]] = {
 }
 
 
+# The app's original invoices carry no worked derivation; their escalation expectation (unchanged by the 6.2 fix)
+# is reasoned here the same way.
+_ORIGINAL_ESCALATION: dict[str, str] = {
+    "inv-01": "Manual 6.2 (multi-factor rule): no factor (clean receipt; GST escrow is not a commercial factor) -> no escalation.",
+    "inv-02": "Manual 6.2 (multi-factor rule): four factor kinds -- partial DOA (L1 15 units), signed amendment (L2 AMD-BOM-5512-A), unauthorized price hike (L3 +5%), disallowed freight (20,000) -> multi-factor -> escalation (this is 6.4 Example B).",
+    "inv-03": "Hard block (Triggers 1 and 2) -> no escalation (6.2: BLOCK_EXCEPTION_HOLD cases complete end-to-end on Haiku).",
+}
+
+
 def _original_preset(p: dict[str, Any]) -> dict[str, Any]:
     out = copy.deepcopy(p)
     out.update(_ORIGINAL_EXTRAS[p["id"]])
     out["derivation"] = None
+    out["escalation_derivation"] = _ORIGINAL_ESCALATION[p["id"]]
     out["source"] = "app/data/cat5_fixtures.CAT5_PRESETS (unchanged)"
     return out
 
@@ -858,86 +868,17 @@ CAT5_ABLATION_PRESETS: list[dict[str, Any]] = [
 ]
 CAT5_ABLATION_PRESETS_BY_ID: dict[str, dict[str, Any]] = {p["id"]: p for p in CAT5_ABLATION_PRESETS}
 
-# Hand derivation vs `evaluate_deterministic_policy_gate` disagreements.
-# Lead ruling (2026-11-26): the manual derivation is correct and the gate was wrong for inv-06; ground_truth
-# stays the manual derivation. inv-06 runs as the separate `gate_disagreement` group and never enters the pooled
-# tables. The gate was fixed on 2026-11-26, after the experiment (gate v2-manual-aligned): it now equals the
-# manual derivation on inv-06 (tested). The recorded runs used the pre-fix gate (v1-band-unconditional);
-# `gate_output_truth` is what that gate returned, frozen here so the recorded result stays reproducible.
-CAT5_ABLATION_GATE_DISAGREEMENT: dict[str, dict[str, Any]] = {
-    "inv-06": {
-        "ruling": (
-            "Lead ruling: the manual derivation is correct and the gate is wrong. Manual 2.1 allows the 1.5% band only "
-            "when the PO currency notes specify an index-linked float; this PO is plain DDP INR with no amendment, so "
-            "line 1 pays at the PO rate. The gate's WITHIN_1.5PCT_TOLERANCE branch ignored that condition when the "
-            "experiment ran; it was fixed on 2026-11-26 (the band now passes only on index-linked POs)."
-        ),
-        # Gate output as recorded on 2026-11-26, before the fix (gate v1-band-unconditional). Frozen: the tests check
-        # it against the v1 gate (replay mode), not against the current gate, which now equals the manual derivation.
-        "gate_output_note": "Gate output as recorded on 2026-11-26, before the fix (gate v1-band-unconditional).",
-        "gate_output_truth": {
-            "decision": "APPROVE_CLEAN",
-            "authorized_net_principal_inr": 3678800.0,
-            "authorized_gst_payout_inr": 662184.0,
-            "gst_escrow_holdback_inr": 0.0,
-            "debit_note_deduction_inr": 0.0,
-            "expected_escalation": False,
-        },
-        "gate_calculation": [
-            "L1 NM-CBL-1.5SQ-90M: 1,480 < 1,499 <= 1,502.20 -> price_rule WITHIN_1.5PCT_TOLERANCE -> rate 1,499 (billed); authorised 1,200 x 1,499 = 1,798,800; deduction 0.",
-            "L2 NM-CBL-2.5SQ-90M: rate 2,350 (= PO); authorised 1,880,000.",
-            "Net 1,798,800 + 1,880,000 = 3,678,800.00; debit 3,678,800 - 3,678,800 = 0.00; GST Case A ROUND(3,678,800 x 0.18, 2) = 662,184.00; APPROVE_CLEAN; escalation_required false.",
-        ],
-        # Line 1 is the only line on which the two truths differ; a committed voucher's net principal shows which
-        # rate was paid on it (the other line and freight are identical under both).
-        "line1": {"sku": "NM-CBL-1.5SQ-90M", "qty": 1200, "po_rate": 1480.0, "billed_rate": 1499.0},
-        "net_principal_if_po_rate": 3656000.0,
-        "net_principal_if_billed_rate": 3678800.0,
-        "bundle_note": (
-            "When the experiment ran, fetch_3way_match_bundle did not return purchase_orders.currency (the PO currency "
-            "notes), so bundle arms could not check the manual's index-linked-float condition; raw arms could "
-            "(query_po_raw returns it). Since 2026-11-26 the bundle returns it (bundle v2-manual-aligned, which also "
-            "adds the vendor risk_flag, any posted vouchers for the invoice and each line's PO GST rate); every "
-            "recorded run used the earlier bundle."
-        ),
-    },
+# Invoice fingerprint basis for the escalation expectation. The fingerprint (below) identifies an invoice's data and
+# voucher ground truth; it was first computed with these expectation values and is kept on them so a recorded run's
+# `settings.invoice_fingerprint` keeps identifying the same invoice. The scored expectation is
+# `ground_truth.expected_escalation` (manual 6.2, see each preset's `escalation_derivation`).
+_FINGERPRINT_ESCALATION_BASIS: dict[str, bool] = {
+    "inv-01": False, "inv-02": True, "inv-03": False, "inv-04": False, "inv-05": True, "inv-06": True,
+    "inv-07": True, "inv-08": False, "inv-09": True, "inv-10": False, "inv-11": False, "inv-12": True,
 }
 
-# Kept for existing imports: the invoices that are not in the default matrix.
-CAT5_ABLATION_EXCLUDED_PENDING_REVIEW: dict[str, dict[str, Any]] = {
-    "inv-06": {
-        "manual_text": (
-            "2.1: \"If `po_unit_price_inr < billed_unit_price_inr <= po_unit_price_inr * 1.015`: tiny FX/metal-surcharge "
-            "rounding within `1.50%` MAY pass ONLY when PO currency notes specify index-linked float; otherwise standard "
-            "landed DDP catalog POs default to PO unit rate unless amended.\""
-        ),
-        "derivation": "PO is 'DDP Inside FC Dock', currency 'INR', no amendment -> L1 at PO rate 1,480; debit 22,800; APPROVE_PARTIAL_DEBIT_NOTE; net 3,656,000; GST 658,080.",
-        "gate_output": "Pre-fix gate (as recorded): price_rule WITHIN_1.5PCT_TOLERANCE -> billed 1,499 accepted; APPROVE_CLEAN; net 3,678,800; GST 662,184; debit 0; escalation_required false. Fixed gate: WITHIN_1.5PCT_NOT_INDEX_LINKED_PO_RATE -> PO rate 1,480; equals the manual derivation.",
-        "note": (
-            "Ruled by the lead: the manual derivation is ground truth and the gate was wrong. Runs as the separate "
-            "`gate_disagreement` group. The pre-fix gate always passed the 1.5% band; the manual passes it only for "
-            "index-linked POs. Fixed 2026-11-26 (gate v2-manual-aligned; the bundle now returns "
-            "purchase_orders.currency)."
-        ),
-    },
-}
-
-for _pid, _dis in CAT5_ABLATION_GATE_DISAGREEMENT.items():
-    # Stored beside the manual ground truth; not part of `ground_truth`, so the invoice fingerprint is unchanged.
-    CAT5_ABLATION_PRESETS_BY_ID[_pid]["gate_output_truth"] = copy.deepcopy(_dis["gate_output_truth"])
-
-CAT5_ABLATION_DEFAULT_INVOICE_IDS: tuple[str, ...] = tuple(
-    p["id"] for p in CAT5_ABLATION_PRESETS if p["id"] not in CAT5_ABLATION_EXCLUDED_PENDING_REVIEW
-)
-CAT5_ABLATION_GATE_DISAGREEMENT_IDS: tuple[str, ...] = tuple(CAT5_ABLATION_GATE_DISAGREEMENT)
-CAT5_ABLATION_ALL_INVOICE_IDS: tuple[str, ...] = tuple(p["id"] for p in CAT5_ABLATION_PRESETS)
-
-# Named invoice groups for the runner CLI (`--group`).
-CAT5_ABLATION_GROUPS: dict[str, tuple[str, ...]] = {
-    "default": CAT5_ABLATION_DEFAULT_INVOICE_IDS,
-    "gate_disagreement": CAT5_ABLATION_GATE_DISAGREEMENT_IDS,
-    "all": CAT5_ABLATION_ALL_INVOICE_IDS,
-}
+CAT5_ABLATION_DEFAULT_INVOICE_IDS: tuple[str, ...] = tuple(p["id"] for p in CAT5_ABLATION_PRESETS)
+CAT5_ABLATION_ALL_INVOICE_IDS: tuple[str, ...] = CAT5_ABLATION_DEFAULT_INVOICE_IDS
 
 
 def _stable_sha(obj: Any) -> str:
@@ -945,7 +886,7 @@ def _stable_sha(obj: Any) -> str:
 
 
 def invoice_fingerprint(preset_id: str) -> str:
-    """Hash of an invoice's preset (incl. ground truth) and its ERP rows; changes supersede its records."""
+    """Hash of an invoice's preset (incl. its voucher ground truth) and its ERP rows; changes supersede its records."""
     preset = CAT5_ABLATION_PRESETS_BY_ID[preset_id]
     rows = ROWS_BY_INVOICE.get(preset_id)
     if rows is None:  # original invoice: its rows live in the app's base seed
@@ -963,4 +904,5 @@ def invoice_fingerprint(preset_id: str) -> str:
             for t in ERP_TABLE_ORDER
         }
     scored = {k: preset[k] for k in ("invoice_id", "po_id", "vendor_name", "fc_hub", "invoice_grand_total_inr", "ground_truth")}
+    scored["ground_truth"] = {**scored["ground_truth"], "expected_escalation": _FINGERPRINT_ESCALATION_BASIS[preset_id]}
     return _stable_sha({"preset": scored, "rows": rows})[:16]

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from app.models import FinOpsBreakdown, JevReferenceComparison
+from app.models import FinOpsBreakdown
 
 
 @dataclass(frozen=True)
@@ -54,27 +54,16 @@ MODEL_RATES: dict[str, ModelRateSpec] = {
         output_rate_multiplier="5x output weight · 50% async batch discount",
         notes="Asynchronous 50% discount for bulk catalog & backlog pipelines.",
     ),
-    "gemini-decision-1": ModelRateSpec(
-        model_id="gemini-decision-1",
-        label="Gemini Decision 1",
-        provider="Google Gemini Decisions API",
-        input_per_1m_usd=0.10,
-        output_per_1m_usd=0.00,
-        cache_write_per_1m_usd=0.00,
-        cache_read_per_1m_usd=0.00,
-        output_rate_multiplier="0 output tokens ($0 output)",
-        notes="System-1 non-autoregressive classifier evaluating up to 1,000 questions on 1 shared input pass.",
-    ),
-    "typesafe-jev": ModelRateSpec(
-        model_id="typesafe-jev",
-        label="TypeSafe Jev (Reference Rate Card)",
-        provider="TypeSafe AI (Reference)",
-        input_per_1m_usd=0.042,
-        output_per_1m_usd=0.00,
-        cache_write_per_1m_usd=0.00,
-        cache_read_per_1m_usd=0.00,
-        output_rate_multiplier="0 output tokens ($0 output)",
-        notes="Dedicated System-1 decision model reference benchmark ($42/B input tokens, $0 output).",
+    "claude-sonnet-5-5-batch": ModelRateSpec(
+        model_id="claude-sonnet-5-5-batch",
+        label="Claude Sonnet 5.5 (Message Batch -50%)",
+        provider="Anthropic Batch API",
+        input_per_1m_usd=1.00,
+        output_per_1m_usd=5.00,
+        cache_write_per_1m_usd=1.25,
+        cache_read_per_1m_usd=0.05,
+        output_rate_multiplier="5x output weight · 50% async batch discount",
+        notes="Asynchronous 50% discount for bulk catalog & backlog pipelines.",
     ),
 }
 
@@ -199,32 +188,6 @@ def rollup_multi_call_finops(
         io_ratio_label=io_ratio_label,
         output_cost_share_pct=round(output_cost / total_cost_usd * 100, 1) if total_cost_usd > 0 else 0.0,
         output_rate_multiplier="5x output weight",
-    )
-
-
-def compute_jev_reference(
-    input_tokens: int,
-    naive_cost_usd: float,
-) -> JevReferenceComparison:
-    """Compute TypeSafe Jev FinOps comparator for a given input payload size."""
-    rate = MODEL_RATES["typesafe-jev"]
-    est_cost = (input_tokens / 1_000_000) * rate.input_per_1m_usd
-    savings = round(((naive_cost_usd - est_cost) / naive_cost_usd) * 100, 2) if naive_cost_usd > 0 else 0.0
-    return JevReferenceComparison(
-        model_id=rate.model_id,
-        model_label=rate.label,
-        input_rate_per_1m_usd=rate.input_per_1m_usd,
-        output_rate_per_1m_usd=rate.output_per_1m_usd,
-        estimated_input_tokens=input_tokens,
-        estimated_cost_usd=round(est_cost, 8),
-        cost_per_1k_usd=round(est_cost * 1_000, 4),
-        monthly_cost_at_100k_usd=round(est_cost * 100_000, 2),
-        savings_vs_naive_pct=savings,
-        note=(
-            "FinOps rate-card benchmark ($0.042/MTok input, $0 output). "
-            "Same System-1 closed-set boundary as Gemini Decision 1: "
-            "cannot rewrite free text for inline PII masking."
-        ),
     )
 
 
