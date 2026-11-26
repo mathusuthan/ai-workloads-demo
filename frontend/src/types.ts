@@ -383,7 +383,7 @@ export interface CreditShieldCredentials {
 // --- Category 2: Generative Synthesis & Drafting ---
 
 export type Cat2SubTaskType = 'exec_synthesis' | 'regulatory_filing'
-// Without (unbounded long-form draft) and with (section template with length caps) the improvement, per model.
+// Without (unbounded long-form draft) and with (section template with length caps) the lever, per model.
 export type Cat2RungId = 'sonnet_unbounded' | 'haiku_unbounded' | 'sonnet_templated' | 'haiku_templated'
 export type Cat2SectionKey =
   | 'executive_summary'
@@ -812,7 +812,7 @@ export interface Cat3ChatTurnResponse {
 // --- Category 4: Multi-Doc RAG & Deep Ingestion (Supplier Deal-Room) ---
 
 export type Cat4UseCaseType = 'supplier_msa_due_diligence'
-// Without and with the deck improvement (hybrid retrieval paired with context caching)
+// Without and with the deck's lever (hybrid retrieval paired with context caching)
 export type Cat4RungId = 'naive_full_corpus' | 'cached_rerank_hybrid'
 
 export interface Cat4DealRoomChunkSpec {
@@ -1297,7 +1297,7 @@ export interface Cat5AblationArm extends Cat5AblationCell {
   arm_id: string
   label: string
   adds: string
-  /** 'without' = the deck's improvement absent; 'with' = present */
+  /** 'without' = the deck's lever absent; 'with' = present */
   design: 'without' | 'with'
   model_column: 'sonnet' | 'haiku'
   runnable_in_app: boolean

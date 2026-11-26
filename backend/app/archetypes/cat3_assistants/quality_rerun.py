@@ -59,7 +59,7 @@ from app.models import Cat3ChatTurnEntry
 
 SCHEMA_VERSION = 1
 SONNET_MODEL_ID = "claude-sonnet-5-5"
-# The two versions the app and every summary show: without and with the deck improvement.
+# The two versions the app and every summary show: without and with the deck's lever.
 RUNG_IDS: tuple[str, ...] = ("naive_full_history", "prefix_cached_summarized")
 # Another lever the harness can still run (prefix caching alone); its records live in
 # experiments/cat3_quality/other_levers/ and nothing displayed reads them.

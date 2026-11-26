@@ -1,4 +1,4 @@
-"""Orchestrates the Category 4 deal-room comparison (without vs with the deck improvement) and ad-hoc queries.
+"""Orchestrates the Category 4 deal-room comparison (without vs with the deck's lever) and ad-hoc queries.
 
 Without: the whole corpus as uncached plain text, no citations (Sonnet answers). With: hybrid retrieval paired with
 context caching — Haiku picks 5 clauses from the cached corpus, Sonnet answers over them with citations (`paired.py`).
@@ -87,7 +87,7 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, str | None, list[str]]:
     if rung_id == "naive_full_corpus":
         return (
             "1. Without: Full Corpus, No Cache, No Citations",
-            "Without the improvement",
+            "Without the lever",
             None,
             [
                 # replaced with the measured prompt size by _apply_measured_claims
@@ -99,7 +99,7 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, str | None, list[str]]:
         )
     return (
         "2. With: Retrieval Paired with Caching + Citations",
-        "With the improvement",  # measured share of corpus not sent to Sonnet added by _apply_measured_claims
+        "With the lever",  # measured share of corpus not sent to Sonnet added by _apply_measured_claims
         "claude-haiku-5-5",
         [
             # replaced with the measured cached block size by _apply_measured_claims
@@ -409,7 +409,7 @@ def _apply_measured_claims(
         )
     if paired:
         avg_red = sum(q.context_reduction_pct for q in paired.queries) / len(paired.queries)
-        paired.badge_text = f"With the improvement: ~{fmt_pct(avg_red)} of Corpus Not Sent to Sonnet + Citations"
+        paired.badge_text = f"With the lever: ~{fmt_pct(avg_red)} of Corpus Not Sent to Sonnet + Citations"
         block = max(
             (q.reranker_finops.cache_creation_tokens + q.reranker_finops.cache_read_tokens
              for q in paired.queries if q.reranker_finops),
@@ -429,7 +429,7 @@ def _apply_measured_claims(
                 paired,
                 1,
                 f"Haiku's spend, including the cache write, is included in this version's cost — a single cold "
-                f"question costs {fmt_pct(cut)} less than without the improvement.",
+                f"question costs {fmt_pct(cut)} less than without the lever.",
             )
     # note 2 of both versions: this audit's quality (+ the rerun at the larger corpus)
     for res in (naive, paired):
@@ -906,12 +906,12 @@ def _cat4_callout(
 ) -> str:
     if not (naive and paired):
         return (
-            "Category 4 compares the deal-room audit without the improvement (full corpus, no cache, no citations) "
+            "Category 4 compares the deal-room audit without the lever (full corpus, no cache, no citations) "
             "and with it (Haiku picks 5 clauses from the cached corpus; Sonnet answers with citations)."
         )
     red = sum(q.context_reduction_pct for q in paired.queries) / len(paired.queries)
     text = (
-        f"4-question deal-room audit (7 documents · {round(total_chars / 2.4):,} est. tok): without the improvement "
+        f"4-question deal-room audit (7 documents · {round(total_chars / 2.4):,} est. tok): without the lever "
         f"(full corpus, no cache) it costs ${naive.cost_per_1k_audits_cold_usd:.2f}/1k audits and returns no "
         f"citations. With retrieval paired with caching, Sonnet sees ~{red:.0f}% less of the corpus and the audit costs "
         f"${paired.cost_per_1k_audits_cold_usd:.2f}/1k from a cold cache (${paired.cost_per_1k_audits_warm_usd:.2f}/1k "
@@ -934,7 +934,7 @@ def _cat4_callout(
     if n3 and p3 and n3.answers_with_material_error and p3.answers_with_material_error:
         text += (
             f" In the rerun with a 3× corpus, {n3.answers_with_material_error.hits}/{n3.judged} answers had a serious "
-            f"error without the improvement vs {p3.answers_with_material_error.hits}/{p3.judged} with it."
+            f"error without the lever vs {p3.answers_with_material_error.hits}/{p3.judged} with it."
         )
     return text
 

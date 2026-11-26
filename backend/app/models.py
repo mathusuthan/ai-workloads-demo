@@ -299,7 +299,7 @@ class Cat1AblationPortfolio(BaseModel):
 # --- Category 2: Generative Synthesis & Drafting ---
 
 Cat2SubTaskType = Literal["exec_synthesis", "regulatory_filing"]
-# Without (unbounded long-form draft) and with (section template with length caps) the deck's improvement, per model.
+# Without (unbounded long-form draft) and with (section template with length caps) the deck's lever, per model.
 Cat2RungId = Literal["sonnet_unbounded", "haiku_unbounded", "sonnet_templated", "haiku_templated"]
 Cat2SectionKey = Literal[
     "executive_summary",
@@ -536,7 +536,7 @@ class Cat2SectionRegenResponse(BaseModel):
 # --- Category 3: Multi-Turn Conversational Assistants (IT & HR Service Desk) ---
 
 Cat3UseCaseType = Literal["it_hr_service_desk"]
-# Without and with the deck improvement (prefix caching + sliding-window summaries).
+# Without and with the deck's lever (prefix caching + sliding-window summaries).
 Cat3RungId = Literal["naive_full_history", "prefix_cached_summarized"]
 
 
@@ -705,7 +705,7 @@ class Cat3ChatTurnResponse(BaseModel):
 # --- Category 4: Multi-Doc RAG & Deep Ingestion (Supplier Deal-Room Due Diligence) ---
 
 Cat4UseCaseType = Literal["supplier_msa_due_diligence"]
-# Without and with the deck improvement (hybrid retrieval paired with context caching).
+# Without and with the deck's lever (hybrid retrieval paired with context caching).
 Cat4RungId = Literal[
     "naive_full_corpus",
     "cached_rerank_hybrid",
@@ -1174,7 +1174,7 @@ class Cat5AblationArm(Cat5AblationCell):
 
 
 class Cat5AblationPortfolio(BaseModel):
-    """The deck's improvement without and with, on Sonnet and on Haiku (replays/cat5_ablation_summary.json): four cells."""
+    """The deck's lever without and with, on Sonnet and on Haiku (replays/cat5_ablation_summary.json): four cells."""
 
     schema_version: int = 2
     source: str
@@ -1205,9 +1205,9 @@ class Cat5RunRequest(BaseModel):
     rungs: list[Cat5RungId] = Field(
         default_factory=lambda: [
             "unbounded_sonnet_loop",
+            "unbounded_haiku_loop",
             "bounded_sonnet_cached_gate",
             "hybrid_haiku_sonnet_governed",
-            "unbounded_haiku_loop",
         ]
     )
     mode: ExecutionMode = "replay"

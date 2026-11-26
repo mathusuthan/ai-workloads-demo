@@ -1,4 +1,4 @@
-"""Score the Category 4 quality-rerun sessions (without vs with the deck improvement); write the analysis report.
+"""Score the Category 4 quality-rerun sessions (without vs with the deck's lever); write the analysis report.
 
 Without = full corpus, no cache, no citations (`naive_full_corpus`); with = hybrid retrieval paired with context
 caching: Haiku picks 5 clauses from the cached corpus and Sonnet answers with citations (`cached_rerank_hybrid`).
@@ -196,7 +196,7 @@ def render(summary: dict[str, Any], args: argparse.Namespace, n_judgements: int)
     L += [f"Question scope line: every question is asked as `{scope_line()}` followed by a blank line and the question "
           "— identically for both versions and both corpus sizes, in the synthesis message and Haiku's clause-pick query. "
           "The judge sees each answer's question as asked.", ""]
-    L += ["Synthesis prompts: without the improvement (whole corpus) the app prompt; with it (picked clauses only) the same "
+    L += ["Synthesis prompts: without the lever (whole corpus) the app prompt; with it (picked clauses only) the same "
           "prompt with two lines telling the model to say when something is not in the text provided "
           "(`app/archetypes/cat4_rag/answer_formats.py`).", ""]
     L += [f"Settings: synthesis max_tokens {SYNTH_MAX_TOKENS} (timeout {SYNTH_TIMEOUT_S:.0f} s), rerank max_tokens "
@@ -251,7 +251,7 @@ def render(summary: dict[str, Any], args: argparse.Namespace, n_judgements: int)
         z = v.get("zero_citation_answers")
         if z and z["hits"]:
             zero.append([_glabel(v), v["question"], f"{z['hits']}/{z['total']}"])
-    L += _table(["group", "question", "zero-citation answers"], zero) if zero else ["No zero-citation answers with the improvement.", ""]
+    L += _table(["group", "question", "zero-citation answers"], zero) if zero else ["No zero-citation answers with the lever.", ""]
     ca = summary["for_lead_review"]["contaminated_answers"]
     if ca:
         L += _table(["source", "group", "question", "distractor values", "distractor chunks cited"],

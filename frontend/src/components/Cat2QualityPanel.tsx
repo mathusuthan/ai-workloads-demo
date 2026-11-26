@@ -10,6 +10,7 @@ import type {
   Cat2RungQuality,
   Cat2RungResult,
 } from '../types'
+import { DesignMark } from './DesignMark'
 
 interface Cat2QualityPanelProps {
   results: Cat2RungResult[]
@@ -24,15 +25,16 @@ const RUNG_NAME: Record<Cat2RungId, string> = {
 }
 
 const RUNG_BAR: Record<Cat2RungId, string> = {
-  sonnet_unbounded: 'bg-rose-500',
+  // red family without the lever, green family with it; two shades tell the models apart
+  sonnet_unbounded: 'bg-rose-600',
   haiku_unbounded: 'bg-rose-400',
-  sonnet_templated: 'bg-amber-500',
-  haiku_templated: 'bg-emerald-600',
+  sonnet_templated: 'bg-emerald-700',
+  haiku_templated: 'bg-emerald-500',
 }
 
 const ROWS: { arm: Cat2Arm; label: string }[] = [
-  { arm: 'unbounded', label: 'Without: unbounded long-form draft' },
-  { arm: 'template_not_stated', label: 'With: section template with length caps' },
+  { arm: 'unbounded', label: 'Without the lever: unbounded long-form draft' },
+  { arm: 'template_not_stated', label: 'With the lever: section template with length caps' },
 ]
 const COLS: { key: 'sonnet' | 'haiku'; label: string }[] = [
   { key: 'sonnet', label: 'Sonnet 5.5' },
@@ -215,7 +217,16 @@ export function Cat2QualityPanel({ results, portfolio }: Cat2QualityPanelProps) 
             <tbody>
               {ROWS.map((row) => (
                 <tr key={row.arm} className="border-b border-slate-100">
-                  <th className="w-48 p-2.5 align-top text-xs font-extrabold text-slate-900">{row.label}</th>
+                  <th
+                    className={`w-48 border-l-4 p-2.5 align-top text-xs font-extrabold ${
+                      row.arm === 'unbounded' ? 'border-l-rose-500 text-rose-900' : 'border-l-emerald-600 text-emerald-900'
+                    }`}
+                  >
+                    <span className="inline-flex items-start gap-1.5">
+                      <DesignMark withLever={row.arm !== 'unbounded'} className="mt-0.5" />
+                      {row.label}
+                    </span>
+                  </th>
                   {COLS.map((c) => (
                     <CellBox key={c.key} c={cell(row.arm, c.key)} />
                   ))}
@@ -253,8 +264,16 @@ export function Cat2QualityPanel({ results, portfolio }: Cat2QualityPanelProps) 
             {scored.map((r) => {
               const q = r.quality as Cat2RungQuality
               return (
-                <div key={r.rung_id} className="space-y-2.5 rounded-xl border border-slate-200 bg-slate-50/60 p-3.5">
-                  <div className="text-xs font-extrabold text-slate-900">{RUNG_NAME[r.rung_id]}</div>
+                <div
+                  key={r.rung_id}
+                  className={`space-y-2.5 rounded-xl border border-t-4 border-slate-200 bg-slate-50/60 p-3.5 ${
+                    r.rung_id.endsWith('_unbounded') ? 'border-t-rose-500' : 'border-t-emerald-600'
+                  }`}
+                >
+                  <div className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-900">
+                    <DesignMark withLever={!r.rung_id.endsWith('_unbounded')} />
+                    {RUNG_NAME[r.rung_id]}
+                  </div>
                   <Stat label="Cost / 1k docs" value={`$${r.finops.cost_per_1k_usd.toFixed(2)}`} />
                   <div className="space-y-1">
                     {q.rubric ? (

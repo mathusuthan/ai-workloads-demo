@@ -13,6 +13,8 @@ import {
 } from 'recharts'
 import { DollarSign, TrendingDown } from 'lucide-react'
 import type { Cat1RunResponse, FinOpsBreakdown } from '../types'
+import { WrappedAxisTick } from './ChartTicks'
+import { DESIGN_SERIES } from './DesignMark'
 
 interface FinOpsHudProps {
   runResponse: Cat1RunResponse
@@ -29,6 +31,9 @@ interface ComparisonRow {
   monthlyUsd: number
   annualUsd: number
   color: string
+  /** solid colour for the spend strip (the computed Batch rows are hatched in the chart) */
+  strip: string
+  computed: boolean
 }
 
 const VOLUME_STEPS = [
@@ -49,7 +54,15 @@ export function FinOpsHud({ runResponse }: FinOpsHudProps) {
     const byId = Object.fromEntries(runResponse.results.map((r) => [r.rung_id, r]))
     const rows: ComparisonRow[] = []
 
-    const push = (id: string, name: string, shortLabel: string, f: FinOpsBreakdown | null | undefined, color: string) => {
+    const push = (
+      id: string,
+      name: string,
+      shortLabel: string,
+      f: FinOpsBreakdown | null | undefined,
+      color: string,
+      strip = color,
+      computed = false
+    ) => {
       if (!f) return
       const c1k = f.cost_per_1k_usd
       rows.push({
@@ -63,16 +76,21 @@ export function FinOpsHud({ runResponse }: FinOpsHudProps) {
         monthlyUsd: f.total_cost_usd * monthlyVol,
         annualUsd: f.total_cost_usd * monthlyVol * 12,
         color,
+        strip,
+        computed,
       })
     }
     const ok = (id: string) => (byId[id] && byId[id].status === 'ok' ? byId[id].finops : null)
 
-    push('sonnet_naive', 'Without · Sonnet 5.5 write-up', 'Sonnet write-up', ok('sonnet_naive'), '#E11D48')
-    push('haiku_naive', 'Without · Haiku 5.5 write-up', 'Haiku write-up', ok('haiku_naive'), '#D97706')
-    push('sonnet_calibrated', 'With · Sonnet 5.5 JSON schema', 'Sonnet schema', ok('sonnet_calibrated'), '#4F46E5')
-    push('sonnet_batch', 'With · Sonnet 5.5 Batch API (computed, not run)', 'Sonnet Batch*', runResponse.sonnet_batch_comparator, '#818CF8')
-    push('haiku_calibrated', 'With · Haiku 5.5 JSON schema', 'Haiku schema', ok('haiku_calibrated'), '#2563EB')
-    push('haiku_batch', 'With · Haiku 5.5 Batch API (computed, not run)', 'Haiku Batch*', runResponse.haiku_batch_comparator, '#0284C7')
+    // without (rose) · Sonnet, Haiku; with (emerald) · Sonnet, Haiku; then the two computed Batch prices (hatched green)
+    push('sonnet_naive', 'Without · Sonnet 5.5 write-up', 'Sonnet write-up', ok('sonnet_naive'), DESIGN_SERIES.withoutSonnet)
+    push('haiku_naive', 'Without · Haiku 5.5 write-up', 'Haiku write-up', ok('haiku_naive'), DESIGN_SERIES.withoutHaiku)
+    push('sonnet_calibrated', 'With · Sonnet 5.5 JSON schema', 'Sonnet schema', ok('sonnet_calibrated'), DESIGN_SERIES.withSonnet)
+    push('haiku_calibrated', 'With · Haiku 5.5 JSON schema', 'Haiku schema', ok('haiku_calibrated'), DESIGN_SERIES.withHaiku)
+    push('sonnet_batch', 'With · Sonnet 5.5 Batch API (computed, not run)', 'Sonnet Batch*', runResponse.sonnet_batch_comparator,
+      'url(#cat1-batch-hatch-sonnet)', DESIGN_SERIES.withSonnet, true)
+    push('haiku_batch', 'With · Haiku 5.5 Batch API (computed, not run)', 'Haiku Batch*', runResponse.haiku_batch_comparator,
+      'url(#cat1-batch-hatch-haiku)', DESIGN_SERIES.withHaiku, true)
 
     return rows
   }, [runResponse, monthlyVol, scaleMode])
@@ -170,6 +188,17 @@ export function FinOpsHud({ runResponse }: FinOpsHudProps) {
                 layout="vertical"
                 margin={{ top: 8, right: 64, left: 10, bottom: 8 }}
               >
+                <defs>
+                  {/* the computed (not run) Batch prices: hatched in the green of their "with" version */}
+                  <pattern id="cat1-batch-hatch-sonnet" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                    <rect width="6" height="6" fill="#d1fae5" />
+                    <line x1="0" y1="0" x2="0" y2="6" stroke="#047857" strokeWidth="2.5" />
+                  </pattern>
+                  <pattern id="cat1-batch-hatch-haiku" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                    <rect width="6" height="6" fill="#ecfdf5" />
+                    <line x1="0" y1="0" x2="0" y2="6" stroke="#10b981" strokeWidth="2.5" />
+                  </pattern>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
                 <XAxis
                   type="number"
@@ -181,6 +210,7 @@ export function FinOpsHud({ runResponse }: FinOpsHudProps) {
                 <YAxis
                   type="category"
                   dataKey="shortLabel"
+                  interval={0}
                   width={95}
                   tick={{ fontSize: 11, fill: '#0f172a', fontWeight: 600 }}
                 />
@@ -208,7 +238,7 @@ export function FinOpsHud({ runResponse }: FinOpsHudProps) {
 
         <div className="rounded-xl border border-slate-200 p-4">
           <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-slate-700">
-            Why Output Tokens Kill Unit Economics ($ / 1k Runs Breakdown)
+            Input vs Output Cost per Version ($ / 1k Runs Breakdown)
           </h3>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -217,16 +247,23 @@ export function FinOpsHud({ runResponse }: FinOpsHudProps) {
                 margin={{ top: 10, right: 20, left: 0, bottom: 8 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="shortLabel" tick={{ fontSize: 11, fill: '#0f172a', fontWeight: 600 }} />
+                {/* interval 0: every bar keeps its label; labels wrap to two lines instead of being thinned */}
+                <XAxis
+                  dataKey="shortLabel"
+                  interval={0}
+                  height={36}
+                  tick={<WrappedAxisTick maxChars={7} fill="#0f172a" />}
+                />
                 <YAxis tickFormatter={(v: number) => `$${v}`} tick={{ fontSize: 11, fill: '#475569' }} />
                 <Tooltip formatter={(val: number) => `$${val.toFixed(4)} / 1k`} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="inputCost1k" name="Input Cost / 1k" stackId="a" fill="#64748b" />
+                {/* series are cost parts, not versions: neutral greys so red/green keep meaning without/with */}
+                <Bar dataKey="inputCost1k" name="Input Cost / 1k" stackId="a" fill="#94a3b8" />
                 <Bar
                   dataKey="outputCost1k"
                   name="Output Cost / 1k (5x Rate)"
                   stackId="a"
-                  fill="#e11d48"
+                  fill="#334155"
                   radius={[6, 6, 0, 0]}
                 />
               </BarChart>
@@ -241,7 +278,7 @@ export function FinOpsHud({ runResponse }: FinOpsHudProps) {
           <div
             key={c.id}
             className="rounded-xl border border-slate-200 bg-slate-50/70 p-3"
-            style={{ borderTopWidth: '3px', borderTopColor: c.color }}
+            style={{ borderTopWidth: '3px', borderTopStyle: c.computed ? 'dashed' : 'solid', borderTopColor: c.strip }}
           >
             <div className="truncate text-[11px] font-bold text-slate-700">{c.name}</div>
             <div className="mt-1 font-mono text-base font-extrabold tabular-nums text-slate-900">

@@ -2,13 +2,13 @@
 
 Without: the whole corpus as uncached plain text, no citations; Sonnet 5.5 answers. With: Haiku 5.5 picks 5 clauses from the cached corpus and Sonnet 5.5 answers over them with native citations. Both corpus sizes: 1× (the app's 7-document deal room) and 3× (21 documents: two other suppliers' look-alike contracts added).
 
-Generated 2026-11-26T07:13:37.077970+00:00 · answer key `2026-11-25.1` · sessions 12 · judgements 96 (judge claude-opus-5-5, spend $2.4549)
+Generated 2026-11-26T11:10:20.324243+00:00 · answer key `2026-11-25.1` · sessions 12 · judgements 96 (judge claude-opus-5-5, spend $2.4549)
 
 Sources: `/Users/mathu/Projects/NuSysDesPrac/novamart-ai-archetypes/backend/experiments/cat4_quality/runs.jsonl`, `/Users/mathu/Projects/NuSysDesPrac/novamart-ai-archetypes/backend/experiments/cat4_quality/judgements.jsonl`, `app/data/cat4_quality_keys.json`. Every answer is scored; zero-citation, truncated and contaminated answers are reported, never dropped. Rates show hits/total (rate) [Wilson 95%]. Costs come from recorded tokens via `compute_run_finops` (billed = as recorded; cold = the cached call writes its whole prefix on question 1 of the session and reads after; warm = every cached-prefix token read).
 
 Question scope line: every question is asked as `Deal room under audit: DR-NM-DECCAN-2026-Q4 (supplier: Deccan Smart Appliances & Energy Pvt. Ltd.). Answer for this supplier's contracts only.` followed by a blank line and the question — identically for both versions and both corpus sizes, in the synthesis message and Haiku's clause-pick query. The judge sees each answer's question as asked.
 
-Synthesis prompts: without the improvement (whole corpus) the app prompt; with it (picked clauses only) the same prompt with two lines telling the model to say when something is not in the text provided (`app/archetypes/cat4_rag/answer_formats.py`).
+Synthesis prompts: without the lever (whole corpus) the app prompt; with it (picked clauses only) the same prompt with two lines telling the model to say when something is not in the text provided (`app/archetypes/cat4_rag/answer_formats.py`).
 
 Settings: synthesis max_tokens 4096 (timeout 300 s), rerank max_tokens 800 (timeout 180 s), max_retries 0. Session = 8 questions in order: audit-01/q1, audit-01/q2, audit-01/q3, audit-01/q4, audit-02/q1, audit-02/q2, audit-02/q3, audit-02/q4.
 
@@ -131,7 +131,7 @@ Deterministic detector over each answer: a sentence saying the documents / deal 
 
 ## Zero-citation and contaminated answers
 
-No zero-citation answers with the improvement.
+No zero-citation answers with the lever.
 
 No contaminated answers.
 

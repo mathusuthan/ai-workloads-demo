@@ -281,7 +281,7 @@ async def run_cat2_unbounded_sonnet(
     *,
     model_tier: str = "claude-sonnet-5-5",
 ) -> AnthropicRawResult:
-    """Category 2 without the improvement: unbounded long-form draft (free text).
+    """Category 2 without the lever: unbounded long-form draft (free text).
 
     `model_tier` selects Sonnet 5.5 (default; thinking between tools) or Haiku 5.5 (thinking disabled), the same
     per-model settings as the templated call."""

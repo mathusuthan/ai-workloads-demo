@@ -28,7 +28,7 @@ from app.models import Cat4QualityPortfolio  # noqa: E402
 
 RUNS = BACKEND_DIR / "experiments" / "cat4_quality" / "runs.jsonl"
 JUDGEMENTS = BACKEND_DIR / "experiments" / "cat4_quality" / "judgements.jsonl"
-APP_RUNGS = ("naive_full_corpus", "cached_rerank_hybrid")  # without / with the deck improvement
+APP_RUNGS = ("naive_full_corpus", "cached_rerank_hybrid")  # without / with the deck's lever
 PAIRED = "cached_rerank_hybrid"
 HAVE_RERUN = RUNS.is_file() and JUDGEMENTS.is_file()
 
@@ -163,7 +163,7 @@ def test_replay_api_includes_quality_and_portfolio(client: TestClient, pid: str)
     data = resp.json()
     assert (data["billing_note"] is None) == (pid == "audit-01")
     pf = data["quality_portfolio"]
-    # without / with the improvement x 2 corpus sizes = 4 cells x 24 answers
+    # without / with the lever x 2 corpus sizes = 4 cells x 24 answers
     assert pf and pf["answers_scored"] == 96 and pf["matrix_complete"] is True and len(pf["cells"]) == 4
     assert {(c["rung_id"], c["scale"]) for c in pf["cells"]} == {(r, s) for r in APP_RUNGS for s in (1, 3)}
     assert all(c["runnable_in_app"] for c in pf["cells"]) and "break_even" not in pf
@@ -195,7 +195,7 @@ def test_portfolio_falls_back_to_none(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert cat4_quality.load_cat4_quality_portfolio() is None
     res = [runner.finalize_cat4_rung_summary(rung_id=r, model_id="claude-sonnet-5-5", queries=[]) for r in APP_RUNGS]
     runner._apply_measured_claims(res, None)  # number-free fallbacks, no crash without the portfolio
-    assert res[1].badge_text == "With the improvement"
+    assert res[1].badge_text == "With the lever"
 
 
 def test_live_and_adhoc_quality_reasons() -> None:
@@ -320,11 +320,11 @@ def test_validator_cat4_lever_and_implicit_rows(monkeypatch: pytest.MonkeyPatch,
     assert res["categories"]["cat4"]["source"] == "quality rerun"
     lever = c4["Pair hybrid retrieval (reranking + chunk filtering) with context caching"]
     implicit = c4["…without losing answer quality (implicit)"]
-    # With vs without the improvement at the same corpus size. Lever row: its written rule (retrieval, cost, serious
+    # With vs without the lever at the same corpus size. Lever row: its written rule (retrieval, cost, serious
     # errors) holds at both sizes. Implicit row: the shared rule (IMPLICIT_RULE): no clear loss, lower key facts at 7 docs -> PARTLY.
     assert lever["verdict"] == "SUPPORTED" and implicit["verdict"] == "PARTLY SUPPORTED"
     assert "Implicit-row rule: no clear loss is detected, but point estimates are lower (7 docs: key facts" in implicit["note"]
-    assert "Reference: the version without the improvement" in implicit["note"] and "Wilson" in lever["note"]
+    assert "Reference: the version without the lever" in implicit["note"] and "Wilson" in lever["note"]
     assert "Retrieval holds; cost holds; quality holds." in lever["note"]
     blob = json.dumps(res["claims"])
     for gone in ("before the", "original-format", "vs the cached full corpus", "break-even"):

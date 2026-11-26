@@ -33,7 +33,7 @@ def get_haiku_calibrated_system_prompt(sub_task: str) -> str:
 
 
 CODE_SNIPPETS: dict[str, str] = {
-    "sonnet_naive": '''# WITHOUT THE IMPROVEMENT (Sonnet): four-part write-up ($2.00/M in · $10.00/M out)
+    "sonnet_naive": '''# WITHOUT THE LEVER (Sonnet): four-part write-up ($2.00/M in · $10.00/M out)
 resp = await anthropic_client.messages.create(
     model="claude-sonnet-5-5",
     max_tokens=8192,  # no write-up in the experiment reached this cap
@@ -43,7 +43,7 @@ resp = await anthropic_client.messages.create(
 )
 # A write-up, not a classification: the prompt never lists the allowed labels.
 # Output tokens at $10/M dominate the cost.''',
-    "haiku_naive": '''# WITHOUT THE IMPROVEMENT (Haiku): same write-up prompt on Haiku 5.5 ($0.10/M in · $0.50/M out)
+    "haiku_naive": '''# WITHOUT THE LEVER (Haiku): same write-up prompt on Haiku 5.5 ($0.10/M in · $0.50/M out)
 resp = await anthropic_client.messages.create(
     model="claude-haiku-5-5",
     max_tokens=8192,
@@ -52,7 +52,7 @@ resp = await anthropic_client.messages.create(
     messages=[{"role": "user", "content": ticket_payload}],
 )
 # Still a long write-up rather than the classification fields.''',
-    "sonnet_calibrated": '''# WITH THE IMPROVEMENT (Sonnet): ask Sonnet 5.5 for the classification fields only, through a
+    "sonnet_calibrated": '''# WITH THE LEVER (Sonnet): ask Sonnet 5.5 for the classification fields only, through a
 # JSON schema ($2.00/M in · $10.00/M out; the Batch API price at 50% is computed, not run)
 resp = await anthropic_client.messages.create(
     model="claude-sonnet-5-5",
@@ -63,7 +63,7 @@ resp = await anthropic_client.messages.create(
     messages=[{"role": "user", "content": ticket_payload}],
 )
 # Same prompt and schema as the Haiku rung; only the model differs.''',
-    "haiku_calibrated": '''# WITH THE IMPROVEMENT (Haiku): ask Haiku 5.5 for the classification fields only, through a
+    "haiku_calibrated": '''# WITH THE LEVER (Haiku): ask Haiku 5.5 for the classification fields only, through a
 # JSON schema ($0.10/M in · $0.50/M out; the Batch API price at 50% is computed, not run)
 resp = await anthropic_client.messages.create(
     model="claude-haiku-5-5",

@@ -41,6 +41,8 @@ import type {
 } from '../types'
 import { NativeModal } from './NativeModal'
 import { Cat4QualityPanel } from './Cat4QualityPanel'
+import { ReplayStatus, RevealPlaceholder, useStagedReveal } from './StagedReveal'
+import { DesignMark } from './DesignMark'
 
 interface Cat4WorkbenchProps {
   archetype: ArchetypeSpec
@@ -49,7 +51,7 @@ interface Cat4WorkbenchProps {
   onRefreshSystemStatus: () => void
 }
 
-// Without and with the deck improvement (hybrid retrieval paired with context caching)
+// Without and with the deck's lever (hybrid retrieval paired with context caching)
 const CAT4_RUNGS: Cat4RungId[] = ['naive_full_corpus', 'cached_rerank_hybrid']
 
 const RUNG_BUTTON: Record<Cat4RungId, string> = {
@@ -108,6 +110,7 @@ export function Cat4Workbench({
   )
   const [cacheMode, setCacheMode] = useState<CacheEntryMode>('cold_deal_room')
   const [loadingArena, setLoadingArena] = useState(false)
+  const reveal = useStagedReveal('versions')
   const [arenaError, setArenaError] = useState<string | null>(null)
   const [runResponse, setRunResponse] = useState<Cat4RunResponse | null>(null)
 
@@ -135,8 +138,11 @@ export function Cat4Workbench({
     [presetsData.presets, selectedPresetId]
   )
 
-  const executeArena = async (presetIdToRun: string) => {
+  const executeArena = async (presetIdToRun: string, opts?: { staged?: boolean }) => {
+    // a replay click clears the cards and reveals them in card order (the mount load and preset picks stay instant)
+    const staged = Boolean(opts?.staged) && creds.mode !== 'live'
     setLoadingArena(true)
+    if (staged) reveal.begin()
     setArenaError(null)
     setActiveCitation(null)
     setAdhocResult(null)
@@ -154,7 +160,9 @@ export function Cat4Workbench({
       setRunResponse(data)
       setSelectedQuestionIdx(0)
       onRefreshSystemStatus()
+      if (staged) reveal.run(data.results.map((r) => r.rung_id))
     } catch (err) {
+      if (staged) reveal.reset()
       setArenaError(err instanceof Error ? err.message : 'Failed to execute Category 4 audit.')
     } finally {
       setLoadingArena(false)
@@ -321,7 +329,7 @@ export function Cat4Workbench({
                 {archetype.title} — {archetype.novamart_product_name}
               </h1>
               <p className="mt-1 text-xs leading-relaxed text-slate-600 sm:text-sm">
-                Compare the audit <strong>without the improvement</strong> (the whole corpus, uncached, no citations)
+                Compare the audit <strong>without the lever</strong> (the whole corpus, uncached, no citations)
                 and <strong>with it</strong> (hybrid retrieval paired with context caching: Haiku 5.5 picks 5 clauses
                 from the cached corpus and Sonnet 5.5 answers over them with native citations) over a 7-document,
                 ~16k–21k-token Indian supplier deal room (Wholesale MSA, Diwali Peak SLA, DPDP Act 2023,
@@ -399,11 +407,16 @@ export function Cat4Workbench({
               </button>
             </div>
 
+            <div className="flex flex-col items-end gap-1">
             <button
               type="button"
-              disabled={loadingArena}
-              onClick={() => void executeArena(selectedPresetId)}
-              className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-xs font-extrabold text-white shadow-sm transition hover:bg-amber-700 disabled:opacity-50"
+              aria-disabled={loadingArena || reveal.replaying}
+              aria-busy={loadingArena || reveal.replaying}
+              onClick={() => {
+                if (loadingArena || reveal.replaying) return
+                void executeArena(selectedPresetId, { staged: true })
+              }}
+              className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-xs font-extrabold text-white shadow-sm transition hover:bg-amber-700 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
             >
               {creds.mode === 'live' ? (
                 <Zap className="h-4 w-4 text-amber-200" />
@@ -411,13 +424,17 @@ export function Cat4Workbench({
                 <Play className="h-4 w-4" />
               )}
               <span>
-                {loadingArena
+                {reveal.replaying
+                  ? 'Replaying…'
+                  : loadingArena
                   ? 'Running 4-Query Audit...'
                   : creds.mode === 'live'
                     ? 'Run Live Deal-Room Audit (Without & With)'
                     : 'Replay Recorded 4-Query Audit'}
               </span>
             </button>
+            <ReplayStatus status={reveal.status} className="text-right" />
+            </div>
           </div>
         </div>
       </section>
@@ -440,8 +457,17 @@ export function Cat4Workbench({
           </div>
 
           {/* Without vs with cards */}
-          <section className="grid gap-4 lg:grid-cols-2">
+          <section ref={reveal.resultsRef} className="grid scroll-mt-24 gap-4 lg:grid-cols-2">
             {runResponse.results.map((res) => {
+              if (!reveal.isVisible(res.rung_id)) {
+                return (
+                  <RevealPlaceholder
+                    key={res.rung_id}
+                    title={res.rung_title}
+                    withLever={res.rung_id !== 'naive_full_corpus'}
+                  />
+                )
+              }
               const isNaive = res.rung_id === 'naive_full_corpus'
               const isPaired = res.rung_id === 'cached_rerank_hybrid'
               const pickCacheW = res.queries.reduce((a, q) => a + (q.reranker_finops?.cache_creation_tokens ?? 0), 0)
@@ -475,7 +501,10 @@ export function Cat4Workbench({
                           {res.queries.length} Queries
                         </span>
                       </div>
-                      <h2 className="mt-2 text-sm font-extrabold text-slate-900">{res.rung_title}</h2>
+                      <div className="mt-2 flex items-center gap-1.5">
+                        <DesignMark withLever={!isNaive} />
+                        <h2 className="text-sm font-extrabold text-slate-900">{res.rung_title}</h2>
+                      </div>
                       <div className="mt-0.5 font-mono text-[11px] text-slate-600">
                         Anthropic · <strong>{res.model_id}</strong>
                         {res.reranker_model_id && ` + ${res.reranker_model_id} clause pick`}
@@ -882,7 +911,7 @@ export function Cat4Workbench({
                 </div>
               )}
 
-              {/* The clauses Haiku picked for the version with the improvement */}
+              {/* The clauses Haiku picked for the version with the lever */}
               {(() => {
                 const pairedSource = activeSourceSummaryList.find((r) => r.rung_id === 'cached_rerank_hybrid') ?? null
                 const pairedQ = adhocResult
@@ -978,7 +1007,7 @@ export function Cat4Workbench({
                 </label>
                 <p id="cat4-adhoc-hint" className="mt-1 text-[11px] text-slate-600">
                   {creds.mode === 'live'
-                    ? 'Live API Mode active: runs your custom question on both versions — without the improvement (whole corpus) and with it (Haiku picks clauses from the cached corpus, Sonnet answers with citations).'
+                    ? 'Live API Mode active: runs your custom question on both versions — without the lever (whole corpus) and with it (Haiku picks clauses from the cached corpus, Sonnet answers with citations).'
                     : 'Verified Replay Mode ($0) serves the 8 pre-captured golden diligence audits. Switch Credit Shield to Live API Mode in the header to test ad-hoc questions.'}
                 </p>
 

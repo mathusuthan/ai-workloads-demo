@@ -1,4 +1,4 @@
-"""Orchestrates the Category 3 IT & HR Service Desk comparison (without vs with the deck improvement) and simulator."""
+"""Orchestrates the Category 3 IT & HR Service Desk comparison (without vs with the deck's lever) and simulator."""
 
 from __future__ import annotations
 
@@ -146,7 +146,7 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
     if rung_id == "naive_full_history":
         return (
             "1. Without: Full History, No Cache",
-            "Without the improvement",
+            "Without the lever",
             [
                 # replaced with the measured prefix size by _apply_measured_claims
                 "Re-sends the IT/HR Handbook + full verbatim multi-turn log stack at full $2.00/M input price on every turn.",
@@ -155,7 +155,7 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
         )
     return (
         "2. With: Cached Prefix + Sliding-Window Summaries",
-        "With the improvement",
+        "With the lever",
         [
             "Caches the IT/HR Handbook prefix (cache_control={'type': 'ephemeral'}, $0.10/M on cache hits) and compacts "
             "older turns into a Sonnet 5.5 JSON memory whenever more than 4 turns are verbatim ([T1..T3] before T5, "
@@ -380,7 +380,7 @@ def _quality_notes(
     results: list[Cat3RungSummary],
     portfolio: Cat3QualityPortfolio | None,
 ) -> None:
-    """Note 3 of the version with the improvement: this session's answer-key scores vs without."""
+    """Note 3 of the version with the lever: this session's answer-key scores vs without."""
     ok = {r.rung_id: r for r in results if r.status == "ok" and r.quality is not None}
     naive, summ = ok.get("naive_full_history"), ok.get("prefix_cached_summarized")
     if not (summ and summ.quality):
@@ -394,7 +394,7 @@ def _quality_notes(
     if q.probe_accuracy is not None:
         text = f"Quality trade-off on this session: answered {_frac(q.probe_accuracy)} recall questions"
         if rq is not None and rq.probe_accuracy is not None:
-            text += f" vs {_frac(rq.probe_accuracy)} without the improvement"
+            text += f" vs {_frac(rq.probe_accuracy)} without the lever"
         text += f", and kept {_frac(early(summ))} turn 1–3 details in the final summary"
     else:
         text = f"Quality trade-off on this session: kept {_frac(early(summ))} turn 1–3 details in the final summary"
@@ -436,11 +436,11 @@ def _apply_measured_claims(
         lower = naive is not None and summ.total_session_cost_usd <= naive.total_session_cost_usd
         text = (
             "Summarizer input/output spend is included in this version's cost"
-            + (" — the session still costs less than without the improvement" if lower else "")
+            + (" — the session still costs less than without the lever" if lower else "")
             + f", and it holds Turn {last.turn_number} context to {context(last):,} tok"
         )
         if naive and len(naive.turns) >= len(summ.turns):
-            text += f" (vs {context(naive.turns[len(summ.turns) - 1]):,} without the improvement)"
+            text += f" (vs {context(naive.turns[len(summ.turns) - 1]):,} without the lever)"
         set_note(summ, 1, text + ".")
     _quality_notes(results, portfolio)
 
@@ -477,13 +477,13 @@ def _quality_callout(
     early_s, early_n = sq.ledger_by_origin.get("1-3"), nq.ledger_by_origin.get("1-3")
     if sq.probe_accuracy is not None and nq.probe_accuracy is not None:
         text = (
-            f"Quality trade-off: with the improvement this session answered {_frac(sq.probe_accuracy)} recall "
+            f"Quality trade-off: with the lever this session answered {_frac(sq.probe_accuracy)} recall "
             f"questions about earlier turns vs {_frac(nq.probe_accuracy)} without, and its final summary kept "
             f"{_frac(early_s)} turn 1–3 details vs {_frac(early_n)}"
         )
     else:
         text = (
-            f"Quality trade-off: with the improvement the final summary kept {_frac(early_s)} turn 1–3 details vs "
+            f"Quality trade-off: with the lever the final summary kept {_frac(early_s)} turn 1–3 details vs "
             f"{_frac(early_n)} without (recall probes are not run live)"
         )
     pf_s = _portfolio_rung(portfolio, "prefix_cached_summarized")
@@ -854,7 +854,7 @@ async def execute_cat3_run(
     measured_prefix = _cached_prefix_tokens(results) or int(preset["approx_handbook_tokens"])
     if naive_res and compacted_res:
         callout = (
-            f"10-turn Sonnet 5.5 session: without the improvement (full history, no cache) it costs "
+            f"10-turn Sonnet 5.5 session: without the lever (full history, no cache) it costs "
             f"${naive_res.cost_per_1k_sessions_usd:.2f}/1k sessions. With a cached ~{measured_prefix:,}-tok handbook "
             f"prefix and sliding-window summaries ({compacted_res.summarizer_calls} Sonnet summarizer calls = "
             f"${compacted_res.summarizer_cost_usd * 1000:.2f}/1k, included) it costs "
@@ -864,7 +864,7 @@ async def execute_cat3_run(
         callout += " " + _quality_callout(compacted_res, naive_res, portfolio)
     else:
         callout = (
-            "Category 3 compares a 10-turn Sonnet 5.5 session without the improvement (full history, no cache) "
+            "Category 3 compares a 10-turn Sonnet 5.5 session without the lever (full history, no cache) "
             "and with it (cached prefix + sliding-window summaries)."
         )
 

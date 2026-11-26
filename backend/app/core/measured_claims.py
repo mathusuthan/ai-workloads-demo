@@ -51,7 +51,7 @@ def _load_replays(name: str) -> dict[str, Any]:
 def rule1_measured_impact() -> str | None:
     """Impact line for FinOps rule 1 (Cat 1 & 2), measured on the golden replays.
 
-    Range of per-item cost reduction of the deck's improvement vs the same model without it: Cat 1 classification
+    Range of per-item cost reduction of the deck's lever vs the same model without it: Cat 1 classification
     with a strict JSON schema vs the four-part write-up (Sonnet and Haiku); Cat 2 section template with length caps vs
     the unbounded draft (Sonnet and Haiku, where both rungs are in the replays).
     """

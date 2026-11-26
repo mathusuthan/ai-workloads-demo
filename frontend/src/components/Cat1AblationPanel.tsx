@@ -1,14 +1,15 @@
 import { FlaskConical } from 'lucide-react'
 import type { Cat1AblationArm, Cat1AblationMiss, Cat1AblationPortfolio } from '../types'
+import { DesignMark } from './DesignMark'
 
 interface Cat1AblationPanelProps {
   portfolio: Cat1AblationPortfolio | null | undefined
 }
 
-// The deck's improvement (rows) x model (columns): one experiment arm per cell.
+// The deck's lever (rows) x model (columns): one experiment arm per cell.
 const ROWS: Array<{ key: 'report' | 'schema'; label: string }> = [
-  { key: 'report', label: 'Without: four-part write-up, free text' },
-  { key: 'schema', label: 'With: classification with strict JSON schema' },
+  { key: 'report', label: 'Without the lever: four-part write-up, free text' },
+  { key: 'schema', label: 'With the lever: classification with strict JSON schema' },
 ]
 const COLS: Array<{ key: 'sonnet' | 'haiku'; label: string }> = [
   { key: 'sonnet', label: 'Sonnet 5.5' },
@@ -106,11 +107,11 @@ export function Cat1AblationPanel({ portfolio }: Cat1AblationPanelProps) {
     <div className="border-b border-slate-200 pb-3">
       <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-700">
         <FlaskConical className="h-4 w-4" />
-        Experiment · Without and With the Improvement
+        Experiment · Without and With the Lever
       </div>
       <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">Four Cells on the Same Twelve Items</h2>
       <p className="mt-1 max-w-4xl text-xs leading-relaxed text-slate-600">
-        Rows: without the improvement (today’s four-part write-up) and with it (only the classification fields, through a
+        Rows: without the lever (today’s four-part write-up) and with it (only the classification fields, through a
         strict JSON schema). Columns: the model. The four rungs above are repeat 0 of these cells.
       </p>
     </div>
@@ -151,8 +152,16 @@ export function Cat1AblationPanel({ portfolio }: Cat1AblationPanelProps) {
           <tbody>
             {ROWS.map((r) => (
               <tr key={r.key} className="border-b border-slate-100 align-top">
-                <th scope="row" className="py-2 pr-3 text-left font-bold text-slate-900">
-                  {r.label}
+                <th
+                  scope="row"
+                  className={`border-l-4 py-2 pl-2 pr-3 text-left font-bold ${
+                    r.key === 'schema' ? 'border-l-emerald-600 text-emerald-900' : 'border-l-rose-500 text-rose-900'
+                  }`}
+                >
+                  <span className="inline-flex items-start gap-1.5">
+                    <DesignMark withLever={r.key === 'schema'} className="mt-0.5" />
+                    {r.label}
+                  </span>
                 </th>
                 {COLS.map((c) => (
                   <td key={c.key} className="py-2 pr-3">
@@ -179,8 +188,8 @@ export function Cat1AblationPanel({ portfolio }: Cat1AblationPanelProps) {
         {portfolio.reader_passes} pass), and compared with the ground truth like a JSON answer.{' '}
         {portfolio.reader_check_note ? `${portfolio.reader_check_note} ` : ''}
         {dq.truncated === 0 ? 'No answer was cut off.' : `${dq.truncated} answers were cut off at their cap and are kept.`}{' '}
-        The Batch API price is computed at 50% of the live price, not run. With twelve items, small differences between
-        cells are indicative only.
+        The Batch API price is computed at 50% of the live price, not run. With {portfolio.items} items, small differences
+        between cells are indicative only.
       </p>
     </section>
   )

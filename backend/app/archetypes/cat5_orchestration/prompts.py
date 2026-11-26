@@ -5,7 +5,7 @@ from __future__ import annotations
 from app.data.cat5_fixtures import AP_POLICY_MANUAL_MARKDOWN
 
 
-# Rung 1 / the ablation's neutral arms: the model chooses its own tools and order (no scripted sequence).
+# The raw-table loops (versions 1 and 2) / the ablation's neutral arms: the model chooses its own tools and order (no scripted sequence).
 # Shared verbatim with app/archetypes/cat5_orchestration/ablation.py (NEUTRAL_PROTOCOL).
 CAT5_FREE_CHOICE_PROTOCOL = (
     "=== EXECUTION PROTOCOL ===\n"
@@ -17,7 +17,7 @@ CAT5_FREE_CHOICE_PROTOCOL = (
 
 def get_cat5_system_prompt(rung_id: str) -> str:
     """SOP policy manual + the rung's execution protocol."""
-    if rung_id in ("unbounded_sonnet_loop", "unbounded_haiku_loop"):  # rung 4 = rung 1 on Haiku, same text
+    if rung_id in ("unbounded_sonnet_loop", "unbounded_haiku_loop"):  # version 2 = version 1 on Haiku, same text
         contract = CAT5_FREE_CHOICE_PROTOCOL
     elif rung_id == "bounded_sonnet_cached_gate":
         contract = (
@@ -50,9 +50,9 @@ def build_cat5_user_task_prompt(preset: dict) -> str:
     )
 
 
-# Display-only (Code Inspector). Describes what each rung does; measured results are in the ablation panel.
+# Display-only (Code Inspector), in display order. Describes what each version does; measured results are in the ablation panel.
 CAT5_CODE_SNIPPETS: dict[str, str] = {
-    "unbounded_sonnet_loop": """# RUNG 1: Free-choice loop over raw SELECT * tools on Sonnet 5.5
+    "unbounded_sonnet_loop": """# VERSION 1 (without the lever, Sonnet): free-choice loop over raw SELECT * tools on Sonnet 5.5
 # The model picks which raw table queries to run (several per turn allowed), does the policy arithmetic
 # itself and commits the voucher. No prompt cache, no policy gate; safety cap of 12 model turns.
 for turn in range(12):
@@ -68,8 +68,8 @@ for turn in range(12):
     if resp.stop_reason == "max_tokens" or not tool_uses:
         break  # a truncated turn or a turn without tool calls ends the run
     loop_history += [assistant(resp.content), user(execute_all(tool_uses))]  # whatever the stop_reason""",
-    "unbounded_haiku_loop": """# RUNG 4: Rung 1 on Haiku 5.5 -- the same free-choice loop over raw SELECT * tools
-# Same tools, prompt, 12-turn safety cap and loop rule as rung 1; no prompt cache and no policy tool, so there is
+    "unbounded_haiku_loop": """# VERSION 2 (without the lever, Haiku): version 1 on Haiku 5.5 -- the same free-choice loop over raw SELECT * tools
+# Same tools, prompt, 12-turn safety cap and loop rule as version 1; no prompt cache and no policy tool, so there is
 # no escalation path to Sonnet. Thinking is disabled for Haiku in the app's call function.
 for turn in range(12):
     resp = await client.messages.create(
@@ -84,7 +84,7 @@ for turn in range(12):
     if resp.stop_reason == "max_tokens" or not tool_uses:
         break
     loop_history += [assistant(resp.content), user(execute_all(tool_uses))]""",
-    "bounded_sonnet_cached_gate": """# RUNG 2: Narrow bundle query + cached policy manual + deterministic policy gate (Sonnet 5.5)
+    "bounded_sonnet_cached_gate": """# VERSION 3 (with the lever, Sonnet): narrow bundle query + cached policy manual + deterministic policy gate
 # One projected JOIN replaces the raw table dumps; the manual is sent as a cached prefix; the commit tool
 # refuses until run_policy_tolerance_gate has computed the figures, which the committed voucher carries.
 system_cached = [{
@@ -100,7 +100,7 @@ resp = await client.messages.create(
     tools=GOVERNED_TOOLS,  # fetch_3way_match_bundle, run_policy_tolerance_gate, commit (gate first)
     messages=loop_history,
 )""",
-    "hybrid_haiku_sonnet_governed": """# RUNG 3: Rung 2's tools on Haiku 5.5, switching to Sonnet 5.5 when the gate flags escalation
+    "hybrid_haiku_sonnet_governed": """# VERSION 4 (with the lever, Haiku-first): version 3's tools on Haiku 5.5, switching to Sonnet 5.5 when the gate flags escalation
 # The gate sets escalation_required only for a multi-factor dispute (2+ of: DOA/short receipt, amendment, price rise, freight).
 active_model = "claude-haiku-5-5"
 for turn in range(5):  # step budget 4 + one wrap-up turn

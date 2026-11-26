@@ -1,6 +1,6 @@
 """Orchestrates the Category 2 four-rung drafting arena and single-section HITL regeneration.
 
-Four rungs: Sonnet 5.5 and Haiku 5.5, each without the deck's improvement (unbounded long-form draft, free text) and
+Four rungs: Sonnet 5.5 and Haiku 5.5, each without the deck's lever (unbounded long-form draft, free text) and
 with it (section template with length caps, strict JSON schema). The golden replays are repeat 0 of the Category 2
 experiment (scripts/build_cat2_golden_from_experiment.py); a rung whose experiment drafts do not exist yet replays as
 "pending". The experiment summary (replays/cat2_quality_summary.json) is attached as `quality_portfolio`.
@@ -153,7 +153,7 @@ def _cat2_rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
     if rung_id in UNBOUNDED_RUNGS:
         return (
             f"Without · {name} unbounded long-form draft",
-            f"Without the Improvement · {name.split()[0]}",
+            f"Without the Lever · {name.split()[0]}",
             [
                 f"Asks {name} ({_RATE[model]}, {thinking}) for an exhaustive long-form draft in free text "
                 f"(max_tokens {UNBOUNDED_MAX_TOKENS:,}).",
@@ -163,7 +163,7 @@ def _cat2_rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
         )
     return (
         f"With · {name} section template with length caps",
-        f"With the Improvement · {name.split()[0]}",
+        f"With the Lever · {name.split()[0]}",
         [
             f"Same {name} model ({_RATE[model]}, {thinking}), constrained to a 4-section JSON schema with word caps "
             f"(max_tokens {TEMPLATE_MAX_TOKENS:,}); action-plan owners and dates only when the source states them.",

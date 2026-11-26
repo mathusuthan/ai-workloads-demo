@@ -272,7 +272,7 @@ def test_portfolio_falls_back_to_none_and_copy_is_number_free(monkeypatch: pytes
     for rid in APP_RUNGS:
         title, badge, notes = runner._rung_metadata(rid)
         blob = badge + " ".join(notes)
-        assert not any(ch.isdigit() for ch in blob.replace("AP-POL-GATE-01", "").replace("5.5", "").replace("Rung 2", "")), rid
+        assert not any(ch.isdigit() for ch in blob.replace("AP-POL-GATE-01", "").replace("5.5", "")), rid
         assert "lever" in badge.lower(), rid
     callout = runner._orchestration_callout(PRESET, [], None)
     assert not any(ch.isdigit() for ch in callout.replace("SQLite 3-way", "").replace("Category 5", ""))
@@ -292,11 +292,19 @@ def test_replay_api_returns_ablation_portfolio(client: TestClient, pid: str) -> 
     assert data["pending_rungs"] == [r for r in APP_RUNGS if r not in golden]  # rung 4 is "run pending" until its live run
     if "unbounded_haiku_loop" in rungs:
         r4 = rungs["unbounded_haiku_loop"]
-        assert r4["max_step_budget"] == 12 and r4["rung_title"].startswith("4. Free-Choice") and "Haiku" in r4["rung_title"]
+        assert r4["max_step_budget"] == 12 and r4["rung_title"].startswith("2. Free-Choice") and "Haiku" in r4["rung_title"]
     else:
         assert "run pending" in data["orchestration_callout"]
     assert rungs["unbounded_sonnet_loop"]["max_step_budget"] == 12
     assert rungs["unbounded_sonnet_loop"]["rung_title"].startswith("1. Free-Choice")
+    # display order: without · Sonnet, without · Haiku, with · Sonnet, with · Haiku-first; numbers follow it
+    display = ["unbounded_sonnet_loop", "unbounded_haiku_loop", "bounded_sonnet_cached_gate", "hybrid_haiku_sonnet_governed"]
+    assert [r["rung_id"] for r in data["results"]] == [r for r in display if r in rungs]
+    assert [r["rung_title"][:2] for r in data["results"]] == [f"{display.index(r['rung_id']) + 1}." for r in data["results"]]
+    assert [row["rung_id"] for row in data["portfolio_scorecard"]] == [r for r in display if r in rungs]
+    assert [a["arm_id"] for a in port["arms"]] == ["raw_free_sonnet", "raw_free_haiku", "bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate"]
+    for a in port["arms"]:
+        assert a["label"].startswith("Without the lever" if a["design"] == "without" else "With the lever")
     blob = json.dumps([r["architectural_notes"] for r in data["results"]]) + data["orchestration_callout"]
     for banned in ("-92%", "quadratic", "runaway", "prevents", "before the fix", "superseded", "inv-06"):
         assert banned not in blob
@@ -418,7 +426,7 @@ def test_validator_cat5_reads_the_four_cells_and_judges_the_lever_as_a_whole(mon
     assert rows["Input 25k–150k+ tokens per task"]["verdict"] == "SUPPORTED"
     md = mod.render_markdown(res)
     assert "| | Sonnet 5.5 | Haiku 5.5 (with the lever: Haiku first, Sonnet on escalation) |" in md and "(not run)" not in md
-    assert "The app's four rungs are these four cells" in md and "Sonnet only" not in md.split("### 5.")[1].split("### 6.")[0]
+    assert "The app's four versions are these four cells" in md and "Sonnet only" not in md.split("### 5.")[1].split("### 6.")[0]
     assert ("run pending" in md.split("### 5.")[1].split("### 6.")[0]) is bool(pending_cells)
     for gone in ("When the policy gate is wrong", "Old scripted rung 1", "What each step changed", "capture script selected runs by outcome"):
         assert gone not in md
@@ -440,3 +448,12 @@ def test_validator_cat5_falls_back(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     rows = {c["claim"]: c["verdict"] for c in res["claims"] if c["category"] == "Cat 5"}
     assert rows["…without losing accuracy (implicit)"] == "NOT TESTABLE"
     assert "Source: the Category 5 golden replays" in mod.render_markdown(res)
+
+
+def test_replay_results_come_back_in_display_order_whatever_the_request_order(client: TestClient) -> None:
+    rev = list(reversed(runner.CAT5_RUNG_ORDER))
+    data = client.post("/api/cat5/run", json={"mode": "replay", "preset_id": "inv-01", "rungs": rev}).json()
+    got = [r["rung_id"] for r in data["results"]]
+    assert got == [r for r in runner.CAT5_RUNG_ORDER if r in got]
+    assert runner.CAT5_RUNG_ORDER == ("unbounded_sonnet_loop", "unbounded_haiku_loop", "bounded_sonnet_cached_gate",
+                                      "hybrid_haiku_sonnet_governed")

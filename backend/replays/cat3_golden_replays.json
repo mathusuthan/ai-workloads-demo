@@ -2,10 +2,10 @@
   "provenance": {
     "source": "cat3 quality rerun",
     "source_file": "experiments/cat3_quality/runs.jsonl",
-    "selection_rule": "fixed pre-declared mapping: repeat_index 0 of both versions (without and with the improvement) for every session (not selected by outcome)",
+    "selection_rule": "fixed pre-declared mapping: repeat_index 0 of both versions (without and with the lever) for every session (not selected by outcome)",
     "keys_version": "2026-11-25.2",
     "probe_phase": "presets[*].probe_phase[rung] holds the probe-phase compaction (summarised rung only) and the recall probes; they are not part of the 10-turn session cost",
-    "rebuilt_at": "2026-11-26T05:40:01Z"
+    "rebuilt_at": "2026-11-26T11:10:20Z"
   },
   "presets": {
     "desk-01": {

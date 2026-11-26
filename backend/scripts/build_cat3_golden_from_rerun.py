@@ -158,7 +158,7 @@ def build_golden(
         "provenance": {
             "source": "cat3 quality rerun",
             "source_file": source_file,
-            "selection_rule": "fixed pre-declared mapping: repeat_index 0 of both versions (without and with the improvement) for every session (not selected by outcome)",
+            "selection_rule": "fixed pre-declared mapping: repeat_index 0 of both versions (without and with the lever) for every session (not selected by outcome)",
             "keys_version": keys_version,
             "probe_phase": "presets[*].probe_phase[rung] holds the probe-phase compaction (summarised rung only) and the recall probes; "
             "they are not part of the 10-turn session cost",

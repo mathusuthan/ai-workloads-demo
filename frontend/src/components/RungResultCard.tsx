@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Cpu, Timer } from 'lucide-react'
+import { ChevronDown, ChevronUp, Cpu, Timer } from 'lucide-react'
 import type { RungExecutionResult } from '../types'
+import { DESIGN_THEME, DesignMark } from './DesignMark'
 
 interface RungResultCardProps {
   result: RungExecutionResult
@@ -14,7 +15,10 @@ export function RungResultCard({ result, visible }: RungResultCardProps) {
     return (
       <div className="flex min-h-[360px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/70 p-6 text-center">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
-        <div className="mt-3 text-xs font-bold text-slate-700">{result.rung_title}</div>
+        <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-slate-700">
+          <DesignMark withLever={result.rung_id === 'sonnet_calibrated' || result.rung_id === 'haiku_calibrated'} />
+          {result.rung_title}
+        </div>
         <div className="mt-1 text-[11px] text-slate-500">
           Simulating {result.latency_ms}ms model response...
         </div>
@@ -22,38 +26,10 @@ export function RungResultCard({ result, visible }: RungResultCardProps) {
     )
   }
 
-  const theme =
-    result.rung_id === 'sonnet_naive'
-      ? {
-          border: 'border-rose-200',
-          headerBg: 'bg-rose-50',
-          badge: 'bg-rose-600 text-white',
-          savingsColor: 'text-rose-700',
-          icon: <AlertTriangle className="h-4 w-4 text-rose-600" />,
-        }
-      : result.rung_id === 'haiku_naive'
-        ? {
-            border: 'border-amber-300',
-            headerBg: 'bg-amber-50/80',
-            badge: 'bg-amber-600 text-white',
-            savingsColor: 'text-amber-800',
-            icon: <AlertTriangle className="h-4 w-4 text-amber-600" />,
-          }
-        : result.rung_id === 'haiku_calibrated'
-          ? {
-              border: 'border-blue-300',
-              headerBg: 'bg-blue-50/80',
-              badge: 'bg-blue-600 text-white',
-              savingsColor: 'text-blue-700',
-              icon: <CheckCircle2 className="h-4 w-4 text-blue-600" />,
-            }
-          : {
-              border: 'border-indigo-300',
-              headerBg: 'bg-indigo-50/80',
-              badge: 'bg-indigo-600 text-white',
-              savingsColor: 'text-indigo-700',
-              icon: <CheckCircle2 className="h-4 w-4 text-indigo-600" />,
-            }
+  // red (rose) for both versions without the lever, green (emerald) for both with it; the model is in the label
+  const withLever = result.rung_id === 'sonnet_calibrated' || result.rung_id === 'haiku_calibrated'
+  const d = withLever ? DESIGN_THEME.with : DESIGN_THEME.without
+  const theme = { border: d.border, headerBg: d.headerBg, badge: d.badge, savingsColor: d.text }
   const isSchemaRung = result.rung_id === 'sonnet_calibrated' || result.rung_id === 'haiku_calibrated'
 
   const f = result.finops
@@ -73,7 +49,7 @@ export function RungResultCard({ result, visible }: RungResultCardProps) {
             </span>
           </div>
           <div className="mt-2 flex items-center gap-1.5">
-            {theme.icon}
+            <DesignMark withLever={withLever} />
             <h3 className="text-sm font-extrabold text-slate-900">{result.rung_title}</h3>
           </div>
           <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-slate-600">
@@ -223,17 +199,11 @@ export function RungResultCard({ result, visible }: RungResultCardProps) {
             {(result.rung_id === 'sonnet_naive' || result.rung_id === 'haiku_naive') &&
               result.raw_text_preview && (
                 <div
-                  className={`rounded-xl border p-3 ${
-                    result.rung_id === 'sonnet_naive'
-                      ? 'border-rose-200 bg-rose-50/40'
-                      : 'border-amber-200 bg-amber-50/40'
-                  }`}
+                  className="rounded-xl border border-rose-200 bg-rose-50/40 p-3"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span
-                      className={`text-[11px] font-bold ${
-                        result.rung_id === 'sonnet_naive' ? 'text-rose-900' : 'text-amber-950'
-                      }`}
+                      className="text-[11px] font-bold text-rose-900"
                     >
                       Write-Up Output ({f.output_tokens.toLocaleString()} tok @{' '}
                       {result.rung_id === 'sonnet_naive' ? '$10/M' : '$0.50/M'} out
@@ -242,9 +212,7 @@ export function RungResultCard({ result, visible }: RungResultCardProps) {
                     <button
                       type="button"
                       onClick={() => setShowRawProse((v) => !v)}
-                      className={`inline-flex items-center gap-1 text-[11px] font-bold hover:underline ${
-                        result.rung_id === 'sonnet_naive' ? 'text-rose-700' : 'text-amber-800'
-                      }`}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 hover:underline"
                     >
                       {showRawProse ? (
                         <>
@@ -268,8 +236,8 @@ export function RungResultCard({ result, visible }: RungResultCardProps) {
               )}
 
             {isSchemaRung && (
-              <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-3">
-                <div className="text-[11px] font-bold text-blue-900">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-3">
+                <div className="text-[11px] font-bold text-emerald-900">
                   JSON Schema Output ({f.output_tokens} tok
                   {result.stop_reason ? ` · stopped: ${result.stop_reason === 'max_tokens' ? 'cut off at the cap' : result.stop_reason}` : ''})
                 </div>

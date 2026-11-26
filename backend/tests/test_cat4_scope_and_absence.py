@@ -1,5 +1,5 @@
 """Category 4 (offline, no network): the supplier-scope line in the app's live and ad-hoc paths, and the answer
-instructions of the version with the improvement (it sees only the picked clauses, so it says when a term is not in
+instructions of the version with the lever (it sees only the picked clauses, so it says when a term is not in
 the text provided)."""
 
 from __future__ import annotations
@@ -123,7 +123,7 @@ def test_live_audit_and_adhoc_endpoints_send_the_scoped_question(fake_app_calls:
 
 
 def test_live_and_adhoc_prompt_per_version(fake_app_calls: Calls, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Without the improvement: the app synthesis prompt byte for byte. With it: the not-in-the-text-provided
+    """Without the lever: the app synthesis prompt byte for byte. With it: the not-in-the-text-provided
     instructions, with citations (preset and ad-hoc)."""
     c = fake_app_calls
     scoped = af.synthesis_system_prompt(with_citations=True, answer_format=af.SCOPED_ABSENCE)
@@ -196,7 +196,7 @@ def test_existing_records_match_the_shared_scope_line_and_stay_current() -> None
     assert len(plan) == 96 and qr.select_pending_judgements(plan, qr.load_jsonl(REAL_JUDGEMENTS)) == []
 
 
-# ------------------------------------------------------------------------ the with-improvement answer instructions
+# ------------------------------------------------------------------------ the with-the-lever answer instructions
 
 
 @pytest.mark.parametrize("cit", [True, False])

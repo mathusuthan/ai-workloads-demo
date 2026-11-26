@@ -269,7 +269,7 @@ class InventoryReservationManager:
 
 
 # >= 45,000 chars (~14,000+ tokens) of unfiltered sibling files, build logs, and OTel span JSON dumps
-# injected into Rung 1's shared uncached omnibus bus so 5 turns exceed 100k+ Band 5 prompt tokens.
+# injected into the shared-bus versions' (1 and 2) uncached omnibus bus so 5 turns exceed 100k+ Band 5 prompt tokens.
 _OTEL_LINES = "\n".join(
     f'{{"ts":"2026-11-17T14:{10 + (i // 60):02d}:{i % 60:02d}.{100 + (i * 7) % 899}Z","svc":"{"checkout-pricing-svc" if i % 3 == 0 else "upi-webhook-svc" if i % 3 == 1 else "inventory-lock-svc"}","pod":"novamart-prod-ap-south-1-{chr(97 + (i % 3))}-{1000 + i}","trace_id":"nm992a000{i:04d}f8c2e1","span":"{"grpc.CalculateTotals" if i % 3 == 0 else "http.POST /hooks/npci/upi" if i % 3 == 1 else "lock.ReserveMultiFC"}","fc_hub":"{"FC-BLR-01" if i % 3 == 0 else "FC-BOM-02" if i % 3 == 1 else "FC-DEL-03"}","latency_ms":{12 + (i * 19) % 185},"status":"{"WARN_RETRY" if i % 11 == 0 else "OK"}","mem_mb":{240 + (i * 3) % 190},"worker_tid":{40000 + i}}}'
     for i in range(185)

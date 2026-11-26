@@ -7,23 +7,24 @@ interface Cat5AblationPanelProps {
   invoiceNumbers?: Record<string, string>
 }
 
+// the screen's version numbers (display order: without · Sonnet, without · Haiku, with · Sonnet, with · Haiku-first)
 const RUNG_LABEL: Record<Cat5RungId, string> = {
-  unbounded_sonnet_loop: 'Rung 1',
-  bounded_sonnet_cached_gate: 'Rung 2',
-  hybrid_haiku_sonnet_governed: 'Rung 3',
-  unbounded_haiku_loop: 'Rung 4',
+  unbounded_sonnet_loop: 'Version 1',
+  unbounded_haiku_loop: 'Version 2',
+  bounded_sonnet_cached_gate: 'Version 3',
+  hybrid_haiku_sonnet_governed: 'Version 4',
 }
 
 const ROWS: { design: Cat5AblationArm['design']; title: string; detail: string }[] = [
   {
     design: 'without',
-    title: 'Without',
+    title: 'Without the lever',
     detail:
       'Free-choice loop over raw ERP tables; no step budget, no policy tool. On Haiku there is no escalation path: only the policy tool can flag one.',
   },
   {
     design: 'with',
-    title: 'With',
+    title: 'With the lever',
     detail:
       '4-step budget + deterministic policy tool. This design also uses one narrow query in place of the raw tables and sends the policy manual as a cached prefix.',
   },
@@ -36,10 +37,10 @@ const COLUMNS: { key: Cat5AblationArm['model_column']; title: string }[] = [
 
 // Each cell's own model set-up, shown under its numbers.
 const CELL_MODEL: Record<string, string> = {
-  'without|sonnet': 'Without · Sonnet 5.5',
-  'without|haiku': 'Without · Haiku 5.5 (no escalation path)',
-  'with|sonnet': 'With · Sonnet 5.5',
-  'with|haiku': 'With · Haiku 5.5 first (Sonnet on escalation)',
+  'without|sonnet': 'Without the lever · Sonnet 5.5',
+  'without|haiku': 'Without the lever · Haiku 5.5 (no escalation path)',
+  'with|sonnet': 'With the lever · Sonnet 5.5',
+  'with|haiku': 'With the lever · Haiku 5.5 first (Sonnet on escalation)',
 }
 
 function money(x: number | null | undefined): string {
@@ -60,7 +61,7 @@ function Cell({ arm }: { arm: Cat5AblationArm | undefined }) {
     return (
       <td className="py-2 pr-3 align-top">
         <div className="text-[10px] font-bold text-slate-500">{model}</div>
-        <span className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-800">
+        <span className="mt-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-700">
           run pending · {expected} runs
         </span>
       </td>
@@ -106,7 +107,7 @@ export function Cat5AblationPanel({ portfolio }: Cat5AblationPanelProps) {
       </div>
       <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">Step Budget + Deterministic Policy Tool</h2>
       <p className="mt-1 max-w-4xl text-xs leading-relaxed text-slate-600">
-        The deck's improvement for this archetype: a maximum step budget, a deterministic guardrail that computes the
+        The deck's lever for this archetype: a maximum step budget, a deterministic guardrail that computes the
         voucher, and routing to the small model first. Each design ran on Sonnet and on Haiku, on the same invoices.
       </p>
     </div>
@@ -144,8 +145,12 @@ export function Cat5AblationPanel({ portfolio }: Cat5AblationPanelProps) {
           <tbody>
             {ROWS.map((r) => (
               <tr key={r.design} className="border-b border-slate-100">
-                <td className="max-w-[260px] py-2 pr-3 align-top">
-                  <div className="font-bold text-slate-900">{r.title}</div>
+                <td
+                  className={`max-w-[260px] border-l-4 py-2 pl-2 pr-3 align-top ${
+                    r.design === 'without' ? 'border-l-rose-500' : 'border-l-emerald-600'
+                  }`}
+                >
+                  <div className={`font-bold ${r.design === 'without' ? 'text-rose-800' : 'text-emerald-800'}`}>{r.title}</div>
                   <div className="text-[10px] leading-relaxed text-slate-600">{r.detail}</div>
                 </td>
                 {COLUMNS.map((c) => (

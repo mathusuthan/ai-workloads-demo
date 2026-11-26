@@ -369,7 +369,7 @@ def seed_cat3() -> int:
     Per rung and session: 10 turns, the summariser calls before turns 5 and 8 (compacted rung), and — when the
     golden replays come from the quality rerun (scripts/build_cat3_golden_from_rerun.py) — the probe-phase
     compaction and the six recall probes, each scored with the answer key. Both versions are seeded: without and
-    with the improvement.
+    with the lever.
     """
     written = 0
     cat3_replays = load_cat3_replays()
@@ -538,7 +538,7 @@ def seed_cat3() -> int:
 def seed_cat4() -> int:
     """Seed Category 4 traces from cat4_golden_replays.json; appends only.
 
-    Both versions are seeded: without the improvement (full corpus, no cache) and with it (Haiku clause pick from
+    Both versions are seeded: without the lever (full corpus, no cache) and with it (Haiku clause pick from
     the cached corpus + Sonnet answer with citations). When the golden replays come from the quality rerun
     (scripts/build_cat4_golden_from_rerun.py) the traces carry the real stop reasons, the question as the model
     received it and the rerun provenance."""
@@ -768,7 +768,7 @@ def seed_cat5() -> int:
 
 def seed_cat6() -> int:
     """Seed Category 6 traces (one swarm rollup per incident x rung in cat6_golden_replays.json: 12 with all
-    four rungs recorded, 9 while rung 4 is pending).
+    four rungs recorded, 9 while the shared-bus Haiku-agents version, `unisolated_tiered_swarm`, is pending).
 
     Appends only; never deletes or rewrites other traces. The golden replays are rebuilt from the fair
     rerun (scripts/build_cat6_golden_from_rerun.py), so these seeds supersede older Category 6 seeds.

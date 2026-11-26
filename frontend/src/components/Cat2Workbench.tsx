@@ -51,6 +51,9 @@ import type {
 } from '../types'
 import { Cat2QualityPanel } from './Cat2QualityPanel'
 import { NativeModal } from './NativeModal'
+import { WrappedAxisTick } from './ChartTicks'
+import { DESIGN_SERIES, DESIGN_THEME, DesignMark } from './DesignMark'
+import { ReplayStatus, RevealPlaceholder, useStagedReveal } from './StagedReveal'
 
 interface Cat2WorkbenchProps {
   archetype: ArchetypeSpec
@@ -137,6 +140,7 @@ export function Cat2Workbench({
 
   const [runResponse, setRunResponse] = useState<Cat2RunResponse | null>(null)
   const [loadingArena, setLoadingArena] = useState(false)
+  const reveal = useStagedReveal('versions')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [expandedRungs, setExpandedRungs] = useState<Record<string, boolean>>({})
 
@@ -224,7 +228,13 @@ export function Cat2Workbench({
     }
   }
 
-  const executeArena = async (overridePresetId?: string, overrideSubTask?: Cat2SubTaskType) => {
+  const executeArena = async (
+    overridePresetId?: string,
+    overrideSubTask?: Cat2SubTaskType,
+    opts?: { staged?: boolean }
+  ) => {
+    // a replay click clears the cards and reveals them in card order (the mount load and preset picks stay instant)
+    const staged = Boolean(opts?.staged) && creds.mode !== 'live'
     const targetSub = overrideSubTask ?? subTask
     const targetPresetId = overridePresetId ?? selectedPresetId
     const targetPreset = presetsData.presets.find((p) => p.id === targetPresetId)
@@ -235,6 +245,7 @@ export function Cat2Workbench({
 
     setLoadingArena(true)
     setErrorMsg(null)
+    if (staged) reveal.begin()
     try {
       const resp = await runCat2Arena(
         {
@@ -252,7 +263,9 @@ export function Cat2Workbench({
       if (resp.mode_used === 'live') {
         onRefreshSystemStatus()
       }
+      if (staged) reveal.run(resp.results.map((r) => r.rung_id))
     } catch (err) {
+      if (staged) reveal.reset()
       setErrorMsg(err instanceof Error ? err.message : 'Failed to run Category 2 Synthesis Arena.')
     } finally {
       setLoadingArena(false)
@@ -369,6 +382,40 @@ export function Cat2Workbench({
 
   // Compute FinOps chart rows for Arena
   const monthlyVol = VOLUME_STEPS[volumeIdx].value
+  // intro figures computed from what the page loaded (no hard-coded results):
+  // output share of the unbounded drafts on this document; templated cost as a share of unbounded, per model
+  const introFacts = useMemo(() => {
+    const pct = (x: number) => `${Math.round(x)}%`
+    const range = (xs: number[]) => {
+      if (xs.length === 0) return null
+      const lo = Math.min(...xs)
+      const hi = Math.max(...xs)
+      return Math.round(lo) === Math.round(hi) ? pct(lo) : `${pct(lo)}–${pct(hi)}`
+    }
+    const shares = (runResponse?.results ?? [])
+      .filter((r) => r.status === 'ok' && r.rung_id.endsWith('_unbounded'))
+      .map((r) => r.finops.output_cost_share_pct)
+    const cells = runResponse?.quality_portfolio?.cells ?? []
+    const ratios: number[] = []
+    const fewer: boolean[] = []
+    for (const model of ['sonnet', 'haiku'] as const) {
+      const u = cells.find((c) => c.model_key === model && c.arm === 'unbounded')
+      const t = cells.find((c) => c.model_key === model && c.arm !== 'unbounded')
+      if (u?.cost_per_1k_docs_usd && t?.cost_per_1k_docs_usd != null) {
+        ratios.push((t.cost_per_1k_docs_usd / u.cost_per_1k_docs_usd) * 100)
+      }
+      if (u?.detail_facts?.total && t?.detail_facts?.total) {
+        fewer.push(t.detail_facts.hits / t.detail_facts.total < u.detail_facts.hits / u.detail_facts.total)
+      }
+    }
+    return {
+      outputShare: range(shares),
+      templateCostShare: ratios.length === 2 ? range(ratios) : null,
+      // stated only when the graded summary shows it on both models
+      fewerDetails: fewer.length === 2 && fewer.every(Boolean),
+    }
+  }, [runResponse])
+
   const finopsRows = useMemo(() => {
     if (!runResponse) return []
     const byId = Object.fromEntries(runResponse.results.map((r) => [r.rung_id, r]))
@@ -402,10 +449,11 @@ export function Cat2Workbench({
     }
 
     const versions: Array<[Cat2RungId, string, string, string]> = [
-      ['sonnet_unbounded', 'Sonnet 5.5 · without template (unbounded)', 'Sonnet unbounded', '#DC2626'],
-      ['haiku_unbounded', 'Haiku 5.5 · without template (unbounded)', 'Haiku unbounded', '#F97316'],
-      ['sonnet_templated', 'Sonnet 5.5 · with section template', 'Sonnet template', '#2563EB'],
-      ['haiku_templated', 'Haiku 5.5 · with section template', 'Haiku template', '#0F766E'],
+      // red family without the lever, green family with it; two shades tell the models apart
+      ['sonnet_unbounded', 'Sonnet 5.5 · without template (unbounded)', 'Sonnet unbounded', DESIGN_SERIES.withoutSonnet],
+      ['haiku_unbounded', 'Haiku 5.5 · without template (unbounded)', 'Haiku unbounded', DESIGN_SERIES.withoutHaiku],
+      ['sonnet_templated', 'Sonnet 5.5 · with section template', 'Sonnet template', DESIGN_SERIES.withSonnet],
+      ['haiku_templated', 'Haiku 5.5 · with section template', 'Haiku template', DESIGN_SERIES.withHaiku],
     ]
     for (const [id, name, shortLabel, color] of versions) {
       const r = byId[id]
@@ -415,8 +463,9 @@ export function Cat2Workbench({
       pushRow(
         'haiku_batch',
         'Haiku 5.5 · with section template, Batch (-50%)',
-        'Haiku Batch (-50%)',
-        '#0284C7',
+        'Haiku Batch (computed)',
+        // computed (not run), a "with" configuration: hatched light green, drawn from the pattern below
+        'url(#cat2-batch-hatch)',
         runResponse.haiku_batch_comparator
       )
     }
@@ -496,11 +545,17 @@ export function Cat2Workbench({
             </h1>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-600 sm:text-sm">
               Because Anthropic output tokens cost <strong>5x input tokens</strong> ($10.00/M vs $2.00/M on{' '}
-              <strong>Sonnet 5.5</strong>), unbounded synthesis lets output drive &gt;80% of the bill.{' '}
-              <strong>Section-Templated Bounds</strong> and <strong>Haiku 5.5</strong> first drafts cut that cost
-              sharply, but on the graded documents the shorter drafts scored lower on accuracy and coverage and had
-              more serious errors, so they need a reviewer; <strong>Surgical HITL Section Regen</strong> fixes one
-              section instead of re-prompting the entire document.
+              <strong>Sonnet 5.5</strong>), output {introFacts.outputShare
+                ? `is ${introFacts.outputShare} of an unbounded draft's cost on this document`
+                : "is most of an unbounded draft's cost"}
+              . <strong>Section-Templated Bounds</strong> (on <strong>Sonnet 5.5</strong> and{' '}
+              <strong>Haiku 5.5</strong>){' '}
+              {introFacts.templateCostShare
+                ? `cost ${introFacts.templateCostShare} of the unbounded drafts on the same model across the graded documents`
+                : 'cost less than the unbounded drafts on the same model'}
+              {introFacts.fewerDetails ? ' and carry fewer of the supporting details in the answer key' : ''}; the grades
+              and serious-error counts per version are in the quality panel below. <strong>Surgical HITL Section Regen</strong> regenerates one section instead of re-prompting the
+              entire document.
             </p>
           </div>
 
@@ -667,11 +722,16 @@ export function Cat2Workbench({
             </div>
 
             <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
+              <ReplayStatus status={reveal.status} />
               <button
                 type="button"
-                disabled={loadingArena}
-                onClick={() => void executeArena()}
-                className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:bg-red-700 disabled:opacity-50"
+                aria-disabled={loadingArena || reveal.replaying}
+                aria-busy={loadingArena || reveal.replaying}
+                onClick={() => {
+                  if (loadingArena || reveal.replaying) return
+                  void executeArena(undefined, undefined, { staged: true })
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-xs font-extrabold text-white shadow-sm transition hover:bg-red-700 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
               >
                 {creds.mode === 'live' ? (
                   <Zap className="h-4 w-4 text-amber-300" />
@@ -679,7 +739,9 @@ export function Cat2Workbench({
                   <Play className="h-4 w-4" />
                 )}
                 <span>
-                  {loadingArena
+                  {reveal.replaying
+                    ? 'Replaying…'
+                    : loadingArena
                     ? 'Drafting 4 versions...'
                     : creds.mode === 'live'
                       ? 'Run Live: Without vs With Template'
@@ -697,29 +759,26 @@ export function Cat2Workbench({
               </div>
 
               {/* Without / with template cards, Sonnet and Haiku */}
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div ref={reveal.resultsRef} className="grid scroll-mt-24 gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {runResponse.results.map((res) => {
+                  if (!reveal.isVisible(res.rung_id)) {
+                    return (
+                      <RevealPlaceholder
+                        key={res.rung_id}
+                        title={res.rung_title}
+                        withLever={!res.rung_id.endsWith('_unbounded')}
+                      />
+                    )
+                  }
                   const f = res.finops
                   const isUnbounded = res.rung_id.endsWith('_unbounded')
                   const isTemplatedSonnet = res.rung_id === 'sonnet_templated'
                   const isPending = res.status === 'pending'
-                  const borderTheme = isPending
-                    ? 'border-slate-200 border-dashed'
-                    : isUnbounded
-                    ? 'border-rose-300'
-                    : isTemplatedSonnet
-                      ? 'border-blue-300'
-                      : 'border-teal-300'
-                  const headerBg = isUnbounded
-                    ? 'bg-rose-50'
-                    : isTemplatedSonnet
-                      ? 'bg-blue-50/80'
-                      : 'bg-teal-50/80'
-                  const badgeBg = isUnbounded
-                    ? 'bg-rose-600 text-white'
-                    : isTemplatedSonnet
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-teal-700 text-white'
+                  // red (rose) for both versions without the lever, green (emerald) for both with it
+                  const d = isUnbounded ? DESIGN_THEME.without : DESIGN_THEME.with
+                  const borderTheme = isPending ? 'border-slate-200 border-dashed' : d.border
+                  const headerBg = d.headerBg
+                  const badgeBg = d.badge
                   const expanded = Boolean(expandedRungs[res.rung_id])
                   const draft = normalizeDraft(res.structured_draft)
 
@@ -738,7 +797,10 @@ export function Cat2Workbench({
                               {(res.latency_ms / 1000).toFixed(1)}s
                             </span>
                           </div>
-                          <h3 className="mt-2 text-sm font-extrabold text-slate-900">{res.rung_title}</h3>
+                          <div className="mt-2 flex items-center gap-1.5">
+                            <DesignMark withLever={!isUnbounded} />
+                            <h3 className="text-sm font-extrabold text-slate-900">{res.rung_title}</h3>
+                          </div>
                           <div className="mt-0.5 font-mono text-[11px] text-slate-600">
                             Anthropic · <strong>{res.model_id}</strong>
                           </div>
@@ -881,8 +943,8 @@ export function Cat2Workbench({
                                   }
                                   className={`mt-1 inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-extrabold text-white transition ${
                                     isTemplatedSonnet
-                                      ? 'bg-blue-600 hover:bg-blue-700'
-                                      : 'bg-teal-700 hover:bg-teal-800'
+                                      ? 'bg-emerald-700 hover:bg-emerald-800'
+                                      : 'bg-emerald-600 hover:bg-emerald-700'
                                   }`}
                                 >
                                   <Scissors className="h-3.5 w-3.5" />
@@ -994,6 +1056,12 @@ export function Cat2Workbench({
                           layout="vertical"
                           margin={{ top: 8, right: 64, left: 12, bottom: 8 }}
                         >
+                          <defs>
+                            <pattern id="cat2-batch-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                              <rect width="6" height="6" fill="#a7f3d0" />
+                              <line x1="0" y1="0" x2="0" y2="6" stroke="#10b981" strokeWidth="2.5" />
+                            </pattern>
+                          </defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
                           <XAxis
                             type="number"
@@ -1005,6 +1073,7 @@ export function Cat2Workbench({
                           <YAxis
                             type="category"
                             dataKey="shortLabel"
+                            interval={0}
                             width={118}
                             tick={{ fontSize: 11, fill: '#0f172a', fontWeight: 600 }}
                           />
@@ -1038,16 +1107,23 @@ export function Cat2Workbench({
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={finopsRows} margin={{ top: 10, right: 20, left: 0, bottom: 8 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                          <XAxis dataKey="shortLabel" tick={{ fontSize: 11, fill: '#0f172a', fontWeight: 600 }} />
+                          {/* interval 0: every bar keeps its label; labels wrap to two lines instead of being thinned */}
+                          <XAxis
+                            dataKey="shortLabel"
+                            interval={0}
+                            height={48}
+                            tick={<WrappedAxisTick maxChars={9} maxLines={3} fill="#0f172a" />}
+                          />
                           <YAxis tickFormatter={(v: number) => `$${v}`} tick={{ fontSize: 11, fill: '#475569' }} />
                           <Tooltip formatter={(val: number) => `$${val.toFixed(2)} / 1k`} />
                           <Legend wrapperStyle={{ fontSize: 11 }} />
-                          <Bar dataKey="inputCost1k" name="Input Cost / 1k (1x)" stackId="a" fill="#64748b" />
+                          {/* series are cost parts, not versions: neutral greys so red/green keep meaning without/with */}
+                          <Bar dataKey="inputCost1k" name="Input Cost / 1k (1x)" stackId="a" fill="#94a3b8" />
                           <Bar
                             dataKey="outputCost1k"
                             name="Output Cost / 1k (5x Rate)"
                             stackId="a"
-                            fill="#dc2626"
+                            fill="#334155"
                             radius={[6, 6, 0, 0]}
                           />
                         </BarChart>
@@ -1062,7 +1138,12 @@ export function Cat2Workbench({
                     <div
                       key={c.id}
                       className="rounded-xl border border-slate-200 bg-slate-50/70 p-3"
-                      style={{ borderTopWidth: '3px', borderTopColor: c.color }}
+                      style={{
+                        borderTopWidth: '3px',
+                        // the computed Batch row is drawn hatched in the chart; its strip uses the pale green of that hatch
+                        borderTopStyle: c.color.startsWith('url(') ? 'dashed' : 'solid',
+                        borderTopColor: c.color.startsWith('url(') ? '#34d399' : c.color,
+                      }}
                     >
                       <div className="truncate text-[11px] font-bold text-slate-700">{c.name}</div>
                       <div className="mt-1 font-mono text-base font-extrabold tabular-nums text-slate-900">
@@ -1103,7 +1184,7 @@ export function Cat2Workbench({
                   onClick={() => handleOpenInStudio('sonnet_templated')}
                   className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition ${
                     studioSourceRung === 'sonnet_templated'
-                      ? 'border-blue-600 bg-blue-50 text-blue-900'
+                      ? 'border-emerald-700 bg-emerald-50 text-emerald-900'
                       : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
                   }`}
                 >
@@ -1114,7 +1195,7 @@ export function Cat2Workbench({
                   onClick={() => handleOpenInStudio('haiku_templated')}
                   className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition ${
                     studioSourceRung === 'haiku_templated'
-                      ? 'border-teal-700 bg-teal-50 text-teal-900'
+                      ? 'border-emerald-600 bg-emerald-50 text-emerald-900'
                       : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
                   }`}
                 >

@@ -1,6 +1,6 @@
 """Orchestrates the Category 1 four-rung arena and 12-item batch (replay and live).
 
-Four rungs: Sonnet 5.5 and Haiku 5.5, each without the improvement (four-part write-up, free text) and with it
+Four rungs: Sonnet 5.5 and Haiku 5.5, each without the lever (four-part write-up, free text) and with it
 (classification with a strict JSON schema). The golden replays are repeat 0 of the four-cell experiment
 (scripts/build_cat1_golden_from_ablation.py); its summary (replays/cat1_ablation_summary.json) is attached to every
 response as `ablation_portfolio`.
@@ -214,7 +214,7 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
     if rung_id == "sonnet_naive":
         return (
             "Without · Sonnet 5.5 four-part write-up (free text)",
-            "Without the Improvement · Sonnet",
+            "Without the Lever · Sonnet",
             [
                 f"Single-pass call on Sonnet 5.5 ({_SONNET_RATE}) with today's write-up prompt: analysis, routing, "
                 "risks and next steps in free text. The prompt never lists the allowed labels.",
@@ -225,7 +225,7 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
     if rung_id == "haiku_naive":
         return (
             "Without · Haiku 5.5 four-part write-up (free text)",
-            "Without the Improvement · Haiku",
+            "Without the Lever · Haiku",
             [
                 f"Same single-pass call and prompt on Haiku 5.5 ({_HAIKU_RATE}), thinking disabled. "
                 "The prompt never lists the allowed labels.",
@@ -239,7 +239,7 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
     )
     return (
         f"With · {model} classification with strict JSON schema",
-        f"With the Improvement · {model.split()[0]}",
+        f"With the Lever · {model.split()[0]}",
         [
             f"Asks {model} ({rate}, {thinking}) for the classification fields only, through an enforced JSON schema.",
             # replaced with the measured output size and saving by _apply_measured_claims
@@ -781,7 +781,7 @@ async def execute_cat1_batch(
         items=batch_results,
         cfo_comparison=cfo_rows,
         summary_callout=(
-            f"At NovaMart scale (1M intake events/month): without the improvement, the four-part write-up costs "
+            f"At NovaMart scale (1M intake events/month): without the lever, the four-part write-up costs "
             f"${by_tier['sonnet_naive'].monthly_1m_usd:,.2f}/mo on Sonnet 5.5 and ${by_tier['haiku_naive'].monthly_1m_usd:,.2f}/mo on "
             f"Haiku 5.5 ({_acc_txt(by_tier['sonnet_naive'].field_accuracy_pct, 'of fields usable as a classification')} on Sonnet). "
             f"With classification + strict JSON schema: Sonnet 5.5 {_with_txt('sonnet_calibrated')}; "

@@ -40,6 +40,9 @@ import type {
 } from '../types'
 import { Cat5AblationPanel } from './Cat5AblationPanel'
 import { NativeModal } from './NativeModal'
+import { ReplayStatus, RevealPlaceholder, useStagedReveal } from './StagedReveal'
+import { DesignMark } from './DesignMark'
+import { WrappedAxisTick } from './ChartTicks'
 
 interface Cat5WorkbenchProps {
   archetype: ArchetypeSpec
@@ -48,26 +51,39 @@ interface Cat5WorkbenchProps {
   onRefreshSystemStatus: () => void
 }
 
+// Display order: without · Sonnet, without · Haiku, with · Sonnet, with · Haiku-first (numbers 1-4 follow it)
 const CAT5_RUNGS: Cat5RungId[] = [
   'unbounded_sonnet_loop',
+  'unbounded_haiku_loop',
   'bounded_sonnet_cached_gate',
   'hybrid_haiku_sonnet_governed',
-  'unbounded_haiku_loop',
 ]
 
 const CAT5_RUNG_TAB: Record<Cat5RungId, string> = {
-  unbounded_sonnet_loop: 'Rung 1: Raw Tables',
-  bounded_sonnet_cached_gate: 'Rung 2: Narrow + Gate',
-  hybrid_haiku_sonnet_governed: 'Rung 3: Haiku + Gate',
-  unbounded_haiku_loop: 'Rung 4: Raw Tables (Haiku)',
+  unbounded_sonnet_loop: '1. Raw Tables (Sonnet)',
+  unbounded_haiku_loop: '2. Raw Tables (Haiku)',
+  bounded_sonnet_cached_gate: '3. Narrow + Gate (Sonnet)',
+  hybrid_haiku_sonnet_governed: '4. Haiku + Gate',
 }
 
-const CAT5_PENDING_TITLE: Record<Cat5RungId, string> = {
+const CAT5_RUNG_TITLE: Record<Cat5RungId, string> = {
   unbounded_sonnet_loop: '1. Free-Choice Raw-Table Loop (Sonnet 5.5)',
-  bounded_sonnet_cached_gate: '2. Narrow Query + Cached Policy + Policy Gate',
-  hybrid_haiku_sonnet_governed: '3. Haiku + Policy Gate + Sonnet Escalation',
-  unbounded_haiku_loop: '4. Free-Choice Raw-Table Loop (Haiku 5.5)',
+  unbounded_haiku_loop: '2. Free-Choice Raw-Table Loop (Haiku 5.5)',
+  bounded_sonnet_cached_gate: '3. Narrow Query + Cached Policy + Policy Gate (Sonnet 5.5)',
+  hybrid_haiku_sonnet_governed: '4. Haiku + Policy Gate + Sonnet Escalation',
 }
+
+// red for the two versions without the lever, green for the two with it (as on the other screens);
+// the model is told apart by label (and a lighter shade of the same hue in the charts)
+const isWithoutLever = (rid: Cat5RungId): boolean =>
+  rid === 'unbounded_sonnet_loop' || rid === 'unbounded_haiku_loop'
+const CAT5_SERIES_COLOR: Record<Cat5RungId, string> = {
+  unbounded_sonnet_loop: '#e11d48', // rose-600
+  unbounded_haiku_loop: '#fb7185', // rose-400
+  bounded_sonnet_cached_gate: '#047857', // emerald-700
+  hybrid_haiku_sonnet_governed: '#10b981', // emerald-500
+}
+const rungOrder = (rid: Cat5RungId): number => CAT5_RUNGS.indexOf(rid)
 
 const VOLUME_STEPS = [
   { label: '1k / mo (Pilot Queue)', value: 1_000 },
@@ -103,10 +119,14 @@ export function Cat5Workbench({
   const [monthlyInvoices, setMonthlyInvoices] = useState<number>(50_000)
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [inspectorTab, setInspectorTab] = useState<'code' | 'ddl' | 'sop'>('code')
+  const reveal = useStagedReveal('versions')
 
-  const executeArena = async (presetIdToRun: string) => {
+  // `staged`: a replay click clears the cards and reveals them again in card order (mount / preset loads stay instant)
+  const executeArena = async (presetIdToRun: string, staged = false) => {
+    const stage = staged && creds.mode === 'replay'
     setLoadingArena(true)
     setArenaError(null)
+    if (stage) reveal.begin()
     try {
       const data = await runCat5Arena(
         {
@@ -119,7 +139,9 @@ export function Cat5Workbench({
       )
       setRunResponse(data)
       onRefreshSystemStatus()
+      if (stage) reveal.run(CAT5_RUNGS.filter((rid) => data.results.some((r) => r.rung_id === rid)))
     } catch (err) {
+      if (stage) reveal.reset()
       setArenaError(err instanceof Error ? err.message : 'Failed to run Category 5 agent loop.')
     } finally {
       setLoadingArena(false)
@@ -161,6 +183,15 @@ export function Cat5Workbench({
     () => runResponse?.results.find((r) => r.rung_id === 'unbounded_haiku_loop') ?? null,
     [runResponse]
   )
+  // cards, charts and the simulator in display order whatever order the response lists them
+  const orderedResults = useMemo(
+    () => [...(runResponse?.results ?? [])].sort((a, b) => rungOrder(a.rung_id) - rungOrder(b.rung_id)),
+    [runResponse]
+  )
+  const orderedScorecard = useMemo(
+    () => [...(runResponse?.portfolio_scorecard ?? [])].sort((a, b) => rungOrder(a.rung_id) - rungOrder(b.rung_id)),
+    [runResponse]
+  )
   const availableRungs = useMemo(
     () => CAT5_RUNGS.filter((rid) => runResponse?.results.some((r) => r.rung_id === rid)),
     [runResponse]
@@ -188,9 +219,9 @@ export function Cat5Workbench({
       rows.push({
         step: `Step ${s}`,
         naive1k: getStepCum(naiveRes, s),
+        naiveHaiku1k: getStepCum(naiveHaikuRes, s),
         bounded1k: getStepCum(boundedRes, s),
         hybrid1k: getStepCum(hybridRes, s),
-        naiveHaiku1k: getStepCum(naiveHaikuRes, s),
       })
     }
     return rows
@@ -198,23 +229,15 @@ export function Cat5Workbench({
 
   // Token consumption bar chart across rungs
   const tokenBarData = useMemo(() => {
-    if (!runResponse) return []
-    return runResponse.results
+    return orderedResults
       .filter((r) => r.status === 'ok')
       .map((r) => ({
-        name:
-          r.rung_id === 'unbounded_sonnet_loop'
-            ? '1. Raw tables'
-            : r.rung_id === 'bounded_sonnet_cached_gate'
-              ? '2. Narrow + gate'
-              : r.rung_id === 'hybrid_haiku_sonnet_governed'
-                ? '3. Haiku + gate'
-                : '4. Raw tables (Haiku)',
+        name: CAT5_RUNG_TAB[r.rung_id],
         'Uncached Input': r.total_uncached_input_tokens,
         'Cache W + R': r.total_cache_creation_tokens + r.total_cache_read_tokens,
         'Tool/Plan Out': r.total_output_tokens,
       }))
-  }, [runResponse])
+  }, [orderedResults])
 
   const handleInspectorTabKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const order: ('code' | 'ddl' | 'sop')[] = ['code', 'ddl', 'sop']
@@ -277,11 +300,11 @@ export function Cat5Workbench({
               {archetype.title} — {archetype.novamart_product_name}
             </h1>
             <p className="mt-1 max-w-4xl text-xs leading-relaxed text-slate-600 sm:text-sm">
-              Compare a <strong>free-choice loop over raw ERP tables</strong> on Sonnet 5.5 (rung 1) with{' '}
-              <strong>one narrow query + a cached policy manual + a deterministic policy gate</strong> (rung 2), and the{' '}
-              <strong>same on Haiku 5.5, switching to Sonnet when the gate flags the invoice</strong> (rung 3), reconciling
-              Purchase Orders, Goods Receipts, GSTR-2B / MSMED 45-day rules and Contract Amendments in live SQLite. The
-              experiment panel below separates what each change contributed.
+              Compare a <strong>free-choice loop over raw ERP tables</strong> on Sonnet 5.5 (1) and on Haiku 5.5 (2,
+              no escalation path) with <strong>one narrow query + a cached policy manual + a deterministic policy gate</strong>{' '}
+              on Sonnet 5.5 (3) and the <strong>same on Haiku 5.5, switching to Sonnet when the gate flags the invoice</strong>{' '}
+              (4), reconciling Purchase Orders, Goods Receipts, GSTR-2B / MSMED 45-day rules and Contract Amendments in live
+              SQLite. The experiment panel below separates what each change contributed.
             </p>
           </div>
 
@@ -355,25 +378,34 @@ export function Cat5Workbench({
               </button>
             </div>
 
-            <button
-              type="button"
-              disabled={loadingArena}
-              onClick={() => void executeArena(selectedPresetId)}
-              className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-xs font-extrabold text-white shadow-sm transition hover:bg-teal-800 disabled:opacity-50"
-            >
-              {creds.mode === 'live' ? (
-                <Zap className="h-4 w-4 text-amber-300" />
-              ) : (
-                <Play className="h-4 w-4" />
-              )}
-              <span>
-                {loadingArena
-                  ? 'Executing SQLite Loops...'
-                  : creds.mode === 'live'
-                    ? 'Run Live 3-Rung SQLite Agent'
-                    : 'Replay Verified ERP Agent Loop'}
-              </span>
-            </button>
+            <div className="flex flex-col items-end gap-1">
+              <button
+                type="button"
+                aria-disabled={loadingArena || reveal.replaying}
+                aria-busy={loadingArena || reveal.replaying}
+                onClick={() => {
+                  if (loadingArena || reveal.replaying) return
+                  void executeArena(selectedPresetId, true)
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-xs font-extrabold text-white shadow-sm transition hover:bg-teal-800 aria-disabled:cursor-wait aria-disabled:opacity-50"
+              >
+                {creds.mode === 'live' ? (
+                  <Zap className="h-4 w-4 text-amber-300" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
+                <span>
+                  {reveal.replaying
+                    ? 'Replaying…'
+                    : loadingArena
+                      ? 'Executing SQLite Loops...'
+                      : creds.mode === 'live'
+                        ? 'Run Live SQLite Agent (4 Versions)'
+                        : 'Replay Verified ERP Agent Loop'}
+                </span>
+              </button>
+              <ReplayStatus status={reveal.status} />
+            </div>
           </div>
         </div>
       </section>
@@ -391,35 +423,51 @@ export function Cat5Workbench({
             {runResponse.orchestration_callout}
           </div>
 
-          {/* Rung cards (rungs 1-4) with native <progress> step-budget bars */}
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {runResponse.results.map((res) => {
-              const isHaikuRaw = res.rung_id === 'unbounded_haiku_loop'
-              const isNaive = res.rung_id === 'unbounded_sonnet_loop' || isHaikuRaw
-              const isBounded = res.rung_id === 'bounded_sonnet_cached_gate'
+          {/* Version cards in display order (without · Sonnet, without · Haiku, with · Sonnet, with · Haiku-first) */}
+          <section ref={reveal.resultsRef} className="grid scroll-mt-24 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {[
+              ...orderedResults.map((res) => ({ rid: res.rung_id, res })),
+              ...(runResponse.pending_rungs ?? []).map((rid) => ({ rid, res: null as Cat5RungResult | null })),
+            ]
+              .sort((a, b) => rungOrder(a.rid) - rungOrder(b.rid))
+              .map(({ rid, res }) => {
+              if (!res) {
+                return (
+                  <div
+                    key={rid}
+                    className="flex flex-col justify-center rounded-2xl border border-dashed border-rose-300 bg-rose-50/40 p-5 text-xs text-slate-600 shadow-sm"
+                  >
+                    <span className="w-fit rounded-md bg-rose-100 px-2 py-0.5 text-[10px] font-extrabold uppercase text-rose-800">
+                      Run pending
+                    </span>
+                    <div className="mt-2 flex items-center gap-1.5">
+                      <DesignMark withLever={!isWithoutLever(rid)} />
+                      <h2 className="text-sm font-extrabold text-slate-900">{CAT5_RUNG_TITLE[rid]}</h2>
+                    </div>
+                    <p className="mt-1 leading-relaxed">
+                      No recorded run to replay yet. The Sonnet raw-table loop on Haiku 5.5: no cache and no policy
+                      tool, so there is no escalation path to Sonnet. Run it live to see this invoice.
+                    </p>
+                  </div>
+                )
+              }
+              if (!reveal.isVisible(rid)) {
+                return (
+                  <RevealPlaceholder
+                    key={rid}
+                    title={res.rung_title}
+                    withLever={!isWithoutLever(rid)}
+                    className="min-h-[360px]"
+                  />
+                )
+              }
+              const isNaive = isWithoutLever(res.rung_id)
               const isHybrid = res.rung_id === 'hybrid_haiku_sonnet_governed'
 
-              const borderTheme = isHaikuRaw
-                ? 'border-amber-300'
-                : isNaive
-                  ? 'border-rose-300'
-                  : isBounded
-                    ? 'border-blue-300'
-                    : 'border-teal-400 ring-1 ring-teal-200'
-              const headerBg = isHaikuRaw
-                ? 'bg-amber-50'
-                : isNaive
-                  ? 'bg-rose-50'
-                  : isBounded
-                    ? 'bg-blue-50/80'
-                    : 'bg-teal-50/90'
-              const badgeBg = isHaikuRaw
-                ? 'bg-amber-600 text-white'
-                : isNaive
-                  ? 'bg-rose-600 text-white'
-                  : isBounded
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-teal-700 text-white'
+              // same classes as the other screens: red (rose) without the lever, green (emerald) with it
+              const borderTheme = isNaive ? 'border-rose-300' : 'border-emerald-400 ring-1 ring-emerald-200'
+              const headerBg = isNaive ? 'bg-rose-50' : 'bg-emerald-50/90'
+              const badgeBg = isNaive ? 'bg-rose-600 text-white' : 'bg-emerald-700 text-white'
 
               const cost1k =
                 cacheMode === 'warm_shared_sop'
@@ -434,7 +482,7 @@ export function Cat5Workbench({
                 res.total_uncached_input_tokens +
                 res.total_cache_creation_tokens +
                 res.total_cache_read_tokens
-              const fillColor = isHaikuRaw ? '#d97706' : isNaive ? '#e11d48' : isBounded ? '#2563eb' : '#0f766e'
+              const fillColor = CAT5_SERIES_COLOR[res.rung_id]
               const ev = res.evaluation
 
               return (
@@ -452,7 +500,10 @@ export function Cat5Workbench({
                           {res.steps_used} / {res.max_step_budget} steps
                         </span>
                       </div>
-                      <h2 className="mt-2 text-sm font-extrabold text-slate-900">{res.rung_title}</h2>
+                      <div className="mt-2 flex items-center gap-1.5">
+                        <DesignMark withLever={!isNaive} />
+                        <h2 className="text-sm font-extrabold text-slate-900">{res.rung_title}</h2>
+                      </div>
                       <div className="mt-0.5 font-mono text-[11px] text-slate-600">
                         {isHybrid
                           ? `Haiku steps: ${res.haiku_steps} · Sonnet steps: ${res.sonnet_steps}${
@@ -474,8 +525,12 @@ export function Cat5Workbench({
                           </div>
                         </div>
                         {res.rung_id !== 'unbounded_sonnet_loop' && savingsPct > 0 && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 font-mono text-xs font-extrabold text-emerald-800">
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 font-mono text-xs font-extrabold text-emerald-800"
+                            title="Saving vs the raw-table loop on Sonnet (version 1)"
+                          >
                             <TrendingDown className="h-3.5 w-3.5" />-{savingsPct.toFixed(1)}%
+                            <span className="sr-only"> vs the raw-table loop on Sonnet</span>
                           </span>
                         )}
                       </div>
@@ -578,21 +633,6 @@ export function Cat5Workbench({
                 </div>
               )
             })}
-            {(runResponse.pending_rungs ?? []).map((rid) => (
-              <div
-                key={rid}
-                className="flex flex-col justify-center rounded-2xl border border-dashed border-amber-300 bg-amber-50/40 p-5 text-xs text-slate-600 shadow-sm"
-              >
-                <span className="w-fit rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold uppercase text-amber-800">
-                  Run pending
-                </span>
-                <h2 className="mt-2 text-sm font-extrabold text-slate-900">{CAT5_PENDING_TITLE[rid]}</h2>
-                <p className="mt-1 leading-relaxed">
-                  No recorded run to replay yet. The first rung's raw-table loop on Haiku 5.5: no cache and no policy
-                  tool, so there is no escalation path to Sonnet. Run it live to see this invoice.
-                </p>
-              </div>
-            ))}
           </section>
 
           {/* Charts: Step-by-Step Cumulative Spend + Token Breakdown */}
@@ -615,38 +655,39 @@ export function Cat5Workbench({
                     <Line
                       type="monotone"
                       dataKey="naive1k"
-                      name="1. Raw tables, no cache"
-                      stroke="#dc2626"
+                      name="1. Raw tables on Sonnet, no cache"
+                      stroke={CAT5_SERIES_COLOR.unbounded_sonnet_loop}
                       strokeWidth={2.5}
                       dot={{ r: 3 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="bounded1k"
-                      name="2. Narrow query + cache + gate"
-                      stroke="#2563eb"
-                      strokeWidth={2}
-                      dot={{ r: 3 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="hybrid1k"
-                      name="3. Haiku + gate + escalation"
-                      stroke="#0f766e"
-                      strokeWidth={2.5}
-                      dot={{ r: 4 }}
                     />
                     {naiveHaikuRes && (
                       <Line
                         type="monotone"
                         dataKey="naiveHaiku1k"
-                        name="4. Raw tables on Haiku, no cache"
-                        stroke="#d97706"
+                        name="2. Raw tables on Haiku, no cache"
+                        stroke={CAT5_SERIES_COLOR.unbounded_haiku_loop}
                         strokeWidth={2}
                         strokeDasharray="5 3"
                         dot={{ r: 3 }}
                       />
                     )}
+                    <Line
+                      type="monotone"
+                      dataKey="bounded1k"
+                      name="3. Narrow query + cache + gate on Sonnet"
+                      stroke={CAT5_SERIES_COLOR.bounded_sonnet_cached_gate}
+                      strokeWidth={2.5}
+                      dot={{ r: 3 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="hybrid1k"
+                      name="4. Haiku + gate + escalation"
+                      stroke={CAT5_SERIES_COLOR.hybrid_haiku_sonnet_governed}
+                      strokeWidth={2}
+                      strokeDasharray="5 3"
+                      dot={{ r: 4 }}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -663,7 +704,8 @@ export function Cat5Workbench({
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={tokenBarData} margin={{ top: 10, right: 16, left: 0, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                    {/* interval 0: every bar keeps its label; labels wrap to two lines instead of being thinned */}
+                    <XAxis dataKey="name" interval={0} height={36} tick={<WrappedAxisTick maxChars={13} />} />
                     <YAxis tick={{ fontSize: 11 }} />
                     <Tooltip />
                     <Legend wrapperStyle={{ fontSize: '11px' }} />
@@ -685,7 +727,7 @@ export function Cat5Workbench({
                     Recorded Runs on the {runResponse.portfolio_scorecard[0]?.invoices_evaluated ?? 'Three'} Original Invoices (Voucher Checked Field by Field)
                   </h2>
                   <p className="text-[11px] text-slate-500">
-                    {presetsData.presets.map((p) => p.title).join(' · ')}. One recorded run per rung and invoice; the
+                    {presetsData.presets.map((p) => p.title).join(' · ')}. One recorded run per version and invoice; the
                     experiment panel below has repeated runs on more invoices.
                   </p>
                 </div>
@@ -711,13 +753,18 @@ export function Cat5Workbench({
                       <th scope="col" className="px-3.5 py-2.5 text-right">Rupee Accuracy</th>
                       <th scope="col" className="px-3.5 py-2.5 text-right">Ev. Recall / Tool Prec</th>
                       <th scope="col" className="px-3.5 py-2.5 text-right">Avg Cost / 1k (Cold / Warm)</th>
-                      <th scope="col" className="px-3.5 py-2.5 text-right">Cold Savings vs R1</th>
+                      <th scope="col" className="px-3.5 py-2.5 text-right">Cold Savings vs Raw Tables (Sonnet)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
-                    {runResponse.portfolio_scorecard.map((row) => (
+                    {orderedScorecard.map((row) => (
                       <tr key={row.rung_id}>
-                        <th scope="row" className="px-3.5 py-2.5 text-left font-bold text-slate-900">
+                        <th
+                          scope="row"
+                          className={`border-l-4 px-3.5 py-2.5 text-left font-bold text-slate-900 ${
+                            isWithoutLever(row.rung_id) ? 'border-l-rose-500' : 'border-l-emerald-600'
+                          }`}
+                        >
                           <div>{row.label}</div>
                           <div className="font-mono text-[10px] font-normal text-slate-500">
                             {row.model_routing_summary}
@@ -779,13 +826,20 @@ export function Cat5Workbench({
                     <button
                       key={rid}
                       type="button"
+                      aria-pressed={activeRungView === rid}
                       onClick={() => setActiveRungView(rid)}
-                      className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition ${
+                      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold transition ${
                         activeRungView === rid
-                          ? 'bg-teal-500 text-slate-950'
+                          ? isWithoutLever(rid)
+                            ? 'bg-rose-500 text-white'
+                            : 'bg-emerald-500 text-slate-950'
                           : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                       }`}
                     >
+                      <span
+                        aria-hidden="true"
+                        className={`h-2 w-2 rounded-full ${isWithoutLever(rid) ? 'bg-rose-400' : 'bg-emerald-400'}`}
+                      />
                       {CAT5_RUNG_TAB[rid]}
                     </button>
                   ))}
@@ -1081,7 +1135,7 @@ export function Cat5Workbench({
               </div>
 
               <div className={`mt-4 grid gap-3 ${naiveHaikuRes ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
-                {[naiveRes, boundedRes, hybridRes, ...(naiveHaikuRes ? [naiveHaikuRes] : [])].map((r) => {
+                {[naiveRes, ...(naiveHaikuRes ? [naiveHaikuRes] : []), boundedRes, hybridRes].map((r) => {
                   const perInv =
                     cacheMode === 'warm_shared_sop'
                       ? r.warm_run_cost_usd
@@ -1089,16 +1143,19 @@ export function Cat5Workbench({
                   const monthly = perInv * monthlyInvoices
                   const annual = monthly * 12
                   return (
-                    <div key={r.rung_id} className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                    <div
+                      key={r.rung_id}
+                      className={`rounded-xl border bg-slate-50/70 p-4 ${
+                        isWithoutLever(r.rung_id) ? 'border-rose-200' : 'border-emerald-200'
+                      }`}
+                    >
                       <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-900">
-                        {r.rung_id === 'unbounded_haiku_loop' ? (
-                          <Database className="h-3.5 w-3.5 text-amber-600" />
-                        ) : r.rung_id === 'unbounded_sonnet_loop' ? (
+                        {isWithoutLever(r.rung_id) ? (
                           <Database className="h-3.5 w-3.5 text-rose-600" />
                         ) : r.rung_id === 'bounded_sonnet_cached_gate' ? (
-                          <Cpu className="h-3.5 w-3.5 text-blue-600" />
+                          <Cpu className="h-3.5 w-3.5 text-emerald-700" />
                         ) : (
-                          <ShieldCheck className="h-3.5 w-3.5 text-teal-700" />
+                          <ShieldCheck className="h-3.5 w-3.5 text-emerald-700" />
                         )}
                         <span>{r.rung_title}</span>
                       </div>
@@ -1158,7 +1215,9 @@ export function Cat5Workbench({
 
           <div role="tabpanel" aria-labelledby="cat5-insp-tab-code" hidden={inspectorTab !== 'code'}>
             <div className="space-y-3">
-              {Object.entries(presetsData.code_snippets).map(([key, snippet]) => (
+              {Object.entries(presetsData.code_snippets)
+                .sort(([a], [b]) => rungOrder(a as Cat5RungId) - rungOrder(b as Cat5RungId))
+                .map(([key, snippet]) => (
                 <div key={key} className="rounded-xl border border-slate-200 bg-slate-950 p-3.5">
                   <pre className="overflow-x-auto font-mono text-[11px] leading-relaxed text-slate-100">
                     {snippet}

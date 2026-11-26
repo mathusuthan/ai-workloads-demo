@@ -42,6 +42,8 @@ import type {
 } from '../types'
 import { NativeModal } from './NativeModal'
 import { Cat3QualityPanel } from './Cat3QualityPanel'
+import { ReplayStatus, RevealPlaceholder, useStagedReveal } from './StagedReveal'
+import { DesignMark } from './DesignMark'
 
 interface Cat3WorkbenchProps {
   archetype: ArchetypeSpec
@@ -50,7 +52,7 @@ interface Cat3WorkbenchProps {
   onRefreshSystemStatus: () => void
 }
 
-// Without and with the deck improvement (prefix caching + sliding-window summaries)
+// Without and with the deck's lever (prefix caching + sliding-window summaries)
 const CAT3_RUNGS: Cat3RungId[] = ['naive_full_history', 'prefix_cached_summarized']
 
 const VOLUME_STEPS = [
@@ -192,6 +194,7 @@ export function Cat3Workbench({
   )
   const [runResponse, setRunResponse] = useState<Cat3RunResponse | null>(null)
   const [loadingArena, setLoadingArena] = useState(false)
+  const reveal = useStagedReveal('versions')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   // Arena HUD controls
@@ -219,9 +222,12 @@ export function Cat3Workbench({
     [presetsData.presets, selectedPresetId]
   )
 
-  const executeArena = async (presetId: string = selectedPresetId) => {
+  const executeArena = async (presetId: string = selectedPresetId, opts?: { staged?: boolean }) => {
+    // a replay click clears the cards and reveals them in card order (the mount load and preset picks stay instant)
+    const staged = Boolean(opts?.staged) && creds.mode !== 'live'
     setLoadingArena(true)
     setErrorMsg(null)
+    if (staged) reveal.begin()
     try {
       const resp = await runCat3Arena(
         {
@@ -239,7 +245,9 @@ export function Cat3Workbench({
       if (resp.mode_used === 'live') {
         onRefreshSystemStatus()
       }
+      if (staged) reveal.run(resp.results.filter((r) => r.status === 'ok' && r.turns.length > 0).map((r) => r.rung_id))
     } catch (err) {
+      if (staged) reveal.reset()
       setErrorMsg(err instanceof Error ? err.message : 'Failed to run Category 3 Session Arena.')
     } finally {
       setLoadingArena(false)
@@ -395,7 +403,7 @@ export function Cat3Workbench({
       : Math.max(0, rawFocus.finops.input_tokens - memTok)
     const handbookUncached = isUncached ? handbookTokens : 0
 
-    // Prompt size without the improvement at same turn index (up to Turn 10) for evicted savings
+    // Prompt size without the lever at same turn index (up to Turn 10) for evicted savings
     const naiveMatchTurn =
       runResponse?.results
         .find((r) => r.rung_id === 'naive_full_history')
@@ -526,9 +534,10 @@ export function Cat3Workbench({
             </h1>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-600 sm:text-sm">
               Hold <strong>Claude Sonnet 5.5</strong> ($2.00/M in · $10.00/M out) constant across a 10-turn IT &amp; HR
-              Service Desk escalation: measure how <strong>Prefix Context Caching</strong> ($0.10/M reads, -95%) and{' '}
-              <strong>Sliding-Window Memory Summarization</strong> cut quadratic <strong>O(N²)</strong> session cost — and
-              what the compacted memory leaves out, scored against a fixed answer key.
+              Service Desk escalation: measure what <strong>Prefix Context Caching</strong> ($0.10/M reads, -95%) and{' '}
+              <strong>Sliding-Window Memory Summarization</strong> do to the session cost, which grows with every resent
+              turn (<strong>O(N²)</strong> without them), and what the compacted memory leaves out, scored against a
+              fixed answer key.
             </p>
           </div>
 
@@ -614,11 +623,16 @@ export function Cat3Workbench({
                 </p>
               </div>
 
+              <div className="flex flex-col items-end gap-1">
               <button
                 type="button"
-                disabled={loadingArena}
-                onClick={() => void executeArena(selectedPresetId)}
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-extrabold text-white shadow-sm transition hover:bg-emerald-800 disabled:opacity-50"
+                aria-disabled={loadingArena || reveal.replaying}
+                aria-busy={loadingArena || reveal.replaying}
+                onClick={() => {
+                  if (loadingArena || reveal.replaying) return
+                  void executeArena(selectedPresetId, { staged: true })
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-xs font-extrabold text-white shadow-sm transition hover:bg-emerald-800 aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
               >
                 {creds.mode === 'live' ? (
                   <Zap className="h-4 w-4 text-amber-300" />
@@ -626,13 +640,17 @@ export function Cat3Workbench({
                   <Play className="h-4 w-4" />
                 )}
                 <span>
-                  {loadingArena
+                  {reveal.replaying
+                    ? 'Replaying…'
+                    : loadingArena
                     ? 'Running 10-Turn Arena...'
                     : creds.mode === 'live'
                       ? 'Run Live Session (Without & With)'
                       : 'Replay Verified 10-Turn Arena'}
                 </span>
               </button>
+              <ReplayStatus status={reveal.status} className="text-right" />
+              </div>
             </div>
 
             <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -758,9 +776,18 @@ export function Cat3Workbench({
               </div>
 
               {/* Without vs with comparison cards */}
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div ref={reveal.resultsRef} className="grid scroll-mt-24 gap-4 lg:grid-cols-2">
                 {slicedByRung.map((s) => {
                   const fullRung = runResponse.results.find((r) => r.rung_id === s.rungId)!
+                  if (!reveal.isVisible(s.rungId)) {
+                    return (
+                      <RevealPlaceholder
+                        key={s.rungId}
+                        title={fullRung.rung_title}
+                        withLever={s.rungId !== 'naive_full_history'}
+                      />
+                    )
+                  }
                   const isNaive = s.rungId === 'naive_full_history'
                   const isCompact = s.rungId === 'prefix_cached_summarized'
 
@@ -787,7 +814,10 @@ export function Cat3Workbench({
                               {selectedMaxTurn} Turn{selectedMaxTurn > 1 ? 's' : ''}
                             </span>
                           </div>
-                          <h3 className="mt-2 text-sm font-extrabold text-slate-900">{s.rungTitle}</h3>
+                          <div className="mt-2 flex items-center gap-1.5">
+                            <DesignMark withLever={!isNaive} />
+                            <h3 className="text-sm font-extrabold text-slate-900">{s.rungTitle}</h3>
+                          </div>
                           <div className="mt-0.5 font-mono text-[11px] text-slate-600">
                             Anthropic · <strong>{s.modelId}</strong>
                           </div>
@@ -855,7 +885,7 @@ export function Cat3Workbench({
                             </div>
                           </div>
 
-                          {/* Summarizer cost included in the version with the improvement */}
+                          {/* Summarizer cost included in the version with the lever */}
                           {isCompact && (
                             <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-[11px] text-emerald-950">
                               <strong>Compactor Cost Included:</strong>{' '}
@@ -909,7 +939,7 @@ export function Cat3Workbench({
                       Category 3 FinOps HUD · Prefix Caching &amp; Memory Compaction Economics
                     </div>
                     <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">
-                      Eliminating Quadratic O(N²) Session Cost Across 10 Service Desk Turns
+                      Cumulative Session Cost Across 10 Service Desk Turns, Without and With the Lever
                     </h2>
                   </div>
 
@@ -978,7 +1008,7 @@ export function Cat3Workbench({
                   <div className="rounded-xl border border-slate-200 p-4">
                     <h3 className="mb-2 text-xs font-extrabold uppercase tracking-wider text-slate-700">
                       {lineMetricMode === 'per_turn_cents'
-                        ? 'Per-Turn Total Spend (¢ · Compaction Sawtooth After T5 & T8 With the Improvement)'
+                        ? 'Per-Turn Total Spend (¢ · Compaction Sawtooth After T5 & T8 With the Lever)'
                         : 'Cumulative Session Spend ($ per 1,000 Sessions)'}
                     </h3>
                     <div className="h-64 w-full">
@@ -1651,7 +1681,7 @@ export function Cat3Workbench({
                     </label>
                     <p id="cat3-followup-hint" className="text-[11px] text-slate-600">
                       {creds.mode === 'live'
-                        ? 'Live API Mode active: sends a real follow-up turn to Sonnet 5.5 on top of the active context window (with the improvement, compaction triggers after every 4 uncompacted turns).'
+                        ? 'Live API Mode active: sends a real follow-up turn to Sonnet 5.5 on top of the active context window (with the lever, compaction triggers after every 4 uncompacted turns).'
                         : 'Verified Replay Mode ($0) covers pre-captured Turns 1–10. Switch Credit Shield in the top bar to Live API Mode to send custom Turn-11+ follow-ups.'}
                     </p>
 

@@ -108,7 +108,7 @@ def build_cat6_shared_bus_turn_message(
     *,
     sandbox_report: dict[str, Any] | None = None,
 ) -> str:
-    """User message for one shared-bus turn (Rung 1): the same asks as the isolated rungs, on one growing thread.
+    """User message for one shared-bus turn (the shared-bus versions, 1 and 2): the same asks as the isolated rungs, on one growing thread.
 
     Turn 1 carries the incident, the buggy source, the full repo manual and the unrelated neighbour services and
     OTel spans; later turns append only their ask, so every agent reads everything said before it.
@@ -163,7 +163,7 @@ def build_cat6_isolated_payload(
     critic_verdict: str = "",
     retry_feedback: str = "",
 ) -> str:
-    """Narrow, isolated context handoff for Rung 2 & Rung 3 sub-agents (NO sibling noise)."""
+    """Narrow, isolated context handoff for the isolated versions' (3 and 4) sub-agents (NO sibling noise)."""
     header = (
         f"Ticket `{preset['pr_id']}` · `{preset['use_case_tag']}` · `{preset['service_name']}`\n"
         f"Target File: `{preset['target_file']}` · Standard: `{preset['standard_ref']}`\n"

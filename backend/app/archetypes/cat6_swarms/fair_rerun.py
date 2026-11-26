@@ -95,6 +95,8 @@ class ArmSpec:
         return self.context == "isolated_cached"
 
 
+# Display order (as the app's versions 1..4): without the lever (shared bus) on Sonnet, then on Haiku agents + a Sonnet
+# patch author; with it (isolated + cached) on Sonnet, then on Haiku agents + a Sonnet patch author.
 ARMS: dict[str, ArmSpec] = {
     spec.arm_id: spec
     for spec in (
@@ -107,6 +109,17 @@ ARMS: dict[str, ArmSpec] = {
             context_summary="Shared growing thread, repo manual + noise, uncached",
             instructions_summary="Governed per-role prompts (same as the isolated arms)",
             models_summary="Sonnet all turns",
+        ),
+        # `shared_bus_matched_gate` with the model assignment of `tiered_gate`: same thread, prompts, caps and gate.
+        ArmSpec(
+            arm_id="shared_bus_tiered_gate",
+            context="shared_bus",
+            prompt_rung_id="unisolated_tiered_swarm",
+            tiered=True,
+            gate_enabled=True,
+            context_summary="Shared growing thread, repo manual + noise, uncached",
+            instructions_summary="Governed per-role prompts (same as the isolated arms)",
+            models_summary="Haiku except patch_author (Sonnet)",
         ),
         ArmSpec(
             arm_id="isolated_cached_gate",
@@ -126,17 +139,6 @@ ARMS: dict[str, ArmSpec] = {
             gate_enabled=True,
             context_summary="Isolated narrow thread per agent + per-run cached repo prefix",
             instructions_summary="Governed per-role prompts",
-            models_summary="Haiku except patch_author (Sonnet)",
-        ),
-        # `shared_bus_matched_gate` with the model assignment of `tiered_gate`: same thread, prompts, caps and gate.
-        ArmSpec(
-            arm_id="shared_bus_tiered_gate",
-            context="shared_bus",
-            prompt_rung_id="unisolated_tiered_swarm",
-            tiered=True,
-            gate_enabled=True,
-            context_summary="Shared growing thread, repo manual + noise, uncached",
-            instructions_summary="Governed per-role prompts (same as the isolated arms)",
             models_summary="Haiku except patch_author (Sonnet)",
         ),
     )
@@ -189,7 +191,7 @@ def build_cached_prefix(run_nonce: str) -> str:
     return f"<!-- run:{run_nonce} -->\n" + SHARED_REPO_PREFIX_MARKDOWN
 
 
-# The shared-bus prompts live in prompts.py, shared with the app's rung 1.
+# The shared-bus prompts live in prompts.py, shared with the app's shared-bus versions (1 and 2).
 build_matched_bus_turn_message = build_cat6_shared_bus_turn_message
 build_matched_bus_retry_message = build_cat6_shared_bus_retry_message
 format_failing_checks = format_cat6_failing_checks

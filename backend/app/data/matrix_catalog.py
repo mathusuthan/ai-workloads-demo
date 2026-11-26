@@ -237,7 +237,10 @@ FINOPS_RULES = [
             "Apply sliding-window summarization and prefix caching on Tier 3 multi-turn sessions (Cat 3: 10k–40k+ tok).",
             "Pair hybrid chunk reranking with Context Caching on Tier 2+ deep RAG corpora (Cat 4: 15k–100k+ tok).",
         ],
-        "impact": "Impact: Eliminates quadratic context bloat",
+        # number-free and true for the recorded runs: with the lever, Cat 3 sessions and Cat 4 questions cost less
+        # (Cat 3 $203.80 vs $390.73 per 1k sessions; Cat 4 $0.023 vs $0.046 per question at 1x, $0.025 vs $0.117 at 3x);
+        # what each leaves out is scored in its lab
+        "impact": "Impact: lower cost per session and per question in the recorded runs; what each design leaves out is scored in its lab",
         "accent": "#15803D",
     },
     {
@@ -248,7 +251,9 @@ FINOPS_RULES = [
             "Enforce max-step loop budgets on Tier 3+ tool orchestration (Cat 5: 25k–150k+ In, 1.5k–8k Out).",
             "Isolate sub-agent contexts on Tier 4 swarms (Cat 6: 1.5M–10M+ tok/day) and measure Cost per Outcome (CpO).",
         ],
-        "impact": "Impact: Predictable unit economics at scale",
+        # no direction stated: with the lever Cat 5 costs more on Haiku ($10.42 vs $7.89 per 1k invoices) and less on
+        # Sonnet; Cat 6 CpO is lower on both model set-ups
+        "impact": "Impact: cost per invoice and per verified fix measured with and without the lever in each lab",
         "accent": "#6D28D9",
     },
 ]

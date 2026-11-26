@@ -60,13 +60,14 @@ CAT6_RUNG_TO_PATTERN: dict[str, str] = {
     "tiered_hybrid_cpo_swarm": "tiered_hybrid_cpo_swarm",
     "unisolated_tiered_swarm": "unisolated_shared_bus_tiered_swarm",
 }
-# App rungs in number order (rung 1..4). The 2x2 design: without the lever = rungs 1 (Sonnet) and 4 (Haiku agents +
-# Sonnet patch author); with it = rungs 2 (Sonnet) and 3 (Haiku agents + Sonnet patch author).
+# App rungs in display order (1..4): the two versions without the lever first, then the two with it, Sonnet before
+# Haiku agents + Sonnet patch author in each. 1 = without, Sonnet; 2 = without, Haiku agents + Sonnet patch author;
+# 3 = with, Sonnet; 4 = with, Haiku agents + Sonnet patch author. Results and the scorecard follow this order.
 CAT6_RUNG_IDS: tuple[Cat6RungId, ...] = (
     "unisolated_broadcast_swarm",
+    "unisolated_tiered_swarm",
     "isolated_cached_sonnet_swarm",
     "tiered_hybrid_cpo_swarm",
-    "unisolated_tiered_swarm",
 )
 CAT6_SHARED_BUS_RUNGS: frozenset[str] = frozenset({"unisolated_broadcast_swarm", "unisolated_tiered_swarm"})
 CAT6_TIERED_RUNGS: frozenset[str] = frozenset({"tiered_hybrid_cpo_swarm", "unisolated_tiered_swarm"})
@@ -109,19 +110,19 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
         )
     if rung_id == "unisolated_tiered_swarm":
         return (
-            "4. Shared-Bus Swarm + Sandbox Gate (Haiku agents + Sonnet Author)",
+            "2. Shared-Bus Swarm + Sandbox Gate (Haiku agents + Sonnet Author)",
             "Without the lever, Haiku agents + Sonnet patch author",
             [
                 # replaced with measured sizes by _apply_measured_claims
                 "Streams the entire repo standards + unrelated neighbor services & OTel spans uncached across one growing shared thread.",
                 # completed with the measured portfolio verified count by _apply_measured_claims
-                "Same shared thread, role instructions, output caps, PR-SANDBOX-GATE-01 and one-retry limit as rung 1; "
+                "Same shared thread, role instructions, output caps, PR-SANDBOX-GATE-01 and one-retry limit as the shared-bus Sonnet swarm; "
                 "Orchestrator, CI Triager, Security Critic & Merge Gate run on Claude Haiku 5.5, the patch author on Sonnet 5.5.",
             ],
         )
     if rung_id == "isolated_cached_sonnet_swarm":
         return (
-            "2. Isolated + Cached Prefix + Sandbox (Sonnet 5.5)",
+            "3. Isolated + Cached Prefix + Sandbox (Sonnet 5.5)",
             "With the lever: isolated agents + cached repo prefix",
             [
                 # replaced with the measured prefix size by _apply_measured_claims
@@ -130,7 +131,7 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
             ],
         )
     return (
-        "3. Tier-Routed Haiku + Sonnet Author Swarm",
+        "4. Isolated + Cached Prefix + Sandbox (Haiku agents + Sonnet Author)",
         "With the lever, Haiku agents + Sonnet patch author",  # measured CpO change added by _apply_measured_claims
         [
             "Routes Orchestrator Plan, CI Triager, Security Critic & Merge Gate to Claude Haiku 5.5 ($0.10/M in · $0.01/M cache read), reserving Sonnet 5.5 for isolated Patch Authoring.",
@@ -335,7 +336,7 @@ def _apply_measured_claims(
             set_note(
                 bus_tiered,
                 1,
-                "Same shared thread, role instructions, output caps, PR-SANDBOX-GATE-01 and one-retry limit as rung 1, "
+                "Same shared thread, role instructions, output caps, PR-SANDBOX-GATE-01 and one-retry limit as the shared-bus Sonnet swarm, "
                 "with Haiku 5.5 on every role except the Sonnet patch author; "
                 f"{row.verified_outcomes_count}/{row.prs_evaluated} of its {row.prs_evaluated}-incident portfolio "
                 f"patches verified ({row.checks_passed_total}/{row.checks_total} sandbox checks).",
@@ -363,12 +364,12 @@ def _apply_measured_claims(
         if row is not None and row.cpo_savings_vs_naive_cold_pct is not None:
             hybrid.badge_text = (
                 "With the lever, Haiku agents + Sonnet patch author "
-                f"(-{fmt_pct(row.cpo_savings_vs_naive_cold_pct)} portfolio CpO vs rung 1)"
+                f"(-{fmt_pct(row.cpo_savings_vs_naive_cold_pct)} portfolio CpO vs the shared-bus Sonnet swarm)"
             )
         elif naive:
             hybrid.badge_text = (
                 "With the lever, Haiku agents + Sonnet patch author "
-                f"(-{fmt_pct(hybrid.savings_vs_naive_cold_pct)} cost/run vs rung 1)"
+                f"(-{fmt_pct(hybrid.savings_vs_naive_cold_pct)} cost/run vs the shared-bus Sonnet swarm)"
             )
         if row is not None:
             set_note(
@@ -427,7 +428,7 @@ async def _run_live_cat6_for_rung(
 
     if rung_id in CAT6_SHARED_BUS_RUNGS:
         # Shared growing bus: same role instructions, caps, sandbox gate and one retry as the isolated rungs.
-        # Rung 1 runs Sonnet on every turn; rung 4 runs Haiku on every role except the Sonnet patch author.
+        # Version 1 runs Sonnet on every turn; version 2 runs Haiku on every role except the Sonnet patch author.
         bus_messages: list[dict[str, Any]] = []
         step_counter = 0
 
@@ -904,6 +905,8 @@ async def execute_cat6_run(
             credit_shield.record_server_spend(total_spend)
         mode_used = "live"
 
+    # display order (without: Sonnet, Haiku agents; with: Sonnet, Haiku agents), whatever order the request listed
+    results.sort(key=lambda r: CAT6_RUNG_IDS.index(r.rung_id))
     _apply_cross_rung_savings(results)
 
     # Persist 1 partitioned trace rollup per executed rung
@@ -957,6 +960,10 @@ async def execute_cat6_run(
     naive = next((r for r in results if r.rung_id == "unisolated_broadcast_swarm" and r.status == "ok"), None)
     iso = next((r for r in results if r.rung_id == "isolated_cached_sonnet_swarm" and r.status == "ok"), None)
     hyb = next((r for r in results if r.rung_id == "tiered_hybrid_cpo_swarm" and r.status == "ok"), None)
+    bus_tiered = next((r for r in results if r.rung_id == "unisolated_tiered_swarm" and r.status == "ok"), None)
+
+    def _pass(r: Cat6RungResult) -> int:
+        return r.sandbox_report.passed_checks if r.sandbox_report else 0
 
     if naive and iso and hyb:
         n_tot = (
@@ -964,33 +971,39 @@ async def execute_cat6_run(
             + naive.total_cache_creation_tokens
             + naive.total_cache_read_tokens
         )
-        n_pass = naive.sandbox_report.passed_checks if naive.sandbox_report else 0
-        h_pass = hyb.sandbox_report.passed_checks if hyb.sandbox_report else 0
-        i_pass = iso.sandbox_report.passed_checks if iso.sandbox_report else 0
+        # in display order: without the lever (Sonnet, then Haiku agents), then with it (Sonnet, then Haiku agents)
         callout = (
             f"Multi-Agent Swarm FinOps ({preset['pr_id']} · {preset['service_name']}), same instructions and sandbox "
-            f"gate on every rung: the shared-bus swarm sent {n_tot:,} uncached prompt tokens "
-            f"(${naive.cost_per_1k_runs_cold_usd:.2f}/1k runs, sandbox {n_pass}/10). Isolated agents + cached repo "
-            f"prefix on Sonnet: ${iso.cost_per_1k_runs_cold_usd:.2f}/1k cold (${iso.cost_per_1k_runs_warm_usd:.2f}/1k "
-            f"warm, -{iso.savings_vs_naive_cold_pct:.1f}%, sandbox {i_pass}/10). The same with Haiku agents + a Sonnet "
-            f"patch author: ${hyb.cost_per_1k_runs_cold_usd:.2f}/1k cold (${hyb.cost_per_1k_runs_warm_usd:.2f}/1k "
-            f"warm, -{hyb.savings_vs_naive_cold_pct:.1f}%, sandbox {h_pass}/10)."
+            f"gate in every version: the shared-bus swarm on Sonnet sent {n_tot:,} uncached prompt tokens "
+            f"(${naive.cost_per_1k_runs_cold_usd:.2f}/1k runs, sandbox {_pass(naive)}/10)."
+        )
+        if bus_tiered:
+            callout += (
+                f" The shared bus with Haiku agents + a Sonnet patch author: ${bus_tiered.cost_per_1k_runs_cold_usd:.2f}/1k "
+                f"runs (sandbox {_pass(bus_tiered)}/10)."
+            )
+        elif "unisolated_tiered_swarm" in pending_rungs:
+            callout += " Version 2 (without the lever: shared bus, Haiku agents + Sonnet patch author): run pending."
+        callout += (
+            f" Isolated agents + cached repo prefix on Sonnet: ${iso.cost_per_1k_runs_cold_usd:.2f}/1k cold "
+            f"(${iso.cost_per_1k_runs_warm_usd:.2f}/1k warm, -{iso.savings_vs_naive_cold_pct:.1f}% vs the shared-bus Sonnet "
+            f"swarm, sandbox {_pass(iso)}/10). The same with Haiku agents + a Sonnet patch author: "
+            f"${hyb.cost_per_1k_runs_cold_usd:.2f}/1k cold (${hyb.cost_per_1k_runs_warm_usd:.2f}/1k warm, "
+            f"-{hyb.savings_vs_naive_cold_pct:.1f}% vs the shared-bus Sonnet swarm, sandbox {_pass(hyb)}/10)."
         )
     else:
         callout = (
             "Category 6 compares one swarm with and without isolated agents + a cached repo prefix (same instructions "
-            "and PR-SANDBOX-GATE-01 on every rung), on Sonnet and on Haiku agents + a Sonnet patch author, by Cost "
+            "and PR-SANDBOX-GATE-01 in every version), on Sonnet and on Haiku agents + a Sonnet patch author, by Cost "
             "per Verified Outcome (CpO)."
         )
-    bus_tiered = next((r for r in results if r.rung_id == "unisolated_tiered_swarm" and r.status == "ok"), None)
-    if bus_tiered:
-        bt_pass = bus_tiered.sandbox_report.passed_checks if bus_tiered.sandbox_report else 0
-        callout += (
-            f" The shared bus with Haiku agents + a Sonnet patch author: ${bus_tiered.cost_per_1k_runs_cold_usd:.2f}/1k "
-            f"runs (sandbox {bt_pass}/10)."
-        )
-    elif "unisolated_tiered_swarm" in pending_rungs:
-        callout += " Rung 4 (shared bus, Haiku agents + Sonnet patch author): run pending."
+        if bus_tiered:
+            callout += (
+                f" The shared bus with Haiku agents + a Sonnet patch author: ${bus_tiered.cost_per_1k_runs_cold_usd:.2f}/1k "
+                f"runs (sandbox {_pass(bus_tiered)}/10)."
+            )
+        elif "unisolated_tiered_swarm" in pending_rungs:
+            callout += " Version 2 (without the lever: shared bus, Haiku agents + Sonnet patch author): run pending."
 
     return Cat6RunResponse(
         mode_used=mode_used,  # type: ignore[arg-type]

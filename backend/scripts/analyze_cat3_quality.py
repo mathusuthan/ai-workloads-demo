@@ -1,4 +1,4 @@
-"""Score the Category 3 quality-rerun records against the answer key: without vs with the deck improvement.
+"""Score the Category 3 quality-rerun records against the answer key: without vs with the deck's lever.
 
 Usage (from backend/):
     .venv/bin/python scripts/analyze_cat3_quality.py

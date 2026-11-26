@@ -1,6 +1,6 @@
 # Category 5: 4-step budget + deterministic policy tool, without and with
 
-Generated 2026-11-26T08:14:54.625636+00:00. Fixture version `cat5-ablation-fixtures-2026-11-26.v1`. Runs used: 144 of 144 (4 versions x 12 invoices x 3 runs).
+Generated 2026-11-26T11:13:17.062923+00:00. Fixture version `cat5-ablation-fixtures-2026-11-26.v1`. Runs used: 144 of 144 (4 versions x 12 invoices x 3 runs).
 
 Settings: max_tokens 4096 on every turn; with-versions step budget 4 (hard cap 5 model turns, as the app); without-version safety cap 12 model turns; call timeout 180s.
 
@@ -158,7 +158,7 @@ truncated turns 0, model mismatches 0, cache anomalies 0, cap hits 0, no voucher
 ## Method notes
 
 - Without: the free-choice loop over the five raw SELECT * tools (no step budget beyond a 12-turn safety cap, no policy tool, no prompt cache), on Sonnet and on Haiku; the Haiku version has no escalation path, since only the policy tool can flag one. With: a 4-step budget and the deterministic policy tool (run_policy_tolerance_gate; the commit is refused until it has run), and the with-design also uses one narrow query (fetch_3way_match_bundle) in place of the raw tables and sends the policy manual as a cached prefix, so the difference is not the budget and the tool alone.
-- The policy manual (SOP-AP-3WAY-2026.v4) is the system text of every version. Both without-versions run the free-choice protocol; the with-versions run the app's rung-2 and rung-3 prompts unchanged.
+- The policy manual (SOP-AP-3WAY-2026.v4) is the system text of every version. Both without-versions run the free-choice protocol; the with-versions run the app's prompts for versions 3 and 4 unchanged.
 - Escalation (Haiku-first version): the run switches to Sonnet from the next turn when the policy tool sets escalation_required, which it does only for a multi-factor commercial dispute (two or more of: partial DOA or short receipt, signed contract amendment, unauthorized line price rise, disallowed freight; manual 6.2). Expected escalations: inv-02 and inv-12.
 - Thinking differs by model in the app's call function: Sonnet runs with thinking {type: between_tools}, Haiku with thinking disabled.
 - Each cached run starts with its own nonce line, so it writes the cache on its first turn and reads it after (cold cache per run). Costs are derived from recorded tokens with app/core/pricing.py; cold/warm by the app's _compute_step_cold_warm rule.

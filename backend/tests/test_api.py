@@ -703,7 +703,7 @@ def test_cat6_run_replay_proves_context_isolation_prefix_caching_and_cpo(
         assert resp.status_code == 200
         data = resp.json()
         assert data["mode_used"] == "replay"
-        # 3 rungs while rung 4 (shared bus, Haiku agents + Sonnet patch author) is pending, 4 once it is recorded
+        # 3 rungs while version 2 (shared bus, Haiku agents + Sonnet patch author) is pending, 4 once it is recorded
         recorded_rungs = len(data["results"])
         assert recorded_rungs + len(data["pending_rungs"]) == 4
         assert len(data["portfolio_scorecard"]) == recorded_rungs

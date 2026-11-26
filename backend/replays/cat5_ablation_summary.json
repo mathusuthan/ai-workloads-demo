@@ -50,7 +50,7 @@
   "arms": [
     {
       "arm_id": "raw_free_sonnet",
-      "label": "Without: free-choice loop over raw tables (Sonnet)",
+      "label": "Without the lever: free-choice loop over raw tables (Sonnet)",
       "adds": "Sonnet chooses among raw ERP table queries and does the policy arithmetic itself; no step budget, no policy tool",
       "design": "without",
       "model_column": "sonnet",
@@ -518,7 +518,7 @@
     },
     {
       "arm_id": "raw_free_haiku",
-      "label": "Without: free-choice loop over raw tables (Haiku)",
+      "label": "Without the lever: free-choice loop over raw tables (Haiku)",
       "adds": "The same loop on Haiku; with no policy tool nothing flags escalation, so there is no escalation path to Sonnet",
       "design": "without",
       "model_column": "haiku",
@@ -986,7 +986,7 @@
     },
     {
       "arm_id": "bundle_gate_sonnet_cached",
-      "label": "With: 4-step budget + policy tool (Sonnet)",
+      "label": "With the lever: 4-step budget + policy tool (Sonnet)",
       "adds": "4-step budget and the deterministic policy tool, with one narrow query and the policy manual cached",
       "design": "with",
       "model_column": "sonnet",
@@ -1454,7 +1454,7 @@
     },
     {
       "arm_id": "bundle_gate_haiku_escalate",
-      "label": "With: 4-step budget + policy tool (Haiku-first)",
+      "label": "With the lever: 4-step budget + policy tool (Haiku-first)",
       "adds": "The same on Haiku; Sonnet takes over when the policy tool flags a multi-factor dispute",
       "design": "with",
       "model_column": "haiku",
@@ -1933,7 +1933,7 @@
   "non_exact_runs": [],
   "notes": [
     "Without: the free-choice loop over the five raw SELECT * tools (no step budget beyond a 12-turn safety cap, no policy tool, no prompt cache), on Sonnet and on Haiku; the Haiku version has no escalation path, since only the policy tool can flag one. With: a 4-step budget and the deterministic policy tool (run_policy_tolerance_gate; the commit is refused until it has run), and the with-design also uses one narrow query (fetch_3way_match_bundle) in place of the raw tables and sends the policy manual as a cached prefix, so the difference is not the budget and the tool alone.",
-    "The policy manual (SOP-AP-3WAY-2026.v4) is the system text of every version. Both without-versions run the free-choice protocol; the with-versions run the app's rung-2 and rung-3 prompts unchanged.",
+    "The policy manual (SOP-AP-3WAY-2026.v4) is the system text of every version. Both without-versions run the free-choice protocol; the with-versions run the app's prompts for versions 3 and 4 unchanged.",
     "Escalation (Haiku-first version): the run switches to Sonnet from the next turn when the policy tool sets escalation_required, which it does only for a multi-factor commercial dispute (two or more of: partial DOA or short receipt, signed contract amendment, unauthorized line price rise, disallowed freight; manual 6.2). Expected escalations: inv-02 and inv-12.",
     "Thinking differs by model in the app's call function: Sonnet runs with thinking {type: between_tools}, Haiku with thinking disabled.",
     "Each cached run starts with its own nonce line, so it writes the cache on its first turn and reads it after (cold cache per run). Costs are derived from recorded tokens with app/core/pricing.py; cold/warm by the app's _compute_step_cold_warm rule.",

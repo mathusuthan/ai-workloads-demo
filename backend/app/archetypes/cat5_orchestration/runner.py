@@ -58,13 +58,15 @@ CAT5_BUDGETS: dict[str, int] = {
     "unbounded_sonnet_loop": 12,  # safety cap on model turns (the ablation's neutral-arm cap)
     "bounded_sonnet_cached_gate": 4,
     "hybrid_haiku_sonnet_governed": 4,
-    "unbounded_haiku_loop": 12,  # rung 1 on Haiku: same cap
+    "unbounded_haiku_loop": 12,  # the Sonnet raw-table loop on Haiku: same cap
 }
+# Display order (cards, tabs, charts, scorecard, API results): without · Sonnet, without · Haiku, with · Sonnet,
+# with · Haiku-first. The displayed numbers 1-4 follow this order; the rung ids are unchanged.
 CAT5_RUNG_ORDER: tuple[str, ...] = (
     "unbounded_sonnet_loop",
+    "unbounded_haiku_loop",
     "bounded_sonnet_cached_gate",
     "hybrid_haiku_sonnet_governed",
-    "unbounded_haiku_loop",
 )
 # Rungs whose recorded runs may not exist yet: a replay request reports them in `pending_rungs` ("run pending")
 # instead of failing, so the other rungs still replay. Every other rung missing from the replays is a 404.
@@ -114,7 +116,7 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
         )
     if rung_id == "bounded_sonnet_cached_gate":
         return (
-            "2. Narrow Query + Cached Policy + Policy Gate",
+            "3. Narrow Query + Cached Policy + Policy Gate (Sonnet 5.5)",
             "With the Lever: Step Budget + Policy Tool",
             [
                 "A step budget and the deterministic policy tool (AP-POL-GATE-01): the commit tool refuses until the tool "
@@ -125,19 +127,19 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
         )
     if rung_id == "unbounded_haiku_loop":
         return (
-            "4. Free-Choice Raw-Table Loop (Haiku 5.5)",
+            "2. Free-Choice Raw-Table Loop (Haiku 5.5)",
             "Without the Lever: Raw Tables, No Cache (Haiku)",
             [
-                "The first rung's raw SELECT * tools, prompt and safety cap on Haiku 5.5: the model chooses its table queries, "
+                "The Sonnet raw-table loop's SELECT * tools, prompt and safety cap on Haiku 5.5: the model chooses its table queries, "
                 "does the policy arithmetic itself and commits the voucher.",
                 "No prompt cache and no policy tool, so nothing can flag escalation: there is no escalation path to Sonnet.",
             ],
         )
     return (
-        "3. Haiku + Policy Gate + Sonnet Escalation",
+        "4. Haiku + Policy Gate + Sonnet Escalation",
         "With the Lever, Haiku-First",
         [
-            "Rung 2's tools and prompt on Haiku 5.5; the run switches to Sonnet 5.5 when the gate flags escalation.",
+            "The Sonnet with-the-lever version's tools and prompt on Haiku 5.5; the run switches to Sonnet 5.5 when the gate flags escalation.",
             "The gate flags escalation only for a multi-factor dispute: two or more of partial DOA or short receipt, a signed "
             "amendment, an unauthorized price rise and disallowed freight (the manual's multi-factor rule).",
         ],
@@ -356,7 +358,7 @@ def _apply_measured_claims(results: list[Cat5RungResult], portfolio: Cat5Ablatio
         if cut is not None:
             text += (
                 f": uncached prompt tokens {naive.total_uncached_input_tokens:,} → {bounded.total_uncached_input_tokens:,} "
-                f"vs rung 1 ({fmt_pct(cut)} fewer)"
+                f"vs the raw-table loop on Sonnet ({fmt_pct(cut)} fewer)"
             )
         set_note(bounded, 0, text + ".")
         ev = bounded.evaluation
@@ -366,7 +368,7 @@ def _apply_measured_claims(results: list[Cat5RungResult], portfolio: Cat5Ablatio
         without, with_s = _arm(portfolio, "raw_free_sonnet"), _arm(portfolio, "bundle_gate_sonnet_cached")
         if without and with_s and without.cost_per_1k_cold_usd and with_s.cost_per_1k_cold_usd is not None:
             gate_text += (
-                f". Across the experiment's invoices, without the budget and tool (rung 1) {without.exact}/{without.runs} "
+                f". Across the experiment's invoices, without the budget and tool on Sonnet {without.exact}/{without.runs} "
                 f"vouchers matched at ${without.cost_per_1k_cold_usd:.2f} per 1,000 invoices cold; with them on Sonnet "
                 f"{with_s.exact}/{with_s.runs} at ${with_s.cost_per_1k_cold_usd:.2f} cold / ${with_s.cost_per_1k_warm_usd:.2f} "
                 f"warm ({_runs_text(with_s)})"
@@ -406,13 +408,14 @@ def _orchestration_callout(
     if naive and bounded and hybrid:
         exact = sum(1 for r in (naive, bounded, hybrid) if r.evaluation and r.evaluation.exact_match)
         parts.append(
-            f"{preset['invoice_id']}: free-choice raw-table loop {naive.steps_used} turns, "
-            f"${naive.cost_per_1k_invoices_cold_usd:.2f} per 1,000 invoices; narrow query + cache + gate "
+            f"{preset['invoice_id']}: free-choice raw-table loop on Sonnet {naive.steps_used} turns, "
+            f"${naive.cost_per_1k_invoices_cold_usd:.2f} per 1,000 invoices"
+            + (f"; the same loop on Haiku {naive_h.steps_used} turns, ${naive_h.cost_per_1k_invoices_cold_usd:.2f}"
+               if naive_h else "")
+            + f"; narrow query + cache + gate "
             f"${bounded.cost_per_1k_invoices_cold_usd:.2f} cold / ${bounded.cost_per_1k_invoices_warm_usd:.2f} warm; "
             f"Haiku + gate + escalation ${hybrid.cost_per_1k_invoices_cold_usd:.2f} cold / "
             f"${hybrid.cost_per_1k_invoices_warm_usd:.2f} warm"
-            + (f"; the raw-table loop on Haiku {naive_h.steps_used} turns, ${naive_h.cost_per_1k_invoices_cold_usd:.2f}"
-               if naive_h else "")
             + f". Exact vouchers on this invoice: "
             f"{exact + (1 if naive_h and naive_h.evaluation and naive_h.evaluation.exact_match else 0)}/{3 + (1 if naive_h else 0)}."
         )
@@ -473,7 +476,7 @@ async def _run_live_cat5_for_rung(
     session = Cat5ErpSession(rung_id=rung_id)
     system_text = get_cat5_system_prompt(rung_id)
     user_task = build_cat5_user_task_prompt(preset)
-    ungoverned = rung_id in UNGOVERNED_RUNG_IDS  # rungs 1 and 4: raw tables, no cache, no policy tool
+    ungoverned = rung_id in UNGOVERNED_RUNG_IDS  # the two raw-table loops: raw tables, no cache, no policy tool
     tools = NAIVE_TOOLS if ungoverned else GOVERNED_TOOLS
     use_cache = not ungoverned
     max_budget = CAT5_BUDGETS[rung_id]
@@ -917,6 +920,10 @@ async def execute_cat5_run(
             credit_shield.record_server_spend(total_spend)
         mode_used = "live"
 
+    # results in display order whatever order the request lists the rungs
+    results.sort(key=lambda r: CAT5_RUNG_ORDER.index(r.rung_id) if r.rung_id in CAT5_RUNG_ORDER else len(CAT5_RUNG_ORDER))
+    pending_rungs.sort(key=lambda r: CAT5_RUNG_ORDER.index(r))
+
     portfolio = load_cat5_ablation_portfolio()
     _apply_cross_rung_savings(results)
     _apply_measured_claims(results, portfolio)
@@ -973,7 +980,7 @@ async def execute_cat5_run(
 
     callout = _orchestration_callout(preset, results, portfolio)
     if pending_rungs:
-        callout += " Rung 4 (the raw-table loop on Haiku): run pending."
+        callout += " Version 2 (the raw-table loop on Haiku): run pending."
 
     return Cat5RunResponse(
         mode_used=mode_used,  # type: ignore[arg-type]

@@ -46,7 +46,8 @@ def _load_script(name: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
 def test_fair_rerun_and_runner_share_one_cap_definition() -> None:
     assert fair_rerun.PATCH_AUTHOR_MAX_TOKENS is PATCH_AUTHOR_MAX_TOKENS
     assert fair_rerun.GOVERNED_ROLE_MAX_TOKENS is GOVERNED_ROLE_MAX_TOKENS
-    assert fair_rerun.ARM_IDS == ("shared_bus_matched_gate", "isolated_cached_gate", "tiered_gate", "shared_bus_tiered_gate")
+    # display order: without the lever (Sonnet, Haiku agents + Sonnet author), then with it (same two set-ups)
+    assert fair_rerun.ARM_IDS == ("shared_bus_matched_gate", "shared_bus_tiered_gate", "isolated_cached_gate", "tiered_gate")
     assert set(GOVERNED_ROLE_MAX_TOKENS.values()) == {4000}
     assert CALL_TIMEOUT_S == 600
 
@@ -356,7 +357,7 @@ def test_replay_reports_rung4_as_pending_without_breaking_the_other_rungs(monkey
     assert [r["rung_id"] for r in data["results"]] == ["unisolated_broadcast_swarm", "isolated_cached_sonnet_swarm", "tiered_hybrid_cpo_swarm"]
     assert data["pending_rungs"] == ["unisolated_tiered_swarm"]
     assert {r["rung_id"] for r in data["portfolio_scorecard"]} == {"unisolated_broadcast_swarm", "isolated_cached_sonnet_swarm", "tiered_hybrid_cpo_swarm"}
-    assert data["swarm_callout"].endswith("Rung 4 (shared bus, Haiku agents + Sonnet patch author): run pending.")
+    assert "Version 2 (without the lever: shared bus, Haiku agents + Sonnet patch author): run pending." in data["swarm_callout"]
     only = client.post("/api/cat6/run", json={"preset_id": "inc-02", "mode": "replay", "rungs": ["unisolated_tiered_swarm"]})
     assert only.status_code == 404 and "run pending" in only.json()["detail"]
     # any other rung missing from the replays is still a 404
@@ -392,7 +393,13 @@ def test_replay_serves_rung4_once_recorded(monkeypatch: pytest.MonkeyPatch, tmp_
     assert all(t["context_mode"] == "shared_omnibus_bus" for t in r4["agent_turns"])
     assert r4["cold_run_cost_usd"] == pytest.approx(r4["warm_run_cost_usd"])  # uncached: cold = warm = billed
     assert r4["cold_run_cost_usd"] < r1["cold_run_cost_usd"]
-    assert r4["rung_title"].startswith("4. ") and r4["badge_text"] == "Without the lever, Haiku agents + Sonnet patch author"
+    assert r4["rung_title"].startswith("2. ") and r4["badge_text"] == "Without the lever, Haiku agents + Sonnet patch author"
+    # display order and numbers: 1 = without/Sonnet, 2 = without/Haiku agents, 3 = with/Sonnet, 4 = with/Haiku agents
+    assert [r["rung_id"] for r in data["results"]] == [
+        "unisolated_broadcast_swarm", "unisolated_tiered_swarm", "isolated_cached_sonnet_swarm", "tiered_hybrid_cpo_swarm"]
+    assert [r["rung_title"][:3] for r in data["results"]] == ["1. ", "2. ", "3. ", "4. "]
+    assert [x["rung_id"] for x in data["portfolio_scorecard"]] == [r["rung_id"] for r in data["results"]]
+    assert "rung 1" not in json.dumps(data).lower()  # savings name the version, not a number
     row = next(x for x in data["portfolio_scorecard"] if x["rung_id"] == "unisolated_tiered_swarm")
     notes = " ".join(r4["architectural_notes"])
     assert f"{row['verified_outcomes_count']}/{row['prs_evaluated']} of its" in notes and "Haiku 5.5" in notes
@@ -435,3 +442,21 @@ def test_golden_rung4_is_repeat0_of_the_new_arm() -> None:
     for pid in ("inc-01", "inc-02", "inc-03"):
         prov = golden["presets"][pid]["rungs"]["unisolated_tiered_swarm"]["provenance"]
         assert prov["arm_id"] == "shared_bus_tiered_gate" and prov["repeat_index"] == 0
+
+
+def test_replay_results_and_scorecard_follow_the_display_order_whatever_the_request_order(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Versions 1..4 = without (Sonnet, Haiku agents + Sonnet author), then with (Sonnet, Haiku agents + Sonnet author)."""
+    monkeypatch.setenv("NOVAMART_TRACES_DIR", str(tmp_path / "traces"))
+    assert runner.CAT6_RUNG_IDS == (
+        "unisolated_broadcast_swarm", "unisolated_tiered_swarm", "isolated_cached_sonnet_swarm", "tiered_hybrid_cpo_swarm")
+    golden = _with_synthetic_rung4(runner.load_cat6_replays()) if not _new_arm_recorded() else runner.load_cat6_replays()
+    monkeypatch.setattr(runner, "load_cat6_replays", lambda: golden)
+    data = _client().post("/api/cat6/run", json={"preset_id": "inc-03", "mode": "replay",
+                                                 "rungs": list(reversed(runner.CAT6_RUNG_IDS))}).json()
+    assert [r["rung_id"] for r in data["results"]] == list(runner.CAT6_RUNG_IDS)
+    assert [x["rung_id"] for x in data["portfolio_scorecard"]] == list(runner.CAT6_RUNG_IDS)
+    titles = {r["rung_id"]: r["rung_title"] for r in data["results"]}
+    assert titles["unisolated_broadcast_swarm"].startswith("1. Shared-Bus") and titles["unisolated_tiered_swarm"].startswith("2. Shared-Bus")
+    assert titles["isolated_cached_sonnet_swarm"].startswith("3. Isolated") and titles["tiered_hybrid_cpo_swarm"].startswith("4. Isolated")

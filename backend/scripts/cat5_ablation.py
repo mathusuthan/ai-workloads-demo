@@ -1,4 +1,4 @@
-"""Run the Category 5 matrix live (the deck's improvement without and with) and append one JSONL record per run.
+"""Run the Category 5 matrix live (the deck's lever without and with) and append one JSONL record per run.
 
 Usage (from backend/):
     .venv/bin/python scripts/cat5_ablation.py --dry-run

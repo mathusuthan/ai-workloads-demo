@@ -114,7 +114,7 @@ async def capture_cat5() -> None:
                 missing_rungs.append(rid)
 
         if not missing_rungs:
-            print(f"[Cat 5] Reusing valid 3-rung captures for {pid}...")
+            print(f"[Cat 5] Reusing valid captures for {pid}...")
             continue
 
         print(f"[Cat 5] Capturing {missing_rungs} live SQLite loops for {pid} ({preset['invoice_id']})...")

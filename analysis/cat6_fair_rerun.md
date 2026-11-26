@@ -1,6 +1,6 @@
 # Category 6 fair rerun — results
 
-Generated: 2026-11-26T08:14:56.273130+00:00
+Generated: 2026-11-26T11:15:27.431452+00:00
 
 Records read: 60 · ok runs used (latest ok per key): 60 · superseded ok records: 0 · error records: 0 · expected matrix: 4 arms × 3 presets × 5 repeats = 60 runs (complete, balanced).
 
@@ -20,18 +20,18 @@ The deck's lever for this archetype: isolate sub-agent contexts and cache the sh
 | Arm | Context | Role instructions | Models | Sandbox gate + 1 retry | Output caps |
 |---|---|---|---|---|---|
 | `shared_bus_matched_gate` | Shared growing thread, repo manual + noise, uncached | Governed per-role prompts (same as the isolated arms) | Sonnet all turns | yes | patch_author 16000; orchestrator_plan 4000, ci_triager 4000, security_critic 4000, orchestrator_merge 4000 |
+| `shared_bus_tiered_gate` | Shared growing thread, repo manual + noise, uncached | Governed per-role prompts (same as the isolated arms) | Haiku except patch_author (Sonnet) | yes | patch_author 16000; orchestrator_plan 4000, ci_triager 4000, security_critic 4000, orchestrator_merge 4000 |
 | `isolated_cached_gate` | Isolated narrow thread per agent + per-run cached repo prefix | Governed per-role prompts | Sonnet all turns | yes | patch_author 16000; orchestrator_plan 4000, ci_triager 4000, security_critic 4000, orchestrator_merge 4000 |
 | `tiered_gate` | Isolated narrow thread per agent + per-run cached repo prefix | Governed per-role prompts | Haiku except patch_author (Sonnet) | yes | patch_author 16000; orchestrator_plan 4000, ci_triager 4000, security_critic 4000, orchestrator_merge 4000 |
-| `shared_bus_tiered_gate` | Shared growing thread, repo manual + noise, uncached | Governed per-role prompts (same as the isolated arms) | Haiku except patch_author (Sonnet) | yes | patch_author 16000; orchestrator_plan 4000, ci_triager 4000, security_critic 4000, orchestrator_merge 4000 |
 
 ## Main results (per arm)
 
 | Arm | Runs (ok) | Errors | First-attempt verified | 95% CI | Final verified | 95% CI | Checks first | Checks final | Retries (fail→pass) | Billed $/1k runs | Cold $/1k runs | Warm $/1k runs | CpO billed | CpO cold | CpO warm | Mean model latency (s) |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `shared_bus_matched_gate` | 15 | 0 | 15/15 (100.0%) | 79.6–100.0% | 15/15 (100.0%) | 79.6–100.0% | 150/150 | 150/150 | 0 (0) | $469.02 | $469.02 | $469.02 | $0.4690 | $0.4690 | $0.4690 | 30.8 |
+| `shared_bus_tiered_gate` | 15 | 0 | 15/15 (100.0%) | 79.6–100.0% | 15/15 (100.0%) | 79.6–100.0% | 150/150 | 150/150 | 0 (0) | $124.61 | $124.61 | $124.61 | $0.1246 | $0.1246 | $0.1246 | 25.6 |
 | `isolated_cached_gate` | 15 | 0 | 15/15 (100.0%) | 79.6–100.0% | 15/15 (100.0%) | 79.6–100.0% | 150/150 | 150/150 | 0 (0) | $99.91 | $99.91 | $77.50 | $0.0999 | $0.0999 | $0.0775 | 38.8 |
 | `tiered_gate` | 15 | 0 | 15/15 (100.0%) | 79.6–100.0% | 15/15 (100.0%) | 79.6–100.0% | 150/150 | 150/150 | 0 (0) | $56.20 | $56.20 | $32.71 | $0.0562 | $0.0562 | $0.0327 | 28.4 |
-| `shared_bus_tiered_gate` | 15 | 0 | 15/15 (100.0%) | 79.6–100.0% | 15/15 (100.0%) | 79.6–100.0% | 150/150 | 150/150 | 0 (0) | $124.61 | $124.61 | $124.61 | $0.1246 | $0.1246 | $0.1246 | 25.6 |
 
 CpO = total spend across all ok runs in the arm ÷ final-verified runs (n/a when zero verified).
 CpO using first-attempt verification instead:
@@ -39,18 +39,18 @@ CpO using first-attempt verification instead:
 | Arm | CpO billed (first attempt) | CpO cold (first attempt) | CpO warm (first attempt) |
 |---|---|---|---|
 | `shared_bus_matched_gate` | $0.4690 | $0.4690 | $0.4690 |
+| `shared_bus_tiered_gate` | $0.1246 | $0.1246 | $0.1246 |
 | `isolated_cached_gate` | $0.0999 | $0.0999 | $0.0775 |
 | `tiered_gate` | $0.0562 | $0.0562 | $0.0327 |
-| `shared_bus_tiered_gate` | $0.1246 | $0.1246 | $0.1246 |
 
 ### Tokens per run (mean, min–max)
 
 | Arm | Uncached input | Cache write | Cache read | Output | Thinking |
 |---|---|---|---|---|---|
 | `shared_bus_matched_gate` | 214,112 (212,868–216,003) | 0 (0–0) | 0 (0–0) | 4,079 (3,851–4,392) | 0 (0–0) |
+| `shared_bus_tiered_gate` | 214,585 (212,606–216,666) | 0 (0–0) | 0 (0–0) | 4,416 (3,834–5,005) | 0 (0–0) |
 | `isolated_cached_gate` | 9,792 (9,203–10,477) | 9,337 (9,335–9,340) | 37,350 (37,340–37,360) | 5,325 (4,725–5,958) | 461 (0–1,072) |
 | `tiered_gate` | 10,095 (9,186–11,009) | 18,675 (18,668–18,682) | 28,013 (28,002–28,023) | 5,408 (4,345–6,563) | 263 (0–1,205) |
-| `shared_bus_tiered_gate` | 214,585 (212,606–216,666) | 0 (0–0) | 0 (0–0) | 4,416 (3,834–5,005) | 0 (0–0) |
 
 ## Per incident
 
@@ -59,24 +59,24 @@ CpO using first-attempt verification instead:
 | `shared_bus_matched_gate` | inc-01 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $471.73 | $471.73 | $471.73 | $0.4717 |
 | `shared_bus_matched_gate` | inc-02 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $466.93 | $466.93 | $466.93 | $0.4669 |
 | `shared_bus_matched_gate` | inc-03 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $468.38 | $468.38 | $468.38 | $0.4684 |
+| `shared_bus_tiered_gate` | inc-01 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $125.44 | $125.44 | $125.44 | $0.1254 |
+| `shared_bus_tiered_gate` | inc-02 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $124.37 | $124.37 | $124.37 | $0.1244 |
+| `shared_bus_tiered_gate` | inc-03 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $124.03 | $124.03 | $124.03 | $0.1240 |
 | `isolated_cached_gate` | inc-01 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $99.63 | $99.63 | $77.22 | $0.0996 |
 | `isolated_cached_gate` | inc-02 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $99.68 | $99.68 | $77.27 | $0.0997 |
 | `isolated_cached_gate` | inc-03 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $100.43 | $100.43 | $78.02 | $0.1004 |
 | `tiered_gate` | inc-01 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $53.63 | $53.63 | $30.14 | $0.0536 |
 | `tiered_gate` | inc-02 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $55.57 | $55.57 | $32.08 | $0.0556 |
 | `tiered_gate` | inc-03 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $59.40 | $59.40 | $35.92 | $0.0594 |
-| `shared_bus_tiered_gate` | inc-01 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $125.44 | $125.44 | $125.44 | $0.1254 |
-| `shared_bus_tiered_gate` | inc-02 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $124.37 | $124.37 | $124.37 | $0.1244 |
-| `shared_bus_tiered_gate` | inc-03 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $124.03 | $124.03 | $124.03 | $0.1240 |
 
 ## Runs whose final patch was not verified
 
 | Arm | Final-failed runs | Runs failing ci_unit | Runs failing adversarial | Runs failing ast | Failing checks ci_unit / adversarial / ast | Patch author stopped on max_tokens | No fenced patch |
 |---|---|---|---|---|---|---|---|
 | `shared_bus_matched_gate` | 0 | 0 | 0 | 0 | 0 / 0 / 0 | 0 | 0 |
+| `shared_bus_tiered_gate` | 0 | 0 | 0 | 0 | 0 / 0 / 0 | 0 | 0 |
 | `isolated_cached_gate` | 0 | 0 | 0 | 0 | 0 / 0 / 0 | 0 | 0 |
 | `tiered_gate` | 0 | 0 | 0 | 0 | 0 / 0 / 0 | 0 | 0 |
-| `shared_bus_tiered_gate` | 0 | 0 | 0 | 0 | 0 / 0 / 0 | 0 | 0 |
 
 ## Data quality
 
@@ -87,9 +87,9 @@ CpO using first-attempt verification instead:
 | Arm | Stopped / total turns | By role (stopped/total) |
 |---|---|---|
 | `shared_bus_matched_gate` | 0/75 | orchestrator_plan 0/15, ci_triager 0/15, patch_author 0/15, security_critic 0/15, orchestrator_merge 0/15 |
+| `shared_bus_tiered_gate` | 0/75 | orchestrator_plan 0/15, ci_triager 0/15, patch_author 0/15, security_critic 0/15, orchestrator_merge 0/15 |
 | `isolated_cached_gate` | 0/75 | orchestrator_plan 0/15, ci_triager 0/15, patch_author 0/15, security_critic 0/15, orchestrator_merge 0/15 |
 | `tiered_gate` | 0/75 | orchestrator_plan 0/15, ci_triager 0/15, patch_author 0/15, security_critic 0/15, orchestrator_merge 0/15 |
-| `shared_bus_tiered_gate` | 0/75 | orchestrator_plan 0/15, ci_triager 0/15, patch_author 0/15, security_critic 0/15, orchestrator_merge 0/15 |
 
 - Individual turns stopped on `max_tokens` (ok runs used + error records): 0.
 

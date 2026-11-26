@@ -8,9 +8,9 @@ Runs made on the way to these results (other levers, and earlier designs that we
 
 ## How to read the numbers
 
-- **The deck.** "Six Key AI Archetypes for AI Workloads" is a 9-slide guide by Eric Lam. It sorts enterprise AI work into six archetypes, gives each a typical token profile, and names one architectural improvement per archetype.
+- **The deck.** "Six Key AI Archetypes for AI Workloads" is a 9-slide guide by Eric Lam. It sorts enterprise AI work into six archetypes, gives each a typical token profile, and names one architectural lever per archetype.
 - **The lab.** Each archetype was built as a workload at NovaMart, a fictional Indian omnichannel retailer (12M SKUs, 45,000 sellers, $2.4B GMV). All data is synthetic. Every run is a live call to the model APIs, recorded in full.
-- **Without and with.** Each archetype is run as one design, without and with the improvement the deck suggests. "Without" is the anti-pattern; "with" is the suggested path.
+- **Without and with.** Each archetype is run as one design, without and with the lever the deck suggests. "Without" is the anti-pattern; "with" is the suggested path.
 - **Models.** Claude Sonnet 5.5 and Claude Haiku 5.5. Where a design was run on both, model is a column.
 - **What is being compared.** System designs: what is asked for, how much context is sent, caching, tools, and which size of model does which step. These are not assessments of any model. Where a row names a model, read it as that configuration in this setup, on these tasks.
 - **Cost.** Recomputed from recorded token counts at the rate card in the appendix, and quoted per 1,000 units of work (items, documents, sessions, questions, invoices, runs).
@@ -25,7 +25,7 @@ Runs made on the way to these results (other levers, and earlier designs that we
 
 Treating every AI initiative like a chatbot breaks unit economics. Workloads differ in two ways: how much autonomy the system has, and how many tokens it moves. The deck plots six archetypes on those two axes.
 
-| # | Archetype | Autonomy tier | Deck's token profile | Deck's improvement |
+| # | Archetype | Autonomy tier | Deck's token profile | Deck's lever |
 |---|---|---|---|---|
 | 1 | Classification, extraction and routing | Tier 1: single-pass API | 500–1,500 in, 10–100 out | Small model, strict JSON schema, batching: ">80% lower unit cost" |
 | 2 | Generative synthesis and drafting | Tier 2: human in the loop | 1,500–4,000 in, 800–3,000+ out | Section templates and length bounds, because output costs 3–5× input |
@@ -92,7 +92,7 @@ One row per archetype, design and model.
 | 4 | Document Q&A | 7 documents | −50.0 | −50.6 |
 | 4 | Document Q&A | 21 documents | −78.7 | −79.5 |
 | 5 | Orchestration | Sonnet 5.5 | −66.6 | −80.1 |
-| 5 | Orchestration | Haiku 5.5 (Haiku first with the improvement) | +32.1 | −24.7 |
+| 5 | Orchestration | Haiku 5.5 (Haiku first with the lever) | +32.1 | −24.7 |
 | 6 | Swarms | Sonnet 5.5 on every turn | −78.7 | −83.5 |
 | 6 | Swarms | Haiku 5.5 agents, Sonnet patch author | −54.9 | −73.8 |
 
@@ -116,7 +116,7 @@ One row per archetype, design and model.
 
 ### The scorecard
 
-The scorecard has 32 rows: the deck's 26 testable claims plus six we added, that the improvement loses no quality in each archetype.
+The scorecard has 32 rows: the deck's 26 testable claims plus six we added, that the lever loses no quality in each archetype.
 
 | Group | Rows | Supported | Partly supported | Not supported | Not testable |
 |---|---:|---:|---:|---:|---:|
@@ -135,14 +135,14 @@ The scorecard has 32 rows: the deck's 26 testable claims plus six we added, that
 - **Not supported:** the data contradicts the row. The three are our added quality rows for Archetypes 2 and 3 (supporting detail; recall of earlier turns) and the deck's output-token band for Archetype 6 (0 of 45 runs inside it).
 - **Not testable:** the per-developer daily token volume for swarms.
 
-All six of the deck's improvement rows are supported or partly supported. Each archetype's claims table is in its part below.
+All six of the deck's lever rows are supported or partly supported. Each archetype's claims table is in its part below.
 
 ### Findings that cut across archetypes
 
-- **With one exception, every "with" configuration cost less than "without" on the same model.** The change ranged from −47% (Archetype 3) to −87% (Archetype 1). The exception is Archetype 5 on Haiku from a cold start: $10.42 per 1,000 invoices with the improvement against $7.89 without. With a warm cache it was $5.94.
+- **With one exception, every "with" configuration cost less than "without" on the same model.** The change ranged from −47% (Archetype 3) to −87% (Archetype 1). The exception is Archetype 5 on Haiku from a cold start: $10.42 per 1,000 invoices with the lever against $7.89 without. With a warm cache it was $5.94.
 - **The deck's "60–80%" rule for Archetypes 1 and 2.** Measured on the same model: −85% and −87% for Archetype 1, −53% and −56% for Archetype 2. With the change of model as well, Archetype 1 reached −99.4%.
 - **Where the task has a checkable right answer, the "with" design scored the same or higher.** Archetype 1: 126 and 120 fields of 126 against 69. Archetype 5: 36 of 36 vouchers in every configuration. Archetype 6: 15 of 15 fixes in every configuration.
-- **In three archetypes a quality measure was lower with the improvement.** Archetype 2: supporting facts 94 of 120 against 120. Archetype 3: recall of earlier details 2 of 36 against 36. Archetype 4: completeness graded 4.54 against 4.83 and 4.75.
+- **In three archetypes a quality measure was lower with the lever.** Archetype 2: supporting facts 94 of 120 against 120. Archetype 3: recall of earlier details 2 of 36 against 36. Archetype 4: completeness graded 4.54 against 4.83 and 4.75.
 - **In two of those, another measure was higher.** Archetype 2: accuracy grades, and 0 and 3 serious errors against 5 and 22. Archetype 4: correctness 4.75 and 4.54 against 4.50.
 - **A smaller model on the same design** cost 44% to 96% less. Scores were equal in Archetypes 5 and 6, six fields of 126 lower in Archetype 1 with the schema, and lower on accuracy grade in Archetype 2.
 - **In Archetypes 5 and 6, changing the model without changing the design gave a large part of the saving.** Archetype 5: −95% from the model alone, −67% from the design on Sonnet. Archetype 6: −73% from the model alone, −79% from the design on Sonnet.
@@ -198,7 +198,7 @@ A triage step that asks a large model for a free-text analyst write-up of every 
 
 ### The suggested path
 
-The deck's improvement: route to small models with strict JSON schema output, and batch.
+The deck's lever: route to small models with strict JSON schema output, and batch.
 
 - The request asks only for the fields the system needs, each chosen from a fixed list.
 - A strict JSON schema guarantees that every answer parses.
@@ -336,7 +336,7 @@ An open-ended request for a long-form report. Nothing bounds the output, and out
 
 ### The suggested path
 
-The deck's improvement: structured section templates and length bounds.
+The deck's lever: structured section templates and length bounds.
 
 - The draft is a four-section JSON document: a summary, three findings, three risks and three actions, each with a word cap.
 - Each action has an owner field and a time-window field. The template says to fill them only if the source states them, and otherwise to write exactly "Not stated in source".
@@ -507,7 +507,7 @@ Full results: `analysis/cat2_quality.md`. Records: `backend/experiments/cat2_not
 
 ## Part 3: Multi-turn conversational assistants
 
-**One-line result:** with a cached prefix and sliding-window summaries, a ten-turn session cost 47% less and its context grew a quarter as fast. Answers to new questions were unchanged. Recall of details from earlier turns was 2 of 36, against 36 of 36 without the improvement.
+**One-line result:** with a cached prefix and sliding-window summaries, a ten-turn session cost 47% less and its context grew a quarter as fast. Answers to new questions were unchanged. Recall of details from earlier turns was 2 of 36, against 36 of 36 without the lever.
 
 ### The anti-pattern
 
@@ -515,7 +515,7 @@ Every turn re-sends the whole transcript and the whole policy handbook at full p
 
 ### The suggested path
 
-The deck's improvement: prefix caching plus sliding-window memory summarisation.
+The deck's lever: prefix caching plus sliding-window memory summarisation.
 
 - The handbook, which never changes, is sent as a cached prefix.
 - Once four turns are held word for word, all but the latest are replaced by a short structured summary (at most 14 items), written by a separate summariser call. This happens before turns 5 and 8. The summariser's cost is included.
@@ -623,7 +623,7 @@ The two reference values given were the same detail both times: the laptop seria
 
 | Claim | Measured | Verdict |
 |---|---|---|
-| Context grows 1.2k → 6.5k → 14k → 25k+ at turns 1, 3, 6 and 10 | 10.6k → 13.2k → 17.1k → 21.9k without the improvement | Partly |
+| Context grows 1.2k → 6.5k → 14k → 25k+ at turns 1, 3, 6 and 10 | 10.6k → 13.2k → 17.1k → 21.9k without the lever | Partly |
 | Session of 10k–40k+ tokens | Largest context 22.6k; 163k prompt tokens billed per session | Partly |
 | Output 150–600 tokens per turn | Median 586, range 342–3,983; 68 of 120 turns in range | Partly |
 | Prefix caching and sliding-window summaries prevent quadratic session cost | Context growth 1,247 tokens per turn without, 288 with; cost −47% | Supported |
@@ -638,7 +638,7 @@ The two reference values given were the same detail both times: the laptop seria
 - **The change follows the summarisation boundary.** Details from turns 7–9, still held word for word at turn 10, appear in the final summary about equally often in both designs (29 and 30 of 45).
 - **Missing details were reported as missing.** In 33 of the 34 recall answers without the reference value, the reply said the detail was not available; none stated a different value as fact.
 - **The first cached turn costs more.** Writing the cache is priced at 1.25× input, so turn 1 was $0.0399 against $0.0314. Turn 2 was $0.0107 against $0.0300.
-- **The context band and the bill are different things.** Context peaked at 22,626 tokens, inside the deck's band. Because every turn re-sends what came before, one session without the improvement billed 163,020 prompt tokens.
+- **The context band and the bill are different things.** Context peaked at 22,626 tokens, inside the deck's band. Because every turn re-sends what came before, one session without the lever billed 163,020 prompt tokens.
 - **Session length.** Ten turns is early on the growth curve. Longer sessions were not run.
 
 ### Limits
@@ -648,7 +648,7 @@ The two reference values given were the same detail both times: the laptop seria
 - One summary design was run: at most 14 short items. A summary that pins every identifier the user gives was not run.
 - The "with" design's system prompt says that older turns are compressed.
 - The recall questions come after turn 10, when a third summarisation has run, so all of turns 1–9 are in the summary by then.
-- Output per turn ranged from 342 to 3,983 tokens because some calls include thinking tokens, so session cost varied between repeats ($0.37 to $0.43 without the improvement).
+- Output per turn ranged from 342 to 3,983 tokens because some calls include thinking tokens, so session cost varied between repeats ($0.37 to $0.43 without the lever).
 - One model. The designs were not run on Haiku 5.5.
 
 Full results: `analysis/cat3_quality_rerun.md`. Records: `backend/experiments/cat3_quality/runs.jsonl`. Answer key: `backend/app/data/cat3_quality_keys.json`. Other levers tried (prefix caching alone): `analysis/experiments_log.md`.
@@ -657,7 +657,7 @@ Full results: `analysis/cat3_quality_rerun.md`. Records: `backend/experiments/ca
 
 ## Part 4: Multi-document RAG and deep ingestion
 
-**One-line result:** pairing retrieval with caching cut the cost of a question by 50% on a 7-document corpus and by 79% on a 21-document corpus. Answers with a serious error were 0 and 2 of 24 with the improvement, against 1 and 3 of 24 without it.
+**One-line result:** pairing retrieval with caching cut the cost of a question by 50% on a 7-document corpus and by 79% on a 21-document corpus. Answers with a serious error were 0 and 2 of 24 with the lever, against 1 and 3 of 24 without it.
 
 ### The anti-pattern
 
@@ -665,7 +665,7 @@ Every question pastes the whole document set into the prompt at full price. Cost
 
 ### The suggested path
 
-The deck's improvement: pair hybrid retrieval (reranking and chunk filtering) with context caching on the shared document set.
+The deck's lever: pair hybrid retrieval (reranking and chunk filtering) with context caching on the shared document set.
 
 - The corpus is cached once, on the small model.
 - For each question, Haiku 5.5 reads all clauses from the cached corpus and picks five.
@@ -804,20 +804,20 @@ The "with" design's instructions tell the model to say when something is not in 
 |---|---|---|
 | Input 15k–100k+ tokens | 18.5k and 54.2k per question without; 5.5k–6.9k to the answering model with | Supported |
 | Output 400–1,500 tokens | Median 938, range 760–1,584; 94 of 96 answers in range | Partly |
-| Input:output of 20:1 to 100:1 | 20.5:1 at 7 documents, 62.1:1 at 21 documents, without the improvement | Supported |
+| Input:output of 20:1 to 100:1 | 20.5:1 at 7 documents, 62.1:1 at 21 documents, without the lever | Supported |
 | Pair hybrid retrieval (reranking and chunk filtering) with context caching | 89 of 90 needed clauses among those picked at both sizes, none from another supplier; cost −50% and −79%; answers with a serious error 0 and 2 of 24, against 1 and 3 | Supported |
 | …without losing answer quality (our addition; the deck does not claim it) | Serious errors 0 and 2 of 24 against 1 and 3; correctness 4.75 and 4.54 against 4.50 and 4.50; key facts 153 against 156 at 7 documents and 154 against 150 at 21 | Partly |
 
 ### Points for the post
 
 - **Cost.** $0.0459 to $0.0230 per question at 7 documents; $0.1173 to $0.0250 at 21 documents.
-- **Cost against corpus size.** Tripling the corpus raised the cost of a question 2.6 times without the improvement and 1.09 times with it.
-- **Where the tokens went.** Without the improvement Sonnet read 18,492 or 54,221 prompt tokens per question. With it Sonnet read about 6,200 at either size; Haiku read the corpus from cache.
+- **Cost against corpus size.** Tripling the corpus raised the cost of a question 2.6 times without the lever and 1.09 times with it.
+- **Where the tokens went.** Without the lever Sonnet read 18,492 or 54,221 prompt tokens per question. With it Sonnet read about 6,200 at either size; Haiku read the corpus from cache.
 - **The cache is on the small model.** Writing it cost $0.0025 at 7 documents and $0.0073 at 21.
 - **Retrieval.** The five clauses picked held 89 of the 90 needed clauses at both sizes, and none of the 240 picked clauses came from another supplier.
-- **Serious errors.** 0 and 2 answers of 24 with the improvement; 1 and 3 of 24 without it. With 24 answers per cell the intervals overlap.
-- **Completeness.** Graded 4.54 at both sizes with the improvement, against 4.83 and 4.75 without it. Correctness was 4.75 and 4.54 against 4.50 and 4.50.
-- **Citations.** Every answer with the improvement carried citations (245 and 251 in 24 answers), all pointing at the audited supplier's documents.
+- **Serious errors.** 0 and 2 answers of 24 with the lever; 1 and 3 of 24 without it. With 24 answers per cell the intervals overlap.
+- **Completeness.** Graded 4.54 at both sizes with the lever, against 4.83 and 4.75 without it. Correctness was 4.75 and 4.54 against 4.50 and 4.50.
+- **Citations.** Every answer with the lever carried citations (245 and 251 in 24 answers), all pointing at the audited supplier's documents.
 - **Five clauses are not the whole corpus.** In 41 of 48 answers the "with" design said some term was not in the text provided. One of its two serious errors was such a statement about terms that exist in clauses it was not given.
 - **Look-alike suppliers.** With three near-identical deal rooms in one prompt, no answer in either design attributed another supplier's value to the audited supplier.
 
@@ -836,7 +836,7 @@ Full results: `analysis/cat4_quality_rerun.md`. Records: `backend/experiments/ca
 
 ## Part 5: Autonomous process orchestration
 
-**One-line result:** with a step budget and a deterministic policy tool, reconciling an invoice cost 67% less on Sonnet. On Haiku the loop without the improvement already cost 95% less than on Sonnet ($7.89 per 1,000 invoices); with the improvement it cost $10.42 from a cold start and $5.94 with a warm cache. All 144 vouchers were exact in all four configurations.
+**One-line result:** with a step budget and a deterministic policy tool, reconciling an invoice cost 67% less on Sonnet. On Haiku the loop without the lever already cost 95% less than on Sonnet ($7.89 per 1,000 invoices); with the lever it cost $10.42 from a cold start and $5.94 with a warm cache. All 144 vouchers were exact in all four configurations.
 
 ### The anti-pattern
 
@@ -844,7 +844,7 @@ An agent loops over raw database tables with no step budget. Each lookup returns
 
 ### The suggested path
 
-The deck's improvement: max-step loop budgets, deterministic guardrails, and small-model routing for routine tool calls.
+The deck's lever: max-step loop budgets, deterministic guardrails, and small-model routing for routine tool calls.
 
 - **Step budget.** Four steps.
 - **Deterministic guardrail.** A policy tool computes the voucher in code from the policy manual's rules. The commit is refused until the tool has run.
@@ -984,11 +984,11 @@ Change from without to with on the same model: −66.6% cold and −80.1% warm o
 - **Cost.** Per 1,000 invoices: $153.41 without and $51.22 with, on Sonnet; $7.89 without and $10.42 with, on Haiku.
 - **Accuracy.** 36 of 36 exact vouchers in every configuration. These invoices do not separate the configurations on accuracy.
 - **Model size alone.** Moving the unchanged "without" loop from Sonnet to Haiku cut cost by 95%, with 36 of 36 vouchers exact on both.
-- **On Haiku the improvement paid off only with a warm cache.** From a cold start the "with" design cost $10.42 against $7.89; warm, $5.94. Two things account for the cold figure: each run writes the cached manual, and the two multi-factor disputes switch to Sonnet.
-- **Where the tokens went.** Without the improvement a run sent about 68,500 uncached input tokens. With it a run sent about 7,200 uncached and read about 25,000 from cache.
+- **On Haiku the lever paid off only with a warm cache.** From a cold start the "with" design cost $10.42 against $7.89; warm, $5.94. Two things account for the cold figure: each run writes the cached manual, and the two multi-factor disputes switch to Sonnet.
+- **Where the tokens went.** Without the lever a run sent about 68,500 uncached input tokens. With it a run sent about 7,200 uncached and read about 25,000 from cache.
 - **The step budget did not come into play.** The "with" runs took exactly four turns. The "without" runs, with only a 12-turn safety cap, took 3.86 on average on Sonnet and 3.92 on Haiku.
 - **The policy tool.** In all 72 "with" runs the committed voucher was the tool's figure, and the tool's figure equals the hand-derived answer on all 12 invoices. In the 72 "without" runs the model's own arithmetic also matched.
-- **Routing.** With Haiku first, ten invoices completed on Haiku at about $2.72 per 1,000, against $6.54 to $8.62 for the same invoices without the improvement on Haiku. The two multi-factor disputes switched to Sonnet and cost $47.76 and $50.01 per 1,000, close to the Sonnet configuration's $54.47 and $56.28. Without the improvement, Haiku completed those two invoices at $8.61 and $8.83, with all six vouchers exact.
+- **Routing.** With Haiku first, ten invoices completed on Haiku at about $2.72 per 1,000, against $6.54 to $8.62 for the same invoices without the lever on Haiku. The two multi-factor disputes switched to Sonnet and cost $47.76 and $50.01 per 1,000, close to the Sonnet configuration's $54.47 and $56.28. Without the lever, Haiku completed those two invoices at $8.61 and $8.83, with all six vouchers exact.
 - **The mix of invoices sets the Haiku-first cost.** Here 6 of 36 runs escalated. A portfolio with more multi-factor disputes would sit nearer the Sonnet figure.
 - **A fleet sharing the cached manual** would sit between the cold and warm columns: $30.49 and $5.94 per 1,000 when warm.
 - **The "with" design is a bundle.** It changes the query, the caching, the step limit and the tool at once. Runs that add those one at a time are in `analysis/experiments_log.md`.
@@ -1017,7 +1017,7 @@ Every agent reads and writes one shared, growing thread. The thread carries the 
 
 ### The suggested path
 
-The deck's improvement: isolate sub-agent contexts, cache shared repository prefixes, and measure return by cost per verified outcome.
+The deck's lever: isolate sub-agent contexts, cache shared repository prefixes, and measure return by cost per verified outcome.
 
 - Each agent gets a fresh, narrow thread with only what its role needs.
 - A 9.3k-token repository guide is cached and shared by all agents.
@@ -1138,7 +1138,7 @@ US dollars per million tokens.
 
 ### Terms
 
-- **Without, with.** One design per archetype, run without and with the improvement the deck suggests.
+- **Without, with.** One design per archetype, run without and with the lever the deck suggests.
 - **Configuration.** One design on one model set-up, for example "with, Haiku 5.5 first".
 - **Cold, warm.** The two cost views defined at the top of this file.
 - **Cost per verified outcome.** Total spend divided by the number of runs that passed verification.

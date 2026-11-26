@@ -5,7 +5,7 @@ all 8 audit questions in order (audit-01 q1–q4, then audit-02 q1–q4) on one 
 7-document deal room, 3 = + two deterministic distractor suppliers, see `scaled_corpus.py`).
 
 The two versions every display shows (`RUNG_IDS`), both runnable in the app through the app's builders:
-  naive_full_corpus             without the deck improvement: all documents as uncached plain text, no citations
+  naive_full_corpus             without the deck's lever: all documents as uncached plain text, no citations
   cached_rerank_hybrid          with it — hybrid retrieval paired with context caching: Haiku reads the FULL corpus
                                 as one cached block (per-session nonce) + the question and returns the top-5 chunk
                                 ids; Sonnet answers over exactly those chunks with native citations (`paired.py`)
@@ -91,7 +91,7 @@ RUNS_PATH = EXPERIMENT_DIR / "runs.jsonl"
 JUDGEMENTS_PATH = EXPERIMENT_DIR / "judgements.jsonl"
 
 NEW_RUNG = PAIRED_RUNG  # "cached_rerank_hybrid"
-# Without and with the deck improvement: the two versions the app runs and every summary shows.
+# Without and with the deck's lever: the two versions the app runs and every summary shows.
 RUNG_IDS: tuple[str, ...] = ("naive_full_corpus", PAIRED_RUNG)
 APP_RUNG_IDS: tuple[str, ...] = RUNG_IDS
 OTHER_LEVER_RUNG_IDS: tuple[str, ...] = ("cached_full_corpus_citations",)

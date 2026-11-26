@@ -71,7 +71,7 @@ def test_cat2_badges_and_notes_quote_measured_values() -> None:
     r = _run("cat2", preset_id="brief-02", sub_task="exec_synthesis")
     for rid in ("sonnet_unbounded", "haiku_unbounded", "sonnet_templated", "haiku_templated"):
         x, name = r[rid], ("Sonnet" if rid.startswith("sonnet") else "Haiku")
-        assert x["badge_text"] == f"{'Without' if rid.endswith('_unbounded') else 'With'} the Improvement · {name}"
+        assert x["badge_text"] == f"{'Without' if rid.endswith('_unbounded') else 'With'} the Lever · {name}"
         if x["status"] == "pending":
             assert REPLAY_PENDING_MESSAGE in x["architectural_notes"]
             continue
@@ -92,7 +92,7 @@ def test_cat2_badges_and_notes_quote_measured_values() -> None:
 def test_cat2_template_rung_alone_states_its_own_output_only() -> None:
     r = _run("cat2", preset_id="brief-02", sub_task="exec_synthesis", rungs=["haiku_templated"])
     x = r["haiku_templated"]
-    assert x["badge_text"] == "With the Improvement · Haiku" and x["savings_vs_unbounded_pct"] == 0
+    assert x["badge_text"] == "With the Lever · Haiku" and x["savings_vs_unbounded_pct"] == 0
     assert f"Writes {x['finops']['output_tokens']:,} output tokens (${x['finops']['total_cost_usd']:.4f} for this draft)." in _notes(x)
     assert "for the unbounded draft" not in _notes(x)
     assert "the unbounded draft was not run" in r["_response"]["output_tax_callout"]
@@ -107,7 +107,7 @@ def test_cat3_notes_quote_measured_prefix_and_final_context() -> None:
     last = r["prefix_cached_summarized"]["turns"][-1]["finops"]
     ctx = last["input_tokens"] + last["cache_creation_tokens"] + last["cache_read_tokens"]
     assert f"it holds Turn 10 context to {ctx:,} tok" in _notes(r["prefix_cached_summarized"])
-    assert "without the improvement" in _notes(r["prefix_cached_summarized"])
+    assert "without the lever" in _notes(r["prefix_cached_summarized"])
     assert f"~{prefix:,}-tok handbook prefix" in r["_response"]["session_callout"]
 
 
@@ -122,7 +122,7 @@ def test_cat3_notes_and_callout_quote_measured_quality(preset: str) -> None:
     assert nq and sq and sq["probes"] and len(sq["probes"]) == 6
     summ_note = r["prefix_cached_summarized"]["architectural_notes"][2]
     assert summ_note.startswith("Quality trade-off on this session:")
-    assert f"answered {_frac(sq['probe_accuracy'])} recall questions vs {_frac(nq['probe_accuracy'])} without the improvement" in summ_note
+    assert f"answered {_frac(sq['probe_accuracy'])} recall questions vs {_frac(nq['probe_accuracy'])} without the lever" in summ_note
     assert f"kept {_frac(sq['ledger_by_origin']['1-3'])} turn 1–3 details" in summ_note
     pf = {x["rung_id"]: x for x in r["_response"]["quality_portfolio"]["rungs"]}
     assert set(pf) == {"naive_full_history", "prefix_cached_summarized"}
@@ -153,9 +153,9 @@ def test_cat4_badge_and_notes_quote_measured_values() -> None:
     assert set(k for k in r if not k.startswith("_")) == {"naive_full_corpus", "cached_rerank_hybrid"}
     naive, paired = r["naive_full_corpus"], r["cached_rerank_hybrid"]
     avg_red = sum(q["context_reduction_pct"] for q in paired["queries"]) / len(paired["queries"])
-    assert paired["badge_text"] == f"With the improvement: ~{fmt_pct(avg_red)} of Corpus Not Sent to Sonnet + Citations"
+    assert paired["badge_text"] == f"With the lever: ~{fmt_pct(avg_red)} of Corpus Not Sent to Sonnet + Citations"
     cut = (1 - paired["single_query_cold_per_1k_usd"] / naive["single_query_cold_per_1k_usd"]) * 100
-    assert f"a single cold question costs {fmt_pct(cut)} less than without the improvement" in _notes(paired)
+    assert f"a single cold question costs {fmt_pct(cut)} less than without the lever" in _notes(paired)
     block = paired["queries"][0]["reranker_finops"]
     assert f"one cached ~{block['cache_creation_tokens'] + block['cache_read_tokens']:,}-tok block" in _notes(paired)
     for rung in (naive, paired):  # note 3: this audit's measured quality
@@ -182,7 +182,7 @@ def test_cat4_fallback_copy_is_number_free_and_makes_no_unsupported_claims() -> 
         assert banned not in text
     summ = cat4_runner.finalize_cat4_rung_summary(rung_id="cached_rerank_hybrid", model_id="m", queries=[])
     cat4_runner._apply_measured_claims([summ], None)  # no ok rung -> fallback copy stays
-    assert summ.badge_text == "With the improvement"
+    assert summ.badge_text == "With the lever"
 
 
 @pytest.mark.parametrize("preset", ["inv-01", "inv-02", "inv-03"])
@@ -197,7 +197,7 @@ def test_cat5_badge_and_notes_quote_measured_values(preset: str) -> None:
     assert hybrid["badge_text"] == "With the Lever, Haiku-First"
     prompt = naive["total_uncached_input_tokens"] + naive["total_cache_creation_tokens"] + naive["total_cache_read_tokens"]
     assert f"{prompt:,} prompt tokens this run; {naive['steps_used']} of a {naive['max_step_budget']}-turn safety cap used" in _notes(naive)
-    assert f"uncached prompt tokens {naive['total_uncached_input_tokens']:,} → {bounded['total_uncached_input_tokens']:,} vs rung 1" in _notes(bounded)
+    assert f"uncached prompt tokens {naive['total_uncached_input_tokens']:,} → {bounded['total_uncached_input_tokens']:,} vs the raw-table loop on Sonnet" in _notes(bounded)
     ev = bounded["evaluation"]
     assert f"rupee fields {ev['matched_fields']}/{ev['total_fields']} on this invoice" in _notes(bounded)
     assert f"Haiku 5.5 ran {hybrid['haiku_steps']} turn" in _notes(hybrid)
@@ -220,7 +220,7 @@ def test_cat6_badge_and_notes_quote_measured_portfolio() -> None:
     row = next(x for x in r["_response"]["portfolio_scorecard"] if x["rung_id"] == "tiered_hybrid_cpo_swarm")
     hybrid = r["tiered_hybrid_cpo_swarm"]
     assert hybrid["badge_text"] == (
-        f"With the lever, Haiku agents + Sonnet patch author (-{fmt_pct(row['cpo_savings_vs_naive_cold_pct'])} portfolio CpO vs rung 1)"
+        f"With the lever, Haiku agents + Sonnet patch author (-{fmt_pct(row['cpo_savings_vs_naive_cold_pct'])} portfolio CpO vs the shared-bus Sonnet swarm)"
     )
     assert f"{row['verified_outcomes_count']}/{row['prs_evaluated']} of its" in _notes(hybrid)
     naive = r["unisolated_broadcast_swarm"]

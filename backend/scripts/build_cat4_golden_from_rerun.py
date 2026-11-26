@@ -1,7 +1,7 @@
 """Rebuild replays/cat4_golden_replays.json and replays/cat4_quality_summary.json from the Category 4 quality rerun.
 
 Golden replays — fixed, pre-declared mapping (never chosen by outcome): repeat_index 0, corpus scale 1 (the app's
-7-document deal room), of both versions the app runs: without the improvement (`naive_full_corpus`) and with it
+7-document deal room), of both versions the app runs: without the lever (`naive_full_corpus`) and with it
 (`cached_rerank_hybrid`). Each rerun session asked all 8 questions in one session (audit-01 q1-q4, then audit-02
 q1-q4); the session is split by audit preset here. Each question keeps the schema
 `runner._build_cat4_summary_from_replay` reads, plus: real `stop_reason`s for synthesis and clause-pick calls,

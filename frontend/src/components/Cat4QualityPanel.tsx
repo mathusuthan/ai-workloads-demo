@@ -19,7 +19,7 @@ const RUNG_SHORT: Record<Cat4RungId, string> = {
   cached_rerank_hybrid: 'With · Retrieval paired with caching + citations',
 }
 
-// Without and with the deck improvement
+// Without and with the deck's lever
 const VERSIONS: Cat4RungId[] = ['naive_full_corpus', 'cached_rerank_hybrid']
 
 const VERSION_HEAD: Record<Cat4RungId, string> = {

@@ -2,7 +2,7 @@
 """Keep only the current Category 3 quality-rerun records (deterministic, idempotent).
 
 runs.jsonl                latest ok record per (rung, session, repeat) of the two displayed versions
-                          (`quality_rerun.RUNG_IDS`: without and with the deck improvement); error and
+                          (`quality_rerun.RUNG_IDS`: without and with the deck's lever); error and
                           superseded records are dropped.
 other_levers/runs.jsonl   latest ok record per key of the other lever the harness ran (prefix caching alone,
                           `quality_rerun.OTHER_LEVER_RUNG_IDS`), moved out of runs.jsonl. Nothing displayed

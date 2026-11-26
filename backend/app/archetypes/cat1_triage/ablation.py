@@ -1,4 +1,4 @@
-"""Category 1 experiment: without and with the deck's improvement (classification with a strict JSON schema), on both models.
+"""Category 1 experiment: without and with the deck's lever (classification with a strict JSON schema), on both models.
 
 Arms (same 12 items: 6 presets + 6 batch items, 3 repeats -> 144 runs):
   sonnet_report        Sonnet 5.5 · the app's four-part write-up prompt                · free text

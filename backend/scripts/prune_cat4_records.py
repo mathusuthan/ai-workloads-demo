@@ -2,7 +2,7 @@
 """Keep only the current Category 4 quality-rerun records (deterministic, idempotent).
 
 runs.jsonl                     latest ok session per (rung, scale, repeat) of the two displayed versions
-                               (`quality_rerun.RUNG_IDS`: without and with the deck improvement), recorded at the
+                               (`quality_rerun.RUNG_IDS`: without and with the deck's lever), recorded at the
                                current synthesis cap and in the rung's answer format; everything else is dropped.
 judgements.jsonl               latest ok rerun judgement per call id whose answer (run id + question + answer hash)
                                belongs to a kept session; everything else is dropped.

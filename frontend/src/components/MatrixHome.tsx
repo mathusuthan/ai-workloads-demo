@@ -188,7 +188,9 @@ export function MatrixHome({ catalog }: MatrixHomeProps) {
             The 6 NovaMart Enterprise AI Workloads
           </h2>
           <span className="text-xs text-slate-500">
-            Building incrementally — Categories 1–5 Live Now, Category 6 Next
+            {archetypes.every((a) => a.status === 'live')
+              ? `All ${archetypes.length} Categories Live`
+              : `${archetypes.filter((a) => a.status === 'live').length} of ${archetypes.length} Categories Live`}
           </span>
         </div>
 

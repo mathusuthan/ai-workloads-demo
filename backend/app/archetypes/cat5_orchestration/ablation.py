@@ -70,7 +70,7 @@ TOOL_RESULT_HEAD_CHARS = 1500
 # Recorded only (not compared for superseding): tool_use blocks run unless the turn hit max_tokens.
 LOOP_RULE = "v2-execute-tool-use-unless-truncated"
 
-# The app's rung 1 now uses this same text (prompts.CAT5_FREE_CHOICE_PROTOCOL); one definition for both.
+# The app's raw-table loops (versions 1 and 2) use this same text (prompts.CAT5_FREE_CHOICE_PROTOCOL); one definition for both.
 NEUTRAL_PROTOCOL = CAT5_FREE_CHOICE_PROTOCOL
 
 VOUCHER_FIELDS: tuple[str, ...] = (
@@ -124,13 +124,13 @@ ARMS: dict[str, ArmSpec] = {
                 "hybrid_haiku_sonnet_governed", "hybrid_haiku_sonnet_governed", GATE_TURN_CAP, GATE_STEP_BUDGET, "gate",
                 "GOVERNED_TOOLS; cached; Haiku -> Sonnet on gate escalation; today's hybrid prompt"),
         # raw_free_sonnet on Haiku: same tools, neutral protocol, no cache, no policy tool, 12-turn cap. With no policy
-        # tool nothing can flag escalation, so the run stays on Haiku. App rung 4 (unbounded_haiku_loop) runs the same.
+        # tool nothing can flag escalation, so the run stays on Haiku. The app's version 2 (unbounded_haiku_loop) runs the same.
         ArmSpec("raw_free_haiku", "raw", False, HAIKU_MODEL_ID, False, False, "neutral",
                 "unbounded_haiku_loop", NEUTRAL_TURN_CAP, NEUTRAL_TURN_CAP, "model",
                 "5 raw SELECT * tools + commit; no cache; Haiku; neutral protocol"),
     )
 }
-# The deck's improvement, without and with, on two model set-ups (the 2x2 every display shows): rows without / with
+# The deck's lever, without and with, on two model set-ups (the 2x2 every display shows): rows without / with
 # (the free-choice raw-table loop; the 4-step budget + deterministic policy tool, with one narrow query and the cached
 # policy manual), columns Sonnet / Haiku (Haiku alone without the lever; Haiku-first escalating to Sonnet with it).
 ARM_IDS: tuple[str, ...] = ("raw_free_sonnet", "raw_free_haiku", "bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate")
@@ -1015,7 +1015,7 @@ ANALYSIS_NOTES: tuple[str, ...] = (
     "query (fetch_3way_match_bundle) in place of the raw tables and sends the policy manual as a cached prefix, so the "
     "difference is not the budget and the tool alone.",
     "The policy manual (SOP-AP-3WAY-2026.v4) is the system text of every version. Both without-versions run "
-    "the free-choice protocol; the with-versions run the app's rung-2 and rung-3 prompts unchanged.",
+    "the free-choice protocol; the with-versions run the app's prompts for versions 3 and 4 unchanged.",
     "Escalation (Haiku-first version): the run switches to Sonnet from the next turn when the policy tool sets "
     "escalation_required, which it does only for a multi-factor commercial dispute (two or more of: partial DOA or "
     "short receipt, signed contract amendment, unauthorized line price rise, disallowed freight; manual 6.2). "
@@ -1270,22 +1270,22 @@ APP_RUNG_FOR_ARM: dict[str, str] = {
 ARM_PLAIN: dict[str, dict[str, str]] = {
     "raw_free_sonnet": {
         "design": "without", "model_column": "sonnet",
-        "label": "Without: free-choice loop over raw tables (Sonnet)",
+        "label": "Without the lever: free-choice loop over raw tables (Sonnet)",
         "adds": "Sonnet chooses among raw ERP table queries and does the policy arithmetic itself; no step budget, no policy tool",
     },
     "raw_free_haiku": {
         "design": "without", "model_column": "haiku",
-        "label": "Without: free-choice loop over raw tables (Haiku)",
+        "label": "Without the lever: free-choice loop over raw tables (Haiku)",
         "adds": "The same loop on Haiku; with no policy tool nothing flags escalation, so there is no escalation path to Sonnet",
     },
     "bundle_gate_sonnet_cached": {
         "design": "with", "model_column": "sonnet",
-        "label": "With: 4-step budget + policy tool (Sonnet)",
+        "label": "With the lever: 4-step budget + policy tool (Sonnet)",
         "adds": "4-step budget and the deterministic policy tool, with one narrow query and the policy manual cached",
     },
     "bundle_gate_haiku_escalate": {
         "design": "with", "model_column": "haiku",
-        "label": "With: 4-step budget + policy tool (Haiku-first)",
+        "label": "With the lever: 4-step budget + policy tool (Haiku-first)",
         "adds": "The same on Haiku; Sonnet takes over when the policy tool flags a multi-factor dispute",
     },
 }

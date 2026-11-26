@@ -1,4 +1,4 @@
-"""Category 2 experiment: without and with the deck's improvement (section template with length caps), on both models.
+"""Category 2 experiment: without and with the deck's lever (section template with length caps), on both models.
 
 Cells (same 4 source bundles, 3 drafts per bundle x model x arm -> 48 drafts):
   unbounded            — without: the app's unbounded long-form prompt (free text), max_tokens 8,000

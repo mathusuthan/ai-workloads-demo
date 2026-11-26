@@ -1,11 +1,11 @@
 # Experiments log
 
-This file is the history of the NovaMart archetype experiments. The app, the reports and `analysis/archetype_posts_source.md` show only the current runs: one design per archetype, without and with the improvement the deck suggests. Everything else that was run is recorded here.
+This file is the history of the NovaMart archetype experiments. The app, the reports and `analysis/archetype_posts_source.md` show only the current runs: one design per archetype, without and with the lever the deck suggests. Everything else that was run is recorded here.
 
 Each archetype section has three parts:
 
 - **Current runs.** What the dashboards and the posts file show, and where the records are.
-- **Other levers we tried.** Valid runs of levers that are not the deck's improvement, or that split it into parts. Their records are kept in `other_levers/` folders and are not displayed.
+- **Other levers we tried.** Valid runs of levers that are not the deck's lever, or that split it into parts. Their records are kept in `other_levers/` folders and are not displayed.
 - **Different or incorrect designs, and what replaced them.** Earlier runs that used a different design or had a fault: what they were, what was wrong, the fix, and the runs that replaced them. Their records are not in the working tree; commit `7807557` holds them.
 
 All costs use the rate card in `backend/app/core/pricing.py`: Sonnet 5.5 at $2 in / $10 out per million tokens, cache write $2.50, cache read $0.10; Haiku 5.5 at $0.10 / $0.50, cache write $0.125, cache read $0.01. "Cold" means each run writes its own cache; "warm" means the cache is already written.
@@ -97,7 +97,7 @@ These apply to more than one archetype.
 
 ### Current runs
 
-Deck improvement: small model + strict JSON schema + batching. Shown as one design, without and with "classification with a strict JSON schema", on Sonnet 5.5 and Haiku 5.5; the Batch API price is computed (50%) on the two "with" cells, not run.
+Deck lever: small model + strict JSON schema + batching. Shown as one design, without and with "classification with a strict JSON schema", on Sonnet 5.5 and Haiku 5.5; the Batch API price is computed (50%) on the two "with" cells, not run.
 
 | Design | Version id (app rung) | Model | Runs | Fields correct of 126 (95% Wilson) | Items fully correct of 36 | $ per 1,000 items | Batch API, computed | Prompt / output tokens (median; output range) | Median latency |
 |---|---|---|---:|---:|---:|---:|---:|---|---:|
@@ -164,7 +164,7 @@ Removed from the app with these levers: the Gemini rung and its decisions-API se
 **4. Seven versions on the dashboard**
 
 - **What it was.** The app and reports showed all seven versions of the experiment (four app rungs including Gemini, plus the plain-text and Sonnet-schema versions in the tables), a lever table, and the Jev rate card.
-- **Fix (26 Nov 2026).** One design, without and with the improvement, on both models; the Sonnet-schema version became a runnable app rung. The other levers are recorded above.
+- **Fix (26 Nov 2026).** One design, without and with the lever, on both models; the Sonnet-schema version became a runnable app rung. The other levers are recorded above.
 - **Verdicts after the change.** "Small model + strict JSON schema + batching cuts unit cost by >80%": partly → supported. It is now judged on Sonnet write-up → Haiku schema (−99.4%), and each step clears 80% on its own (write-up → schema −87.2% Sonnet, −84.9% Haiku; Sonnet → Haiku −95.0%). The earlier "partly" came from the plain-text lever, which showed that the schema itself adds cost. "…without losing accuracy (implicit)": partly, unchanged. With beats without on every count on the same model; on the "with" row, Haiku is 6 fields below Sonnet with overlapping intervals. The input, output and ratio rows stay partly. The input row is now measured on the prompts sent (schema median 1,389, write-up median 791) and a fitted payload estimate (≈122–1,388 tokens). It was previously measured on Gemini's input tokens (581–1,472).
 
 **Record files after pruning (26 Nov 2026).** `runs.jsonl` 252 → 144 (108 other-lever runs moved to `other_levers/runs.jsonl`). `extractions.jsonl` 231 → 72: 43 error records, 24 original-capture extractions and 20 schema-as-text records deleted, and 72 plain-text extractions moved to `other_levers/extractions.jsonl`. `backend/replays/cat1_original_capture.json` deleted. Earlier copies: commit `7807557`.
@@ -175,7 +175,7 @@ Removed from the app with these levers: the Gemini rung and its decisions-API se
 
 ### Current runs
 
-Deck improvement: structured section templates and length bounds. Shown as one design, without ("unbounded long-form draft") and with ("section template with length caps"), on Sonnet 5.5 and Haiku 5.5. The template includes one rule for action items: give the owner and time window only if the source states them, otherwise write exactly `Not stated in source`.
+Deck lever: structured section templates and length bounds. Shown as one design, without ("unbounded long-form draft") and with ("section template with length caps"), on Sonnet 5.5 and Haiku 5.5. The template includes one rule for action items: give the owner and time window only if the source states them, otherwise write exactly `Not stated in source`.
 
 | Design | Version id (app rung) | Model | Drafts | $ per 1,000 documents | Output tokens (mean; range) | Core facts | Detail facts | Accuracy | Coverage | Clarity | Actionability | Concision | Serious errors per draft | Owners in source / not stated / not in source | Time windows (same) |
 |---|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
@@ -232,7 +232,7 @@ None beyond the deck's lever. Haiku with the template was earlier a separate run
 **4. Three rungs on the dashboard**
 
 - **What it was.** Sonnet unbounded, Sonnet template and Haiku template, with a separate "template fix" panel beside them.
-- **Fix (26 Nov 2026).** One design, without and with the improvement, on both models; Haiku unbounded added as a runnable app rung. The app's template is now the one the current drafts used (byte-identical prompt, checked against the recorded `system_sha256`).
+- **Fix (26 Nov 2026).** One design, without and with the lever, on both models; Haiku unbounded added as a runnable app rung. The app's template is now the one the current drafts used (byte-identical prompt, checked against the recorded `system_sha256`).
 - **Verdicts after the change.** "Section templates + length bounds control output cost": supported (−53% on Sonnet, −56% on Haiku, same model). "…without losing draft quality" (our addition): not supported, on detail facts (94 of 120 against 120 of 120 on Sonnet; 92 against 119 on Haiku). Under the template, accuracy grades were higher and serious errors fewer on both models. "Output tokens cost 3–5× input" stays supported.
 
 **5. Section regenerations captured on the earlier drafts**
@@ -250,7 +250,7 @@ None beyond the deck's lever. Haiku with the template was earlier a separate run
 
 ### Current runs
 
-Deck improvement: prefix caching plus sliding-window summarisation.
+Deck lever: prefix caching plus sliding-window summarisation.
 
 | Design | Version id | Model | Sessions | $ per 1,000 sessions, cold | Warm | Context at turn 10 (tokens) | Answers grounded | Early details in final summary | Recall questions |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|
@@ -259,12 +259,12 @@ Deck improvement: prefix caching plus sliding-window summarisation.
 
 - 2 ten-turn sessions, 3 runs each, 6 recall questions asked after turn 10. Scored against a fixed answer key by string matching.
 - "Early details" are the details from turns 1–3 that appear in the final summary.
-- Context grows by 1,247 tokens per turn without the improvement and 288 with it.
+- Context grows by 1,247 tokens per turn without the lever and 288 with it.
 - Records: `backend/experiments/cat3_quality/runs.jsonl` (12 records).
 
 ### Other levers we tried
 
-**Prefix caching alone (`prefix_cached_history`).** The full transcript as in the "without" version, with the 9,900-token handbook sent as a cached prefix and no summarisation. Tried to separate the two parts of the deck's improvement. Same harness, sessions, recall questions and answer key; 6 sessions. Records: `backend/experiments/cat3_quality/other_levers/runs.jsonl` (6 records).
+**Prefix caching alone (`prefix_cached_history`).** The full transcript as in the "without" version, with the 9,900-token handbook sent as a cached prefix and no summarisation. Tried to separate the two parts of the deck's lever. Same harness, sessions, recall questions and answer key; 6 sessions. Records: `backend/experiments/cat3_quality/other_levers/runs.jsonl` (6 records).
 
 | Version | $ per 1,000 sessions, cold | Warm | Context at turn 1 | Turn 3 | Turn 6 | Turn 10 | Answers grounded | Final-summary details | Early details | Recall questions |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -303,7 +303,7 @@ What it showed:
 **3. Three versions on the dashboard**
 
 - **What it was.** The app and reports showed prefix caching alone as a middle version, and the quality row compared the summarised version with it.
-- **Fix.** One design, without and with the improvement. Caching alone is recorded above.
+- **Fix.** One design, without and with the lever. Caching alone is recorded above.
 - **Verdicts after the change.** "Prefix caching + sliding-window summary prevents quadratic session cost": supported. "…without losing answer quality" (our addition): not supported, on recall of 2 of 36 against 36 of 36.
 
 ---
@@ -312,7 +312,7 @@ What it showed:
 
 ### Current runs
 
-Deck improvement: pair retrieval with context caching.
+Deck lever: pair retrieval with context caching.
 
 | Design | Version id | Corpus | Answers | $ per question, cold | Warm | Key facts (of 159) | Answers with a serious error | Correctness (1–5) | Completeness (1–5) | Needed clauses kept (of 90) | Other-supplier clauses picked |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -414,7 +414,7 @@ What they showed:
 **6. Four versions on the dashboard**
 
 - **What it was.** The app showed the full corpus, the cached full corpus and keyword search + rerank; the paired version appeared in the results panel only. Reports carried break-even tables and compared quality against the cached full corpus.
-- **Fix.** One design, without and with the improvement. The app runs the paired version live. The other two versions are recorded above.
+- **Fix.** One design, without and with the lever. The app runs the paired version live. The other two versions are recorded above.
 - **Verdicts after the change.** "Pair hybrid retrieval with context caching": supported. "…without losing answer quality" (our addition): partly, because key facts at 7 documents are 153 against 156.
 
 ---
@@ -423,7 +423,7 @@ What they showed:
 
 ### Current runs
 
-Deck improvement: step budgets, deterministic guardrails and small-model routing.
+Deck lever: step budgets, deterministic guardrails and small-model routing.
 
 | Design | Version id | Model | Runs | Exact vouchers | $ per 1,000 invoices, cold | Warm | Model turns | Escalations |
 |---|---|---|---:|---:|---:|---:|---:|---:|
@@ -523,7 +523,7 @@ Records removed from the main file: 1 harness-bug record, 36 runs made with earl
 
 ### Current runs
 
-Deck improvement: isolate sub-agent contexts and cache the shared repository prefix; measure cost per verified outcome.
+Deck lever: isolate sub-agent contexts and cache the shared repository prefix; measure cost per verified outcome.
 
 | Design | Version id | Models | Runs | Verified fixes | $ per 1,000 runs, cold | Warm | Uncached input tokens | Output tokens | Model time |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|

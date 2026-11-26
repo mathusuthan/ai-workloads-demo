@@ -24,6 +24,7 @@ import { Cat1AblationPanel } from './Cat1AblationPanel'
 import { FinOpsHud } from './FinOpsHud'
 import { NativeModal } from './NativeModal'
 import { RungResultCard } from './RungResultCard'
+import { DesignMark } from './DesignMark'
 
 interface Cat1WorkbenchProps {
   archetype: ArchetypeSpec
@@ -52,6 +53,11 @@ const REVEAL_SCHEDULE: Array<[RungId, number]> = [
   ['haiku_naive', 950],
   ['sonnet_naive', 1450],
 ]
+
+// with the lever = the JSON-schema classification versions; without = the four-part write-ups
+function isWithLever(rungId: string): boolean {
+  return rungId === 'sonnet_calibrated' || rungId === 'haiku_calibrated'
+}
 
 function fmtUsd(x: number): string {
   return `$${x < 1 ? x.toFixed(4) : x.toFixed(2)}`
@@ -265,7 +271,7 @@ export function Cat1Workbench({
             </h1>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-600 sm:text-sm">
               The same ticket or SKU on <strong>Sonnet 5.5</strong> and <strong>Haiku 5.5</strong>, without the
-              improvement (a <strong>four-part write-up</strong> in free text) and with it (the{' '}
+              lever (a <strong>four-part write-up</strong> in free text) and with it (the{' '}
               <strong>classification with a strict JSON schema</strong>). The experiment below the rungs shows the
               four cells over 12 items and 3 repeats.
             </p>
@@ -564,7 +570,7 @@ export function Cat1Workbench({
                 </h2>
                 <p className="mt-0.5 text-xs text-slate-600">
                   Runs the mixed Support Escalations + Cold-Start SKU feed through the four rungs: Sonnet 5.5 and
-                  Haiku 5.5, without the improvement (four-part write-up) and with it (classification with a strict
+                  Haiku 5.5, without the lever (four-part write-up) and with it (classification with a strict
                   JSON schema). The two "with" rows also show the Batch API price (computed at 50%, not run).
                 </p>
               </div>
@@ -621,10 +627,15 @@ export function Cat1Workbench({
                     {batchResponse.accuracy_rollup.map((m) => (
                       <div
                         key={m.rung_id}
-                        className="rounded-xl border border-slate-200 bg-slate-50/80 p-3.5"
+                        className={`rounded-xl border border-l-4 border-slate-200 bg-slate-50/80 p-3.5 ${
+                          isWithLever(m.rung_id) ? 'border-l-emerald-600' : 'border-l-rose-500'
+                        }`}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-extrabold text-slate-900">{m.label}</span>
+                          <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-900">
+                            <DesignMark withLever={isWithLever(m.rung_id)} />
+                            {m.label}
+                          </span>
                           <span
                             className={`rounded px-1.5 py-0.5 font-mono text-[10px] font-bold ${
                               m.schema_compliance_pct === 100
@@ -695,7 +706,7 @@ export function Cat1Workbench({
                     }
                   >
                     <caption className="sr-only">
-                      Unit economics and accuracy of Sonnet 5.5 and Haiku 5.5, without the improvement (four-part
+                      Unit economics and accuracy of Sonnet 5.5 and Haiku 5.5, without the lever (four-part
                       write-up) and with it (classification with a strict JSON schema); the Batch API price of the two
                       "with" rows is computed, not run.
                     </caption>
@@ -714,8 +725,16 @@ export function Cat1Workbench({
                     <tbody className="divide-y divide-slate-200 bg-white">
                       {batchResponse.cfo_comparison.map((row) => (
                         <tr key={row.tier_id} className="hover:bg-slate-50">
-                          <th scope="row" className="px-4 py-3 text-left font-bold text-slate-900">
-                            <div>{row.label}</div>
+                          <th
+                            scope="row"
+                            className={`border-l-4 px-4 py-3 text-left font-bold text-slate-900 ${
+                              isWithLever(row.tier_id) ? 'border-l-emerald-600' : 'border-l-rose-500'
+                            }`}
+                          >
+                            <div className="inline-flex items-center gap-1.5">
+                              <DesignMark withLever={isWithLever(row.tier_id)} />
+                              {row.label}
+                            </div>
                             <div className="text-[11px] font-normal text-slate-500">
                               {row.scope_note}
                             </div>
@@ -842,7 +861,7 @@ export function Cat1Workbench({
                           <td className="px-4 py-3 font-mono text-[11px] text-slate-700">
                             {item.input_tokens} / {item.haiku_output_tokens}
                           </td>
-                          <td className="px-4 py-3 font-mono text-[11px] text-blue-800">
+                          <td className="px-4 py-3 font-mono text-[11px] text-emerald-800">
                             {String(
                               item.haiku_decision.queue ??
                                 item.haiku_decision.compliance_status ??
@@ -858,7 +877,7 @@ export function Cat1Workbench({
                               )
                             </span>
                           </td>
-                          <td className="px-4 py-3 font-mono text-[11px] text-indigo-800">
+                          <td className="px-4 py-3 font-mono text-[11px] text-emerald-900">
                             {String(
                               item.sonnet_schema_decision.queue ??
                                 item.sonnet_schema_decision.compliance_status ??
@@ -879,13 +898,13 @@ export function Cat1Workbench({
                               <span className="rounded bg-rose-50 px-1.5 py-0.5 text-rose-800 ring-1 ring-rose-200" title="Sonnet write-up (usable as a classification)">
                                 SW:{fmtPct(item.sonnet_accuracy_pct)}
                               </span>
-                              <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-900 ring-1 ring-amber-200" title="Haiku write-up (usable as a classification)">
+                              <span className="rounded bg-white px-1.5 py-0.5 text-rose-700 ring-1 ring-rose-200" title="Haiku write-up (usable as a classification)">
                                 HW:{fmtPct(item.haiku_naive_accuracy_pct)}
                               </span>
-                              <span className="rounded bg-indigo-50 px-1.5 py-0.5 font-bold text-indigo-800 ring-1 ring-indigo-200" title="Sonnet classification with JSON schema">
+                              <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-bold text-emerald-900 ring-1 ring-emerald-200" title="Sonnet classification with JSON schema">
                                 SS:{fmtPct(item.sonnet_schema_accuracy_pct)}
                               </span>
-                              <span className="rounded bg-blue-50 px-1.5 py-0.5 font-bold text-blue-800 ring-1 ring-blue-200" title="Haiku classification with JSON schema">
+                              <span className="rounded bg-white px-1.5 py-0.5 font-bold text-emerald-700 ring-1 ring-emerald-200" title="Haiku classification with JSON schema">
                                 HS:{fmtPct(item.haiku_accuracy_pct)}
                               </span>
                             </div>

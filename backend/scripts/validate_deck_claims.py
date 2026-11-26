@@ -8,7 +8,7 @@ Reads these sources and writes a JSON + Markdown report:
 3. backend/experiments/cat3_quality/runs.jsonl (read-only) + backend/replays/cat3_quality_summary.json
                                  (fallback analysis/cat3_quality_rerun.json)
                               -> Category 3: the quality-rerun records of the two displayed versions (without / with
-                                 the deck's improvement x 2 sessions x 3 repeats) for cost and context growth;
+                                 the deck's lever x 2 sessions x 3 repeats) for cost and context growth;
                                  answer-key quality scores from the summary
                                  (falls back to the Category 3 golden replays if the rerun file is missing)
 4. backend/experiments/cat2_not_stated/drafts.jsonl (read-only) + backend/replays/cat2_quality_summary.json
@@ -20,7 +20,7 @@ Reads these sources and writes a JSON + Markdown report:
 5. backend/experiments/cat4_quality/runs.jsonl (read-only) + backend/replays/cat4_quality_summary.json
                                  (fallback analysis/cat4_quality_rerun.json)
                               -> Category 4: the quality-rerun records of the two displayed versions (without / with
-                                 the deck's improvement x 2 corpus sizes x 3 sessions of 8 questions = 96 answers) for
+                                 the deck's lever x 2 corpus sizes x 3 sessions of 8 questions = 96 answers) for
                                  cost and tokens; answer-key and blind-grader quality from the summary (falls back to
                                  the golden replays)
 5b. backend/experiments/cat5_ablation/runs.jsonl (read-only) + backend/replays/cat5_ablation_summary.json
@@ -78,8 +78,8 @@ CAT4_QUALITY_SUMMARY = REPLAYS / "cat4_quality_summary.json"
 CAT4_QUALITY_ANALYSIS = OUT_DIR / "cat4_quality_rerun.json"
 CAT4_SYNTH_MAX_TOKENS = 4096  # records at another synthesis cap are superseded (the 2,048-cap pilot)
 CAT4_APP_MAX_TOKENS_BEFORE = 2048
-CAT3_RUNGS = ["naive_full_history", "prefix_cached_summarized"]  # without / with the deck's improvement
-CAT4_RUNGS = ["naive_full_corpus", "cached_rerank_hybrid"]  # without / with the deck's improvement
+CAT3_RUNGS = ["naive_full_history", "prefix_cached_summarized"]  # without / with the deck's lever
+CAT4_RUNGS = ["naive_full_corpus", "cached_rerank_hybrid"]  # without / with the deck's lever
 CAT4_SCALES = [1, 3]
 # Synthesis answer format per displayed version (mirror of backend/app/archetypes/cat4_rag/answer_formats.py
 # RUNG_ANSWER_FORMAT; a record without settings.answer_format used "full_corpus").
@@ -857,7 +857,7 @@ def analyse():
     def claim(cat, text, measured, v, note=""):
         claims.append({"category": cat, "claim": text, "measured": measured, "verdict": v, "note": note})
 
-    # ---------------- Cat 1 (four cells: Sonnet / Haiku x without / with the improvement, 12 items x 3 repeats)
+    # ---------------- Cat 1 (four cells: Sonnet / Haiku x without / with the lever, 12 items x 3 repeats)
     info1, src1 = cat1_ablation_info()
     u1 = None
     if info1:
@@ -903,7 +903,7 @@ def analyse():
         pay = (f"; payload alone ≈{dp['payload_tokens_min']:,.0f}–{dp['payload_tokens_max']:,.0f} (median {dp['payload_tokens_median']:,.0f}; "
                "estimated from a linear fit of the write-up runs' input tokens on payload length)") if dp.get("payload_tokens_median") else ""
         claim("Cat 1", "Input 500–1,500 tokens",
-              f"prompt sent with the improvement (schema) {sp_lo:,}–{sp_hi:,} (median {hs['prompt_tokens_median']:,.0f}); without (write-up) {wp_lo:,}–{wp_hi:,} "
+              f"prompt sent with the lever (schema) {sp_lo:,}–{sp_hi:,} (median {hs['prompt_tokens_median']:,.0f}); without (write-up) {wp_lo:,}–{wp_hi:,} "
               f"(median {wr['prompt_tokens_median']:,.0f}){pay} (n={hs['n']} runs per cell)",
               verdict(500 <= sp_lo and sp_hi <= 1500 and 500 <= wp_lo and wp_hi <= 1500,
                       in_band(500, 1500, hs["prompt_tokens_median"]) and in_band(500, 1500, wr["prompt_tokens_median"])),
@@ -911,13 +911,13 @@ def analyse():
               f"{wp_lo:,} tokens), and the system prompt plus the JSON schema add ~600 tokens, so the longest schema prompts reach {sp_hi:,}." + band_rule)
         o_lo, o_hi = hs["output_tokens_range"]
         claim("Cat 1", "Output 10–100 tokens",
-              f"with the improvement: Haiku {o_lo}–{o_hi} (median {hs['output_tokens_median']:.0f}), Sonnet {ss['output_tokens_range'][0]}–{ss['output_tokens_range'][1]} "
+              f"with the lever: Haiku {o_lo}–{o_hi} (median {hs['output_tokens_median']:.0f}), Sonnet {ss['output_tokens_range'][0]}–{ss['output_tokens_range'][1]} "
               f"(median {ss['output_tokens_median']:.0f}); without: write-ups {min(s1['haiku_report']['output_tokens_range'][0], wr['output_tokens_range'][0]):,}–"
               f"{max(s1['haiku_report']['output_tokens_range'][1], wr['output_tokens_range'][1]):,} (n={hs['n']} runs per cell)",
               verdict(10 <= o_lo and o_hi <= 100 and 10 <= ss["output_tokens_range"][0] and ss["output_tokens_range"][1] <= 100,
                       hs["output_tokens_median"] <= 100 and ss["output_tokens_median"] <= 100),
               "The medians are inside the band and the longest classification answers run just over it." + band_rule)
-        claim("Cat 1", "Input:output ≈ 20:1 to 50:1", f"with the improvement: Haiku median {hs['io_ratio_median']:.0f}:1, Sonnet {ss['io_ratio_median']:.0f}:1; "
+        claim("Cat 1", "Input:output ≈ 20:1 to 50:1", f"with the lever: Haiku median {hs['io_ratio_median']:.0f}:1, Sonnet {ss['io_ratio_median']:.0f}:1; "
               f"without: {wr['io_ratio_median']:.2f}:1 (Sonnet write-up)",
               verdict(20 <= hs["io_ratio_median"] <= 50, hs["io_ratio_median"] > 1),
               "Input-heavy as claimed, but below the 20:1 floor because the classification answer is ~100 tokens and the prompt carries the schema.")
@@ -945,10 +945,10 @@ def analyse():
         misses_h = sorted({m["item_id"] for m in info1["misses"] if m["arm_id"] == "haiku_schema"})
         claim("Cat 1", "…without losing accuracy (implicit)",
               f"fields correct of {a_s['fields_total']} (items fully correct of {a_s['items_total']}). With vs without, same model: Sonnet {a_s['fields']} ({a_s['items']}) vs "
-              f"{w_s['fields']} ({w_s['items']}); Haiku {a_h['fields']} ({a_h['items']}) vs {w_h['fields']} ({w_h['items']}). With the improvement, Haiku vs Sonnet: "
+              f"{w_s['fields']} ({w_s['items']}); Haiku {a_h['fields']} ({a_h['items']}) vs {w_h['fields']} ({w_h['items']}). With the lever, Haiku vs Sonnet: "
               f"{a_h['fields']} ({a_h['wilson'][0]:.0f}–{a_h['wilson'][1]:.0f}%) vs {a_s['fields']} ({a_s['wilson'][0]:.0f}–{a_s['wilson'][1]:.0f}%), items {a_h['items']} vs {a_s['items']}",
               implicit_verdict(clear_hs, with_ge and equal_hs),
-              ("With the improvement every field and item count is at least the write-up's on the same model. " if with_ge else "")
+              ("With the lever every field and item count is at least the write-up's on the same model. " if with_ge else "")
               + "The write-up prompt never lists the allowed labels, so a write-up's score counts the fields where one allowed label can be read off it "
               f"(usable as a classification), read by a blind reader model (`{info1['reader_model']}`, one pass). On the \"with\" row the Haiku version matched "
               f"{a_s['fields'] - a_h['fields']} fewer of {a_h['fields_total']} fields than the Sonnet version (−{loss:.1f} points), all on {len(misses_h)} "
@@ -1122,7 +1122,7 @@ def analyse():
           + (" or Category 2 is pending" if not all4 else "") + ". "
           + (f"Outside the range: {', '.join(f'{v:.0f}%' for v, ok in zip(vals_t, in_rng) if not ok)}." if not all(in_rng) else ""))
 
-    # ---------------- Cat 3 (quality rerun: without / with the deck's improvement x 2 sessions x 3 repeats)
+    # ---------------- Cat 3 (quality rerun: without / with the deck's lever x 2 sessions x 3 repeats)
     u3, cat3_source, cat3_stats = cat3_units()
     order3 = list(CAT3_RUNGS)
     WO3, WI3 = order3  # without (full history, no cache); with (cached prefix + sliding-window summaries)
@@ -1153,9 +1153,9 @@ def analyse():
                                                  "range": rng([x["output"] for x in all_turns3]), "turns_with_thinking": len(with_thinking)}}
     g = growth[WO3]
     n3 = s3[WO3]["n"]
-    claim("Cat 3", "Per-turn context grows 1.2k → 6.5k → 14k → 25k+ (turns 1/3/6/10)", f"without the improvement (mean of n={n3}): {g['turn1']/1e3:.1f}k → {g['turn3']/1e3:.1f}k → {g['turn6']/1e3:.1f}k → {g['turn10']/1e3:.1f}k",
+    claim("Cat 3", "Per-turn context grows 1.2k → 6.5k → 14k → 25k+ (turns 1/3/6/10)", f"without the lever (mean of n={n3}): {g['turn1']/1e3:.1f}k → {g['turn3']/1e3:.1f}k → {g['turn6']/1e3:.1f}k → {g['turn10']/1e3:.1f}k",
           verdict(False, True), f"Starts much higher (a ~{prefix3/1e3:.1f}k-token handbook is sent on every turn) and grows more slowly: +{g['slope_tokens_per_turn']/1e3:.1f}k/turn vs the ~2.6k/turn the chart implies.")
-    claim("Cat 3", "Session 10,000–40,000+ tokens", f"peak context {g['peak_context']/1e3:.1f}k; cumulative billed prompt per session {s3[WO3]['prompt_tokens_median']/1e3:.0f}k (median, n={n3}; without the improvement)",
+    claim("Cat 3", "Session 10,000–40,000+ tokens", f"peak context {g['peak_context']/1e3:.1f}k; cumulative billed prompt per session {s3[WO3]['prompt_tokens_median']/1e3:.0f}k (median, n={n3}; without the lever)",
           verdict(False, True), f"Holds for context-window size. Billed tokens per 10-turn session are ~{s3[WO3]['prompt_tokens_median']/40e3:.0f}× the top of the range, because every turn re-sends the history.")
     to3 = res["categories"]["cat3"]["turn_output"]
     out_med_ok = 150 <= to3["median"] <= 600
@@ -1170,7 +1170,7 @@ def analyse():
     lever_measured = (f"context slope: without +{g['slope_tokens_per_turn']:.0f} tok/turn (turn 10 {g['turn10']/1e3:.1f}k) → with +{gs['slope_tokens_per_turn']:.0f} tok/turn "
                       f"(turn 10 {gs['turn10']/1e3:.1f}k, peak {gs['peak_context']/1e3:.1f}k); cost ${s3[WO3]['cost_per_1k_billed']:.2f} → ${s3[WI3]['cost_per_1k_billed']:.2f} "
                       f"per 1k sessions billed (−{cut_s:.0f}%; n={n3} sessions per version)")
-    lever_note = ("Rule: holds if the version with the improvement grows its context more slowly per turn and costs less per session billed. "
+    lever_note = ("Rule: holds if the version with the lever grows its context more slowly per turn and costs less per session billed. "
                   f"Both hold: the summaries bound the growth from turn {min((t for t in (3, 6, 10) if gs[f'turn{t}'] < g[f'turn{t}']), default=10)} on, and the cached handbook prefix cuts the price of each turn.")
     fr = lambda m: f"{m['hits']}/{m['total']}" if m else "—"  # noqa: E731
     if q3 and WO3 in q3 and WI3 in q3:
@@ -1191,10 +1191,10 @@ def analyse():
         lost3 = [n for n, m in measures3 if worse(m(qw), m(qo))]
         lower3 = [n for n, m in measures3 if m(qw) and m(qo) and m(qw)["hits"] / m(qw)["total"] < m(qo)["hits"] / m(qo)["total"]]
         claim("Cat 3", "…without losing answer quality (implicit)",
-              f"with vs without the improvement (n={n3} sessions each): answers grounded (turns 1–9) {fr(qw['turn_recall'])} vs {fr(qo['turn_recall'])}; "
+              f"with vs without the lever (n={n3} sessions each): answers grounded (turns 1–9) {fr(qw['turn_recall'])} vs {fr(qo['turn_recall'])}; "
               f"recall questions {fr(qw['probe_accuracy'])} vs {fr(qo['probe_accuracy'])}; turn 1–3 details in the final summary {fr(ew)} vs {fr(eo)}",
               implicit_verdict(bool(lost3), not lower3),
-              "Answer key, deterministic string matching, 95% Wilson intervals; the reference is the version without the improvement. Replies on turns 1–9 stay "
+              "Answer key, deterministic string matching, 95% Wilson intervals; the reference is the version without the lever. Replies on turns 1–9 stay "
               "grounded in both versions, but once early turns are compacted, replies to recall questions about them did not give their specifics and the final "
               "summary kept fewer of them. "
               + (f"Implicit-row rule: a clear loss ({', '.join(lost3)}: the intervals do not overlap)." if lost3
@@ -1202,7 +1202,7 @@ def analyse():
     else:
         claim("Cat 3", "…without losing answer quality (implicit)", "no quality data", "NOT TESTABLE", q3_source.get("reason") or "the summary has no cell for one of the versions")
 
-    # ---------------- Cat 4 (quality rerun: without / with the deck's improvement x 2 corpus sizes x 3 sessions of 8 questions)
+    # ---------------- Cat 4 (quality rerun: without / with the deck's lever x 2 corpus sizes x 3 sessions of 8 questions)
     u4, cat4_source, cat4_stats = cat4_units()
     order4 = [_cat4_key(r, sc) for r in CAT4_RUNGS for sc in CAT4_SCALES if u4.get(_cat4_key(r, sc))]
     s4 = summarize_rungs(u4, order4)
@@ -1241,10 +1241,10 @@ def analyse():
     full_lo = min(r["synth_prompt_range"][0] for r in full_rows)
     full_hi = max(r["synth_prompt_range"][1] for r in full_rows)
     claim("Cat 4", "Input 15k–100k+ tokens",
-          f"without the improvement (full corpus) {full_lo/1e3:.1f}k–{full_hi/1e3:.1f}k per question (7 documents → 21 documents)"
-          + (f"; with the improvement, Sonnet's prompt {pq1['synth_prompt_range'][0]/1e3:.1f}k–{pq1['synth_prompt_range'][1]/1e3:.1f}k (the 5 picked clauses)" if pq1 else ""),
+          f"without the lever (full corpus) {full_lo/1e3:.1f}k–{full_hi/1e3:.1f}k per question (7 documents → 21 documents)"
+          + (f"; with the lever, Sonnet's prompt {pq1['synth_prompt_range'][0]/1e3:.1f}k–{pq1['synth_prompt_range'][1]/1e3:.1f}k (the 5 picked clauses)" if pq1 else ""),
           verdict(full_lo >= 15_000 and full_hi <= 100_000),
-          f"n={sum(r['answers'] for r in per_q.values())} answers. Every full-corpus prompt is in the band at both corpus sizes; the version with the improvement cuts "
+          f"n={sum(r['answers'] for r in per_q.values())} answers. Every full-corpus prompt is in the band at both corpus sizes; the version with the lever cuts "
           "the answering model's prompt below it by design (its Haiku step reads the whole corpus from a cached block).")
     outs = [o for r in per_q.values() for o in r["synth_outputs"]]
     in_band = sum(1 for o in outs if 400 <= o <= 1500)
@@ -1277,14 +1277,14 @@ def analyse():
         cost_ok = all(cost(PR, sc) < cost(NV, sc) for sc in CAT4_SCALES)
         q_worse = {sc: worse(q4[K(PR, sc)]["answers_with_material_error"], q4[K(NV, sc)]["answers_with_material_error"]) for sc in CAT4_SCALES}
         quality_ok = not any(q_worse.values())
-        measured = (f"with the improvement (Haiku picks 5 clauses from the cached full corpus, Sonnet answers over them with citations; n=24 per corpus size) vs without "
+        measured = (f"with the lever (Haiku picks 5 clauses from the cached full corpus, Sonnet answers over them with citations; n=24 per corpus size) vs without "
                     f"(full corpus, no cache, no citations): expected clauses among the picks {pc4(p1['recall_after_rerank'])} / {pc4(p3['recall_after_rerank'])} "
                     f"(7 / 21 documents); other suppliers' clauses picked {fr4(p1['distractors_selected'])} / {fr4(p3['distractors_selected'])}; "
                     f"$/question billed ${cost(PR, 1):.4f} / ${cost(PR, 3):.4f} vs ${cost(NV, 1):.4f} / ${cost(NV, 3):.4f} "
                     f"(−{pct_saving(cost(NV, 1), cost(PR, 1)):.0f}% / −{pct_saving(cost(NV, 3), cost(PR, 3)):.0f}%); "
                     f"answers with a serious error {fr4(p1['answers_with_material_error'])} / {fr4(p3['answers_with_material_error'])} vs "
                     f"{fr4(n1['answers_with_material_error'])} / {fr4(n3q['answers_with_material_error'])}")
-        note = ("Rule (both corpus sizes, with vs without the improvement at the same size; \"clearly\" = 95% Wilson intervals do not overlap): retrieval holds if the "
+        note = ("Rule (both corpus sizes, with vs without the lever at the same size; \"clearly\" = 95% Wilson intervals do not overlap): retrieval holds if the "
                 "picked clauses' share of expected clauses is not clearly below the full corpus's (which holds every clause) and no other supplier's clause is picked; "
                 "cost holds if it is cheaper per question billed in 8-question sessions; quality holds if its share of answers with a serious error is not clearly higher. "
                 f"Retrieval {'holds' if retr_ok else 'does not hold'}; cost {'holds' if cost_ok else 'does not hold'}; quality "
@@ -1305,12 +1305,12 @@ def analyse():
                 lower4.append(f"{CAT4_SCALE_LABEL[sc]}: " + ", ".join(f"{n} {v}" for n, v in low))
         v_impl4 = implicit_verdict(bool(clear), not lower4)
         claim("Cat 4", "…without losing answer quality (implicit)",
-              f"with vs without the improvement (7 / 21 documents, n=24 answers each): answers with a serious error {fr4(p1['answers_with_material_error'])} / "
+              f"with vs without the lever (7 / 21 documents, n=24 answers each): answers with a serious error {fr4(p1['answers_with_material_error'])} / "
               f"{fr4(p3['answers_with_material_error'])} vs {fr4(n1['answers_with_material_error'])} / {fr4(n3q['answers_with_material_error'])}; grader correctness "
               f"{p1['correctness_mean']:.2f} / {p3['correctness_mean']:.2f} vs {n1['correctness_mean']:.2f} / {n3q['correctness_mean']:.2f}; key facts "
               f"{fr4(p1['fact_recall'])} / {fr4(p3['fact_recall'])} vs {fr4(n1['fact_recall'])} / {fr4(n3q['fact_recall'])}",
               v_impl4,
-              "Reference: the version without the improvement (full corpus, no cache, no citations) at the same corpus size. Clear loss: the share of answers with a "
+              "Reference: the version without the lever (full corpus, no cache, no citations) at the same corpus size. Clear loss: the share of answers with a "
               "serious error is clearly higher (95% Wilson intervals do not overlap). "
               + ("A clear loss at " + ", ".join(CAT4_SCALE_LABEL[sc] for sc in clear) + ". " if clear else "No clear loss at either size. ")
               + ("Implicit-row rule: no clear loss is detected, but point estimates are lower (" + "; ".join(lower4) + "), and 24 answers per cell cannot show "
@@ -1637,16 +1637,16 @@ RUNG_LABELS = {
     "haiku_calibrated_batch": "Haiku 5.5 · strict JSON · Batch API (−50%)",
     "sonnet_unbounded": "Sonnet 5.5 · without: unbounded long-form draft", "haiku_unbounded": "Haiku 5.5 · without: unbounded long-form draft",
     "sonnet_templated": "Sonnet 5.5 · with: section template with length caps", "haiku_templated": "Haiku 5.5 · with: section template with length caps",
-    "naive_full_history": "Without the improvement: full history, no cache",
-    "prefix_cached_summarized": "With the improvement: cached prefix + sliding-window summaries",
-    "naive_full_corpus": "Without the improvement: full corpus, no cache, no citations",
-    "cached_rerank_hybrid": "With the improvement: Haiku picks 5 clauses from the cached corpus → Sonnet + citations",
+    "naive_full_history": "Without the lever: full history, no cache",
+    "prefix_cached_summarized": "With the lever: cached prefix + sliding-window summaries",
+    "naive_full_corpus": "Without the lever: full corpus, no cache, no citations",
+    "cached_rerank_hybrid": "With the lever: Haiku picks 5 clauses from the cached corpus → Sonnet + citations",
     "unbounded_sonnet_loop": "Unbounded Sonnet ReAct loop", "bounded_sonnet_cached_gate": "4-step budget + cached SOP + policy gate",
     "hybrid_haiku_sonnet_governed": "Haiku-first, Sonnet on escalation",
     "shared_bus_matched_gate": "Without the lever: shared bus, Sonnet",
+    "shared_bus_tiered_gate": "Without the lever: shared bus, Haiku agents + Sonnet patch author",
     "isolated_cached_gate": "With the lever: isolated + cached, Sonnet",
     "tiered_gate": "With the lever: isolated + cached, Haiku agents + Sonnet patch author",
-    "shared_bus_tiered_gate": "Without the lever: shared bus, Haiku agents + Sonnet patch author",
 }
 UNIT = {"cat1": "item", "cat2": "document", "cat3": "10-turn session", "cat4": "4-question audit", "cat5": "invoice", "cat6": "incident run"}
 TITLE = {"cat1": "Classification, extraction & routing", "cat2": "Generative synthesis & drafting", "cat3": "Multi-turn assistants",
@@ -1674,10 +1674,10 @@ def _cat3_thinking_issue(res):
 
 
 CAT5_LABELS = {
-    "raw_free_sonnet": "Without the lever, Sonnet (app rung 1)",
-    "raw_free_haiku": "Without the lever, Haiku (app rung 4)",
-    "bundle_gate_sonnet_cached": "With the lever, Sonnet (app rung 2)",
-    "bundle_gate_haiku_escalate": "With the lever, Haiku-first (app rung 3)",
+    "raw_free_sonnet": "Without the lever, Sonnet (app version 1)",
+    "raw_free_haiku": "Without the lever, Haiku (app version 2)",
+    "bundle_gate_sonnet_cached": "With the lever, Sonnet (app version 3)",
+    "bundle_gate_haiku_escalate": "With the lever, Haiku-first (app version 4)",
 }
 
 
@@ -1699,7 +1699,7 @@ def _render_cat1(c):
          f"Costs are recomputed here from each run's tokens; they match the summary within ${c['max_cost_diff_vs_summary_per_1k']:.4f} per 1k. "
          f"Write-ups ran at max_tokens 8,192, the JSON-schema answers at 512; truncated runs: {sum(c['truncated_runs'].values())}. "
          "The app runs all four cells; its golden replays are repeat 0 of each cell on all 12 items. "
-         "Each cell: fields correct (95% Wilson); items fully correct; $ per 1k items (with the improvement: also the Batch API price, computed at 50%, not run); "
+         "Each cell: fields correct (95% Wilson); items fully correct; $ per 1k items (with the lever: also the Batch API price, computed at 50%, not run); "
          "median prompt / output tokens (output range); median response time.", "",
          "| | " + " | ".join(CAT1_COLS.values()) + " |", "|---|" + "---|" * len(CAT1_COLS)]
     for rk, rl in CAT1_ROWS.items():
@@ -1843,6 +1843,19 @@ def _render_cat6(c):
     return L + [""]
 
 
+def _cat6_unit_sentence(res):
+    """Category 6's unit-of-analysis sentence, from the recorded cells (a cell with no runs yet is named as run pending)."""
+    c = (res.get("categories") or {}).get("cat6") or {}
+    cells = c.get("cpo") or {}
+    if not cells:
+        return "Category 6 has no fair-rerun records in this run. "
+    n = next(iter(cells.values()))["runs"]
+    pend = c.get("pending") or []
+    return (f"Category 6 uses the {c['records']} fair-rerun records of its with/without design ({len(cells)} cells × 3 incidents × 5 repeats, "
+            f"n={n} per cell" + ("; " + ", ".join(f"{CAT6_CELL[a]}: {CAT6_RUN_PENDING}" for a in pend) if pend else "")
+            + "); its golden replays are repeat 0 of each cell. ")
+
+
 def _cat6_ceiling_note(res):
     """The Category 6 sentence of the ceiling-effects limit, from the recorded cells ("" when no cell is at the ceiling)."""
     c = (res.get("categories") or {}).get("cat6") or {}
@@ -1882,7 +1895,8 @@ def _render_cat5(c):
          f"answer. Costs are recomputed here from each turn's tokens (within ${c['max_cost_diff_vs_summary_per_1k']:.4f} per 1k of the summary). Every run wrote "
          f"its own cache (per-run nonce), so billed equals cold. Every turn ran at max_tokens {c['settings'].get('max_tokens_per_turn')}. "
          "Each cell: exact vouchers (95% Wilson interval); $ per 1k invoices cold / warm; median prompt / output tokens per invoice; mean model turns; "
-         "escalations to Sonnet. The app's four rungs are these four cells; their golden replays are repeat 0 on inv-01..03.", "",
+         "escalations to Sonnet. The app's four versions are these four cells (numbered 1–4 in this order: without · Sonnet, "
+         "without · Haiku, with · Sonnet, with · Haiku-first); their golden replays are repeat 0 on inv-01..03.", "",
          "| | " + " | ".join(CAT5_COLS.values()) + " |", "|---|" + "---|" * len(CAT5_COLS)]
     for rk, rl in CAT5_ROWS.items():
         cells = []
@@ -1911,8 +1925,8 @@ def _render_cat5(c):
 
 
 CAT4_LABELS = {
-    "naive_full_corpus": "Without the improvement: full corpus, no cache, no citations",
-    "cached_rerank_hybrid": "With the improvement: Haiku picks 5 clauses from the cached corpus → Sonnet + citations",
+    "naive_full_corpus": "Without the lever: full corpus, no cache, no citations",
+    "cached_rerank_hybrid": "With the lever: Haiku picks 5 clauses from the cached corpus → Sonnet + citations",
 }
 CAT4_SCALE_LABEL = {1: "7 docs", 3: "21 docs"}
 
@@ -1945,7 +1959,7 @@ def _render_cat4(c):
     first = next(iter(rungs.values()))
     if c["source"] == "quality rerun":
         L += [f"### 4. {TITLE['cat4']} (per 1k questions; n={first['n'] * 4} answers per row)", "",
-              f"Source: the quality rerun, {stats['records']} records = {stats['answers']} answers (2 versions — without and with the deck's improvement — × 2 corpus "
+              f"Source: the quality rerun, {stats['records']} records = {stats['answers']} answers (2 versions — without and with the deck's lever — × 2 corpus "
               "sizes × 3 sessions of 8 questions; each session asked audit-01 then audit-02, so one unit here is a 4-question audit and each session gives two). Corpus "
               "sizes: the app's 7-document deal room, and 21 documents (two synthetic look-alike suppliers added). Every question carried a one-line supplier-scope "
               "prefix. The golden replays are repeat 0 of both versions at 7 documents. Synthesis stop reasons: "
@@ -1963,7 +1977,7 @@ def _render_cat4(c):
                  f"{_k(v['synth_prompt_median'])} | {v['synth_output_median']:.0f} | {cit} | {zero} | "
                  + ", ".join(f"{k} {n}" for k, n in sorted(v["stop_reasons"].items())) + " |")
     L += ["", "*Cold* here: the first question of each 4-question audit writes the clause cache (the rerun billed one write per 8-question session). "
-          "Cost includes the Haiku clause pick in the version with the improvement; the prompt column is the answering (Sonnet) call.", ""]
+          "Cost includes the Haiku clause pick in the version with the lever; the prompt column is the answering (Sonnet) call.", ""]
     q, src = c.get("quality"), c.get("quality_source") or {}
     if q:
         L += [f"Answer quality (read from `{src['file']}`, keys version `{src.get('keys_version')}`; {src.get('answers')} answers, {src.get('judged')} graded by a blind "
@@ -1984,7 +1998,7 @@ def _render_cat4(c):
             L.append(f"| {_cat4_label(key)} | {qm(v['fact_recall'])} | {qm(v['citations_at_expected'])} | {qm(v['expected_chunk_recall'])} | {qm(v['recall_after_rerank'])} | "
                      f"{qm(v['distractors_selected'])} | {v['correctness_mean']:.2f} | {v['completeness_mean']:.2f} | {qm(v['answers_with_material_error'])} | {qm(v['contaminated_answers'])} |")
         L += ["", "*Key facts*: fixed answer key (4–7 facts per question), deterministic matching. *Expected clauses among Haiku's picks*: the clauses the answer key "
-              "needs that are among the 5 Haiku picked (the version without the improvement sends every clause: —). "
+              "needs that are among the 5 Haiku picked (the version without the lever sends every clause: —). "
               "*Serious error*: a statement the grader marked material (wrong amount, party, date, condition or precedence, or a claim that the documents lack something they contain). "
               "*Contaminated*: states another supplier's value for a keyed fact or cites another supplier's clause.", ""]
     else:
@@ -2116,8 +2130,8 @@ def render_markdown(res):
         + _cat1_unit_sentence(res) + _cat2_unit_sentence(res) + "Category 3 uses the 12 quality-rerun records of its without/with design (2 versions × 2 sessions × 3 repeats, n=6 per version); its golden replays are repeat 0 of both. "
         "Category 4 uses the 12 quality-rerun sessions of its without/with design (2 versions × 2 corpus sizes × 3 sessions of 8 questions, 96 answers, n=24 per row); "
         "its golden replays are repeat 0 of both versions at the 7-document corpus. "
-        + _cat5_unit_sentence(res) +
-        "Category 6 uses the 45 fair-rerun records of its with/without design (3 cells × 3 incidents × 5 repeats, n=15 per cell); its golden replays are repeat 0 of each cell. "
+        + _cat5_unit_sentence(res)
+        + _cat6_unit_sentence(res) +
         "Costs are recomputed per API call from recorded token counts, priced by the model that served the call. "
         "The traces' own `finops` blocks are not used, so the results don't depend on how the app priced them.",
         "",
@@ -2177,7 +2191,7 @@ def render_markdown(res):
         c = res["categories"][cat]
         if cat == "cat3":
             if c["source"] == "quality rerun":
-                L += [f"Source: the quality rerun, {c['records']} records (2 versions — without and with the deck's improvement — × 2 sessions × 3 repeats). Costs cover "
+                L += [f"Source: the quality rerun, {c['records']} records (2 versions — without and with the deck's lever — × 2 sessions × 3 repeats). Costs cover "
                       "turns 1–10 and the compactions before them; the recall-probe phase is excluded. The golden replays are repeat 0 of both versions.", ""]
             else:
                 L += ["Source: the Category 3 golden replays (the quality-rerun records could not be read).", ""]
