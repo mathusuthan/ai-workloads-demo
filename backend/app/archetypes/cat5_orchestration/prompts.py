@@ -5,22 +5,20 @@ from __future__ import annotations
 from app.data.cat5_fixtures import AP_POLICY_MANUAL_MARKDOWN
 
 
+# Rung 1 / the ablation's neutral arms: the model chooses its own tools and order (no scripted sequence).
+# Shared verbatim with app/archetypes/cat5_orchestration/ablation.py (NEUTRAL_PROTOCOL).
+CAT5_FREE_CHOICE_PROTOCOL = (
+    "=== EXECUTION PROTOCOL ===\n"
+    "Reconcile this invoice against the ERP records using the tools available. Use only the tools you need; "
+    "you may call several in one step. Apply the policy manual exactly, then commit the final voucher with "
+    "`commit_reconciliation_voucher`, and finish with a summary of at most 130 words that cites the committed voucher."
+)
+
+
 def get_cat5_system_prompt(rung_id: str) -> str:
-    """Return SOP-grounded system instruction tailored to the rung's tool protocol."""
+    """SOP policy manual + the rung's execution protocol."""
     if rung_id == "unbounded_sonnet_loop":
-        contract = (
-            "=== EXECUTION PROTOCOL: EXPLORATORY MULTI-STEP RECONCILIATION ===\n"
-            "You are reconciling this invoice step-by-step against NovaMart's raw SQLite ERP tables.\n"
-            "To maintain a complete step-by-step audit trail, call ONLY ONE tool per step in sequence "
-            "(never batch multiple tool calls in a single turn):\n"
-            "1. query_invoice_raw(invoice_id)\n"
-            "2. query_po_raw(po_id)\n"
-            "3. query_grn_wms_telemetry(po_id)\n"
-            "4. query_vendor_audit_history(vendor_id)\n"
-            "5. query_contract_amendments_and_dock_logs(po_id)\n"
-            "6. Perform all Module 1–5 math carefully and call commit_reconciliation_voucher(...).\n"
-            "7. Finish with a concise 120-word AP controller readout citing the committed voucher."
-        )
+        contract = CAT5_FREE_CHOICE_PROTOCOL
     elif rung_id == "bounded_sonnet_cached_gate":
         contract = (
             "=== EXECUTION PROTOCOL: GOVERNED 4-STEP BUDGET + DETERMINISTIC GATE (SONNET 5.5) ===\n"
@@ -52,50 +50,54 @@ def build_cat5_user_task_prompt(preset: dict) -> str:
     )
 
 
+# Display-only (Code Inspector). Describes what each rung does; measured results are in the ablation panel.
 CAT5_CODE_SNIPPETS: dict[str, str] = {
-    "unbounded_sonnet_loop": """# RUNG 1 ANTI-PATTERN: Unbounded Exploratory ReAct Loop on Sonnet 5.5
-# Calls 6 unprojected SELECT * tools (WMS scan arrays, 3-yr vendor audit logs, dock logs)
-# WITHOUT prefix cache_control or deterministic policy gate -> ~35k–55k cumulative tokens/invoice!
-for step in range(max_steps=10):
+    "unbounded_sonnet_loop": """# RUNG 1: Free-choice loop over raw SELECT * tools on Sonnet 5.5
+# The model picks which raw table queries to run (several per turn allowed), does the policy arithmetic
+# itself and commits the voucher. No prompt cache, no policy gate; safety cap of 12 model turns.
+for turn in range(12):
     resp = await client.messages.create(
-        model="claude-sonnet-5-5",  # $2.00/M uncached in · $10.00/M out every turn!
-        max_tokens=2048,
+        model="claude-sonnet-5-5",
+        max_tokens=4096,
         thinking={"type": "between_tools"},
-        system=AP_POLICY_MANUAL_TEXT,  # NO cache_control!
-        tools=NAIVE_SELECT_STAR_TOOLS,
+        system=AP_POLICY_MANUAL_TEXT + FREE_CHOICE_PROTOCOL,  # no cache_control
+        tools=RAW_SELECT_STAR_TOOLS + [COMMIT_VOUCHER],
         messages=loop_history,
     )
-    if resp.stop_reason != "tool_use":
-        break""",
-    "bounded_sonnet_cached_gate": """# RUNG 2 LEVER 1: Projected JOINs + Cached SOP Manual + Deterministic AP Gate (max_steps=4)
-# Consolidates reads into fetch_3way_match_bundle, caches ~5.5k-tok manual (-95% read),
-# and forces commit_reconciliation_voucher to pass run_policy_tolerance_gate first!
+    tool_uses = [b for b in resp.content if b.type == "tool_use"]
+    if resp.stop_reason == "max_tokens" or not tool_uses:
+        break  # a truncated turn or a turn without tool calls ends the run
+    loop_history += [assistant(resp.content), user(execute_all(tool_uses))]  # whatever the stop_reason""",
+    "bounded_sonnet_cached_gate": """# RUNG 2: Narrow bundle query + cached policy manual + deterministic policy gate (Sonnet 5.5)
+# One projected JOIN replaces the raw table dumps; the manual is sent as a cached prefix; the commit tool
+# refuses until run_policy_tolerance_gate has computed the figures, which the model copies.
 system_cached = [{
     "type": "text",
-    "text": AP_POLICY_MANUAL_TEXT,
-    "cache_control": {"type": "ephemeral"},  # >= 4,096 tok floor satisfied!
+    "text": AP_POLICY_MANUAL_TEXT + GOVERNED_PROTOCOL,
+    "cache_control": {"type": "ephemeral"},
 }]
 resp = await client.messages.create(
     model="claude-sonnet-5-5",
-    max_tokens=2048,
+    max_tokens=4096,
     thinking={"type": "between_tools"},
     system=system_cached,
-    tools=GOVERNED_TOOLS,
+    tools=GOVERNED_TOOLS,  # fetch_3way_match_bundle, run_policy_tolerance_gate, commit (gate first)
     messages=loop_history,
 )""",
-    "hybrid_haiku_sonnet_governed": """# RUNG 3 LEVER 2: Haiku-First ERP Lookups + Conditional Sonnet Escalation (-92% Cost!)
-# Steps 1–2 run on Haiku 5.5 ($0.10/M in · $0.50/M out, $0.01/M cached read).
-# Escalates to Sonnet 5.5 ONLY when AP-POL-GATE-01 flags multi-factor commercial disputes!
+    "hybrid_haiku_sonnet_governed": """# RUNG 3: Rung 2's tools on Haiku 5.5, switching to Sonnet 5.5 when the gate flags escalation
+# The gate sets escalation_required when the debit note is above zero or 2+ discrepancies combine.
 active_model = "claude-haiku-5-5"
-for step in range(max_steps=4):
+for turn in range(5):  # step budget 4 + one wrap-up turn
     resp = await client.messages.create(
         model=active_model,
+        max_tokens=4096,
         thinking={"type": "between_tools"} if "sonnet" in active_model else {"type": "disabled"},
-        system=[{"type": "text", "text": AP_POLICY_MANUAL_TEXT, "cache_control": {"type": "ephemeral"}}],
+        system=[{"type": "text", "text": AP_POLICY_MANUAL_TEXT + HYBRID_PROTOCOL, "cache_control": {"type": "ephemeral"}}],
         tools=GOVERNED_TOOLS,
         messages=loop_history,
     )
-    gate_out = execute_sqlite_tool(resp)
+    gate_out = execute_sqlite_tools(resp)
     if gate_out and gate_out.get("escalation_required"):
-        active_model = "claude-sonnet-5-5"  # Escalate complex disputes only!""",
+        active_model = "claude-sonnet-5-5"  # from the next turn on
+""",
 }

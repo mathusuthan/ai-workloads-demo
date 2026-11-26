@@ -625,11 +625,15 @@ def test_cat5_sqlite_erp_and_policy_tolerance_gate_determinism() -> None:
     sess.close()
 
 
-def test_cat5_run_replay_proves_loop_governance_haiku_routing_and_100pct_accuracy(
+def test_cat5_run_replay_reproduces_recorded_runs(
     isolated_traces_dir: Path,
 ) -> None:
-    expected_esc = {"inv-01": False, "inv-02": True, "inv-03": False}
-    for pid, esc in expected_esc.items():
+    """Replay must reproduce the recorded runs as they happened (structure, tokens, stop reasons, escalation),
+    without asserting what the outcome should have been: the golden runs are ablation repeat 0, not selected."""
+    from app.archetypes.cat5_orchestration.runner import load_cat5_replays
+
+    golden = load_cat5_replays()["presets"]
+    for pid in ("inv-01", "inv-02", "inv-03"):
         resp = client.post("/api/cat5/run", json={"preset_id": pid, "mode": "replay"})
         assert resp.status_code == 200
         data = resp.json()
@@ -637,29 +641,24 @@ def test_cat5_run_replay_proves_loop_governance_haiku_routing_and_100pct_accurac
         assert len(data["portfolio_scorecard"]) == 3
 
         by_rung = {r["rung_id"]: r for r in data["results"]}
-        naive = by_rung["unbounded_sonnet_loop"]
-        bounded = by_rung["bounded_sonnet_cached_gate"]
+        for rid, rec in golden[pid]["rungs"].items():
+            res = by_rung[rid]
+            assert res["status"] == "ok"
+            assert [s["stop_reason"] for s in res["steps"]] == [s["stop_reason"] for s in rec["steps"]]
+            assert res["total_uncached_input_tokens"] == sum(s["input_tokens"] for s in rec["steps"])
+            assert res["total_cache_read_tokens"] == sum(s["cache_read_tokens"] for s in rec["steps"])
+            assert res["steps_used"] <= res["max_step_budget"] + (0 if rid == "unbounded_sonnet_loop" else 1)
+            assert res["evaluation"] is not None and (res["committed_voucher"] is None) == (rec["committed_voucher"] is None)
+            if rid != "unbounded_sonnet_loop":
+                assert res["total_cache_creation_tokens"] + res["total_cache_read_tokens"] > 0  # cached prefix engaged
+
         hybrid = by_rung["hybrid_haiku_sonnet_governed"]
-
-        naive_tot = (
-            naive["total_uncached_input_tokens"]
-            + naive["total_cache_creation_tokens"]
-            + naive["total_cache_read_tokens"]
+        gate_flagged = any(
+            (tc.get("gate_snapshot") or {}).get("escalation_required")
+            for st in golden[pid]["rungs"]["hybrid_haiku_sonnet_governed"]["steps"]
+            for tc in st["tool_calls"]
         )
-        assert naive_tot >= 25_000
-
-        for gov in (bounded, hybrid):
-            ev = gov["evaluation"]
-            assert ev["exact_match"] is True
-            assert ev["field_accuracy_pct"] == 100.0
-            assert ev["evidence_recall_pct"] == 100.0
-            assert ev["tool_precision_pct"] == 100.0
-            assert ev["within_step_budget"] is True
-            assert ev["gate_verified"] is True
-            assert gov["steps"][1]["finops"]["cache_read_tokens"] >= 4096
-
-        assert hybrid["escalated_to_sonnet"] is esc
-        assert hybrid["cold_run_cost_usd"] < bounded["cold_run_cost_usd"] < naive["cold_run_cost_usd"]
+        assert hybrid["escalated_to_sonnet"] is gate_flagged  # escalation follows the gate's flag, whatever it was
 
     cat5_dir = (
         isolated_traces_dir

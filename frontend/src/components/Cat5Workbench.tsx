@@ -38,6 +38,7 @@ import type {
   Cat5RunResponse,
   CreditShieldCredentials,
 } from '../types'
+import { Cat5AblationPanel } from './Cat5AblationPanel'
 import { NativeModal } from './NativeModal'
 
 interface Cat5WorkbenchProps {
@@ -179,10 +180,10 @@ export function Cat5Workbench({
       .map((r) => ({
         name:
           r.rung_id === 'unbounded_sonnet_loop'
-            ? '1. Unbounded ReAct'
+            ? '1. Raw tables'
             : r.rung_id === 'bounded_sonnet_cached_gate'
-              ? '2. Bounded Sonnet'
-              : '3. Haiku -> Sonnet',
+              ? '2. Narrow + gate'
+              : '3. Haiku + gate',
         'Uncached Input': r.total_uncached_input_tokens,
         'Cache W + R': r.total_cache_creation_tokens + r.total_cache_read_tokens,
         'Tool/Plan Out': r.total_output_tokens,
@@ -250,10 +251,11 @@ export function Cat5Workbench({
               {archetype.title} — {archetype.novamart_product_name}
             </h1>
             <p className="mt-1 max-w-4xl text-xs leading-relaxed text-slate-600 sm:text-sm">
-              Contrast an <strong>Unbounded Exploratory SELECT * ReAct Loop</strong> on Sonnet 5.5 against{' '}
-              <strong>Bounded Step Budgets + Cached SOP Manual + Deterministic AP-POL-GATE-01</strong> and{' '}
-              <strong>Haiku-First Tiered Routing (escalating to Sonnet only on multi-factor commercial disputes)</strong>{' '}
-              reconciling Purchase Orders, Goods Receipts, GSTR-2B / MSMED 45-day rules, and Contract Amendments in live SQLite.
+              Compare a <strong>free-choice loop over raw ERP tables</strong> on Sonnet 5.5 (rung 1) with{' '}
+              <strong>one narrow query + a cached policy manual + a deterministic policy gate</strong> (rung 2), and the{' '}
+              <strong>same on Haiku 5.5, switching to Sonnet when the gate flags the invoice</strong> (rung 3), reconciling
+              Purchase Orders, Goods Receipts, GSTR-2B / MSMED 45-day rules and Contract Amendments in live SQLite. The
+              experiment panel below separates what each change contributed.
             </p>
           </div>
 
@@ -287,8 +289,8 @@ export function Cat5Workbench({
                       {p.complexity_tier === 'hard_circuit_breaker'
                         ? 'Hard Block'
                         : p.complexity_tier === 'multi_factor_dispute'
-                          ? 'Escalate -> Sonnet'
-                          : 'Haiku Clean'}
+                          ? 'Multi-Factor Dispute'
+                          : 'Routine'}
                     </span>
                   </div>
                   <div className="mt-1.5 text-xs font-extrabold text-slate-900">{p.title}</div>
@@ -421,7 +423,7 @@ export function Cat5Workbench({
                       <div className="mt-0.5 font-mono text-[11px] text-slate-600">
                         {isHybrid
                           ? `Haiku steps: ${res.haiku_steps} · Sonnet steps: ${res.sonnet_steps}${
-                              res.escalated_to_sonnet ? ' (Escalated)' : ' (Haiku-Only!)'
+                              res.escalated_to_sonnet ? ' (escalated)' : ' (no escalation)'
                             }`
                           : `Anthropic · ${res.primary_model_id}`}
                       </div>
@@ -452,7 +454,7 @@ export function Cat5Workbench({
                             htmlFor={`cat5-budget-${res.rung_id}`}
                             className="font-bold text-slate-700"
                           >
-                            Max-Step Budget Usage
+                            {isNaive ? 'Turns Used (Safety Cap)' : 'Turns Used (Step Budget)'}
                           </label>
                           <span className="font-mono font-bold text-slate-800">
                             {res.steps_used} of {res.max_step_budget} turns
@@ -552,7 +554,7 @@ export function Cat5Workbench({
                 Cumulative Loop Cost by Step ($ / 1,000 Invoices)
               </h2>
               <p className="mb-3 text-[11px] text-slate-500">
-                Shows quadratic uncached SELECT * ramp across Steps 1–7 vs. 4-step governed trajectories
+                Running cost after each model turn on this invoice; each uncached turn resends the whole conversation
               </p>
               <div className="h-72 w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -565,7 +567,7 @@ export function Cat5Workbench({
                     <Line
                       type="monotone"
                       dataKey="naive1k"
-                      name="1. Unbounded ReAct"
+                      name="1. Raw tables, no cache"
                       stroke="#dc2626"
                       strokeWidth={2.5}
                       dot={{ r: 3 }}
@@ -573,7 +575,7 @@ export function Cat5Workbench({
                     <Line
                       type="monotone"
                       dataKey="bounded1k"
-                      name="2. Bounded Sonnet"
+                      name="2. Narrow query + cache + gate"
                       stroke="#2563eb"
                       strokeWidth={2}
                       dot={{ r: 3 }}
@@ -581,7 +583,7 @@ export function Cat5Workbench({
                     <Line
                       type="monotone"
                       dataKey="hybrid1k"
-                      name="3. Haiku -> Sonnet"
+                      name="3. Haiku + gate + escalation"
                       stroke="#0f766e"
                       strokeWidth={2.5}
                       dot={{ r: 4 }}
@@ -596,7 +598,7 @@ export function Cat5Workbench({
                 Total Loop Tokens by Architecture (Uncached In vs. Cached W+R vs. Output)
               </h2>
               <p className="mb-3 text-[11px] text-slate-500">
-                Projection-pruned JOINs + SOP caching slash uncached input bloat &gt;90% per invoice
+                Uncached input, cached prefix (written + read) and output tokens for this invoice
               </p>
               <div className="h-72 w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -621,10 +623,11 @@ export function Cat5Workbench({
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h2 className="text-sm font-extrabold text-slate-900">
-                    3-Invoice Portfolio Evaluation Scorecard (15 Ground-Truth Financial &amp; Decision Checks)
+                    Recorded Runs on the {runResponse.portfolio_scorecard[0]?.invoices_evaluated ?? 'Three'} Original Invoices (Voucher Checked Field by Field)
                   </h2>
                   <p className="text-[11px] text-slate-500">
-                    Aggregated across GST Escrow (`inv-01`), DOA + Amendment Dispute (`inv-02`), and Cancelled IRN Hard Block (`inv-03`)
+                    {presetsData.presets.map((p) => p.title).join(' · ')}. One recorded run per rung and invoice; the
+                    experiment panel below has repeated runs on more invoices.
                   </p>
                 </div>
               </div>
@@ -640,7 +643,7 @@ export function Cat5Workbench({
                   data-table="cat5-scorecard"
                 >
                   <caption id="cat5-scorecard-caption" className="sr-only">
-                    Portfolio accuracy, evidence recall, tool precision, and FinOps across all 3 invoices
+                    Voucher accuracy, evidence recall, tool precision and cost across the original invoices
                   </caption>
                   <thead className="bg-slate-100 text-[11px] font-bold uppercase tracking-wider text-slate-600">
                     <tr>
@@ -693,6 +696,11 @@ export function Cat5Workbench({
             </section>
           )}
 
+          <Cat5AblationPanel
+            portfolio={runResponse.ablation_portfolio}
+            invoiceNumbers={Object.fromEntries(presetsData.presets.map((p) => [p.id, p.invoice_id]))}
+          />
+
           {/* Interactive Agent Loop Trajectory & SQLite Voucher Ledger Inspector */}
           {activeRungObj && (
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -702,7 +710,7 @@ export function Cat5Workbench({
                     Interactive SQLite Agent Execution Trajectory &amp; Committed Voucher Ledger
                   </div>
                   <h2 className="text-base font-extrabold">
-                    Inspect step-by-step LLM tool calls, Haiku -&gt; Sonnet escalation, and live SQL queries for{' '}
+                    Inspect each model turn, its tool calls and SQL, and any Haiku -&gt; Sonnet switch for{' '}
                     {runResponse.invoice_id}
                   </h2>
                 </div>
@@ -720,10 +728,10 @@ export function Cat5Workbench({
                       }`}
                     >
                       {rid === 'unbounded_sonnet_loop'
-                        ? 'Rung 1: Unbounded'
+                        ? 'Rung 1: Raw Tables'
                         : rid === 'bounded_sonnet_cached_gate'
-                          ? 'Rung 2: Bounded Sonnet'
-                          : 'Rung 3: Hybrid Haiku'}
+                          ? 'Rung 2: Narrow + Gate'
+                          : 'Rung 3: Haiku + Gate'}
                     </button>
                   ))}
                 </div>
@@ -773,6 +781,16 @@ export function Cat5Workbench({
                                   ESCALATED FROM HAIKU
                                 </span>
                               )}
+                              <span
+                                className={`rounded px-2 py-0.5 font-mono text-[10px] font-bold ${
+                                  st.stop_reason === 'max_tokens'
+                                    ? 'bg-rose-100 text-rose-800'
+                                    : 'bg-slate-200 text-slate-700'
+                                }`}
+                                title="stop_reason returned by the API for this turn"
+                              >
+                                stop: {st.stop_reason}
+                              </span>
                             </div>
                             <span className="font-mono text-[10px] font-semibold text-slate-600">
                               {st.finops.input_tokens.toLocaleString()} in · {st.finops.cache_read_tokens.toLocaleString()} cr ·{' '}
@@ -801,7 +819,7 @@ export function Cat5Workbench({
                                       : 'bg-rose-100 text-rose-800'
                                   }`}
                                 >
-                                  {tc.is_optimal_call ? 'Projected Optimal' : 'Unprojected SELECT *'}
+                                  {tc.is_optimal_call ? 'Narrow / gate tool' : 'Raw SELECT *'}
                                 </span>
                                 {tc.gate_snapshot && Boolean(tc.gate_snapshot.circuit_breaker_halt) && (
                                   <span className="rounded bg-rose-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
@@ -829,6 +847,14 @@ export function Cat5Workbench({
                               </details>
                             </div>
                           ))}
+
+                          {(st.tool_calls_not_executed?.length ?? 0) > 0 && (
+                            <p className="mt-2 rounded bg-rose-50 px-2 py-1 font-mono text-[10px] text-rose-800 ring-1 ring-rose-200">
+                              Turn cut off at the output limit: {st.tool_calls_not_executed?.length} tool call
+                              {st.tool_calls_not_executed?.length === 1 ? '' : 's'} recorded but not executed (
+                              {st.tool_calls_not_executed?.map((c) => String(c.name ?? '?')).join(', ')})
+                            </p>
+                          )}
                         </li>
                       )
                     })}
@@ -961,7 +987,7 @@ export function Cat5Workbench({
                       CFO Autonomous AP Volume Simulator ({monthlyInvoices.toLocaleString()} Invoices / Month)
                     </h2>
                     <p className="text-[11px] text-slate-500">
-                      Compare monthly &amp; annual AP reconciliation spend across all 3 orchestration tiers
+                      This invoice's measured cost per run, multiplied out to a monthly and annual volume
                     </p>
                   </div>
                 </div>

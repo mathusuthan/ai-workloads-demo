@@ -33,6 +33,7 @@ from app.core.trace_store import (
 )
 from app.data.cat5_fixtures import AP_POLICY_MANUAL_MARKDOWN, CAT5_PRESETS
 from app.models import (
+    Cat5AblationPortfolio,
     Cat5CommittedVoucher,
     Cat5LoopStep,
     Cat5PortfolioRungRollup,
@@ -52,10 +53,13 @@ CAT5_RUNG_TO_PATTERN: dict[str, str] = {
     "hybrid_haiku_sonnet_governed": "hybrid_haiku_sonnet_governed_loop",
 }
 CAT5_BUDGETS: dict[str, int] = {
-    "unbounded_sonnet_loop": 10,
+    "unbounded_sonnet_loop": 12,  # safety cap on model turns (the ablation's neutral-arm cap)
     "bounded_sonnet_cached_gate": 4,
     "hybrid_haiku_sonnet_governed": 4,
 }
+# Live path: same per-turn output cap and timeout as the ablation harness (ablation.MAX_TOKENS_PER_TURN / CALL_TIMEOUT_S).
+CAT5_MAX_TOKENS = 4096
+CAT5_CALL_TIMEOUT_S = 180.0
 
 
 def _preset_map() -> dict[str, dict[str, Any]]:
@@ -69,33 +73,45 @@ def load_cat5_replays() -> dict[str, Any]:
     return json.loads(replays_file.read_text(encoding="utf-8"))
 
 
+def load_cat5_ablation_portfolio() -> Cat5AblationPortfolio | None:
+    """Six-arm ablation summary (replays/cat5_ablation_summary.json); None if absent or unreadable."""
+    path = Path(get_settings().replays_dir) / "cat5_ablation_summary.json"
+    if not path.is_file():
+        return None
+    try:
+        return Cat5AblationPortfolio.model_validate(json.loads(path.read_text(encoding="utf-8")))
+    except (ValueError, OSError):
+        return None
+
+
 def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
+    """Number-free fallback copy; `_apply_measured_claims` replaces result-dependent sentences."""
     if rung_id == "unbounded_sonnet_loop":
         return (
-            "1. Unbounded ReAct Loop (Sonnet 5.5)",
-            "Anti-Pattern: Uncached SELECT * Loop",
+            "1. Free-Choice Raw-Table Loop (Sonnet 5.5)",
+            "Baseline: Raw Tables, No Cache",
             [
-                # both notes replaced with measured steps / prompt tokens by _apply_measured_claims
-                "Fires unprojected SELECT * SQLite calls (WMS barcode dumps + 3-yr vendor audit trails) across multiple uncached Sonnet turns.",
-                "Cumulative prompt tokens explode into Band 4R with NO AP-POL-GATE-01 deterministic check before commit.",
+                "The model chooses which raw SELECT * table queries to run (several per turn allowed), does the policy "
+                "arithmetic itself and commits the voucher.",
+                "No prompt cache and no policy gate; a safety cap on model turns.",
             ],
         )
     if rung_id == "bounded_sonnet_cached_gate":
         return (
-            "2. Governed Loop + Cached Policy + Gate",
-            "Lever 1: Step Budget + Prefix Cache + Gate",
+            "2. Narrow Query + Cached Policy + Policy Gate",
+            "Narrow Query + Cache + Policy Gate",
             [
-                # both notes replaced with measured values by _apply_measured_claims
-                "Projected JOIN bundle shrinks tool noise, attaches cache_control on the SOP manual (-95% reads), and enforces a step budget.",
-                "AP-POL-GATE-01 runs deterministic Python math before commit_reconciliation_voucher.",
+                "One projected bundle query replaces the raw table dumps, and the policy manual is sent as a cached prefix.",
+                "The commit tool refuses until the deterministic policy gate (AP-POL-GATE-01) has computed the voucher; "
+                "the model copies its figures.",
             ],
         )
     return (
-        "3. Hybrid Haiku-First + Sonnet Escalation",
-        "Lever 2: Tier-Routed Agent",  # measured saving added by _apply_measured_claims
+        "3. Haiku + Policy Gate + Sonnet Escalation",
+        "Tiered Routing + Policy Gate",
         [
-            "Runs bundle fetch & AP-POL-GATE-01 on Haiku 5.5 ($0.10/M in · $0.01/M cached read); stays on Haiku for routine escrow & hard blocks.",
-            "Deterministically escalates Step 3+ to Sonnet 5.5 ONLY when AP-POL-GATE-01 flags a multi-factor commercial/amendment dispute.",
+            "Rung 2's tools and prompt on Haiku 5.5; the run switches to Sonnet 5.5 when the gate flags escalation.",
+            "The gate flags escalation whenever the debit note is above zero or two or more discrepancies combine.",
         ],
     )
 
@@ -156,7 +172,7 @@ def persist_cat5_trace(
         system_instruction=system_instruction,
         parameters=request_params
         or {
-            "max_tokens": 2048,
+            "max_tokens": CAT5_MAX_TOKENS,
             "endpoint": "messages.create",
             "thinking": {"type": "between_tools"} if "sonnet" in model_id else {"type": "disabled"},
         },
@@ -247,8 +263,20 @@ def finalize_cat5_rung_result(
     )
 
 
-def _apply_measured_claims(results: list[Cat5RungResult]) -> None:
-    """Rewrite result-dependent rung badges/notes with numbers measured on this invoice."""
+def _arm(portfolio: Cat5AblationPortfolio | None, arm_id: str) -> Any:
+    return next((a for a in (portfolio.arms if portfolio else []) if a.arm_id == arm_id and a.runs > 0), None)
+
+
+def _lever(portfolio: Cat5AblationPortfolio | None, name: str) -> Any:
+    return next((lv for lv in (portfolio.levers if portfolio else []) if lv.lever == name and lv.available), None)
+
+
+def _gate_disagreement(portfolio: Cat5AblationPortfolio | None) -> Any:
+    return next((g for g in (portfolio.gate_disagreement if portfolio else []) if g.gate_runs or g.no_gate_runs), None)
+
+
+def _apply_measured_claims(results: list[Cat5RungResult], portfolio: Cat5AblationPortfolio | None = None) -> None:
+    """Rewrite result-dependent rung notes with numbers measured on this invoice and in the ablation."""
     ok = {r.rung_id: r for r in results if r.status == "ok" and r.steps}
     naive = ok.get("unbounded_sonnet_loop")
     bounded = ok.get("bounded_sonnet_cached_gate")
@@ -258,37 +286,111 @@ def _apply_measured_claims(results: list[Cat5RungResult]) -> None:
         return r.total_uncached_input_tokens + r.total_cache_creation_tokens + r.total_cache_read_tokens
 
     if naive:
+        calls = [tc.tool_name for st in naive.steps for tc in st.tool_calls]
+        lookups = sum(1 for c in calls if c != "commit_reconciliation_voucher")
         set_note(
             naive,
             0,
-            "Fires unprojected SELECT * SQLite calls (WMS barcode dumps + 3-yr vendor audit trails) across "
-            f"{naive.steps_used} uncached Sonnet turns.",
+            f"The model chose {lookups} raw SELECT * table quer{'y' if lookups == 1 else 'ies'} across "
+            f"{naive.steps_used} turns (several per turn allowed), did the policy arithmetic itself and "
+            f"{'committed the voucher' if naive.committed_voucher else 'committed no voucher'}.",
         )
         set_note(
             naive,
             1,
-            f"Cumulative prompt tokens reach {prompt_tok(naive):,} with NO AP-POL-GATE-01 deterministic check before commit.",
+            f"No prompt cache and no policy gate: {prompt_tok(naive):,} prompt tokens this run; "
+            f"{naive.steps_used} of a {naive.max_step_budget}-turn safety cap used.",
         )
     if bounded:
         prefix = max(s.finops.cache_creation_tokens + s.finops.cache_read_tokens for s in bounded.steps)
-        text = f"Projected JOIN bundle + a cached ~{prefix / 1000:.1f}k-tok SOP prefix (-95% reads)"
+        text = f"One bundle query and a cached ~{prefix / 1000:.1f}k-token policy prefix"
         cut = pct_cut(naive.total_uncached_input_tokens, bounded.total_uncached_input_tokens) if naive else None
         if cut is not None:
             text += (
-                f" cut uncached prompt tokens {fmt_pct(cut)} vs Rung 1 "
-                f"({naive.total_uncached_input_tokens:,} → {bounded.total_uncached_input_tokens:,})"
+                f": uncached prompt tokens {naive.total_uncached_input_tokens:,} → {bounded.total_uncached_input_tokens:,} "
+                f"vs rung 1 ({fmt_pct(cut)} fewer)"
             )
-        set_note(bounded, 0, text + f", within a max {bounded.max_step_budget}-step budget.")
-        if bounded.evaluation is not None:
-            ev = bounded.evaluation
+        set_note(bounded, 0, text + ".")
+        ev = bounded.evaluation
+        gate_text = "The voucher is copied from the deterministic policy gate"
+        if ev is not None:
+            gate_text += f" (rupee fields {ev.matched_fields}/{ev.total_fields} on this invoice)"
+        lv = _lever(portfolio, "deterministic gate")
+        no_gate, with_gate = _arm(portfolio, "bundle_sonnet_cached"), _arm(portfolio, "bundle_gate_sonnet_cached")
+        gd = _gate_disagreement(portfolio)
+        if lv and no_gate and with_gate and lv.cost_billed_ratio is not None:
+            gate_text += (
+                f". In the {with_gate.runs}-run ablation, adding the gate to the same narrow-query setup changed turns "
+                f"{no_gate.turns_mean:.1f} → {with_gate.turns_mean:.1f} and cost per invoice by "
+                f"{(lv.cost_billed_ratio - 1) * 100:+.0f}%, with exact vouchers {no_gate.exact}/{no_gate.runs} → "
+                f"{with_gate.exact}/{with_gate.runs}"
+            )
+            if gd and gd.gate_runs:
+                gate_text += (
+                    f"; on invoice {gd.invoice_id}, where the gate itself is wrong, gated runs committed its figures in "
+                    f"{gd.gate_match_gate_output}/{gd.gate_runs} runs"
+                )
+        set_note(bounded, 1, gate_text + ".")
+    if hybrid:
+        set_note(
+            hybrid,
+            0,
+            f"Haiku 5.5 ran {hybrid.haiku_steps} turn{'s' if hybrid.haiku_steps != 1 else ''} and Sonnet 5.5 "
+            f"ran {hybrid.sonnet_steps} on this invoice "
+            f"({'the gate flagged escalation' if hybrid.escalated_to_sonnet else 'no escalation flagged'}).",
+        )
+        small, tiered = _arm(portfolio, "bundle_haiku_cached"), _arm(portfolio, "bundle_gate_haiku_escalate")
+        if small and tiered and small.cost_per_1k_billed_usd is not None and tiered.cost_per_1k_billed_usd is not None:
             set_note(
-                bounded,
+                hybrid,
                 1,
-                "AP-POL-GATE-01 runs deterministic Python math before commit_reconciliation_voucher — "
-                f"rupee fields matched {ev.matched_fields}/{ev.total_fields} on this invoice.",
+                f"In the ablation, Haiku with the narrow query and no gate committed {small.exact}/{small.runs} exact "
+                f"vouchers at ${small.cost_per_1k_billed_usd:.2f} per 1,000 invoices; adding the gate and escalation gave "
+                f"{tiered.exact}/{tiered.runs} at ${tiered.cost_per_1k_billed_usd:.2f} (escalation fired on "
+                f"{tiered.escalation_fired}/{tiered.runs} runs, because the gate flags every debit note).",
             )
-    if hybrid and naive:
-        hybrid.badge_text = f"Lever 2: Tier-Routed Agent (-{fmt_pct(hybrid.savings_vs_naive_cold_pct)} Cost)"
+
+
+def _orchestration_callout(
+    preset: dict[str, Any],
+    results: list[Cat5RungResult],
+    portfolio: Cat5AblationPortfolio | None,
+) -> str:
+    ok = {r.rung_id: r for r in results if r.status == "ok" and r.steps}
+    naive = ok.get("unbounded_sonnet_loop")
+    bounded = ok.get("bounded_sonnet_cached_gate")
+    hybrid = ok.get("hybrid_haiku_sonnet_governed")
+    parts: list[str] = []
+    if naive and bounded and hybrid:
+        exact = sum(1 for r in (naive, bounded, hybrid) if r.evaluation and r.evaluation.exact_match)
+        parts.append(
+            f"{preset['invoice_id']}: free-choice raw-table loop {naive.steps_used} turns, "
+            f"${naive.cost_per_1k_invoices_cold_usd:.2f} per 1,000 invoices; narrow query + cache + gate "
+            f"${bounded.cost_per_1k_invoices_cold_usd:.2f} cold / ${bounded.cost_per_1k_invoices_warm_usd:.2f} warm; "
+            f"Haiku + gate + escalation ${hybrid.cost_per_1k_invoices_cold_usd:.2f} cold / "
+            f"${hybrid.cost_per_1k_invoices_warm_usd:.2f} warm. Exact vouchers on this invoice: {exact}/3."
+        )
+    nq = _lever(portfolio, "narrow query")
+    ms = _lever(portfolio, "model swap without gate")
+    gt = _lever(portfolio, "deterministic gate")
+    ratios_ok = nq and ms and gt and None not in (nq.cost_billed_ratio, ms.cost_billed_ratio, gt.cost_billed_ratio)
+    if portfolio and portfolio.arms and ratios_ok:
+        low = min(a.exact for a in portfolio.arms if a.runs)
+        caps = sum(a.cap_hits for a in portfolio.arms)
+        parts.append(
+            f"Across {portfolio.pooled_runs} ablation runs ({len(portfolio.arms)} versions × {portfolio.runs_per_arm}) every "
+            f"version got at least {low}/{portfolio.runs_per_arm} vouchers exactly right. The narrow query cut cost "
+            f"{fmt_pct((1 - nq.cost_billed_ratio) * 100)} and the small model a further "
+            f"{fmt_pct((1 - ms.cost_billed_ratio) * 100)}; adding the policy gate raised cost "
+            f"{fmt_pct((gt.cost_billed_ratio - 1) * 100)} with exact vouchers {gt.exact_delta_pp:+.0f} pp; "
+            f"{caps} run{'s' if caps != 1 else ''} hit a step cap."
+        )
+    if not parts:
+        return (
+            "Category 5 compares a free-choice loop over raw ERP tables with a narrow query + cached policy + "
+            "deterministic gate, and the same on Haiku with Sonnet escalation, inside a live SQLite 3-way ERP."
+        )
+    return " ".join(parts)
 
 
 def _apply_cross_rung_savings(results: list[Cat5RungResult]) -> None:
@@ -357,10 +459,11 @@ async def _run_live_cat5_for_rung(
                 model_tier=active_model,
                 system_text=system_text,
                 tools=tools,
-                messages=messages,
+                messages=list(messages),
                 use_prefix_cache=use_cache,
                 api_key=api_key,
-                max_tokens=2048,
+                max_tokens=CAT5_MAX_TOKENS,
+                timeout_s=CAT5_CALL_TIMEOUT_S,
             )
             fin = compute_run_finops(
                 model_id=raw.model_id,
@@ -385,8 +488,18 @@ async def _run_live_cat5_for_rung(
 
             executed_traces: list[Cat5ToolCallTrace] = []
             tool_result_blocks: list[dict[str, Any]] = []
+            # A turn cut off by max_tokens may hold incomplete tool_use blocks: record them, never execute them.
+            # Otherwise every tool_use block is executed whatever the stop_reason (the API can return end_turn
+            # together with tool_use blocks) and the loop continues with their results.
+            truncated = raw.stop_reason == "max_tokens"
+            not_executed = (
+                [{"tool_use_id": str(tu.get("id") or ""), "name": str(tu.get("name") or ""), "input": dict(tu.get("input") or {})}
+                 for tu in tool_uses]
+                if truncated
+                else []
+            )
 
-            for tu in tool_uses:
+            for tu in ([] if truncated else tool_uses):
                 t_name = str(tu.get("name") or "")
                 t_id = str(tu.get("id") or "")
                 t_input = dict(tu.get("input") or {})
@@ -427,9 +540,10 @@ async def _run_live_cat5_for_rung(
                 step_number=step_idx,
                 model_id=raw.model_id,
                 escalated_from_haiku=is_escalated_turn,
-                stop_reason=raw.stop_reason or "end_turn",
+                stop_reason=raw.stop_reason or "none",
                 assistant_thought=thought_text[:1200],
                 tool_calls=executed_traces,
+                tool_calls_not_executed=not_executed,
                 latency_ms=raw.latency_ms,
                 finops=fin,
                 cumulative_cold_cost_usd=cum_cold,
@@ -444,15 +558,19 @@ async def _run_live_cat5_for_rung(
                     "stop_reason": step_obj.stop_reason,
                     "assistant_thought": step_obj.assistant_thought,
                     "tool_calls": [tc.model_dump() for tc in executed_traces],
+                    "tool_calls_not_executed": not_executed,
                     "latency_ms": raw.latency_ms,
                     "input_tokens": raw.input_tokens,
                     "output_tokens": raw.output_tokens,
+                    "thinking_tokens": int(raw.thinking_tokens or 0),
                     "cache_creation_tokens": raw.cache_creation_tokens,
                     "cache_read_tokens": raw.cache_read_tokens,
+                    "max_tokens": CAT5_MAX_TOKENS,
                 }
             )
 
-            if raw.stop_reason != "tool_use" or not tool_result_blocks:
+            # Only a turn without tool calls (or a truncated turn) ends the run.
+            if truncated or not tool_result_blocks:
                 final_readout = raw.raw_text
                 break
 
@@ -547,6 +665,7 @@ def _build_cat5_result_from_replay(
                 stop_reason=str(rs.get("stop_reason") or "end_turn"),
                 assistant_thought=str(rs.get("assistant_thought") or ""),
                 tool_calls=[Cat5ToolCallTrace(**tc) for tc in (rs.get("tool_calls") or [])],
+                tool_calls_not_executed=list(rs.get("tool_calls_not_executed") or []),
                 latency_ms=int(rs.get("latency_ms") or 0),
                 finops=fin,
                 cumulative_cold_cost_usd=cum_cold,
@@ -589,16 +708,19 @@ def _build_portfolio_scorecard(
         "bounded_sonnet_cached_gate": [],
         "hybrid_haiku_sonnet_governed": [],
     }
+    by_rung_presets: dict[str, list[dict[str, Any]]] = {rid: [] for rid in by_rung_runs}
     for preset in CAT5_PRESETS:
         pid = preset["id"]
         if pid == active_preset_id:
             for res in active_results:
                 if res.status == "ok":
                     by_rung_runs[res.rung_id].append(res)
+                    by_rung_presets[res.rung_id].append(preset)
             continue
         rungs_map = (presets_replays.get(pid) or {}).get("rungs") or {}
         for rid in by_rung_runs:
             if rid in rungs_map:
+                by_rung_presets[rid].append(preset)
                 by_rung_runs[rid].append(
                     _build_cat5_result_from_replay(
                         rung_id=rid,
@@ -644,15 +766,15 @@ def _build_portfolio_scorecard(
             naive_cold_avg = cold_1k_avg
 
         label, _, _ = _rung_metadata(rid)
-        routing_desc = (
-            "claude-sonnet-5-5 (Uncached 6-tool loop)"
-            if rid == "unbounded_sonnet_loop"
-            else (
-                "claude-sonnet-5-5 (Cached SOP + AP Gate)"
-                if rid == "bounded_sonnet_cached_gate"
-                else "Haiku 5.5 -> Sonnet 5.5 only on inv-02 dispute"
+        if rid == "unbounded_sonnet_loop":
+            routing_desc = "claude-sonnet-5-5 (raw tables, uncached, no gate)"
+        elif rid == "bounded_sonnet_cached_gate":
+            routing_desc = "claude-sonnet-5-5 (bundle + cached policy + gate)"
+        else:
+            escalated_on = [p["id"] for p, r in zip(by_rung_presets[rid], runs) if r.escalated_to_sonnet]
+            routing_desc = (
+                f"Haiku 5.5 -> Sonnet 5.5 on {', '.join(escalated_on)}" if escalated_on else "Haiku 5.5 only"
             )
-        )
         rollups.append(
             Cat5PortfolioRungRollup(
                 rung_id=rid,
@@ -744,8 +866,9 @@ async def execute_cat5_run(
             credit_shield.record_server_spend(total_spend)
         mode_used = "live"
 
+    portfolio = load_cat5_ablation_portfolio()
     _apply_cross_rung_savings(results)
-    _apply_measured_claims(results)
+    _apply_measured_claims(results, portfolio)
 
     # Persist 1 partitioned trace rollup per rung
     for res in results:
@@ -782,10 +905,11 @@ async def execute_cat5_run(
             },
             request_params={
                 "endpoint": "messages.create",
+                "max_tokens": CAT5_MAX_TOKENS,
                 "max_step_budget": res.max_step_budget,
                 "prefix_cache_enabled": res.rung_id != "unbounded_sonnet_loop",
             },
-            stop_reason="end_turn",
+            stop_reason=res.steps[-1].stop_reason if res.steps else None,
             extra_metadata={"source_endpoint": "/api/cat5/run", "rung_id": res.rung_id},
         )
 
@@ -795,26 +919,7 @@ async def execute_cat5_run(
         replays=replays,
     )
 
-    naive = next((r for r in results if r.rung_id == "unbounded_sonnet_loop" and r.status == "ok"), None)
-    bounded = next((r for r in results if r.rung_id == "bounded_sonnet_cached_gate" and r.status == "ok"), None)
-    hybrid = next((r for r in results if r.rung_id == "hybrid_haiku_sonnet_governed" and r.status == "ok"), None)
-
-    if naive and bounded and hybrid:
-        callout = (
-            f"3-Way ERP Orchestration FinOps ({preset['invoice_id']}): Unbounded ReAct Loop burned {naive.steps_used} steps "
-            f"({naive.total_uncached_input_tokens:,} uncached in tok -> ${naive.cost_per_1k_invoices_cold_usd:.2f}/1k invoices, "
-            f"tool prec {naive.evaluation.tool_precision_pct if naive.evaluation else 0:.0f}%). "
-            f"Bounded Gate + Cached SOP cuts to ${bounded.cost_per_1k_invoices_cold_usd:.2f}/1k cold "
-            f"(${bounded.cost_per_1k_invoices_warm_usd:.2f}/1k warm, -{bounded.savings_vs_naive_cold_pct:.1f}%), and "
-            f"Hybrid Haiku -> Sonnet Escalation drops spend to ${hybrid.cost_per_1k_invoices_cold_usd:.2f}/1k cold "
-            f"(${hybrid.cost_per_1k_invoices_warm_usd:.2f}/1k warm, -{hybrid.savings_vs_naive_cold_pct:.1f}%) "
-            f"with {hybrid.evaluation.field_accuracy_pct if hybrid.evaluation else 100:.0f}% rupee accuracy!"
-        )
-    else:
-        callout = (
-            "Category 5 compares Unbounded Exploratory ReAct Loops vs. Bounded Cached Policy + Deterministic Gate vs. "
-            "Haiku-First Tiered Routing inside a live SQLite 3-Way ERP Reconciliation Engine."
-        )
+    callout = _orchestration_callout(preset, results, portfolio)
 
     return Cat5RunResponse(
         mode_used=mode_used,  # type: ignore[arg-type]
@@ -831,4 +936,5 @@ async def execute_cat5_run(
         results=results,
         portfolio_scorecard=scorecard,
         orchestration_callout=callout,
+        ablation_portfolio=portfolio,
     )

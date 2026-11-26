@@ -179,7 +179,7 @@ ARCHETYPES_CATALOG = [
         ),
         "novamart_story": (
             "Reconciles vendor invoices against Purchase Orders and warehouse Goods Receipts in a live "
-            "SQLite ERP, stopping immediately on tolerance violations or step-budget limits."
+            "SQLite ERP and commits a payment voucher, scored field by field against a hand-derived answer."
         ),
         "status": "live",
         "blog_post_number": 5,

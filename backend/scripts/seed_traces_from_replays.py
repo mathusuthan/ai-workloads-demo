@@ -1,7 +1,7 @@
 """Seed backend/traces/ from the golden replays.
 
 Default: clears every prior `live_captured_seed` trace (all categories) and re-seeds Categories 1-6.
-`--cat3-only` / `--cat4-only` / `--cat6-only`: appends that category's seeds only, without deleting or rewriting any other
+`--cat3-only` / `--cat4-only` / `--cat5-only` / `--cat6-only`: appends that category's seeds only, without deleting or rewriting any other
 trace (older seeds of that category stay on disk and are superseded by the new ones).
 """
 
@@ -67,6 +67,7 @@ from app.archetypes.cat5_orchestration.prompts import (  # noqa: E402
 )
 from app.archetypes.cat5_orchestration.runner import (  # noqa: E402
     CAT5_BUDGETS,
+    CAT5_MAX_TOKENS,
     CAT5_RUNG_TO_PATTERN,
     _build_cat5_result_from_replay,
     load_cat5_replays,
@@ -386,73 +387,7 @@ def seed_all() -> None:
 
     written += seed_cat4()
 
-    # Seed Category 5 traces (9 orchestration rollups across 3 invoices x 3 rungs)
-    cat5_replays = load_cat5_replays()
-    cat5_presets_replays = cat5_replays.get("presets") or {}
-    for preset in CAT5_PRESETS:
-        pid = preset["id"]
-        if pid not in cat5_presets_replays:
-            continue
-        rungs_map = cat5_presets_replays[pid].get("rungs") or {}
-        run_group = f"seed-cat5-{pid}"
-        for rung_id in (
-            "unbounded_sonnet_loop",
-            "bounded_sonnet_cached_gate",
-            "hybrid_haiku_sonnet_governed",
-        ):
-            if rung_id not in rungs_map:
-                continue
-            res = _build_cat5_result_from_replay(
-                rung_id=rung_id,
-                preset=preset,
-                raw_rung=rungs_map[rung_id],
-            )
-            fin_model = (
-                "claude-haiku-5-5"
-                if rung_id == "hybrid_haiku_sonnet_governed" and not res.escalated_to_sonnet
-                else "claude-sonnet-5-5"
-            )
-            rollup_fin = rollup_multi_call_finops(
-                calls=[s.finops for s in res.steps],
-                total_cost_usd=res.cold_run_cost_usd,
-                model_id=fin_model,
-                model_label=res.primary_model_id,
-            ).model_dump()
-            persist_cat5_trace(
-                source_mode="live_captured_seed",
-                run_group_id=run_group,
-                item_id=pid,
-                item_title=preset["title"],
-                model_id=fin_model,
-                pattern=CAT5_RUNG_TO_PATTERN[rung_id],
-                system_instruction=get_cat5_system_prompt(rung_id),
-                payload_text=build_cat5_user_task_prompt(preset),
-                status="ok",
-                latency_ms=res.total_latency_ms,
-                finops_dict=rollup_fin,
-                raw_text=res.final_readout,
-                structured_output={
-                    "steps_used": res.steps_used,
-                    "haiku_steps": res.haiku_steps,
-                    "sonnet_steps": res.sonnet_steps,
-                    "escalated_to_sonnet": res.escalated_to_sonnet,
-                    "committed_voucher": res.committed_voucher.model_dump()
-                    if res.committed_voucher
-                    else None,
-                    "evaluation": res.evaluation.model_dump() if res.evaluation else None,
-                },
-                request_params={
-                    "endpoint": "messages.create",
-                    "max_step_budget": CAT5_BUDGETS[rung_id],
-                    "prefix_cache_enabled": rung_id != "unbounded_sonnet_loop",
-                },
-                stop_reason="end_turn",
-                extra_metadata={
-                    "source_endpoint": "capture_cat5_replays.py",
-                    "rung_id": rung_id,
-                },
-            )
-            written += 1
+    written += seed_cat5()
 
     written += seed_cat6()
 
@@ -798,6 +733,112 @@ def seed_cat4() -> int:
     return written
 
 
+def _cat5_system_text(rung_id: str, prov: dict) -> str:
+    """The system text the recorded run actually received: the ablation's (nonce line + base) when it matches the
+    recorded sha256, else today's rung prompt."""
+    from app.archetypes.cat5_orchestration.ablation import _sha, system_text_for
+
+    arm_id, nonce, want = prov.get("arm_id"), prov.get("run_nonce"), prov.get("system_text_sha256")
+    if arm_id and want:
+        text = system_text_for(str(arm_id), nonce)
+        if _sha(text) == want:
+            return text
+    return get_cat5_system_prompt(rung_id)
+
+
+def seed_cat5() -> int:
+    """Seed Category 5 traces (one orchestration rollup per invoice x rung) from cat5_golden_replays.json; appends only.
+
+    When the golden replays come from the ablation (scripts/build_cat5_golden_from_ablation.py) the traces carry the
+    real stop reason of the last turn, the per-turn max_tokens, the system text the run received and the ablation
+    provenance; older Category 5 seeds stay on disk and are superseded by these (newest seed per
+    category/model/pattern/item)."""
+    from app.archetypes.cat5_orchestration.ablation import ABLATION_GOLDEN_SOURCE
+
+    written = 0
+    cat5_replays = load_cat5_replays()
+    from_ablation = (cat5_replays.get("provenance") or {}).get("source") == ABLATION_GOLDEN_SOURCE
+    source_endpoint = "build_cat5_golden_from_ablation.py" if from_ablation else "capture_cat5_replays.py"
+    cat5_presets_replays = cat5_replays.get("presets") or {}
+    for preset in CAT5_PRESETS:
+        pid = preset["id"]
+        if pid not in cat5_presets_replays:
+            continue
+        rungs_map = cat5_presets_replays[pid].get("rungs") or {}
+        rung_prov = cat5_presets_replays[pid].get("provenance") or {}
+        run_group = f"seed-cat5-ablation-{pid}" if from_ablation else f"seed-cat5-{pid}"
+        for rung_id in (
+            "unbounded_sonnet_loop",
+            "bounded_sonnet_cached_gate",
+            "hybrid_haiku_sonnet_governed",
+        ):
+            if rung_id not in rungs_map:
+                continue
+            raw_rung = rungs_map[rung_id]
+            prov = rung_prov.get(rung_id) or {}
+            res = _build_cat5_result_from_replay(
+                rung_id=rung_id,
+                preset=preset,
+                raw_rung=raw_rung,
+            )
+            fin_model = (
+                "claude-haiku-5-5"
+                if rung_id == "hybrid_haiku_sonnet_governed" and not res.escalated_to_sonnet
+                else "claude-sonnet-5-5"
+            )
+            rollup_fin = rollup_multi_call_finops(
+                calls=[s.finops for s in res.steps],
+                total_cost_usd=res.cold_run_cost_usd,
+                model_id=fin_model,
+                model_label=res.primary_model_id,
+            ).model_dump()
+            steps = raw_rung.get("steps") or []
+            last_stop = (steps[-1].get("stop_reason") if steps else None) if from_ablation else "end_turn"
+            request_params = {
+                "endpoint": "messages.create",
+                "max_step_budget": CAT5_BUDGETS[rung_id],
+                "prefix_cache_enabled": rung_id != "unbounded_sonnet_loop",
+            }
+            meta = {"source_endpoint": source_endpoint, "rung_id": rung_id}
+            if from_ablation:
+                request_params["max_tokens"] = max((int(st.get("max_tokens") or 0) for st in steps), default=CAT5_MAX_TOKENS)
+                meta.update({
+                    "ablation_arm_id": prov.get("arm_id"),
+                    "ablation_run_id": prov.get("run_id"),
+                    "repeat_index": prov.get("repeat_index"),
+                    "turn_stop_reasons": [st.get("stop_reason") for st in steps],
+                })
+            persist_cat5_trace(
+                source_mode="live_captured_seed",
+                run_group_id=run_group,
+                item_id=pid,
+                item_title=preset["title"],
+                model_id=fin_model,
+                pattern=CAT5_RUNG_TO_PATTERN[rung_id],
+                system_instruction=_cat5_system_text(rung_id, prov) if from_ablation else get_cat5_system_prompt(rung_id),
+                payload_text=build_cat5_user_task_prompt(preset),
+                status="ok",
+                latency_ms=res.total_latency_ms,
+                finops_dict=rollup_fin,
+                raw_text=res.final_readout,
+                structured_output={
+                    "steps_used": res.steps_used,
+                    "haiku_steps": res.haiku_steps,
+                    "sonnet_steps": res.sonnet_steps,
+                    "escalated_to_sonnet": res.escalated_to_sonnet,
+                    "committed_voucher": res.committed_voucher.model_dump()
+                    if res.committed_voucher
+                    else None,
+                    "evaluation": res.evaluation.model_dump() if res.evaluation else None,
+                },
+                request_params=request_params,
+                stop_reason=last_stop,
+                extra_metadata=meta,
+            )
+            written += 1
+    return written
+
+
 def seed_cat6() -> int:
     """Seed Category 6 traces (9 swarm rollups: 3 incidents x 3 rungs) from cat6_golden_replays.json.
 
@@ -894,13 +935,22 @@ def main(argv: list[str] | None = None) -> None:
         help="append Category 3 seed traces only; no other trace is deleted or rewritten",
     )
     ap.add_argument(
+        "--cat5-only",
+        action="store_true",
+        help="append Category 5 seed traces only; no other trace is deleted or rewritten",
+    )
+    ap.add_argument(
         "--cat4-only",
         action="store_true",
         help="append Category 4 seed traces only; no other trace is deleted or rewritten",
     )
     args = ap.parse_args(argv)
-    if sum(map(bool, (args.cat3_only, args.cat4_only, args.cat6_only))) > 1:
-        ap.error("--cat3-only, --cat4-only and --cat6-only are mutually exclusive")
+    if sum(map(bool, (args.cat3_only, args.cat4_only, args.cat5_only, args.cat6_only))) > 1:
+        ap.error("--cat3-only, --cat4-only, --cat5-only and --cat6-only are mutually exclusive")
+    if args.cat5_only:
+        n = seed_cat5()
+        print(f"Seeded {n} Category 5 trace files into {get_settings().traces_dir} (append-only)")
+        return
     if args.cat4_only:
         n = seed_cat4()
         print(f"Seeded {n} Category 4 trace files into {get_settings().traces_dir} (append-only)")

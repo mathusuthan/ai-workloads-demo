@@ -1101,6 +1101,8 @@ export interface Cat5LoopStep {
   stop_reason: string
   assistant_thought: string
   tool_calls: Cat5ToolCallTrace[]
+  /** tool_use blocks of a turn cut off by max_tokens: recorded, never executed */
+  tool_calls_not_executed?: Record<string, unknown>[]
   latency_ms: number
   finops: FinOpsBreakdown
   cumulative_cold_cost_usd: number
@@ -1199,6 +1201,155 @@ export interface Cat5RunResponse {
   results: Cat5RungResult[]
   portfolio_scorecard: Cat5PortfolioRungRollup[]
   orchestration_callout: string
+  /** Six-version Category 5 ablation (replays/cat5_ablation_summary.json); null when absent */
+  ablation_portfolio?: Cat5AblationPortfolio | null
+}
+
+export interface Cat5AblationCell {
+  runs: number
+  exact: number
+  exact_rate: number | null
+  exact_wilson95: number[] | null
+  decision_correct: number
+  committed: number
+  field_accuracy_pct_mean: number | null
+  evidence_recall_pct_mean: number | null
+  tool_precision_pct_mean: number | null
+  turns_mean: number | null
+  turns_min: number | null
+  turns_max: number | null
+  cap_hits: number
+  truncated_turns: number
+  escalation_expected: number
+  escalation_fired: number
+  uncached_input_tokens_mean: number | null
+  cache_write_tokens_mean: number | null
+  cache_read_tokens_mean: number | null
+  output_tokens_mean: number | null
+  cost_per_1k_billed_usd: number | null
+  cost_per_1k_cold_usd: number | null
+  cost_per_1k_warm_usd: number | null
+}
+
+export interface Cat5AblationArm extends Cat5AblationCell {
+  arm_id: string
+  label: string
+  adds: string
+  runnable_in_app: boolean
+  app_rung_id: Cat5RungId | null
+  tool_set: string
+  cached: boolean
+  start_model: string
+  gate: boolean
+  escalate: boolean
+  turn_cap: number
+  tool_calls_per_run: Record<string, number | null>
+  runs_calling_tool: Record<string, number>
+  disallowed_tool_calls: number
+  disallowed_by_name: Record<string, number>
+  by_tier: Record<string, Cat5AblationCell>
+  by_invoice: Record<string, Cat5AblationCell>
+}
+
+export interface Cat5AblationLever {
+  lever: string
+  label: string
+  from_arm: string
+  to_arm: string
+  changes: string[]
+  available: boolean
+  exact_from: number | null
+  exact_to: number | null
+  exact_delta_pp: number | null
+  decision_delta_pp: number | null
+  cost_billed_from: number | null
+  cost_billed_to: number | null
+  cost_billed_delta: number | null
+  cost_billed_ratio: number | null
+  cost_cold_from: number | null
+  cost_cold_to: number | null
+  cost_cold_delta: number | null
+  cost_cold_ratio: number | null
+  cost_warm_from: number | null
+  cost_warm_to: number | null
+  cost_warm_delta: number | null
+  cost_warm_ratio: number | null
+}
+
+export interface Cat5AblationBaselineRow {
+  preset_id: string
+  source: 'original_scripted' | 'free_choice'
+  runs: number
+  exact: number
+  decision_correct: number
+  turns_mean: number | null
+  tool_calls_mean: number | null
+  prompt_tokens_mean: number | null
+  output_tokens_mean: number | null
+  cost_per_1k_billed_usd: number | null
+}
+
+export interface Cat5GateDisagreementArm {
+  arm_id: string
+  gate_arm: boolean
+  runs: number
+  matches_manual: number
+  matches_gate_output: number
+  neither: number
+  no_commit: number
+  decisions: Record<string, number>
+  line1_rate: Record<string, number>
+}
+
+export interface Cat5GateDisagreement {
+  preset_id: string
+  invoice_id: string
+  ruling: string
+  manual_text: string
+  manual_truth: Record<string, unknown>
+  manual_calculation: string[]
+  gate_output_truth: Record<string, unknown>
+  gate_calculation: string[]
+  line1: Record<string, unknown>
+  bundle_note: string
+  per_arm: Cat5GateDisagreementArm[]
+  no_gate_runs: number
+  no_gate_match_manual: number
+  gate_runs: number
+  gate_match_gate_output: number
+  gate_match_manual: number
+  missing_keys: number
+}
+
+export interface Cat5AblationPortfolio {
+  schema_version: number
+  source: string
+  source_file: string | null
+  fixture_version: string | null
+  record_count: number
+  pooled_runs: number
+  gate_disagreement_runs: number
+  live_runs_used: number
+  error_records: number
+  superseded_records: number
+  superseded_reasons: string[]
+  invoices_pooled: string[]
+  invoice_count_pooled: number
+  invoice_count_total: number
+  repeats: number
+  matrix_complete: boolean
+  runs_per_arm: number
+  settings: Record<string, unknown>
+  tiers: Record<string, string | null>
+  arms: Cat5AblationArm[]
+  levers: Cat5AblationLever[]
+  baseline: Cat5AblationBaselineRow[]
+  baseline_note: string
+  gate_disagreement: Cat5GateDisagreement[]
+  data_quality: Record<string, number>
+  non_exact_runs: Record<string, unknown>[]
+  notes: string[]
+  golden_mapping: Record<string, unknown>
 }
 
 // --- Category 6: Multi-Agent Swarms & Auto Eng (Checkout CI Swarm + CpO) ---

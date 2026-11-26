@@ -3,7 +3,7 @@
 Reads these sources and writes a JSON + Markdown report:
 
 1. backend/traces/            -> de-duplication audit (how many traces are distinct runs)
-2. backend/replays/*.json     -> the canonical dataset for Categories 1, 2 and 5: one record per (item x rung),
+2. backend/replays/*.json     -> the canonical dataset for Categories 1 and 2: one record per (item x rung),
                                  with per-call token counts and the model that served each call
 3. backend/experiments/cat3_quality/runs.jsonl (read-only) + backend/replays/cat3_quality_summary.json
                                  (fallback analysis/cat3_quality_rerun.json)
@@ -21,6 +21,12 @@ Reads these sources and writes a JSON + Markdown report:
                               -> Category 4: all quality-rerun records (4 rungs x 2 corpus sizes x 3 sessions of
                                  8 questions = 192 answers) for cost and tokens; answer-key and blind-grader quality
                                  and the break-even tables from the summary (falls back to the golden replays)
+5b. backend/experiments/cat5_ablation/runs.jsonl (read-only) + backend/replays/cat5_ablation_summary.json
+                                 (fallback analysis/cat5_ablation.json)
+                              -> Category 5: the six-version ablation, 198 pooled runs (6 versions x 11 invoices x 3
+                                 repeats) selected by the summary's run ids, costs recomputed from each turn's tokens;
+                                 quality, levers, the baseline and the gate-disagreement invoice (inv-06) from the
+                                 summary (falls back to the golden replays if the records cannot be read)
 6. backend/experiments/cat6_fair_rerun/runs.jsonl (read-only) + analysis/cat6_fair_rerun.json
                               -> Category 6: all fair-rerun records (4 arms x 3 incidents x 5 repeats);
                                  verdicts from the summary's `rescored` section (current sandbox),
@@ -64,6 +70,16 @@ CAT4_SYNTH_MAX_TOKENS = 4096  # records at another synthesis cap are superseded 
 CAT4_APP_MAX_TOKENS_BEFORE = 2048
 CAT4_RUNGS = ["naive_full_corpus", "cached_full_corpus_citations", "hybrid_rag_rerank_citations", "cached_rerank_hybrid"]
 CAT4_SCALES = [1, 3]
+CAT5_ABLATION = BACKEND / "experiments" / "cat5_ablation" / "runs.jsonl"
+CAT5_ABLATION_SUMMARY = REPLAYS / "cat5_ablation_summary.json"
+CAT5_ABLATION_ANALYSIS = OUT_DIR / "cat5_ablation.json"
+CAT5_ARMS = ["raw_free_sonnet", "raw_free_sonnet_cached", "bundle_sonnet_cached", "bundle_gate_sonnet_cached",
+             "bundle_haiku_cached", "bundle_gate_haiku_escalate"]
+CAT5_APP_RUNGS = ["unbounded_sonnet_loop", "bounded_sonnet_cached_gate", "hybrid_haiku_sonnet_governed"]
+CAT5_ARM_FOR_RUNG = {"unbounded_sonnet_loop": "raw_free_sonnet", "bounded_sonnet_cached_gate": "bundle_gate_sonnet_cached",
+                     "hybrid_haiku_sonnet_governed": "bundle_gate_haiku_escalate"}
+CAT5_LEVERS = ["caching alone", "narrow query", "deterministic gate", "model swap without gate", "gate + tiering",
+               "gate Sonnet -> gate Haiku escalate"]
 CAT6_RERUN = BACKEND / "experiments" / "cat6_fair_rerun" / "runs.jsonl"
 CAT6_RERUN_SUMMARY = OUT_DIR / "cat6_fair_rerun.json"
 CAT6_ARMS = ["shared_bus_original", "shared_bus_matched_gate", "isolated_cached_gate", "tiered_gate"]
@@ -609,7 +625,8 @@ def cat4_quality():
         return None, None, {"file": None, "reason": "neither backend/replays/cat4_quality_summary.json nor analysis/cat4_quality_rerun.json could be read"}
 
 
-def cat5_units(seeds):
+def cat5_golden_units(seeds):
+    """Fallback: one unit per (invoice x app rung) from the golden replays, quality from the seed traces."""
     d = load(5)
     pat = {"unbounded_sonnet_loop": "unbounded_uncached_react_loop", "bounded_sonnet_cached_gate": "bounded_sonnet_cached_gate",
            "hybrid_haiku_sonnet_governed": "hybrid_haiku_sonnet_governed_loop"}
@@ -626,6 +643,98 @@ def cat5_units(seeds):
                                 "optimal_tool_calls": r["optimal_tool_calls"], "escalated": any(c["model"] == SONNET for c in calls) and rung.startswith("hybrid"),
                                 "decision": (r.get("committed_voucher") or {}).get("decision"), "evaluation": ev})
     return units
+
+
+def _cat5_priced_model(t):
+    m = t.get("model_id")
+    return m if m in RATE_CARDS["official"] else (t.get("intended_model_id") or SONNET)
+
+
+def cat5_ablation_info():
+    """Quality, levers, inv-06 and the record selection, from replays/cat5_ablation_summary.json, falling back to
+    analysis/cat5_ablation.json. Returns (info, source); info is None when neither file can be read."""
+    try:
+        d = json.loads(CAT5_ABLATION_SUMMARY.read_text())
+        arms = {a["arm_id"]: {
+            "label": a["label"], "runs": a["runs"], "exact": a["exact"], "decision_correct": a["decision_correct"],
+            "wilson": a.get("exact_wilson95"), "turns_mean": a["turns_mean"], "turns_min": a["turns_min"], "turns_max": a["turns_max"],
+            "turn_cap": a["turn_cap"], "cap_hits": a["cap_hits"], "truncated_turns": a["truncated_turns"],
+            "escalation_fired": a["escalation_fired"], "escalation_expected": a["escalation_expected"],
+            "tool_calls_per_run": a["tool_calls_per_run"], "runs_calling_tool": a["runs_calling_tool"], "tool_set": a["tool_set"],
+            "summary_cost_billed": a["cost_per_1k_billed_usd"]} for a in d["arms"]}
+        levers = [{"lever": lv["lever"], "label": lv.get("label") or lv["lever"], "from": lv["from_arm"], "to": lv["to_arm"],
+                   "changes": lv["changes"], "exact_delta_pp": lv["exact_delta_pp"]} for lv in d["levers"] if lv.get("available")]
+        g = (d.get("gate_disagreement") or [None])[0]
+        gd = None if not g else {k: g[k] for k in ("preset_id", "invoice_id", "manual_truth", "gate_output_truth", "line1", "no_gate_runs",
+                                                   "no_gate_match_manual", "gate_runs", "gate_match_gate_output", "gate_match_manual")}
+        if gd:
+            gd["per_arm"] = {x["arm_id"]: {k: x[k] for k in ("runs", "matches_manual", "matches_gate_output", "gate_arm", "line1_rate")} for x in g["per_arm"]}
+        scripted = {pid: [call(st["model_id"], st["input_tokens"], st["output_tokens"], st.get("cache_creation_tokens"), st.get("cache_read_tokens"))
+                          for st in c["steps"]] for pid, c in (d.get("original_scripted_captures") or {}).items()}
+        scripted_q = {r["preset_id"]: {"exact": r["exact"], "runs": r["runs"], "turns": r["turns_mean"]}
+                      for r in d.get("baseline") or [] if r["source"] == "original_scripted"}
+        info = {"arms": arms, "levers": levers, "gate_disagreement": gd, "run_ids": d.get("run_ids"), "scripted_calls": scripted,
+                "scripted_quality": scripted_q, "data_quality": d.get("data_quality") or {}, "non_exact_runs": d.get("non_exact_runs") or [],
+                "invoices_pooled": d.get("invoice_count_pooled"), "invoices_total": d.get("invoice_count_total"), "repeats": d.get("repeats"),
+                "settings": d.get("settings") or {}, "superseded_records": d.get("superseded_records", 0), "fixture_version": d.get("fixture_version")}
+        return info, "backend/replays/cat5_ablation_summary.json"
+    except (OSError, KeyError, TypeError, IndexError, json.JSONDecodeError):
+        pass
+    try:
+        d = json.loads(CAT5_ABLATION_ANALYSIS.read_text())
+        arms = {}
+        for a in d["arm_ids"]:
+            m, spec = d["arms"][a], d["arms_spec"][a]
+            arms[a] = {"label": a, "runs": m["runs"], "exact": m["exact"]["k"], "decision_correct": m["decision_correct"]["k"],
+                       "wilson": m["exact"].get("wilson95"), "turns_mean": m["turns"]["mean"], "turns_min": m["turns"]["min"],
+                       "turns_max": m["turns"]["max"], "turn_cap": spec["turn_cap"], "cap_hits": m["cap_hits"], "truncated_turns": m["truncated_turns"],
+                       "escalation_fired": m["escalation"]["fired"], "escalation_expected": m["escalation"]["expected"],
+                       "tool_calls_per_run": m["tool_calls_per_run"], "runs_calling_tool": m["runs_calling_tool"], "tool_set": spec["tool_set"],
+                       "summary_cost_billed": m["cost_per_1k_invoices_usd"]["billed"]}
+        levers = [{"lever": lv["lever"], "label": lv["lever"], "from": lv["from_arm"], "to": lv["to_arm"], "changes": lv["changes"],
+                   "exact_delta_pp": lv["exact"]["delta_pp"]} for lv in d["levers"] if lv.get("available")]
+        gd = None
+        for pid, g in (d.get("gate_disagreement") or {}).items():
+            pa = g["per_arm"]
+            no_gate = [x for x in pa.values() if not x["gate_arm"]]
+            gate = [x for x in pa.values() if x["gate_arm"]]
+            gd = {"preset_id": pid, "invoice_id": None, "manual_truth": g["manual_truth"], "gate_output_truth": g["gate_output_truth"], "line1": g["line1"],
+                  "no_gate_runs": sum(x["runs"] for x in no_gate), "no_gate_match_manual": sum(x["matches_manual"] for x in no_gate),
+                  "gate_runs": sum(x["runs"] for x in gate), "gate_match_gate_output": sum(x["matches_gate_output"] for x in gate),
+                  "gate_match_manual": sum(x["matches_manual"] for x in gate),
+                  "per_arm": {a: {k: x[k] for k in ("runs", "matches_manual", "matches_gate_output", "gate_arm", "line1_rate")} for a, x in pa.items()}}
+            break
+        scripted, scripted_q = {}, {}
+        for r in (d.get("baseline") or {}).get("golden_scripted") or []:
+            t = r["tokens"]
+            scripted[r["preset_id"]] = [call(SONNET, t["uncached_input"], t["output"], t["cache_write"], t["cache_read"])]
+            scripted_q[r["preset_id"]] = {"exact": int(bool(r["exact"])), "runs": 1, "turns": r["turns"]}
+        info = {"arms": arms, "levers": levers, "gate_disagreement": gd, "run_ids": d.get("run_ids"), "scripted_calls": scripted,
+                "scripted_quality": scripted_q, "data_quality": {k: (len(v) if isinstance(v, list) else v) for k, v in (d.get("data_quality") or {}).items()},
+                "non_exact_runs": d.get("for_lead_review") or [], "invoices_pooled": len(d.get("preset_ids") or []),
+                "invoices_total": len(d.get("preset_ids") or []) + len(d.get("pooled_excludes") or []), "repeats": d.get("expected_repeats"),
+                "settings": d.get("settings") or {}, "superseded_records": None, "fixture_version": d.get("fixture_version")}
+        return info, "analysis/cat5_ablation.json"
+    except (OSError, KeyError, TypeError, json.JSONDecodeError):
+        return None, "neither backend/replays/cat5_ablation_summary.json nor analysis/cat5_ablation.json could be read"
+
+
+def cat5_ablation_units(run_ids):
+    """Units for the pooled ablation runs (and the inv-06 runs), selected by run_id from runs.jsonl; the JSONL is only read."""
+    by_id = {}
+    for line in CAT5_ABLATION.read_text().splitlines():
+        if line.strip():
+            r = json.loads(line)
+            by_id[r["run_id"]] = r
+
+    def unit(r):
+        calls = [call(_cat5_priced_model(t), t["input_tokens"], t["output_tokens"], t.get("cache_creation_tokens"), t.get("cache_read_tokens"))
+                 for t in r["turns"]]
+        return {"item": f"{r['preset_id']}/r{r['repeat_index']}", "preset_id": r["preset_id"], "calls": calls, "steps": len(calls),
+                "cap_hit": bool(r.get("cap_hit")), "escalated": bool(r.get("escalation_fired"))}
+    pooled = {a: [unit(by_id[i]) for i in ids] for a, ids in (run_ids.get("pooled") or {}).items()}
+    gd = {a: [unit(by_id[i]) for i in ids] for a, ids in (run_ids.get("gate_disagreement") or {}).items()}
+    return pooled, gd
 
 
 def cat6_rerun_records():
@@ -994,25 +1103,169 @@ def analyse():
               q4_source.get("reason") or "the Category 4 rerun summary has no paired-rung cells")
         claim("Cat 4", "…without losing answer quality (implicit)", "no quality data", "NOT TESTABLE", q4_source.get("reason") or "")
 
-    # ---------------- Cat 5
-    u5 = cat5_units(seeds)
-    order5 = ["unbounded_sonnet_loop", "bounded_sonnet_cached_gate", "hybrid_haiku_sonnet_governed"]
-    s5 = summarize_rungs(u5, order5)
-    q5 = {r: {"exact_match": sum(1 for u in u5[r] if (u["evaluation"] or {}).get("exact_match")),
-              "tool_precision_median": med([(u["evaluation"] or {}).get("tool_precision_pct") for u in u5[r]]),
-              "evidence_recall_min": min((u["evaluation"] or {}).get("evidence_recall_pct", 0) for u in u5[r]),
-              "gate_verified": sum(1 for u in u5[r] if (u["evaluation"] or {}).get("gate_verified")),
-              "steps": [u["steps"] for u in u5[r]], "escalations": sum(1 for u in u5[r] if u["escalated"])} for r in order5}
-    res["categories"]["cat5"] = {"rungs": s5, "quality": q5}
-    ub5 = s5["unbounded_sonnet_loop"]
-    claim("Cat 5", "Input 25k–150k+ tokens per task", f"unbounded {ub5['prompt_tokens_range'][0]/1e3:.0f}k–{ub5['prompt_tokens_range'][1]/1e3:.0f}k; bounded {s5['bounded_sonnet_cached_gate']['prompt_tokens_range'][0]/1e3:.0f}k–{s5['bounded_sonnet_cached_gate']['prompt_tokens_range'][1]/1e3:.0f}k (mostly cache reads)", verdict(True))
-    claim("Cat 5", "Output 1,500–8,000 tokens per task", f"unbounded {ub5['output_tokens_range'][0]:,}–{ub5['output_tokens_range'][1]:,}; bounded {s5['bounded_sonnet_cached_gate']['output_tokens_range'][0]:,}–{s5['bounded_sonnet_cached_gate']['output_tokens_range'][1]:,}",
-          verdict(False, True), "Low end or just under: these are short 3–7-step loops.")
-    sv5b = pct_saving(ub5["cost_per_1k_billed"], s5["bounded_sonnet_cached_gate"]["cost_per_1k_billed"])
-    sv5h = pct_saving(ub5["cost_per_1k_billed"], s5["hybrid_haiku_sonnet_governed"]["cost_per_1k_billed"])
-    claim("Cat 5", "Max-step budgets + deterministic guardrails + small-model routing for routine tool calls",
-          f"bounded −{sv5b:.0f}%, + Haiku routing −{sv5h:.0f}%; voucher exact-match 3/3 on every rung; tool precision {q5['unbounded_sonnet_loop']['tool_precision_median']:.0f}% → 100%",
-          verdict(True), f"Holds on n=3 invoices; Haiku escalated to Sonnet on {q5['hybrid_haiku_sonnet_governed']['escalations']}/3. Each rung changes step cap, SOP caching and SQL projection at once, so the saving can't be split between them.")
+    # ---------------- Cat 5 (ablation: 6 versions x 11 gate-agreed invoices x 3 repeats pooled; inv-06 on its own)
+    info5, info5_source = cat5_ablation_info()
+    u5 = u5_gd = None
+    if info5 and info5.get("run_ids") and CAT5_ABLATION.is_file():
+        try:
+            u5, u5_gd = cat5_ablation_units(info5["run_ids"])
+        except (OSError, KeyError, TypeError, json.JSONDecodeError):
+            u5 = u5_gd = None
+    if u5 and all(u5.get(a) for a in CAT5_ARMS):
+        order5 = CAT5_ARMS
+        s5 = summarize_rungs(u5, order5)
+        a5 = info5["arms"]
+        q5 = {a: {"runs": a5[a]["runs"], "exact": a5[a]["exact"], "decision_correct": a5[a]["decision_correct"],
+                  "exact_ci": list(wilson(a5[a]["exact"], a5[a]["runs"])), "turns_mean": st.mean(u["steps"] for u in u5[a]),
+                  "turns_max": max(u["steps"] for u in u5[a]), "turn_cap": a5[a]["turn_cap"],
+                  "cap_hits": sum(1 for u in u5[a] if u["cap_hit"]), "escalations": sum(1 for u in u5[a] if u["escalated"]),
+                  "escalation_expected": a5[a]["escalation_expected"], "truncated_turns": a5[a]["truncated_turns"],
+                  "summary_cost_billed": a5[a]["summary_cost_billed"]} for a in order5}
+        levers5 = []
+        for lv in info5["levers"]:
+            fa, ta = lv["from"], lv["to"]
+            if fa not in s5 or ta not in s5:
+                continue
+            row = {"lever": lv["lever"], "label": lv["label"], "from": fa, "to": ta, "changes": lv["changes"],
+                   "exact_from": q5[fa]["exact"], "exact_to": q5[ta]["exact"], "runs": q5[ta]["runs"], "exact_delta_pp": lv["exact_delta_pp"],
+                   "turns_from": q5[fa]["turns_mean"], "turns_to": q5[ta]["turns_mean"]}
+            for v in ("billed", "warm", "cold"):
+                f, t = s5[fa][f"cost_per_1k_{v}"], s5[ta][f"cost_per_1k_{v}"]
+                row[f"{v}_from"], row[f"{v}_to"], row[f"{v}_change_pct"] = f, t, (t / f - 1) * 100 if f else None
+            levers5.append(row)
+        lev5 = {lv["lever"]: lv for lv in levers5}
+        gd5 = info5["gate_disagreement"]
+        if gd5 and u5_gd:
+            gd5 = {**gd5, "cost_per_1k_billed": {a: st.mean(unit_cost(u["calls"]) for u in us) * 1000 for a, us in u5_gd.items() if us}}
+        base5 = []
+        raw_units = defaultdict(list)
+        for u in u5["raw_free_sonnet"]:
+            raw_units[u["preset_id"]].append(u)
+        for pid in sorted(info5["scripted_calls"]):
+            sc = info5["scripted_calls"][pid]
+            fr_ = raw_units.get(pid) or []
+            sq = info5["scripted_quality"].get(pid) or {}
+            base5.append({"preset_id": pid,
+                          "scripted": {"runs": sq.get("runs", 1), "exact": sq.get("exact"), "turns": sq.get("turns") or len(sc),
+                                       "prompt_tokens": tok(sc)["prompt"], "cost_per_1k_billed": unit_cost(sc) * 1000},
+                          "free_choice": {"runs": len(fr_), "turns": st.mean(u["steps"] for u in fr_) if fr_ else None,
+                                          "prompt_tokens": st.mean(tok(u["calls"])["prompt"] for u in fr_) if fr_ else None,
+                                          "cost_per_1k_billed": st.mean(unit_cost(u["calls"]) for u in fr_) * 1000 if fr_ else None}})
+        cost_check = max(abs(s5[a]["cost_per_1k_billed"] - (q5[a]["summary_cost_billed"] or 0)) for a in order5)
+        res["categories"]["cat5"] = {"rungs": s5, "quality": q5, "levers": levers5, "gate_disagreement": gd5, "baseline": base5,
+                                     "source": "ablation", "summary_source": info5_source, "records": sum(len(u5[a]) for a in order5),
+                                     "gate_disagreement_records": sum(len(v) for v in (u5_gd or {}).values()),
+                                     "invoices_pooled": info5["invoices_pooled"], "invoices_total": info5["invoices_total"],
+                                     "repeats": info5["repeats"], "settings": info5["settings"], "data_quality": info5["data_quality"],
+                                     "non_exact_runs": info5["non_exact_runs"], "superseded_records": info5["superseded_records"],
+                                     "max_cost_diff_vs_summary_per_1k": cost_check, "app_rungs": dict(CAT5_ARM_FOR_RUNG)}
+        n5 = q5["raw_free_sonnet"]["runs"]
+        rf, bs = s5["raw_free_sonnet"], s5["bundle_sonnet_cached"]
+        rk5 = lambda v: f"{v['prompt_tokens_range'][0]/1e3:.0f}k–{v['prompt_tokens_range'][1]/1e3:.0f}k"  # noqa: E731
+        claim("Cat 5", "Input 25k–150k+ tokens per task",
+              f"n={n5} runs per version: raw tables {rk5(rf)} (cached manual {rk5(s5['raw_free_sonnet_cached'])}); narrow query {rk5(bs)} (Sonnet), "
+              f"{rk5(s5['bundle_haiku_cached'])} (Haiku); with the policy tool {rk5(s5['bundle_gate_sonnet_cached'])}",
+              verdict(min(s5[a]["prompt_tokens_range"][0] for a in order5) >= 25_000, rf["prompt_tokens_range"][0] >= 25_000),
+              "Every version is in the band. For the cached versions most of it is cache reads of the policy manual resent each turn: uncached input per invoice "
+              "(median) is " + "; ".join(f"{CAT5_LABELS[a].split(' (')[0]} {_k(med([sum(c['in'] for c in u['calls']) for u in u5[a]]))}" for a in order5) + ".")
+        outs5 = {a: s5[a]["output_tokens_range"] for a in order5}
+        all_out = [tok(u["calls"])["output"] for a in order5 for u in u5[a]]
+        in_band5 = sum(1 for o in all_out if 1500 <= o <= 8000)
+        claim("Cat 5", "Output 1,500–8,000 tokens per task",
+              "; ".join(f"{CAT5_LABELS[a]} {outs5[a][0]:,}–{outs5[a][1]:,}" for a in order5) + f"; {in_band5}/{len(all_out)} runs in band",
+              verdict(in_band5 == len(all_out), in_band5 > 0),
+              f"Median {med(all_out):,.0f} output tokens per invoice; output includes extended thinking (Sonnet only). These are short 3–4-turn loops.")
+        # lever row: three parts judged separately, then the claim as a whole
+        caps5 = sum(q5[a]["cap_hits"] for a in order5)
+        free_max = max(q5[a]["turns_max"] for a in order5 if q5[a]["turn_cap"] > 5)
+        free_cap = max(q5[a]["turn_cap"] for a in order5)
+        gated_turns = q5["bundle_gate_sonnet_cached"]["turns_mean"]
+        gate_cap = q5["bundle_gate_sonnet_cached"]["turn_cap"]
+        g_lv, m_lv, t_lv, gh_lv = lev5.get("deterministic gate"), lev5.get("model swap without gate"), lev5.get("gate + tiering"), lev5.get("gate Sonnet -> gate Haiku escalate")
+        nq_lv = lev5.get("narrow query")
+        gd_ok = bool(gd5 and gd5.get("gate_runs"))
+        gate_worse_06 = False
+        if gd_ok:
+            lo_ng, _ = wilson(gd5["no_gate_match_manual"], gd5["no_gate_runs"])
+            _, hi_g = wilson(gd5["gate_match_manual"], gd5["gate_runs"])
+            gate_worse_06 = hi_g is not None and lo_ng is not None and hi_g < lo_ng
+        budget_part = (f"max-step budgets: never bound — {caps5} of {sum(q5[a]['runs'] for a in order5)} runs hit a cap; versions with a {free_cap}-turn safety cap "
+                       f"finished in at most {free_max} turns, the policy-tool versions in {gated_turns:.0f} of {gate_cap}")
+        gate_part = (f"deterministic guardrails (policy tool on the narrow-query Sonnet version): cost {g_lv['billed_change_pct']:+.0f}% billed "
+                     f"({_money(g_lv['billed_from'])} → {_money(g_lv['billed_to'])}/1k), turns {g_lv['turns_from']:.1f} → {g_lv['turns_to']:.1f}, "
+                     f"exact vouchers {g_lv['exact_from']}/{g_lv['runs']} → {g_lv['exact_to']}/{g_lv['runs']}"
+                     + (f"; on {gd5['preset_id']}, where the tool is wrong, {gd5['gate_match_gate_output']}/{gd5['gate_runs']} gated runs committed its figures "
+                        f"and {gd5['gate_match_manual']}/{gd5['gate_runs']} matched the manual, vs {gd5['no_gate_match_manual']}/{gd5['no_gate_runs']} without it" if gd_ok else "")
+                     ) if g_lv else "deterministic guardrails: no paired data"
+        route_part = (f"small-model routing: Haiku instead of Sonnet on the narrow query {m_lv['billed_change_pct']:+.0f}% billed "
+                      f"({_money(m_lv['billed_from'])} → {_money(m_lv['billed_to'])}/1k), exact {m_lv['exact_from']}/{m_lv['runs']} → {m_lv['exact_to']}/{m_lv['runs']}"
+                      + (f"; with the policy tool, Haiku-first + escalation {gh_lv['billed_change_pct']:+.0f}% vs gated Sonnet "
+                         f"(escalated {q5['bundle_gate_haiku_escalate']['escalations']}/{q5['bundle_gate_haiku_escalate']['runs']})" if gh_lv else "")
+                      ) if m_lv else "small-model routing: no paired data"
+        # part verdicts: SUPPORTED / NOT SUPPORTED / NOT SHOWN (the lever never came into play)
+        p_budget = "NOT SHOWN" if caps5 == 0 else "SUPPORTED"
+        if g_lv:
+            gate_cost_up = g_lv["billed_change_pct"] > 0
+            gate_acc_gain = g_lv["exact_to"] > g_lv["exact_from"] or (gd_ok and gd5["gate_match_manual"] > gd5["no_gate_match_manual"] * gd5["gate_runs"] / max(1, gd5["no_gate_runs"]))
+            p_gate = "NOT SUPPORTED" if (gate_cost_up and not gate_acc_gain) or gate_worse_06 else "SUPPORTED"
+        else:
+            p_gate = "NOT SHOWN"
+        p_route = ("SUPPORTED" if m_lv and m_lv["billed_change_pct"] < 0 and m_lv["exact_to"] >= m_lv["exact_from"] else
+                   "NOT SUPPORTED" if m_lv else "NOT SHOWN")
+        parts5 = [p_budget, p_gate, p_route]
+        v_lever = ("SUPPORTED" if all(x == "SUPPORTED" for x in parts5) else
+                   "PARTLY SUPPORTED" if "SUPPORTED" in parts5 else "NOT SUPPORTED")
+        word = {"SUPPORTED": "supported", "NOT SUPPORTED": "not supported", "NOT SHOWN": "not shown"}
+        note_b = ("no loop ran long on these invoices, so a budget saved nothing here; whether it prevents runaway cost is untested"
+                  if p_budget == "NOT SHOWN" else f"{caps5} runs reached a cap")
+        note_g = (f"the policy gate changed cost {g_lv['billed_change_pct']:+.0f}% and turns {g_lv['turns_from']:.1f} → {g_lv['turns_to']:.1f}, exact vouchers "
+                  f"{g_lv['exact_from']} → {g_lv['exact_to']} of {g_lv['runs']}"
+                  + (f"; on the invoice where its rule is wrong {gd5['gate_match_gate_output']} of {gd5['gate_runs']} gated runs copied its figures, while "
+                     f"{gd5['no_gate_match_manual']} of {gd5['no_gate_runs']} runs without it matched the manual" if gd_ok else "")) if g_lv else "no paired data"
+        note_r = (f"the small model changed cost {m_lv['billed_change_pct']:+.0f}% with exact vouchers {m_lv['exact_from']} → {m_lv['exact_to']} of {m_lv['runs']}"
+                  if m_lv else "no paired data")
+        claim("Cat 5", "Max-step budgets + deterministic guardrails + small-model routing for routine tool calls",
+              "; ".join([budget_part, gate_part, route_part]),
+              v_lever,
+              f"Judged in three parts. (1) Step budgets: {word[p_budget]} — {note_b}. (2) Deterministic guardrails: {word[p_gate]} — {note_g}. "
+              f"(3) Small-model routing: {word[p_route]} — {note_r}. "
+              + (f"The saving across the ladder comes from the narrow query ({nq_lv['billed_change_pct']:+.0f}%) and the model choice. " if nq_lv else "")
+              + f"As a whole: {sum(x == 'SUPPORTED' for x in parts5)} of 3 levers supported, {sum(x == 'NOT SUPPORTED' for x in parts5)} contradicted, "
+              f"{sum(x == 'NOT SHOWN' for x in parts5)} never came into play.")
+        res["categories"]["cat5"]["lever_parts"] = {"max_step_budgets": p_budget, "deterministic_guardrails": p_gate, "small_model_routing": p_route}
+        exact_lo = min(q5[a]["exact"] for a in order5)
+        pooled_worse = []
+        for a in order5:
+            for b in order5:
+                ca, cb = q5[a]["exact_ci"], q5[b]["exact_ci"]
+                if ca[1] is not None and cb[0] is not None and ca[1] < cb[0]:
+                    pooled_worse.append((a, b))
+        claim("Cat 5", "…without losing accuracy (implicit)",
+              "exact vouchers (n=" + str(n5) + " each): " + "; ".join(f"{CAT5_LABELS[a]} {q5[a]['exact']}/{q5[a]['runs']}" for a in order5)
+              + (f"; on {gd5['preset_id']} (policy tool wrong): without the tool {gd5['no_gate_match_manual']}/{gd5['no_gate_runs']} correct, "
+                 f"with it {gd5['gate_match_manual']}/{gd5['gate_runs']}" if gd_ok else ""),
+              verdict(not pooled_worse and not gate_worse_06, not pooled_worse),
+              f"Rule: a lever loses accuracy when its exact-voucher rate is clearly lower (95% Wilson intervals do not overlap). Pooled, every version scored "
+              f"{exact_lo}/{n5} or better and no interval separates, so no loss is detected; at this ceiling small differences cannot be detected either. "
+              + ("The policy tool does lose accuracy where its rule disagrees with the manual: its intervals on that invoice do not overlap with the no-tool runs'. "
+                 if gate_worse_06 else "")
+              + "The invoices test simple arithmetic.")
+    else:
+        u5 = cat5_golden_units(seeds)
+        order5 = CAT5_APP_RUNGS
+        s5 = summarize_rungs(u5, order5)
+        q5 = {r: {"exact_match": sum(1 for u in u5[r] if (u["evaluation"] or {}).get("exact_match")),
+                  "steps": [u["steps"] for u in u5[r]], "escalations": sum(1 for u in u5[r] if u["escalated"])} for r in order5}
+        reason5 = info5_source if not info5 else "the ablation records (backend/experiments/cat5_ablation/runs.jsonl) could not be read"
+        res["categories"]["cat5"] = {"rungs": s5, "quality": q5, "source": "golden replays", "summary_source": info5_source, "reason": reason5}
+        ub5 = s5["unbounded_sonnet_loop"]
+        claim("Cat 5", "Input 25k–150k+ tokens per task", f"unbounded {ub5['prompt_tokens_range'][0]/1e3:.0f}k–{ub5['prompt_tokens_range'][1]/1e3:.0f}k (golden replays, n=3)",
+              verdict(ub5["prompt_tokens_range"][0] >= 25_000), "Golden replays only: " + reason5 + ".")
+        claim("Cat 5", "Output 1,500–8,000 tokens per task", f"unbounded {ub5['output_tokens_range'][0]:,}–{ub5['output_tokens_range'][1]:,} (golden replays, n=3)",
+              verdict(False, True), "Golden replays only: " + reason5 + ".")
+        claim("Cat 5", "Max-step budgets + deterministic guardrails + small-model routing for routine tool calls", "no ablation data", "NOT TESTABLE",
+              "Three invoices cannot separate the levers; " + reason5 + ".")
+        claim("Cat 5", "…without losing accuracy (implicit)", "no ablation data", "NOT TESTABLE", reason5)
 
     # ---------------- Cat 6 (fair rerun: 4 arms x 3 incidents x 5 repeats)
     u6, cat6_verdict_source = cat6_units()
@@ -1072,7 +1325,7 @@ def analyse():
         "Cat 4 (single question)": med([tok(q["calls"])["total"] for u in u4[_cat4_key("naive_full_corpus", 1)] for q in u["per_question"]]),
         **({"Cat 4 (single question, 3× corpus)": med([tok(q["calls"])["total"] for u in u4[_cat4_key("naive_full_corpus", 3)] for q in u["per_question"]])}
            if u4.get(_cat4_key("naive_full_corpus", 3)) else {}),
-        "Cat 5 (invoice)": s5["unbounded_sonnet_loop"]["total_tokens_median"],
+        "Cat 5 (invoice, raw tables)": s5["raw_free_sonnet" if "raw_free_sonnet" in s5 else "unbounded_sonnet_loop"]["total_tokens_median"],
         "Cat 6 (incident run, shared bus)": s6["shared_bus_original"]["total_tokens_median"],
     }
     res["scale"] = scale
@@ -1145,6 +1398,94 @@ def _cat2_owner_issue(res):
             f"exactly 3 items), even when the source gives none. Measured: the judge flagged an owner or deadline the source does not support in this many templated action items: {per}. *Not changed:* the model-facing prompt and schema are as captured."
             + _cat2_fix_sentence(res["categories"]["cat2"].get("template_fix"))
             + (" The app keeps the original template; the follow-up is shown beside it." if res["categories"]["cat2"].get("template_fix") else ""))
+
+
+CAT5_LABELS = {
+    "raw_free_sonnet": "Raw tables, Sonnet, no cache (app rung 1)",
+    "raw_free_sonnet_cached": "Raw tables, Sonnet, cached manual",
+    "bundle_sonnet_cached": "Narrow query, Sonnet, cached",
+    "bundle_gate_sonnet_cached": "Narrow query + policy gate, Sonnet (app rung 2)",
+    "bundle_haiku_cached": "Narrow query, Haiku, cached",
+    "bundle_gate_haiku_escalate": "Narrow query + policy gate, Haiku → Sonnet on escalation (app rung 3)",
+}
+CAT5_LEVER_LABELS = {
+    "caching alone": "Cache the policy manual",
+    "narrow query": "One narrow query instead of raw tables",
+    "deterministic gate": "Add the deterministic policy gate",
+    "model swap without gate": "Switch Sonnet → Haiku (no gate)",
+    "gate + tiering": "Add the gate + escalation to Haiku",
+    "gate Sonnet -> gate Haiku escalate": "Gated version: Haiku-first instead of Sonnet",
+}
+
+
+def _render_cat5(c):
+    """Category 5 section of the cost table: the six-version ablation (or the golden-replay fallback)."""
+    rungs = c["rungs"]
+    if c.get("source") != "ablation":
+        L = [f"### 5. {TITLE['cat5']} (per 1k invoices, n={next(iter(rungs.values()))['n']} per rung)", "",
+             f"Source: the Category 5 golden replays ({c.get('reason')}).", "",
+             "| Rung | Billed | Warm | Cold | Pre-fix card (billed) | Prompt tok (median) | Output tok (median) |", "|---|---:|---:|---:|---:|---:|---:|"]
+        for r, v in rungs.items():
+            L.append(f"| {RUNG_LABELS.get(r, r)} | {_money(v['cost_per_1k_billed'])} | {_money(v['cost_per_1k_warm'])} | {_money(v['cost_per_1k_cold'])} | "
+                     f"{_money(v['cost_per_1k_billed_repo_card'])} | {_k(v['prompt_tokens_median'])} | {_k(v['output_tokens_median'])} |")
+        return L + [""]
+    q = c["quality"]
+    n = next(iter(q.values()))["runs"]
+    L = [f"### 5. {TITLE['cat5']} (per 1k invoices, n={n} per version)", "",
+         f"Source: the Category 5 ablation, {c['records']} pooled runs (6 versions × {c['invoices_pooled']} invoices × {c['repeats']} repeats) selected by run id "
+         f"from `backend/experiments/cat5_ablation/runs.jsonl`; quality, levers and the {c['gate_disagreement_records']} runs on the invoice where the policy gate "
+         f"disagrees with the manual read from `{c['summary_source']}`. Costs are recomputed here from each turn's tokens; they match the summary's billed "
+         f"figures within ${c['max_cost_diff_vs_summary_per_1k']:.4f} per 1k. Every run wrote its own cache (per-run nonce), so billed equals cold. "
+         f"Every turn ran at max_tokens {c['settings'].get('max_tokens_per_turn')}. The app's three rungs are versions 1, 4 and 6; their golden replays are repeat 0 of those versions on inv-01..03.", "",
+         "| Version | Billed | vs raw tables | Warm | Cold | Pre-fix card (billed) | Prompt tok (median) | Output tok (median) | Output share of cost |",
+         "|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
+    base = rungs["raw_free_sonnet"]["cost_per_1k_billed"]
+    for r, v in rungs.items():
+        sv = pct_saving(base, v["cost_per_1k_billed"])
+        L.append(f"| {CAT5_LABELS.get(r, r)} | {_money(v['cost_per_1k_billed'])} | {'—' if r == 'raw_free_sonnet' else f'−{sv:.1f}%'} | "
+                 f"{_money(v['cost_per_1k_warm'])} | {_money(v['cost_per_1k_cold'])} | {_money(v['cost_per_1k_billed_repo_card'])} | "
+                 f"{_k(v['prompt_tokens_median'])} | {_k(v['output_tokens_median'])} | {v['output_cost_share_median']*100:.0f}% |")
+    L += ["", "Quality (voucher scored field by field against a hand-derived answer; 95% Wilson intervals):", "",
+          "| Version | Exact vouchers | Decision right | Turns (mean / max / cap) | Cap hits | Truncated turns | Escalated |", "|---|---:|---:|---:|---:|---:|---:|"]
+    for r, v in q.items():
+        ci = v["exact_ci"]
+        L.append(f"| {CAT5_LABELS.get(r, r)} | {v['exact']}/{v['runs']} ({ci[0]*100:.0f}–{ci[1]*100:.0f}%) | {v['decision_correct']}/{v['runs']} | "
+                 f"{v['turns_mean']:.2f} / {v['turns_max']} / {v['turn_cap']} | {v['cap_hits']} | {v['truncated_turns']} | "
+                 f"{v['escalations']}/{v['runs']}{' (expected ' + str(v['escalation_expected']) + ')' if r == 'bundle_gate_haiku_escalate' else ''} |")
+    for m in c.get("non_exact_runs") or []:
+        L += ["", f"Non-exact run: {CAT5_LABELS.get(m.get('arm_id'), m.get('arm_id'))}, {m.get('preset_id')} repeat {m.get('repeat_index')}: "
+              f"fields {', '.join(m.get('mismatched_fields') or [])} differ (net principal {m.get('committed', {}).get('authorized_net_principal_inr'):,.2f} "
+              f"vs {m.get('expected', {}).get('authorized_net_principal_inr'):,.2f})."]
+    L += ["", "What each step changed (adjacent versions, same invoices; cost change billed / warm):", "",
+          "| Step | From → to | Cost change (billed / warm) | Exact vouchers | Turns |", "|---|---|---:|---:|---:|"]
+    for lv in c["levers"]:
+        L.append(f"| {CAT5_LEVER_LABELS.get(lv['lever'], lv['label'])} | {CAT5_LABELS.get(lv['from'], lv['from'])} → {CAT5_LABELS.get(lv['to'], lv['to'])} | "
+                 f"{lv['billed_change_pct']:+.0f}% / {lv['warm_change_pct']:+.0f}% | {lv['exact_from']} → {lv['exact_to']} of {lv['runs']} | "
+                 f"{lv['turns_from']:.1f} → {lv['turns_to']:.1f} |")
+    L += ["", "The \"add the policy gate\" steps also change the tool set, the prompt (the rung's scripted protocol) and the turn cap (12 → 5) together; "
+          "the other steps change one setting each."]
+    g = c.get("gate_disagreement")
+    if g:
+        mt, gt, l1 = g["manual_truth"], g["gate_output_truth"], g.get("line1") or {}
+        L += ["", f"**When the policy gate is wrong ({g['preset_id']}, not pooled).** Line 1 bills INR {l1.get('billed_rate', 0):,.0f} against a PO rate of INR {l1.get('po_rate', 0):,.0f} "
+              f"on {l1.get('qty', 0):,} units. Manual 2.1 allows the 1.5% band only when the PO's currency notes say the price is index-linked; this PO is plain DDP INR, "
+              "so the manual pays line 1 at the PO rate. The gate's `WITHIN_1.5PCT_TOLERANCE` branch applies the band regardless.", "",
+              "| Calculation | Decision | Net principal | GST payout | Debit note | Runs matching |", "|---|---|---:|---:|---:|---:|",
+              f"| Manual (ground truth) | {mt['decision']} | {mt['authorized_net_principal_inr']:,.2f} | {mt['authorized_gst_payout_inr']:,.2f} | {mt['debit_note_deduction_inr']:,.2f} | "
+              f"without the gate {g['no_gate_match_manual']}/{g['no_gate_runs']}; with it {g['gate_match_manual']}/{g['gate_runs']} |",
+              f"| Policy gate output | {gt['decision']} | {gt['authorized_net_principal_inr']:,.2f} | {gt['authorized_gst_payout_inr']:,.2f} | {gt['debit_note_deduction_inr']:,.2f} | "
+              f"gated runs {g['gate_match_gate_output']}/{g['gate_runs']} |"]
+        if g.get("cost_per_1k_billed"):
+            L += ["", "Billed cost per 1k on this invoice: " + "; ".join(f"{CAT5_LABELS.get(a, a)} {_money(v)}" for a, v in g["cost_per_1k_billed"].items()) + "."]
+    if c.get("baseline"):
+        L += ["", "Old scripted rung 1 (one raw query per step in a fixed 7-step order, max_tokens 2,048, n=1) vs the free-choice rung 1 (n=3 per invoice):", "",
+              "| Invoice | Scripted: turns / prompt tok / $ per 1k / exact | Free choice: turns / prompt tok / $ per 1k | Change in cost |", "|---|---|---|---:|"]
+        for b in c["baseline"]:
+            sc, fr = b["scripted"], b["free_choice"]
+            ch = (fr["cost_per_1k_billed"] / sc["cost_per_1k_billed"] - 1) * 100 if fr["cost_per_1k_billed"] and sc["cost_per_1k_billed"] else None
+            L.append(f"| {b['preset_id']} | {sc['turns']} / {_k(sc['prompt_tokens'])} / {_money(sc['cost_per_1k_billed'])} / {sc['exact']}/{sc['runs']} | "
+                     f"{fr['turns']:.1f} / {_k(fr['prompt_tokens'])} / {_money(fr['cost_per_1k_billed'])} | {'—' if ch is None else f'{ch:+.0f}%'} |")
+    return L + [""]
 
 
 CAT4_LABELS = {
@@ -1245,6 +1586,47 @@ def _render_cat4(c):
     return L
 
 
+def _cat5_unit_sentence(res):
+    c = res["categories"]["cat5"]
+    if c.get("source") != "ablation":
+        return "Category 5 uses its golden replays (n=3 per rung; the ablation records could not be read). "
+    return (f"Category 5 uses the {c['records']} pooled ablation runs (6 versions × {c['invoices_pooled']} invoices × {c['repeats']} repeats, n={c['records'] // 6} per version) "
+            f"and reports the {c['gate_disagreement_records']} runs on the invoice where the policy gate disagrees with the manual separately; its golden replays are repeat 0 "
+            "of the three versions the app runs, on inv-01..03. ")
+
+
+def _cat5_issues(res):
+    c = res["categories"]["cat5"]
+    ch = []
+    for b in c.get("baseline") or []:
+        sc, fr = b["scripted"], b["free_choice"]
+        if sc["cost_per_1k_billed"] and fr["cost_per_1k_billed"]:
+            ch.append(f"{b['preset_id']} {sc['turns']} → {fr['turns']:.0f} turns, {(fr['cost_per_1k_billed'] / sc['cost_per_1k_billed'] - 1) * 100:+.0f}% cost")
+    g = c.get("gate_disagreement") or {}
+    gd_txt = (f" On {g['preset_id']} every gated run ({g['gate_match_gate_output']}/{g['gate_runs']}) committed the gate's figures; runs without the gate matched the "
+              f"manual {g['no_gate_match_manual']}/{g['no_gate_runs']}." if g.get("gate_runs") else "")
+    return [
+        "17. **The Category 5 capture script selected runs by outcome.** `capture_cat5_replays.py::_validate_rung` re-captured a rung until its voucher matched exactly, "
+        "evidence recall and tool precision were 100%, the hybrid rung escalated as \"expected\" and the naive rung used more than 25k prompt tokens. "
+        "*Fixed:* it now rejects a run only for infrastructure failures (error status, a truncated last turn, no cache write/read on a cached rung). "
+        "The golden replays were rebuilt from the ablation (repeat 0 of three versions, fixed mapping, not chosen by outcome).",
+        "18. **The old Category 5 rung 1 was a scripted prompt, not an unbounded loop.** It told Sonnet to run one raw `SELECT *` tool per step in a fixed 7-step order "
+        "(max_tokens 2,048), so its turn count and cost were set by the script. *Fixed:* rung 1 now uses the ablation's free-choice protocol (several calls per turn allowed, "
+        "12-turn safety cap). Scripted vs free choice on the original invoices: " + ("; ".join(ch) if ch else "not available") + ".",
+        "19. **The policy gate contradicts manual 2.1.** Its `WITHIN_1.5PCT_TOLERANCE` branch accepts any price up to 1.5% above the PO; the manual allows that band only "
+        "when the PO's currency notes say the price is index-linked." + gd_txt + " The gate is unchanged (changing it would change the measured system).",
+        "20. **The narrow query omits the PO currency notes.** `fetch_3way_match_bundle` does not return `purchase_orders.currency`, so a version that uses it cannot check "
+        "manual 2.1's condition from the data; the raw-table tools return it.",
+        "21. **The app's Category 5 runner stopped on `end_turn` turns that still held tool calls.** The API can return `stop_reason: end_turn` together with `tool_use` "
+        "blocks; the runner ended the loop without executing them (one ablation record was superseded for the same harness failure). *Fixed:* every `tool_use` block in a "
+        "non-truncated turn is executed and the loop continues; a turn cut off at max_tokens is recorded, not executed; the live path now uses max_tokens 4,096 and "
+        "records the real stop reasons.",
+        "22. **Latent gate gaps not exercised by these invoices.** The gate ignores `approved_freight_waiver_inr` (manual 2.2/2.3 allow a freight waiver by amendment), "
+        "takes the GST rate from the first invoice line only, and does not implement Trigger 3 (duplicate invoice or a `PAYMENT_FREEZE` vendor). It also flags escalation "
+        "for every debit note, including single-factor ones that manual 6.2 does not describe as multi-factor disputes.",
+    ]
+
+
 def render_markdown(res):
     L = []
     dd = res["dedup"]["totals"]
@@ -1252,10 +1634,11 @@ def render_markdown(res):
     L += [
         "# Six AI Archetypes deck: claims checked against the NovaMart traces",
         "",
-        "_Generated by `backend/scripts/validate_deck_claims.py` from `backend/replays/*_golden_replays.json` (Categories 1, 2, 5), the Category 2 blind-judge quality summary "
+        "_Generated by `backend/scripts/validate_deck_claims.py` from `backend/replays/*_golden_replays.json` (Categories 1, 2), the Category 2 blind-judge quality summary "
         "(`backend/replays/cat2_quality_summary.json`), the Category 3 quality rerun "
         "(`backend/experiments/cat3_quality/runs.jsonl` + `backend/replays/cat3_quality_summary.json`), the Category 4 quality rerun "
-        "(`backend/experiments/cat4_quality/runs.jsonl` + `backend/replays/cat4_quality_summary.json`), the Category 6 fair rerun "
+        "(`backend/experiments/cat4_quality/runs.jsonl` + `backend/replays/cat4_quality_summary.json`), the Category 5 ablation "
+        "(`backend/experiments/cat5_ablation/runs.jsonl` + `backend/replays/cat5_ablation_summary.json`), the Category 6 fair rerun "
         "(`backend/experiments/cat6_fair_rerun/runs.jsonl` + `analysis/cat6_fair_rerun.json`) and `backend/traces/`. Re-run the script after re-capturing replays._",
         "",
         "## How the data was de-duplicated",
@@ -1277,8 +1660,9 @@ def render_markdown(res):
         "Category 6 captures, and replays of them are counted as superseded captures.",
         "",
         "**Unit of analysis:** one canonical run per (item × rung), taken from the current golden-replay files, which match the seed traces one-to-one. "
-        "Categories 3, 4 and 6 are the exceptions. Category 3 uses all 18 quality-rerun records (3 rungs × 2 sessions × 3 repeats, n=6 per rung); its golden replays are repeat 0 of every rung. "
+        "Categories 3, 4, 5 and 6 are the exceptions. Category 3 uses all 18 quality-rerun records (3 rungs × 2 sessions × 3 repeats, n=6 per rung); its golden replays are repeat 0 of every rung. "
         "Category 4 uses all 24 quality-rerun sessions (4 rungs × 2 corpus sizes × 3 sessions of 8 questions, 192 answers, n=24 per row); its golden replays are repeat 0 of the three app rungs at the 7-document corpus. "
+        + _cat5_unit_sentence(res) +
         "Category 6 uses all 60 fair-rerun records (4 arms × 3 incidents × 5 repeats, n=15 per arm); its golden replays are repeat 0 of three of those arms. "
         "Costs are recomputed per API call from recorded token counts, priced by the model that served the call. "
         "The traces' own `finops` blocks are not used, so the results don't depend on how the app priced them.",
@@ -1306,6 +1690,9 @@ def render_markdown(res):
     for cat in ("cat1", "cat2", "cat3", "cat4", "cat5", "cat6"):
         if cat == "cat4":
             L += _render_cat4(res["categories"]["cat4"])
+            continue
+        if cat == "cat5":
+            L += _render_cat5(res["categories"]["cat5"])
             continue
         rungs = res["categories"][cat]["rungs"]
         first = next(iter(rungs.values()))
@@ -1419,9 +1806,6 @@ def render_markdown(res):
                       "each about one detail stated once in an early turn."]
             else:
                 L.append(f"Answer quality: not available ({qsrc['reason']}).")
-        if cat == "cat5":
-            L.append("Quality: " + "; ".join(f"{RUNG_LABELS[r]}: exact voucher {q['exact_match']}/3, tool precision {q['tool_precision_median']:.0f}%, policy gate verified {q['gate_verified']}/3, steps {q['steps']}"
-                                            for r, q in c["quality"].items()) + ".")
         if cat == "cat6":
             src = "re-scored with the current sandbox" if c["verdict_source"] == "rescored" else "as recorded (re-scored section missing)"
             L.append(f"Source: the fair rerun, {c['records']} records; sandbox verdicts {src}.")
@@ -1486,10 +1870,11 @@ def render_markdown(res):
           "or delisting gate\". When the answering model sees only 5 retrieved chunks, it fills that bullet by stating the documents contain no NOC or escrow gate. "
           + _cat4_absence_issue_text()
           + "The prompt is unchanged here (changing it would change the measured system).",
+          *_cat5_issues(res),
           "",
           "## Limitations",
           "",
-          "- Small samples: 12 items (Category 1), 4 documents, 3 invoices; Category 4 has 24 answers per rung and corpus size (8 questions × 3 sessions); Category 3 has 6 sessions per rung (2 scenarios × 3 repeats) and Category 6 has 15 runs per arm (3 incidents × 5 repeats). Treat percentages as indicative, not statistically robust.",
+          "- Small samples: 12 items (Category 1), 4 documents; Category 5 has 12 invoices (33 pooled runs per version: 11 invoices × 3 repeats, plus 3 runs per version on the gate-disagreement invoice); Category 4 has 24 answers per rung and corpus size (8 questions × 3 sessions); Category 3 has 6 sessions per rung (2 scenarios × 3 repeats) and Category 6 has 15 runs per arm (3 incidents × 5 repeats). Treat percentages as indicative, not statistically robust.",
           "- Category 6 ceiling effect: every arm verified 15/15, so these incidents are too easy to show a quality difference between context designs, and CpO equals cost per run in every arm.",
           "- Category 2 now has a quality measurement: a deterministic fact key plus a single blind LLM judge (`claude-opus-5-5`; rubric with 3 passes per draft and "
           "position-swapped head-to-head comparisons) on one draft per rung per document (12 drafts). Judge repeats measure judge noise, not drafting variance, and no "
@@ -1499,7 +1884,10 @@ def render_markdown(res):
           "- Category 4 quality: one blind-grader pass per answer (`claude-opus-5-5`, not a model under test) plus a deterministic answer key; 8 questions on one deal room; "
           "the larger corpus adds two synthetic look-alike suppliers generated by a deterministic transform of Deccan's documents, not real contracts. Grader noise was not "
           "measured (no repeat grading) and no human graded the answers; the lead checked the serious errors' source quotes against the documents.",
-          "- Several rungs change more than one lever at once (model + template, caching + step cap + projection), so savings cannot be attributed to individual levers.",
+          "- Several rungs change more than one lever at once (e.g. model + template in Category 2), so savings cannot be attributed to individual levers. "
+          "Category 5's ablation adds its levers one at a time, except that adding the policy gate also changes the tool set, the prompt and the turn cap.",
+          "- Category 5 ceiling effect: every version scored at or near 100% exact vouchers (32–33 of 33), so accuracy differences between versions cannot be detected; "
+          "the invoices test simple arithmetic (quantities × rates, an 18% GST split, a debit note), and one invoice (inv-06) is where the policy gate and the manual disagree.",
           "- The deck's daily-volume claim (Category 6: 1.5M–10M tokens/dev/day) and its production-scale framing can't be checked from single runs.",
           ""]
     return "\n".join(L)

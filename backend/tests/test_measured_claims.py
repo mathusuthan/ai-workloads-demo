@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -160,13 +161,30 @@ def test_cat4_fallback_copy_is_number_free_and_makes_no_unsupported_claims() -> 
 
 @pytest.mark.parametrize("preset", ["inv-01", "inv-02", "inv-03"])
 def test_cat5_badge_and_notes_quote_measured_values(preset: str) -> None:
+    from app.archetypes.cat5_orchestration.runner import load_cat5_ablation_portfolio
+
     r = _run("cat5", preset_id=preset)
     naive, bounded, hybrid = r["unbounded_sonnet_loop"], r["bounded_sonnet_cached_gate"], r["hybrid_haiku_sonnet_governed"]
-    assert hybrid["badge_text"] == f"Lever 2: Tier-Routed Agent (-{fmt_pct(hybrid['savings_vs_naive_cold_pct'])} Cost)"
-    assert f"across {naive['steps_used']} uncached Sonnet turns" in _notes(naive)
-    assert f"({naive['total_uncached_input_tokens']:,} → {bounded['total_uncached_input_tokens']:,})" in _notes(bounded)
+    # badges name the levers; no fixed cost claim in a badge
+    assert naive["badge_text"] == "Baseline: Raw Tables, No Cache"
+    assert bounded["badge_text"] == "Narrow Query + Cache + Policy Gate"
+    assert hybrid["badge_text"] == "Tiered Routing + Policy Gate"
+    prompt = naive["total_uncached_input_tokens"] + naive["total_cache_creation_tokens"] + naive["total_cache_read_tokens"]
+    assert f"{prompt:,} prompt tokens this run; {naive['steps_used']} of a {naive['max_step_budget']}-turn safety cap used" in _notes(naive)
+    assert f"uncached prompt tokens {naive['total_uncached_input_tokens']:,} → {bounded['total_uncached_input_tokens']:,} vs rung 1" in _notes(bounded)
     ev = bounded["evaluation"]
-    assert f"matched {ev['matched_fields']}/{ev['total_fields']}" in _notes(bounded)
+    assert f"rupee fields {ev['matched_fields']}/{ev['total_fields']} on this invoice" in _notes(bounded)
+    assert f"Haiku 5.5 ran {hybrid['haiku_steps']} turn" in _notes(hybrid)
+    # ablation numbers are quoted from the summary, not fixed text
+    port = load_cat5_ablation_portfolio()
+    assert port is not None
+    gated = next(a for a in port.arms if a.arm_id == "bundle_gate_sonnet_cached")
+    tiered = next(a for a in port.arms if a.arm_id == "bundle_gate_haiku_escalate")
+    assert f"{gated.turns_mean:.1f}" in _notes(bounded) and f"{gated.exact}/{gated.runs}" in _notes(bounded)
+    assert f"${tiered.cost_per_1k_billed_usd:.2f}" in _notes(hybrid)
+    assert f"{tiered.escalation_fired}/{tiered.runs}" in _notes(hybrid)
+    for banned in ("-92%", "Cost)", "quadratic", "runaway"):
+        assert banned not in json.dumps([naive, bounded, hybrid])
 
 
 def test_cat6_badge_and_notes_quote_measured_portfolio() -> None:

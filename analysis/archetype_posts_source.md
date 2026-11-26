@@ -1,6 +1,6 @@
 # Six AI Workload Archetypes: experiment notes for the post series
 
-Source material for seven posts: one introduction and one post per archetype. Every number here comes from `analysis/deck_claims_validation.md` (regenerated 26 Nov 2026), the reruns and scoring in `analysis/cat6_fair_rerun.md`, `analysis/cat3_quality_rerun.md`, `analysis/cat4_quality_rerun.md` and `analysis/cat2_quality.md`, or the golden replays the lab app serves. Part 0 feeds the intro post; Parts 1–6 each feed one archetype post; the appendix holds the rate card and definitions that every post may need.
+Source material for seven posts: one introduction and one post per archetype. Every number here comes from `analysis/deck_claims_validation.md` (regenerated 26 Nov 2026), the reruns and scoring in `analysis/cat6_fair_rerun.md`, `analysis/cat3_quality_rerun.md`, `analysis/cat4_quality_rerun.md`, `analysis/cat5_ablation.md` and `analysis/cat2_quality.md`, or the golden replays the lab app serves. Part 0 feeds the intro post; Parts 1–6 each feed one archetype post; the appendix holds the rate card and definitions that every post may need.
 
 ## How to read the numbers
 
@@ -13,7 +13,7 @@ Source material for seven posts: one introduction and one post per archetype. Ev
   - *Billed*: what the recorded runs actually cost, cache hits and misses as they happened.
   - *Cold*: the first call has to write the cache. This is a single user starting from nothing.
   - *Warm*: the cached prefix is already there. This is a busy fleet in steady state.
-- **Sample sizes are small**: 12 items, 4 documents, 2 sessions (each run 3 times), 8 questions (each asked 3 times per version and corpus size), 3 invoices, 3 incidents (each run 5 times). Quote the percentages as indicative results from one lab, not as benchmarks.
+- **Sample sizes are small**: 12 items, 4 documents, 2 sessions (each run 3 times), 8 questions (each asked 3 times per version and corpus size), 12 invoices (each run 3 times per version), 3 incidents (each run 5 times). Quote the percentages as indicative results from one lab, not as benchmarks.
 
 ---
 
@@ -46,15 +46,15 @@ The deck closes with three rules:
 | 2 | 1,000 documents | $58.92 | $1.39 (Haiku, section template); $27.25 with the template on Sonnet | −98%; −54% | Every core fact kept, but a blind grader preferred the long draft in 16 of 16 comparisons; serious errors rose from 1 to 6 (Sonnet template) and 10 (Haiku template) |
 | 3 | 1,000 ten-turn sessions | $399 | $212 (cache + compaction); $240 with caching alone | −47%; −40% | Caching: no change. Compaction: new answers unaffected, but recall of earlier details fell from 36/36 to 2/36 |
 | 4 | 1,000 questions | $46 | $19 (cached corpus, warm); $24–25 with retrieval | −59%; −46% | Caching: best answers, no serious errors in 48. Retrieval: fine on the small corpus; on one three times larger, 6 to 8 answers in 24 had a serious error |
-| 5 | 1,000 invoices | $191 | $16.99 (Haiku first, Sonnet on escalation) | −91.1% | Correct voucher on 3/3 at every rung |
+| 5 | 1,000 invoices | $154 | $2.40 (one narrow query, Haiku computes the voucher) | −98% | 197 of 198 vouchers correct across six versions; the cheapest got all 33 |
 | 6 | 1,000 incidents | $696 | $56.20 (Haiku agents, Sonnet patch author, cold start) | −92% | Unchanged: every arm fixed 15 of 15 |
 
 ### The scorecard
 
-The scorecard has 30 rows: the deck's 26 testable claims plus four implicit ones we added, that the cheaper version loses no quality in Archetypes 1, 2, 3 and 4. Against the lab data:
+The scorecard has 31 rows: the deck's 26 testable claims plus five implicit ones we added, that the cheaper version loses no quality in Archetypes 1 to 5. Against the lab data:
 
-- **11 supported**: the measurement falls inside the claimed range or clears the threshold.
-- **16 partly supported**: the direction holds, but the magnitude is outside the range or a confound limits the conclusion.
+- **10 supported**: the measurement falls inside the claimed range or clears the threshold.
+- **18 partly supported**: the direction holds, but the magnitude is outside the range or a confound limits the conclusion.
 - **2 not supported**: our added rows for Archetypes 2 and 3. Templated drafts lose to the long draft on quality, and compacting old turns loses recall.
 - **1 not testable**: the per-developer daily token volume for swarms.
 
@@ -62,7 +62,7 @@ The Archetype 6 rows were re-judged on the fair rerun; none of the verdicts chan
 
 ### Findings that cut across archetypes
 
-- **Every cost lever worked in the direction the deck says.** None of the deck's own claims was contradicted. The two failures are quality costs the deck does not mention.
+- **Most cost levers worked in the direction the deck says, and none of the deck's own claims was contradicted outright.** The exceptions are in Archetype 5, where the deterministic guardrail added cost and the step budget never came into play. The two rows scored not supported are quality costs the deck does not mention.
 - **The "60–80%" rule missed on both sides.** Changing the model as well as the prompt gave 98–99%. A template alone, on the same model, gave 54%.
 - **Cheaper was not worse where the work has a checkable right answer, and was worse where it does not.** The governed rungs were more accurate in Archetype 1 and equally accurate in Archetypes 5 and 6. In Archetype 2 the templated drafts kept every core fact but lost every blind comparison with the long draft, mostly by inventing owners and deadlines the template demanded; one added sentence allowing "not stated" removed nearly all of those errors but did not close the gap. In Archetype 3, caching cost nothing in quality, but compacting old turns bought an extra 11% saving at the price of nearly all recall of earlier details. In Archetype 4, caching the whole corpus gave the best answers, while answering from five retrieved clauses led the model to report terms as absent that it had simply not been shown.
 - **The deck's token bands describe context size, not the bill.** A ten-turn session peaks at 22k tokens of context but bills 163k prompt tokens, because every turn re-sends the history.
@@ -80,13 +80,13 @@ Median total tokens per unit of work, on the rung closest to what the deck descr
 | Archetype 2, one document | 8.5k |
 | Archetype 4, one question | 19.4k (55.1k on the 3× corpus) |
 | Archetype 4, one four-question audit | 77.5k |
-| Archetype 5, one invoice | 116.9k |
+| Archetype 5, one invoice (raw tables) | 76.1k |
 | Archetype 3, one ten-turn session | 169.6k |
 | Archetype 6, one incident (rerun, mean) | 266.9k |
 
 ### What we got wrong while measuring
 
-Good material for the intro: the measurement itself needed six corrections.
+Good material for the intro: the measurement itself needed eight corrections.
 
 - **Duplicate traces.** At the first audit the trace folder held 842 files but only 206 distinct runs. The rest were copies written each time the app replayed a recorded run; one run appeared 29 times. Averaging the raw folder weights each run by how often someone viewed it.
 - **A wrong price.** The rate card had Sonnet cache reads at $0.20 per million tokens; the published rate is $0.10. Every cached Sonnet rung was overstated by 2–10%.
@@ -94,10 +94,12 @@ Good material for the intro: the measurement itself needed six corrections.
 - **Claims that drifted from the data.** The app's labels carried fixed numbers that no longer matched the runs. One badge promised "-65%+" where the data showed −97%; one note said "~115k–130k prompt tokens" where the run used 236k. Labels are now computed from each run.
 - **A rigged comparison.** The first swarm experiment showed the naive swarm verifying 1 fix in 3 against 3 in 3 for the governed ones. The naive agents had been cut off at their output cap, and the capture script discarded governed runs that failed. Rerun fairly, every arm fixed 15 of 15 (Part 6).
 - **A check that failed good code.** One static security check flagged a harmless comparison because of a variable's name. Three correct patches were scored as failures until the check was fixed.
+- **A scripted baseline.** The naive invoice agent was told to make five lookups one at a time in a fixed order. Left to choose, it took about half the turns, and the saving credited to the governed design shrank accordingly (Part 5).
+- **A guardrail nobody had tested.** Writing new invoices by hand showed that the lab's deterministic policy tool misapplied one rule. Every run that trusted the tool repeated its error; every run that did the arithmetic itself got it right (Part 5).
 
 ### Limits to state in the intro
 
-- Samples are small. Archetypes 3, 4 and 6 were repeated (3, 3 and 5 times); Archetypes 1, 2 and 5 ran once, apart from the Archetype 2 follow-up.
+- Samples are small. Archetypes 3, 4, 5 and 6 were repeated (3, 3, 3 and 5 times); Archetypes 1 and 2 ran once, apart from the Archetype 2 follow-up.
 - Archetype 2's quality grades come from one model acting as a blind grader, with its serious findings checked by hand. Archetype 4's answers were graded the same way, in one pass.
 - Several rungs change more than one thing at a time, so a saving cannot always be split between levers.
 - All data is synthetic and the corpus sizes are at the low end of the deck's bands.
@@ -572,7 +574,9 @@ Full results: `analysis/cat4_quality_rerun.md`. Raw records: `backend/experiment
 
 ## Part 5: Autonomous process orchestration
 
-**One-line result:** a step budget, a cached manual and a deterministic policy check cut cost by 80%; routing routine work to a small model took it to 91%, with the correct result every time.
+**One-line result:** asking the database for less and using a smaller model cut the cost of reconciling an invoice by 98% with every voucher still correct; the deterministic policy tool and the step budget, which the first version of this experiment credited, added nothing measurable.
+
+This section uses the ablation of 26 Nov 2026: 216 live runs (six versions, twelve invoices, three runs each), every run kept, scored field by field against vouchers derived by hand from the policy manual.
 
 ### What the deck says
 
@@ -583,58 +587,97 @@ Full results: `analysis/cat4_quality_rerun.md`. Raw records: `backend/experiment
 
 ### What was built
 
-The NovaMart three-way invoice reconciliation agent. It matches a vendor invoice against the purchase order and the warehouse goods receipt in a live SQLite database, then commits a payment voucher.
+The NovaMart three-way invoice reconciliation agent. It matches a vendor invoice against the purchase order and the warehouse goods receipt in a live SQLite database, applies an accounts-payable policy manual, and commits a payment voucher with five fields: the decision, the net principal, the tax paid, the tax held in escrow, and the deduction.
 
-Three invoices of rising difficulty:
+Twelve invoices: the original three plus nine new ones written to cover the manual's rules. They include a clean match, rejected units, price rises inside and outside tolerance, an authorised amendment, freight above the cap, a tax escrow, two hard stops, and two disputes with several problems at once.
 
-- **Invoice 1, routine.** All 1,000 units received; a tax filing is pending, so the payment is split into a release and an escrow.
-- **Invoice 2, multi-factor dispute.** 15 dead-on-arrival units, one authorised price amendment, one unauthorised 5% price rise, and a disallowed freight charge.
-- **Invoice 3, hard stop.** The tax registration was cancelled and 5,000 cartons never arrived. The correct outcome is zero payment.
+Six versions, each adding or changing one thing:
 
-Three rungs:
+| # | Version | What it adds |
+|---|---|---|
+| 1 | Raw tables, Sonnet chooses its tools | The baseline: five `SELECT *` lookups available, no cache, the model does the arithmetic |
+| 2 | Same, manual cached | Caching alone |
+| 3 | One narrow query, cached, Sonnet computes | A single query returning only the needed columns |
+| 4 | Narrow query plus a deterministic policy tool, Sonnet | The tool computes the voucher in code and the model copies it |
+| 5 | One narrow query, cached, Haiku computes | The small model, with no policy tool |
+| 6 | Haiku first with the policy tool, escalating to Sonnet | The small model plus the tool, handing off to Sonnet when the tool flags a deduction |
 
-- **Unbounded loop.** Sonnet explores with `SELECT *` queries, re-reads an uncached procedures manual every step, and commits with no policy check.
-- **Bounded.** A four-step budget, queries that fetch only the needed columns, a cached prefix of about 8.6k tokens built around the procedures manual, and a deterministic policy check before the voucher is committed.
-- **Haiku first.** The same governed loop on Haiku, escalating to Sonnet only when the policy check flags a multi-factor dispute.
+Versions 4 and 6 are the "governed" designs from the first version of the experiment.
 
 ### Results
 
-| Rung | Cost per 1,000 invoices (billed) | vs naive | Cold | Warm | Prompt tokens (median) |
-|---|---:|---:|---:|---:|---:|
-| Unbounded Sonnet loop | $191 | — | $191 | $191 | 115.2k |
-| Four-step budget, cached manual, policy check | $37.47 | −80.4% | $51.24 | $30.58 | 41.5k |
-| Haiku first, Sonnet on escalation | $16.99 | −91.1% | $17.65 | $9.72 | 41.9k |
+Eleven invoices, three runs each: 33 runs per version.
 
-| Rung | Correct voucher | Tool precision | Policy check passed | Steps per invoice | Escalations |
-|---|---:|---:|---:|---|---:|
-| Unbounded Sonnet loop | 3 of 3 | 17% | 0 of 3 | 7, 7, 3 | 0 |
-| Four-step budget, cached manual, policy check | 3 of 3 | 100% | 3 of 3 | 4, 4, 4 | 0 |
-| Haiku first, Sonnet on escalation | 3 of 3 | 100% | 3 of 3 | 4, 4, 4 | 1 |
+| # | Version | Correct vouchers | Cost per 1,000 invoices (cold start) | Warm cache | Model turns | Prompt tokens per run |
+|---|---|---:|---:|---:|---:|---:|
+| 1 | Raw tables, Sonnet | 33 | $154 | $154 | 3–4 | 68k |
+| 2 | Raw tables, cached | 32 | $111 | $90 | 3–4 | 69k |
+| 3 | Narrow query, Sonnet computes | 33 | $43 | $23 | 3 | 29k |
+| 4 | Narrow query plus policy tool, Sonnet | 33 | $51 | $30 | 4 | 42k |
+| 5 | Narrow query, Haiku computes | 33 | $2.40 | $1.45 | 3 | 29k |
+| 6 | Haiku plus policy tool, escalating | 33 | $23 | $12 | 4 | 42k |
+
+What each step did:
+
+| Step | Cost change (cold start) | Correct vouchers |
+|---|---:|---|
+| Caching alone (1 → 2) | −28% | 33 → 32 |
+| Narrow query (2 → 3) | −61% | 32 → 33 |
+| Deterministic policy tool (3 → 4) | +18% | 33 → 33 |
+| Smaller model, no tool (3 → 5) | −94% | 33 → 33 |
+| Tool plus escalation on the smaller model (5 → 6) | 9.4 times the cost | 33 → 33 |
+
+No run on any version reached a step cap, and no output was cut off.
+
+### When the policy tool is wrong
+
+The twelfth invoice is reported separately, because writing it exposed a bug in the lab's own policy tool.
+
+- **The case.** One line is billed 1.28% above the purchase-order price. The manual allows a rise within 1.5% only on purchase orders marked as index-linked. This one is not, so the line should be paid at the purchase-order price and the difference deducted.
+- **The tool.** It allows any rise within 1.5% and approves the invoice in full: an overpayment of ₹26,904.
+- **The result.** In all 12 runs where the model worked out the voucher itself, it followed the manual and made the deduction. In all 6 runs that used the policy tool, the model committed the tool's wrong figure.
+- **A detail worth quoting.** In one of those six, Haiku flagged the overrun for review in its summary, noted that "the gate allowed it under the 1.5% rounding band", and committed the full payment anyway.
+
+### How the first version went wrong
+
+The first version of this experiment reported an 80% saving from a step budget, caching and a policy check together, and 91% with Haiku added, with a correct voucher on every version. Three things made that less than it seemed:
+
+- **The baseline was scripted.** Its instructions told the model to call five lookups one at a time in a fixed order, including one it never needed. Left to choose, the model made the first four lookups in a single turn and finished in 3 or 4 turns, not 7. On the two larger original invoices the scripted run cost about half as much again as the free one.
+- **The governed versions could not fail.** The capture script threw away any governed run that was not exactly right and tried again.
+- **The governed versions did no arithmetic.** The policy tool computed the answer and the model copied it, so "Haiku is as accurate as Sonnet" was true by construction.
 
 ### Deck claims against the data
 
 | Claim | Measured | Verdict |
 |---|---|---|
-| Input 25k–150k+ tokens per task | Unbounded 29k–116k; bounded 40k–42k, mostly cache reads | Supported |
-| Output 1,500–8,000 tokens per task | 1,183–2,356 | Partly |
-| Step budgets, guardrails and small-model routing | −80%, then −91%; correct voucher 3 of 3 on every rung | Supported |
+| Input 25k–150k+ tokens per task | 44k–77k with raw tables; 28k–31k with a narrow query; 40k–43k with the policy tool added | Supported |
+| Output 1,500–8,000 tokens per task | Median 1,426; 77 of 198 runs in range | Partly |
+| Step budgets, deterministic guardrails and small-model routing | Small-model routing cut cost 94% with every voucher correct. The guardrail added 18% and no accuracy, and copied its own error. No run came near a step budget | Partly |
+| …without losing accuracy (our addition; the deck does not claim it) | No loss detected: every version got at least 32 of 33 right. But on the invoice where the policy tool is wrong, the versions using it were wrong 6 times in 6 | Partly |
 
 ### Points worth making in the post
 
-- **The naive agent got the right answer too.** All three rungs produced the correct voucher on all three invoices. The governed rungs are not more accurate; they are cheaper, predictable and checked.
-- **The waste is in what the agent reads.** The unbounded loop's tool precision was 17%: five of every six tool calls fetched data it did not need. Fresh (uncached) prompt tokens fell from about 115,000 to 7,000–8,000 on the first two invoices.
-- **The bill is almost all input.** Output is 9% of the unbounded loop's cost. Loops are an input problem.
-- **Predictability is a result in itself.** The unbounded loop took 7, 7 and 3 steps. The governed loops took exactly 4 every time.
-- **Escalation is where the tiered saving goes.** Haiku handled the routine invoice and the hard stop alone, at about 99% and 96% below naive. The dispute escalated to Sonnet and saved 81%.
-- **A step budget can cost more on easy cases.** On the hard-stop invoice the unbounded loop quit after 3 steps, so the bounded rung saved only 32% there.
-- **Right answer, thin evidence.** On the hard-stop invoice the unbounded loop reached the correct voucher having gathered a third of the expected evidence, and with no policy check before committing.
+- **The saving came from two plain things.** Fetch only the columns you need (−61%), and use the smallest model that gets it right (−94%). Together with caching they took the cost from $154 to $2.40 per 1,000 invoices.
+- **The model did the policy arithmetic correctly on its own.** Across the versions with no policy tool, 143 of 144 vouchers were right, including the case where the tool itself was wrong.
+- **A guardrail written in code moves the error; it does not remove it.** When the tool was right it added a turn and 18% to the cost. When it was wrong, every run that trusted it was wrong, and one model noticed and deferred to it anyway.
+- **So test the guardrail as hard as the model.** The bug surfaced only because the new invoices' answers were worked out by hand from the manual first and then compared with the tool.
+- **The step budget was insurance, not a saving.** Every version finished in 3 or 4 turns with a cap of 12 available.
+- **Eager escalation is expensive.** The Haiku-first design hands off to Sonnet whenever the tool reports any deduction, which was 15 runs in 33. It cost nine times as much as Haiku alone and was no more accurate.
+- **Caching helps less when tool output dominates.** The cached manual is under 9k tokens of a 68k prompt; the rest is raw table dumps that change on every invoice. Caching alone saved 28% from a cold start and 41% warm.
+- **Offer a tool and it gets used.** Free to choose, the model still made the unneeded vendor-history lookup in 28 of 33 runs.
+- **The one wrong voucher in 198** was a slip of exactly ₹1,000,000 by Sonnet on the most complex invoice, in a version working from raw table dumps.
+- **The bill is almost all input.** Even in the cheapest version, a run reads about 29k tokens and writes about 1.5k.
 
 ### Caveats
 
-- Three invoices; Haiku escalated on one of them.
-- Each rung changes the step cap, the caching and the query style together, so the 80% cannot be split between them.
-- The per-invoice percentages in the bullets use cold-cache costs; the table's headline uses billed costs.
-- Output sits at or below the deck's band because these are short loops of three to seven steps.
+- Twelve invoices, three runs each. Every version scored at or near 100%, so the experiment cannot detect small differences in accuracy.
+- The policy rules are simple and fully written down. A deterministic tool may earn its place on messier cases, or for audit reasons this experiment does not measure.
+- The policy tool's bug is specific to this lab. The general point is that the tool was trusted without being tested.
+- The policy manual shown to every version mentions the narrow query, the policy tool and a four-step budget by name, including to versions that do not have them. None tried to call a tool it lacked.
+- Sonnet and Haiku ran with different thinking settings, as the app configures them, so the model swap changes both.
+- Costs here start every run from a cold cache; a busy system would sit between the cold and warm columns.
+
+Full results: `analysis/cat5_ablation.md`. Raw records: `backend/experiments/cat5_ablation/runs.jsonl`. New invoices and their worked answers: `backend/app/data/cat5_ablation_fixtures.py`.
 
 ---
 
@@ -775,7 +818,8 @@ US dollars per million tokens.
 - Full validation report: `analysis/deck_claims_validation.md` (and `.json` for raw values).
 - Script that produces it: `backend/scripts/validate_deck_claims.py`.
 - Recorded runs: `backend/replays/cat{1..6}_golden_replays.json`.
-- Trace files: `backend/traces/` (985 files, 244 distinct canonical runs).
+- Trace files: `backend/traces/` (994 files, 244 distinct canonical runs).
+- Archetype 5 ablation: `analysis/cat5_ablation.md`, with raw records in `backend/experiments/cat5_ablation/`.
 - Archetype 4 rerun: `analysis/cat4_quality_rerun.md`, with raw records in `backend/experiments/cat4_quality/`.
 - Archetype 2 quality scoring: `analysis/cat2_quality.md`, with grader records in `backend/experiments/cat2_quality/judgements.jsonl`.
 - Archetype 3 rerun: `analysis/cat3_quality_rerun.md`, with raw records in `backend/experiments/cat3_quality/runs.jsonl`.

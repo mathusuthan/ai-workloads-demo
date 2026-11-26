@@ -999,6 +999,8 @@ class Cat5LoopStep(BaseModel):
     stop_reason: str
     assistant_thought: str = ""
     tool_calls: list[Cat5ToolCallTrace] = Field(default_factory=list)
+    # tool_use blocks of a turn cut off by max_tokens: recorded, never executed
+    tool_calls_not_executed: list[dict[str, Any]] = Field(default_factory=list)
     latency_ms: int
     finops: FinOpsBreakdown
     cumulative_cold_cost_usd: float
@@ -1082,6 +1084,157 @@ class Cat5PortfolioRungRollup(BaseModel):
     savings_vs_naive_cold_pct: float
 
 
+class Cat5AblationCell(BaseModel):
+    """Pooled ablation metrics for one arm (overall, one tier or one invoice)."""
+
+    runs: int
+    exact: int
+    exact_rate: float | None = None
+    exact_wilson95: list[float] | None = None
+    decision_correct: int
+    committed: int
+    field_accuracy_pct_mean: float | None = None
+    evidence_recall_pct_mean: float | None = None
+    tool_precision_pct_mean: float | None = None
+    turns_mean: float | None = None
+    turns_min: float | None = None
+    turns_max: float | None = None
+    cap_hits: int = 0
+    truncated_turns: int = 0
+    escalation_expected: int = 0
+    escalation_fired: int = 0
+    uncached_input_tokens_mean: float | None = None
+    cache_write_tokens_mean: float | None = None
+    cache_read_tokens_mean: float | None = None
+    output_tokens_mean: float | None = None
+    cost_per_1k_billed_usd: float | None = None
+    cost_per_1k_cold_usd: float | None = None
+    cost_per_1k_warm_usd: float | None = None
+
+
+class Cat5AblationArm(Cat5AblationCell):
+    arm_id: str
+    label: str
+    adds: str
+    runnable_in_app: bool = False
+    app_rung_id: Cat5RungId | None = None
+    tool_set: str
+    cached: bool
+    start_model: str
+    gate: bool
+    escalate: bool
+    turn_cap: int
+    tool_calls_per_run: dict[str, float | None] = Field(default_factory=dict)
+    runs_calling_tool: dict[str, int] = Field(default_factory=dict)
+    disallowed_tool_calls: int = 0
+    disallowed_by_name: dict[str, int] = Field(default_factory=dict)
+    by_tier: dict[str, Cat5AblationCell] = Field(default_factory=dict)
+    by_invoice: dict[str, Cat5AblationCell] = Field(default_factory=dict)
+
+
+class Cat5AblationLever(BaseModel):
+    lever: str
+    label: str
+    from_arm: str
+    to_arm: str
+    changes: list[str] = Field(default_factory=list)
+    available: bool = False
+    exact_from: float | None = None
+    exact_to: float | None = None
+    exact_delta_pp: float | None = None
+    decision_delta_pp: float | None = None
+    cost_billed_from: float | None = None
+    cost_billed_to: float | None = None
+    cost_billed_delta: float | None = None
+    cost_billed_ratio: float | None = None
+    cost_cold_from: float | None = None
+    cost_cold_to: float | None = None
+    cost_cold_delta: float | None = None
+    cost_cold_ratio: float | None = None
+    cost_warm_from: float | None = None
+    cost_warm_to: float | None = None
+    cost_warm_delta: float | None = None
+    cost_warm_ratio: float | None = None
+
+
+class Cat5AblationBaselineRow(BaseModel):
+    preset_id: str
+    source: Literal["original_scripted", "free_choice"]
+    runs: int
+    exact: int
+    decision_correct: int
+    turns_mean: float | None = None
+    tool_calls_mean: float | None = None
+    prompt_tokens_mean: float | None = None
+    output_tokens_mean: float | None = None
+    cost_per_1k_billed_usd: float | None = None
+
+
+class Cat5GateDisagreementArm(BaseModel):
+    arm_id: str
+    gate_arm: bool
+    runs: int
+    matches_manual: int
+    matches_gate_output: int
+    neither: int
+    no_commit: int
+    decisions: dict[str, int] = Field(default_factory=dict)
+    line1_rate: dict[str, int] = Field(default_factory=dict)
+
+
+class Cat5GateDisagreement(BaseModel):
+    preset_id: str
+    invoice_id: str
+    ruling: str
+    manual_text: str
+    manual_truth: dict[str, Any]
+    manual_calculation: list[str] = Field(default_factory=list)
+    gate_output_truth: dict[str, Any]
+    gate_calculation: list[str] = Field(default_factory=list)
+    line1: dict[str, Any] = Field(default_factory=dict)
+    bundle_note: str = ""
+    per_arm: list[Cat5GateDisagreementArm] = Field(default_factory=list)
+    no_gate_runs: int = 0
+    no_gate_match_manual: int = 0
+    gate_runs: int = 0
+    gate_match_gate_output: int = 0
+    gate_match_manual: int = 0
+    missing_keys: int = 0
+
+
+class Cat5AblationPortfolio(BaseModel):
+    """Six-arm ablation picture (replays/cat5_ablation_summary.json); `original_scripted_captures` is not exposed."""
+
+    schema_version: int = 1
+    source: str
+    source_file: str | None = None
+    fixture_version: str | None = None
+    record_count: int
+    pooled_runs: int
+    gate_disagreement_runs: int = 0
+    live_runs_used: int
+    error_records: int = 0
+    superseded_records: int = 0
+    superseded_reasons: list[str] = Field(default_factory=list)
+    invoices_pooled: list[str] = Field(default_factory=list)
+    invoice_count_pooled: int
+    invoice_count_total: int
+    repeats: int
+    matrix_complete: bool = True
+    runs_per_arm: int
+    settings: dict[str, Any] = Field(default_factory=dict)
+    tiers: dict[str, str | None] = Field(default_factory=dict)
+    arms: list[Cat5AblationArm] = Field(default_factory=list)
+    levers: list[Cat5AblationLever] = Field(default_factory=list)
+    baseline: list[Cat5AblationBaselineRow] = Field(default_factory=list)
+    baseline_note: str = ""
+    gate_disagreement: list[Cat5GateDisagreement] = Field(default_factory=list)
+    data_quality: dict[str, int] = Field(default_factory=dict)
+    non_exact_runs: list[dict[str, Any]] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+    golden_mapping: dict[str, Any] = Field(default_factory=dict)
+
+
 class Cat5RunRequest(BaseModel):
     preset_id: str = "inv-01"
     use_case: Cat5UseCaseType = "invoice_3way_reconciliation"
@@ -1110,6 +1263,7 @@ class Cat5RunResponse(BaseModel):
     results: list[Cat5RungResult]
     portfolio_scorecard: list[Cat5PortfolioRungRollup] = Field(default_factory=list)
     orchestration_callout: str
+    ablation_portfolio: Cat5AblationPortfolio | None = None
 
 
 # --- Category 6: Multi-Agent Swarms & Auto Eng (Checkout CI Swarm + CpO) ---

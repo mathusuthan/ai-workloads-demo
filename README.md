@@ -41,11 +41,12 @@ Interactive FinOps & Architecture companion app mapping **Six Key AI Archetypes*
   - **Interactive Clause Citation Verifier & 3-Stage Retrieval Funnel X-Ray:** Click inline citation pills (`[1]`, `[2]`) to highlight the cited span inside searchable `<details>` contracts, plus an answer-quality panel, a Query-Count Crossover Chart (measured costs, straight-line beyond the questions asked) and a CFO Audit Scale Simulator (linear projection of measured cost).
 - **Category 5 (Live — `/archetype/5`):** *Autonomous Process Orchestration* (`NovaMart 3-Way Invoice Reconciliation Agent`), featuring:
   - **Live In-Memory SQLite ERP (8 Tables):** `vendors`, `purchase_orders`, `po_lines`, `goods_receipts`, `vendor_invoices`, `invoice_lines`, `contract_amendments`, `fc_dock_logs`, and committed `reconciliation_vouchers`.
-  - **3-Rung Process Governance Arena (`inv-01` GST Escrow Split, `inv-02` DOA + Amendment Dispute, `inv-03` Cancelled IRN Hard Block):**
-    1. Rung 1: Unbounded Exploratory `SELECT *` ReAct Loop (`claude-sonnet-5-5`, uncached SOP manual, no gate pre-check)
-    2. Rung 2: Bounded 4-Step Budget + Projection JOINs + Cached SOP Manual (`-95%` reads) + Deterministic `AP-POL-GATE-01`
-    3. Rung 3: Haiku-First Tiered Agent (`claude-haiku-5-5`, escalating to Sonnet 5.5 solely when `AP-POL-GATE-01` flags multi-factor commercial disputes — `-81%` to `-99%` cost)
-  - **3-Invoice Portfolio Evaluation Scorecard & Interactive Trajectory / SQL Inspector:** Tracks Rupee Accuracy (`15/15`), Evidence Recall %, Tool Precision %, `<progress>` Loop Budgets, and live executed SQL statements.
+  - **3-Rung Process Arena (`inv-01` GST Escrow Split, `inv-02` DOA + Amendment Dispute, `inv-03` Cancelled IRN Hard Block):**
+    1. Rung 1: Free-Choice Raw-Table Loop (`claude-sonnet-5-5`, the model picks its own raw `SELECT *` lookups, several per turn allowed; uncached policy manual, no policy gate, 12-turn safety cap)
+    2. Rung 2: One Narrow Query + Cached Policy Manual + Deterministic Policy Gate `AP-POL-GATE-01` (the commit tool refuses until the gate has computed the voucher; 4-step budget)
+    3. Rung 3: Rung 2 on `claude-haiku-5-5`, switching to `claude-sonnet-5-5` when the gate flags escalation (it flags every debit note)
+  - **Six-version ablation (`backend/experiments/cat5_ablation/`):** 216 live runs (6 versions × 12 invoices × 3 runs, every run kept, vouchers scored field by field against a hand-derived answer) add the levers one at a time. Every version got 32–33 of 33 vouchers exactly right on the 11 invoices where the gate agrees with the manual. Cost per 1,000 invoices (billed): raw tables `$153.72`, + cached manual `$110.99`, + one narrow query `$43.10`, + policy gate `$50.84` (Rung 2), narrow query on Haiku `$2.40`, Haiku + gate + escalation `$22.62` (Rung 3). The narrow query (`-61%`) and the model choice (`-94%`) carry the saving; the gate added a turn and `+18%` cost with no measured accuracy gain, and on `inv-06`, where the gate's 1.5% price band contradicts manual 2.1, all 6 gated runs committed the gate's wrong figures while all 12 runs without it matched the manual. No run hit a step cap. The golden replays are repeat 0 of the three versions the app runs (fixed mapping, not selected by outcome); the old scripted Rung 1 captures are kept in `backend/replays/cat5_ablation_summary.json` as a baseline.
+  - **Portfolio Scorecard, Experiment Panel & Interactive Trajectory / SQL Inspector:** Voucher accuracy on the recorded runs, evidence recall, tool precision, turns used against each rung's cap, real stop reasons per turn, live executed SQL, and the six-version results (what each step saved, the policy-gate disagreement, scripted vs free-choice Rung 1, raw-table lookups chosen).
 - **Category 6 (Live — `/archetype/6`):** *Multi-Agent Swarms & Auto Eng* (`NovaMart Checkout & Pricing CI Self-Healing Swarm`), featuring:
   - **3 Engineering Swarm Incidents (`inc-01` Checkout GST Sec 15(3), `inc-02` NPCI UPI Auth & DPDP Act 2023, `inc-03` Multi-FC Split-Cart Concurrency):**
   - **Shared `~9.3k`-Token Monorepo Prefix (measured cache write) & `PR-SANDBOX-GATE-01`:** Isolated Python `-I` subprocess verifier running `4` CI unit checks + `4` adversarial/concurrency checks + `2` static AST security gates (`10` checks per incident) alongside unified diffs.
@@ -100,7 +101,7 @@ backend/traces/category=<category>/use_case=<use_case>/model=<model>/pattern=<pa
 To seed all `244` pre-captured traces (`48` Cat 1 + `44` Cat 2 + `102` Cat 3 + `32` Cat 4 + `9` Cat 5 + `9` Cat 6; Cat 3 includes the recall-probe calls) from golden replays and launch the dedicated **Streamlit Trace Explorer**:
 ```bash
 backend/.venv/bin/pip install -r backend/requirements-viewer.txt   # one-time local install into backend/.venv
-backend/.venv/bin/python backend/scripts/seed_traces_from_replays.py   # --cat3-only / --cat6-only append one category without clearing others
+backend/.venv/bin/python backend/scripts/seed_traces_from_replays.py   # --cat3-only / --cat4-only / --cat5-only / --cat6-only append one category without clearing others
 chmod +x run_trace_viewer.sh
 ./run_trace_viewer.sh   # opens http://127.0.0.1:8501
 ```

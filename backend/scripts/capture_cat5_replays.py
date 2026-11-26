@@ -30,49 +30,52 @@ RUNGS: list[Cat5RungId] = [
 ]
 
 
+CACHED_RUNGS: frozenset[str] = frozenset(
+    {"bounded_sonnet_cached_gate", "hybrid_haiku_sonnet_governed"}
+)
+
+
 def _validate_rung(
     preset: dict[str, Any],
     rid: Cat5RungId,
     res: Cat5RungResult,
     raw_rung: dict[str, Any],
 ) -> str | None:
+    """Return a reason to re-capture a rung, or None to keep it.
+
+    Only infrastructure problems are grounds for rejection:
+
+    * the run did not finish with status ``ok`` (API error, timeout, exception);
+    * the last model turn was truncated at ``max_tokens`` (its tool calls were
+      never executed, so the trajectory is incomplete through no fault of the
+      model's choices);
+    * on the cached rungs, the prompt cache did not engage (no cache write or
+      read on the first turn, or no cache read on any later turn).
+
+    Outcomes are deliberately NOT checked. Earlier versions re-captured a rung
+    until the voucher matched exactly, recall/precision hit 100%, the hybrid
+    rung escalated as "expected" and the naive rung burned more than 25k prompt
+    tokens. That kept only the runs that told the intended story and made the
+    recorded replays a selected sample. The Category 5 ablation keeps every
+    run; this capture script now does the same, so a wrong voucher, a missed
+    escalation or a cheap naive run is recorded as it happened.
+    """
+    del preset  # outcome expectations live in the preset; they are not used here
     if res.status != "ok":
         return f"status={res.status} error={res.error_message}"
-    if not raw_rung.get("committed_voucher"):
-        return "missing committed_voucher in SQLite"
     steps = raw_rung.get("steps") or []
-    if not steps or steps[-1].get("stop_reason") != "end_turn":
-        return f"last step stop_reason={steps[-1].get('stop_reason') if steps else 'none'}"
-
-    tot_prompt = (
-        res.total_uncached_input_tokens
-        + res.total_cache_creation_tokens
-        + res.total_cache_read_tokens
-    )
-    if rid == "unbounded_sonnet_loop":
-        if tot_prompt < 25000:
-            return f"Rung 1 below 25k Band 4R floor (got {tot_prompt})"
-        return None
-
-    # Governed rungs checks
-    eval_obj = res.evaluation
-    if not eval_obj or not eval_obj.exact_match:
-        return f"Governed rung failed exact_match: {eval_obj.field_checks if eval_obj else 'None'}"
-    if eval_obj.evidence_recall_pct < 100.0 or eval_obj.tool_precision_pct < 100.0:
-        return (
-            f"Recall/Precision <100%: recall={eval_obj.evidence_recall_pct}, "
-            f"prec={eval_obj.tool_precision_pct}"
-        )
-    s0 = steps[0]
-    if int(s0.get("cache_creation_tokens") or 0) + int(s0.get("cache_read_tokens") or 0) < 4096:
-        return "Step 1 missed 4,096-token SOP prefix cache floor"
-    if len(steps) >= 2 and int(steps[1].get("cache_read_tokens") or 0) < 4096:
-        return f"Step 2 missed prefix cache hit on SOP manual (cr={steps[1].get('cache_read_tokens')})"
-
-    if rid == "hybrid_haiku_sonnet_governed":
-        exp_esc = bool(preset["ground_truth"]["expected_escalation"])
-        if res.escalated_to_sonnet != exp_esc:
-            return f"expected escalated_to_sonnet={exp_esc}, got {res.escalated_to_sonnet}"
+    if not steps:
+        return "no model turns recorded"
+    if steps[-1].get("stop_reason") == "max_tokens":
+        return "last turn truncated at max_tokens"
+    if rid in CACHED_RUNGS:
+        s0 = steps[0]
+        if int(s0.get("cache_creation_tokens") or 0) + int(s0.get("cache_read_tokens") or 0) <= 0:
+            return "cached rung: first turn shows no cache write or read"
+        if len(steps) >= 2 and not any(
+            int(st.get("cache_read_tokens") or 0) > 0 for st in steps[1:]
+        ):
+            return "cached rung: no cache read on any turn after the first"
     return None
 
 
