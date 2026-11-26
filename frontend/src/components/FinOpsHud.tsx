@@ -52,8 +52,8 @@ export function FinOpsHud({ runResponse }: FinOpsHudProps) {
       const c1k = s.finops.cost_per_1k_usd
       rows.push({
         id: 'sonnet',
-        name: '1A. Sonnet 5.5 (Prose)',
-        shortLabel: 'Sonnet Prose',
+        name: '1A. Sonnet 5.5 write-up',
+        shortLabel: 'Sonnet write-up',
         costPer1k: c1k,
         chartValue: scaleMode === 'log' ? Math.max(0.01, c1k) : c1k,
         inputCost1k: Number((s.finops.input_cost_usd * 1000).toFixed(4)),
@@ -69,8 +69,8 @@ export function FinOpsHud({ runResponse }: FinOpsHudProps) {
       const c1k = hn.finops.cost_per_1k_usd
       rows.push({
         id: 'haiku_naive',
-        name: '1B. Haiku 5.5 (Prose)',
-        shortLabel: 'Haiku Prose',
+        name: '1B. Haiku 5.5 write-up',
+        shortLabel: 'Haiku write-up',
         costPer1k: c1k,
         chartValue: scaleMode === 'log' ? Math.max(0.01, c1k) : c1k,
         inputCost1k: Number((hn.finops.input_cost_usd * 1000).toFixed(4)),
@@ -86,8 +86,8 @@ export function FinOpsHud({ runResponse }: FinOpsHudProps) {
       const c1k = h.finops.cost_per_1k_usd
       rows.push({
         id: 'haiku',
-        name: '2. Haiku 5.5 + Schema',
-        shortLabel: 'Haiku 5.5',
+        name: '2. Haiku 5.5 classification + schema',
+        shortLabel: 'Haiku schema',
         costPer1k: c1k,
         chartValue: scaleMode === 'log' ? Math.max(0.01, c1k) : c1k,
         inputCost1k: Number((h.finops.input_cost_usd * 1000).toFixed(4)),
@@ -103,8 +103,8 @@ export function FinOpsHud({ runResponse }: FinOpsHudProps) {
       const c1k = hb.cost_per_1k_usd
       rows.push({
         id: 'haiku_batch',
-        name: '3. Haiku 5.5 Batch (-50%)',
-        shortLabel: 'Haiku Batch',
+        name: '3. Haiku 5.5 Batch API (computed)',
+        shortLabel: 'Haiku Batch*',
         costPer1k: c1k,
         chartValue: scaleMode === 'log' ? Math.max(0.01, c1k) : c1k,
         inputCost1k: Number((hb.input_cost_usd * 1000).toFixed(4)),
@@ -167,6 +167,9 @@ export function FinOpsHud({ runResponse }: FinOpsHudProps) {
           <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">
             Scaling This Exact Payload Across NovaMart Enterprise Volume
           </h2>
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            Costs come from this item’s measured tokens. *The Batch API price is computed at 50% of the live price, not run.
+          </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">

@@ -25,9 +25,14 @@ export function MatrixHome({ catalog }: MatrixHomeProps) {
               {enterprise.series_title}
             </h1>
             <p className="text-sm leading-relaxed text-slate-300">
-              Why treating every AI initiative like a frontier chatbot breaks cloud unit economics—and how{' '}
-              <span className="font-semibold text-white">NovaMart Enterprise</span> matches each workload to its
-              calibrated Autonomy Tier, Token Band, and FinOps lever.
+              Why treating every AI initiative like one general-purpose chatbot on the largest model breaks cloud unit
+              economics—and how <span className="font-semibold text-white">NovaMart Enterprise</span> matches each
+              workload to its calibrated Autonomy Tier, Token Band, and FinOps lever.
+            </p>
+            <p className="text-xs leading-relaxed text-slate-400">
+              These experiments compare system designs (what is asked for, how much context is sent, caching, tools,
+              routing between model sizes) in one synthetic lab setup; the results describe those configurations on these
+              tasks and are not an assessment of any model.
             </p>
           </div>
           <div className="flex min-w-0 shrink-0 flex-col items-start gap-2 lg:items-end">

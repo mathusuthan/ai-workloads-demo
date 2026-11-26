@@ -144,6 +144,9 @@ export interface RungAccuracyEvaluation {
   field_accuracy_pct: number
   exact_match: boolean
   field_checks: FieldCheckResult[]
+  /** structured_output: schema / decisions API; reader_model: a write-up read by the experiment's reader model (replay) */
+  method?: 'structured_output' | 'reader_model' | 'keyword_match'
+  method_note?: string | null
 }
 
 export interface ModelAccuracyRollup {
@@ -153,12 +156,13 @@ export interface ModelAccuracyRollup {
   schema_compliance_pct: number
   fields_matched: number
   fields_total: number
-  field_accuracy_pct: number
+  field_accuracy_pct: number | null
   exact_items_matched: number
   items_total: number
-  exact_match_pct: number
+  exact_match_pct: number | null
   cost_per_1k_usd: number
   notes: string
+  scoring_method?: string
 }
 
 export interface RungExecutionResult {
@@ -177,6 +181,11 @@ export interface RungExecutionResult {
   savings_vs_naive_pct: number
   architectural_notes: string[]
   accuracy?: RungAccuracyEvaluation | null
+  accuracy_note?: string | null
+  stop_reason?: string | null
+  thinking_tokens?: number
+  max_tokens?: number | null
+  truncated?: boolean | null
 }
 
 export interface PiiRedactionResult {
@@ -211,6 +220,7 @@ export interface Cat1RunResponse {
   pii_redaction: PiiRedactionResult
   system1_boundary_note: string
   ground_truth?: Record<string, unknown> | null
+  ablation_portfolio?: Cat1AblationPortfolio | null
 }
 
 export interface BatchItemResult {
@@ -226,12 +236,12 @@ export interface BatchItemResult {
   haiku_latency_ms: number
   gemini_latency_ms: number
   ground_truth?: Record<string, unknown>
-  sonnet_accuracy_pct?: number
-  haiku_naive_accuracy_pct?: number
+  sonnet_accuracy_pct?: number | null
+  haiku_naive_accuracy_pct?: number | null
   haiku_accuracy_pct?: number
   gemini_accuracy_pct?: number
-  sonnet_exact?: boolean
-  haiku_naive_exact?: boolean
+  sonnet_exact?: boolean | null
+  haiku_naive_exact?: boolean | null
   haiku_exact?: boolean
   gemini_exact?: boolean
 }
@@ -261,6 +271,168 @@ export interface Cat1BatchResponse {
   cfo_comparison: CfoScaleRow[]
   summary_callout: string
   accuracy_rollup?: ModelAccuracyRollup[]
+  ablation_portfolio?: Cat1AblationPortfolio | null
+}
+
+// --- Category 1 seven-version ablation (replays/cat1_ablation_summary.json) ---
+
+export interface Cat1AblationAccuracyCell {
+  fields_correct: number | null
+  fields_total: number | null
+  field_accuracy_pct: number | null
+  wilson95: number[] | null
+  items_fully_correct: number | null
+  items: number
+  input_tokens_median?: number | null
+}
+
+export interface Cat1AblationArm extends Cat1AblationAccuracyCell {
+  arm_id: string
+  label: string
+  what: string
+  model: string
+  task: 'report' | 'classify_text' | 'schema' | 'decision' | string
+  output_format: string
+  runnable_in_app: boolean
+  app_rung_id: RungId | null
+  given_allowed_labels: boolean
+  scored_by: 'reader_model' | 'structured_output' | string
+  max_tokens: number | null
+  thinking: string | null
+  runs: number
+  scored_runs: number
+  by_field: Record<string, { hits: number; total: number }>
+  by_sub_task: Record<string, Cat1AblationAccuracyCell>
+  by_group: Record<string, Cat1AblationAccuracyCell>
+  cost_per_1k_items_usd: number | null
+  batch_cost_per_1k_items_usd_computed: number | null
+  input_tokens_median: number | null
+  input_tokens_min: number | null
+  input_tokens_max: number | null
+  output_tokens_median: number | null
+  output_tokens_min: number | null
+  output_tokens_max: number | null
+  thinking_tokens_total: number
+  io_ratio_median: number | null
+  latency_ms_median: number | null
+  truncated: number
+  stop_reasons: Record<string, number>
+  model_mismatches: number
+  schema_parse_failures: number | null
+  keyword_fields_correct: number | null
+  keyword_field_accuracy_pct: number | null
+  reader_value_counts: Record<string, number> | null
+  extractor_agreement: Record<string, number> | null
+}
+
+export interface Cat1AblationLever {
+  lever: string
+  kind: 'ask_less' | 'schema' | 'model' | 'gemini' | 'whole_stack' | string
+  label: string
+  from_arm: string
+  to_arm: string
+  cost_from: number | null
+  cost_to: number | null
+  cost_change_pct: number | null
+  fields_from: number | null
+  fields_to: number | null
+  fields_total: number | null
+  accuracy_change_pp: number | null
+  comparable_accuracy: boolean
+}
+
+export interface Cat1AblationScoringRow {
+  arm_id: string
+  label: string
+  fields_total: number | null
+  keyword_fields_correct: number | null
+  keyword_field_accuracy_pct: number | null
+  reader_fields_correct: number | null
+  reader_field_accuracy_pct: number | null
+  difference_pp: number | null
+  extractor_agreement: Record<string, number> | null
+  reader_value_counts: Record<string, number> | null
+}
+
+export interface Cat1AblationMiss {
+  arm_id: string
+  item_id: string
+  item_title: string
+  sub_task: SubTaskType
+  field: string
+  field_label: string
+  expected: unknown
+  returned: unknown
+  repeats: number[]
+  runs_missed: number
+  runs_total: number
+}
+
+export interface Cat1AblationOriginalRow {
+  arm_id: string
+  app_rung_id: RungId
+  responses: number
+  truncated_at_cap: number | null
+  cap: number | null
+  output_tokens_median: number | null
+  output_tokens_max?: number | null
+  cost_per_1k_items_usd: number | null
+  keyword_fields_correct?: number | null
+  keyword_field_accuracy_pct?: number | null
+  reader_fields_correct?: number | null
+  reader_field_accuracy_pct?: number | null
+  reader_status?: string | null
+  extractor_agreement?: Record<string, number> | null
+  fields_correct?: number | null
+  fields_total?: number | null
+  field_accuracy_pct?: number | null
+}
+
+export interface Cat1AblationPending {
+  planned: number
+  done: number
+  pending: number
+  status: string
+  what: string
+  fields_agree?: number | null
+  fields?: number | null
+}
+
+export interface Cat1AblationPortfolio {
+  schema_version: number
+  source: string
+  source_files: Record<string, string>
+  items: number
+  presets: number
+  batch_items: number
+  repeats: number
+  runs_per_arm: number
+  planned_runs: number
+  ok_runs: number
+  ground_truth_fields_per_repeat: number
+  fields_per_arm: number
+  reader_model: string
+  reader_passes: number
+  settings: Record<string, unknown>
+  arms: Cat1AblationArm[]
+  levers: Cat1AblationLever[]
+  scoring_comparison: Cat1AblationScoringRow[]
+  write_up_note: {
+    never_given_allowed_labels?: boolean
+    ambiguous_fields?: number
+    not_stated_fields?: number
+    fields_read?: number
+    ambiguous_fields_per_arm?: Record<string, number | null>
+    example_ambiguous?: string | null
+  }
+  classification_text_readable: { answers?: number; every_field_stated?: number }
+  misses: Cat1AblationMiss[]
+  original_capture: Cat1AblationOriginalRow[]
+  original_capture_note: string
+  pending: Record<string, Cat1AblationPending>
+  deck_profile: Record<string, unknown>
+  data_quality: Record<string, number>
+  golden_mapping: Record<string, unknown>
 }
 
 export interface CreditShieldCredentials {
@@ -892,6 +1064,8 @@ export interface Cat4RungQuality {
 export interface Cat4PortfolioCell {
   rung_id: string
   runnable_in_app: boolean
+  answer_format?: string
+  adopted?: boolean
   scale: number
   sessions: number
   answers: number
@@ -927,6 +1101,18 @@ export interface Cat4PortfolioCell {
   cost_per_question_billed_sonnet_usd: number | null
   cost_per_question_billed_haiku_usd: number | null
   cache_write_premium_usd: number
+  answers_with_documents_lack_claim?: Cat4Measure | null
+  answers_with_not_in_text_provided_claim?: Cat4Measure | null
+  judged_answers_with_unsupported_absence_claim?: Cat4Measure | null
+}
+
+export interface Cat4FormatChange {
+  adopted_on: string
+  answer_format: string
+  rungs: string[]
+  removed: string[]
+  added: string[]
+  note: string
 }
 
 export interface Cat4BreakEven {
@@ -962,7 +1148,10 @@ export interface Cat4QualityPortfolio {
   corpus: Record<string, Record<string, number>>
   synth_max_tokens: number | null
   matrix_complete: boolean
+  adopted_answer_formats?: Record<string, string>
+  format_change?: Cat4FormatChange | null
   cells: Cat4PortfolioCell[]
+  break_even_basis?: string | null
   break_even: Record<string, Cat4BreakEven[]>
 }
 
@@ -1025,6 +1214,7 @@ export interface Cat4RungSummary {
   avg_reranker_recall_pct: number | null
   total_latency_ms: number
   architectural_notes: string[]
+  answer_format?: string | null
   quality?: Cat4RungQuality | null
   quality_unavailable_reason?: string | null
 }
@@ -1319,6 +1509,17 @@ export interface Cat5GateDisagreement {
   gate_match_gate_output: number
   gate_match_manual: number
   missing_keys: number
+  /** The gate was fixed after the experiment; the counts above are the recorded (pre-fix) runs. */
+  gate_output_note?: string
+  gate_fixed_on?: string | null
+  gate_version_recorded?: string | null
+  gate_version_current?: string | null
+  current_gate_output?: Record<string, unknown>
+  current_gate_matches_manual?: boolean | null
+  after_fix_per_arm?: Cat5GateDisagreementArm[]
+  after_fix_gate_runs?: number
+  after_fix_gate_match_manual?: number
+  after_fix_missing_keys?: number
 }
 
 export interface Cat5AblationPortfolio {

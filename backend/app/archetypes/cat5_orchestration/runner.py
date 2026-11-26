@@ -103,7 +103,7 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, list[str]]:
             [
                 "One projected bundle query replaces the raw table dumps, and the policy manual is sent as a cached prefix.",
                 "The commit tool refuses until the deterministic policy gate (AP-POL-GATE-01) has computed the voucher; "
-                "the model copies its figures.",
+                "the committed voucher carries its figures, as this version's instructions require.",
             ],
         )
     return (
@@ -312,7 +312,7 @@ def _apply_measured_claims(results: list[Cat5RungResult], portfolio: Cat5Ablatio
             )
         set_note(bounded, 0, text + ".")
         ev = bounded.evaluation
-        gate_text = "The voucher is copied from the deterministic policy gate"
+        gate_text = "The committed voucher carries the deterministic policy gate's figures"
         if ev is not None:
             gate_text += f" (rupee fields {ev.matched_fields}/{ev.total_fields} on this invoice)"
         lv = _lever(portfolio, "deterministic gate")
@@ -326,10 +326,17 @@ def _apply_measured_claims(results: list[Cat5RungResult], portfolio: Cat5Ablatio
                 f"{with_gate.exact}/{with_gate.runs}"
             )
             if gd and gd.gate_runs:
+                was = "was" if gd.gate_fixed_on else "is"
                 gate_text += (
-                    f"; on invoice {gd.invoice_id}, where the gate itself is wrong, gated runs committed its figures in "
+                    f"; on invoice {gd.invoice_id}, where the gate's own rule {was} wrong, gated runs committed its figures in "
                     f"{gd.gate_match_gate_output}/{gd.gate_runs} runs"
                 )
+                if gd.gate_fixed_on:
+                    gate_text += f" (the gate has since been fixed, on {gd.gate_fixed_on}"
+                    gate_text += (
+                        f"; re-run on the fixed gate, {gd.after_fix_gate_match_manual}/{gd.after_fix_gate_runs} gated runs "
+                        "matched the manual)" if gd.after_fix_gate_runs else "; not yet re-run on the fixed gate)"
+                    )
         set_note(bounded, 1, gate_text + ".")
     if hybrid:
         set_note(
@@ -379,7 +386,7 @@ def _orchestration_callout(
         caps = sum(a.cap_hits for a in portfolio.arms)
         parts.append(
             f"Across {portfolio.pooled_runs} ablation runs ({len(portfolio.arms)} versions × {portfolio.runs_per_arm}) every "
-            f"version got at least {low}/{portfolio.runs_per_arm} vouchers exactly right. The narrow query cut cost "
+            f"version committed at least {low}/{portfolio.runs_per_arm} vouchers that matched exactly. The narrow query cut cost "
             f"{fmt_pct((1 - nq.cost_billed_ratio) * 100)} and the small model a further "
             f"{fmt_pct((1 - ms.cost_billed_ratio) * 100)}; adding the policy gate raised cost "
             f"{fmt_pct((gt.cost_billed_ratio - 1) * 100)} with exact vouchers {gt.exact_delta_pp:+.0f} pp; "

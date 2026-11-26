@@ -186,7 +186,7 @@ shared_repo_block = {
 plan = await run_swarm_agent("claude-haiku-5-5", shared_repo_block, ORCH_PROMPT, ticket_plus_ci_log)
 triage = await run_swarm_agent("claude-haiku-5-5", shared_repo_block, TRIAGER_PROMPT, plan + buggy_file)
 
-# 3) Code & Patch Author runs on Claude Sonnet 5.5 (frontier coding only, no noisy OTel spans)
+# 3) Code & Patch Author runs on Claude Sonnet 5.5 (patch authoring only, no OTel spans in its context)
 patch = await run_swarm_agent("claude-sonnet-5-5", shared_repo_block, AUTHOR_PROMPT, triage + buggy_file)
 
 # 4) Deterministic PR-SANDBOX-GATE-01 runs offline in Python -I subprocess (0 LLM tokens)

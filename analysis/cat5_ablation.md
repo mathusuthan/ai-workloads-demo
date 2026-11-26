@@ -1,6 +1,6 @@
 # Category 5 six-arm ablation — factual summary
 
-Generated 2026-11-26T03:18:47.001291+00:00. Fixture version `cat5-ablation-fixtures-2026-11-26.v1`. Records read: 217; ok runs used (latest per key at current settings): 198; expected 198 (6 arms x 11 invoices x 3 repeats). Matrix complete: True; balanced: True.
+Generated 2026-11-26T05:02:14.908270+00:00. Fixture version `cat5-ablation-fixtures-2026-11-26.v1`. Records read: 223; ok runs used (latest per key at current settings): 198; expected 198 (6 arms x 11 invoices x 3 repeats). Matrix complete: True; balanced: True.
 
 Settings: max_tokens 4096 on every turn; gate arms step budget 4 (hard cap 5 model turns, as the app); neutral arms cap 12 model turns; call timeout 180s. Costs derived from recorded tokens with app/core/pricing.py; cold/warm by the app's `_compute_step_cold_warm` rule.
 
@@ -218,24 +218,26 @@ Golden scripted naive runs (unbounded_sonnet_loop prompt, 7-step one-tool-per-st
 
 ## Fixtures: hand derivation vs deterministic gate
 
-| invoice | scenario | tier | hub | expected decision (manual) | escalation | grand total INR | agrees with gate | group |
-|---|---|---|---|---|---|---|---|---|
-| inv-01 | Statutory GST escrow, MSE vendor, clean receipt (original) | routine | FC-BLR-01 | APPROVE_WITH_GST_ESCROW | False | 2,171,200.00 | True | default |
-| inv-02 | Multi-factor dispute: DOA + amendment + unauthorised hike + freight (original) | dispute | FC-BOM-02 | APPROVE_PARTIAL_DEBIT_NOTE | True | 3,899,900.00 | True | default |
-| inv-03 | Hard stop: cancelled IRN + phantom line (original) | hard_stop | FC-DEL-03 | BLOCK_EXCEPTION_HOLD | False | 3,127,000.00 | True | default |
-| inv-04 | Clean full match | routine | FC-HYD-01 | APPROVE_CLEAN | False | 2,542,900.00 | True | default |
-| inv-05 | DOA rejects only | dispute | FC-BLR-01 | APPROVE_PARTIAL_DEBIT_NOTE | True | 2,950,000.00 | True | default |
-| inv-06 | Price variance inside the 1.5% band (standard DDP INR PO, no amendment) | routine | FC-DEL-03 | APPROVE_PARTIAL_DEBIT_NOTE | True | 4,340,984.00 | False | gate_disagreement |
-| inv-07 | Price variance outside tolerance, no amendment | dispute | FC-BOM-02 | APPROVE_PARTIAL_DEBIT_NOTE | True | 3,096,320.00 | True | default |
-| inv-08 | Authorised amendment only | routine | FC-HYD-01 | APPROVE_CLEAN | False | 3,919,370.00 | True | default |
-| inv-09 | Freight above the PO cap | dispute | FC-DEL-03 | APPROVE_PARTIAL_DEBIT_NOTE | True | 5,318,850.00 | True | default |
-| inv-10 | Statutory GST escrow on a non-MSE large-enterprise vendor (5% GST) | routine | FC-BOM-02 | APPROVE_WITH_GST_ESCROW | False | 3,273,900.00 | True | default |
-| inv-11 | Hard stop: phantom unreceived line (>10%) with an active IRN and matched GSTR-2B | hard_stop | FC-BLR-01 | BLOCK_EXCEPTION_HOLD | False | 3,182,460.00 | True | default |
-| inv-12 | Multi-factor dispute: short receipt + unauthorised hike (draft amendment only) + DOA on an amended line + freight over cap, with GSTR-2B pending | dispute | FC-HYD-01 | APPROVE_PARTIAL_DEBIT_NOTE | True | 5,981,420.00 | True | default |
+| invoice | scenario | tier | hub | expected decision (manual) | escalation | grand total INR | agrees with the gate as recorded (v1-band-unconditional) | agrees with the current gate (v2-manual-aligned) | group |
+|---|---|---|---|---|---|---|---|---|---|
+| inv-01 | Statutory GST escrow, MSE vendor, clean receipt (original) | routine | FC-BLR-01 | APPROVE_WITH_GST_ESCROW | False | 2,171,200.00 | True | True | default |
+| inv-02 | Multi-factor dispute: DOA + amendment + unauthorised hike + freight (original) | dispute | FC-BOM-02 | APPROVE_PARTIAL_DEBIT_NOTE | True | 3,899,900.00 | True | True | default |
+| inv-03 | Hard stop: cancelled IRN + phantom line (original) | hard_stop | FC-DEL-03 | BLOCK_EXCEPTION_HOLD | False | 3,127,000.00 | True | True | default |
+| inv-04 | Clean full match | routine | FC-HYD-01 | APPROVE_CLEAN | False | 2,542,900.00 | True | True | default |
+| inv-05 | DOA rejects only | dispute | FC-BLR-01 | APPROVE_PARTIAL_DEBIT_NOTE | True | 2,950,000.00 | True | True | default |
+| inv-06 | Price variance inside the 1.5% band (standard DDP INR PO, no amendment) | routine | FC-DEL-03 | APPROVE_PARTIAL_DEBIT_NOTE | True | 4,340,984.00 | False | True | gate_disagreement |
+| inv-07 | Price variance outside tolerance, no amendment | dispute | FC-BOM-02 | APPROVE_PARTIAL_DEBIT_NOTE | True | 3,096,320.00 | True | True | default |
+| inv-08 | Authorised amendment only | routine | FC-HYD-01 | APPROVE_CLEAN | False | 3,919,370.00 | True | True | default |
+| inv-09 | Freight above the PO cap | dispute | FC-DEL-03 | APPROVE_PARTIAL_DEBIT_NOTE | True | 5,318,850.00 | True | True | default |
+| inv-10 | Statutory GST escrow on a non-MSE large-enterprise vendor (5% GST) | routine | FC-BOM-02 | APPROVE_WITH_GST_ESCROW | False | 3,273,900.00 | True | True | default |
+| inv-11 | Hard stop: phantom unreceived line (>10%) with an active IRN and matched GSTR-2B | hard_stop | FC-BLR-01 | BLOCK_EXCEPTION_HOLD | False | 3,182,460.00 | True | True | default |
+| inv-12 | Multi-factor dispute: short receipt + unauthorised hike (draft amendment only) + DOA on an amended line + freight over cap, with GSTR-2B pending | dispute | FC-HYD-01 | APPROVE_PARTIAL_DEBIT_NOTE | True | 5,981,420.00 | True | True | default |
 
 ## When the deterministic gate is wrong (inv-06)
 
-These runs never enter the pooled tables. Lead ruling: the manual derivation is correct and the gate is wrong. Manual 2.1 allows the 1.5% band only when the PO currency notes specify an index-linked float; this PO is plain DDP INR with no amendment, so line 1 pays at the PO rate. The gate's WITHIN_1.5PCT_TOLERANCE branch ignores that condition.
+These runs never enter the pooled tables. Lead ruling: the manual derivation is correct and the gate is wrong. Manual 2.1 allows the 1.5% band only when the PO currency notes specify an index-linked float; this PO is plain DDP INR with no amendment, so line 1 pays at the PO rate. The gate's WITHIN_1.5PCT_TOLERANCE branch ignored that condition when the experiment ran; it was fixed on 2026-11-26 (the band now passes only on index-linked POs).
+
+The gate was fixed on 2026-11-26, after the experiment (v1-band-unconditional -> v2-manual-aligned). Every recorded run below used the pre-fix gate. The current gate equals the manual derivation on inv-06.
 
 Manual 2.1: "If `po_unit_price_inr < billed_unit_price_inr <= po_unit_price_inr * 1.015`: tiny FX/metal-surcharge rounding within `1.50%` MAY pass ONLY when PO currency notes specify index-linked float; otherwise standard landed DDP catalog POs default to PO unit rate unless amended."
 
@@ -246,12 +248,14 @@ Manual derivation (ground truth): APPROVE_PARTIAL_DEBIT_NOTE, net 3,656,000.00, 
   - 3,678,800.00 - 3,656,000.00 = 22,800.00
   - Case A: payout = ROUND(3,656,000 x 0.18, 2) = 658,080.00; escrow 0.00
   - Case A with debit note > 0 -> APPROVE_PARTIAL_DEBIT_NOTE
-Gate output: APPROVE_CLEAN, net 3,678,800.00, GST payout 662,184.00, escrow 0.00, debit 0.00, escalation False.
+Gate output as recorded, before the fix: APPROVE_CLEAN, net 3,678,800.00, GST payout 662,184.00, escrow 0.00, debit 0.00, escalation False.
   - L1 NM-CBL-1.5SQ-90M: 1,480 < 1,499 <= 1,502.20 -> price_rule WITHIN_1.5PCT_TOLERANCE -> rate 1,499 (billed); authorised 1,200 x 1,499 = 1,798,800; deduction 0.
   - L2 NM-CBL-2.5SQ-90M: rate 2,350 (= PO); authorised 1,880,000.
   - Net 1,798,800 + 1,880,000 = 3,678,800.00; debit 3,678,800 - 3,678,800 = 0.00; GST Case A ROUND(3,678,800 x 0.18, 2) = 662,184.00; APPROVE_CLEAN; escalation_required false.
 
-fetch_3way_match_bundle does not return purchase_orders.currency (the PO currency notes), so bundle arms cannot check the manual's index-linked-float condition; raw arms can (query_po_raw returns it).
+When the experiment ran, fetch_3way_match_bundle did not return purchase_orders.currency (the PO currency notes), so bundle arms could not check the manual's index-linked-float condition; raw arms could (query_po_raw returns it). Since 2026-11-26 the bundle returns it (bundle v2-manual-aligned, which also adds the vendor risk_flag, any posted vouchers for the invoice and each line's PO GST rate); every recorded run used the earlier bundle.
+
+### Before the fix (recorded, gate v1-band-unconditional)
 
 | arm | n | matches manual | matches gate output | neither | no commit | decisions committed | line 1 NM-CBL-1.5SQ-90M rate paid (PO 1,480 / billed 1,499 / other) |
 |---|---|---|---|---|---|---|---|
@@ -269,6 +273,17 @@ Line-1 rate is read from the committed net principal (3,656,000 = PO rate, 3,678
 - bundle_gate_haiku_escalate / r0 (matches_gate_output, line 1 billed_rate): committed {"decision": "APPROVE_CLEAN", "authorized_net_principal_inr": 3678800.0, "authorized_gst_payout_inr": 662184.0, "gst_escrow_holdback_inr": 0.0, "debit_note_deduction_inr": 0.0}; tools fetch_3way_match_bundle, run_policy_tolerance_gate, commit_reconciliation_voucher; final message: **Voucher VCH-4157-HYB committed for INV-DL-2026-4157: APPROVE_CLEAN.**  - Net principal: ₹36,78,800.00 - GST payout: ₹6,62,184.00 (GSTR-2B matched; no escrow) - Debit note deduction: ₹0.00 - Total: ₹43,40,984.00, matching the claimed grand total  All 1,200 + 800 units were accepted at GRN with zero DOA. The IRN is active and verified, and freight claimed is zero.  **Flag for review:** Line 1 (NM-CBL-1.5SQ-90M) is billed at ₹1,499 against a PO rate of ₹1,480, a 1.28% overrun. The gate allowed it under the 1.5% rounding band. The SOP only permits this when the PO carries an index-linked float c
 - bundle_gate_haiku_escalate / r1 (matches_gate_output, line 1 billed_rate): committed {"decision": "APPROVE_CLEAN", "authorized_net_principal_inr": 3678800.0, "authorized_gst_payout_inr": 662184.0, "gst_escrow_holdback_inr": 0.0, "debit_note_deduction_inr": 0.0}; tools fetch_3way_match_bundle, run_policy_tolerance_gate, commit_reconciliation_voucher; final message: **AP Audit Summary: INV-DL-2026-4157**  The voucher is committed as **VCH-4157-HYB**, decision **APPROVE_CLEAN**. Sonnet escalation did not fire; the gate returned `escalation_required = false`.  - **Principal:** INR 3,678,800.00 (line 1: INR 1,798,800; line 2: INR 1,880,000) - **GST (18%):** INR 662,184.00 released (GSTR-2B MATCHED_VERIFIED) - **Escrow holdback:** INR 0.00 - **Debit note:** INR 0.00 - **Grand total:** INR 4,340,984.00, matching the claim  All 2,000 units were accepted at GRN with no DOA. Line 1 is billed at INR 1,499 against a PO rate of INR 1,480 (+1.28%). The gate accepted 
 - bundle_gate_haiku_escalate / r2 (matches_gate_output, line 1 billed_rate): committed {"decision": "APPROVE_CLEAN", "authorized_net_principal_inr": 3678800.0, "authorized_gst_payout_inr": 662184.0, "gst_escrow_holdback_inr": 0.0, "debit_note_deduction_inr": 0.0}; tools fetch_3way_match_bundle, run_policy_tolerance_gate, commit_reconciliation_voucher; final message: **Executive AP Audit Summary: INV-DL-2026-4157**  Voucher **VCH-4157-HYB** is committed as **APPROVE_CLEAN**. Indraprastha Cables & Wires Ltd. (FC-DEL-03, PO-NM-DEL-4157) is cleared for payment.  - **Principal:** INR 36,78,800.00 | **GST (18%):** INR 6,62,184.00 | **Total:** INR 43,40,984.00 - **Debit note:** INR 0. All 2,000 units were accepted at GRN with no DOA rejections, and no freight was claimed. - **Compliance:** IRN ACTIVE_VERIFIED and GSTR-2B MATCHED_VERIFIED, so no GST escrow is needed. - **Watch item:** Line 1 is billed at ₹1,499 against a PO rate of ₹1,480 (+1.28%). It is within t
+
+### After the fix (gate v2-manual-aligned; gate arms only, no-gate arms are not re-run)
+
+Current gate output: APPROVE_PARTIAL_DEBIT_NOTE, net 3,656,000.00, GST payout 658,080.00, escrow 0.00, debit 22,800.00, escalation True.
+
+| arm | n | matches manual | matches gate output | neither | no commit | decisions committed | line 1 NM-CBL-1.5SQ-90M rate paid (PO 1,480 / billed 1,499 / other) |
+|---|---|---|---|---|---|---|---|
+| bundle_gate_sonnet_cached | 3 | 3 | 0 | 0 | 0 | APPROVE_PARTIAL_DEBIT_NOTE 3 | 3 / 0 / 0 |
+| bundle_gate_haiku_escalate | 3 | 3 | 0 | 0 | 0 | APPROVE_PARTIAL_DEBIT_NOTE 3 | 3 / 0 / 0 |
+
+After the fix the gate output equals the manual derivation, so a run whose committed voucher carries its figures is counted under 'matches manual'.
 
 ## For lead review (every non-exact run)
 
@@ -298,7 +313,8 @@ Line-1 rate is read from the committed net principal (3,656,000 = PO rate, 3,678
 - The deterministic gate sets escalation_required whenever the debit note is above zero (or on 2+ discrepancies), so single-factor debit notes (DOA only, freight only, one price hike) escalate in the Haiku -> Sonnet arm even though manual 6.2 describes escalation for multi-factor disputes. expected_escalation follows the gate rule.
 - Thinking differs by model in the app's call function: Sonnet runs with thinking {type: between_tools}, Haiku with thinking disabled. The model-swap levers therefore also change thinking.
 - Voucher ids in no-gate arms end in -UNB: those arms reuse the app session's unbounded_sonnet_loop rung id to disable the gate requirement, and the app derives the voucher-id suffix from the rung id. The model sees this id.
-- Latent gate gaps not exercised by the default fixtures: the gate ignores approved_freight_waiver_inr (2.2/2.3 allow a freight-waiver amendment); it takes the GST rate from the first invoice line only; it does not implement Trigger 3 (duplicate invoice or PAYMENT_FREEZE vendor). The 1.5% band gap is exercised by inv-06 (separate section).
+- Gate gaps not exercised by any recorded invoice, fixed on 2026-11-26 after the experiment: the gate ignored approved_freight_waiver_inr (2.2/2.3 allow a freight-waiver amendment; it now raises the cap by the waivers on signed, active amendments); it took the GST rate from the first invoice line only (it now applies each line's PO GST rate when rates differ); it did not implement Trigger 3 (it now hard-blocks an invoice_id already posted in reconciliation_vouchers or a vendor flagged PAYMENT_FREEZE). No recorded invoice has a waiver, mixed GST rates, a prior voucher or a frozen vendor, so the gate returns byte-identical output for all 11 pooled invoices.
+- Gate fix (2026-11-26, after the experiment): the gate's 1.5% band now passes only when the PO's currency notes (purchase_orders.currency) say the price is index-linked, as manual 2.1 requires; otherwise the line pays the PO rate (price_rule WITHIN_1.5PCT_NOT_INDEX_LINKED_PO_RATE); the three gaps above were fixed at the same time (gate v2-manual-aligned). fetch_3way_match_bundle (bundle v2-manual-aligned) now also returns purchase_orders.currency, the vendor risk_flag, the invoice's posted vouchers and each line's PO GST rate, so a bundle arm can check the same conditions as the gate. Records carry settings.gate_version / bundle_version (absent = v1, before the fix). For the 11 pooled invoices the fixed gate returns byte-identical output and the added bundle fields do not bear on them (none has a price rise inside the 1.5% band, a waiver, mixed rates, a prior voucher or a frozen vendor), so their records stay current. On inv-06 the gate arms are reported by gate version (before / after the fix).
 - The Anthropic SDK client retries failed or timed-out calls (default max_retries=2) inside one recorded turn; a retried call is not visible in the records and may have been billed.
 - Tool precision (the app's metric, min(optimal, total) / total) counts only fetch_3way_match_bundle, run_policy_tolerance_gate and commit_reconciliation_voucher as optimal. A raw SELECT * tool is never credited, so a raw arm's precision is at most 1 / (number of calls) however few lookups it makes; it is not comparable between raw and bundle arms. Use the per-tool call counts instead.
 - Loop rule (v2): a turn cut off by max_tokens ends the run and its tool_use blocks are recorded but not executed; tool_use blocks in any other turn are executed and the loop continues, whatever the stop_reason (the API can return end_turn together with tool_use). One v1 record that stopped on such a turn is superseded. The app's live runner follows the same rule.

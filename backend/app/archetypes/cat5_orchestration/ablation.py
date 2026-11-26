@@ -23,6 +23,7 @@ import statistics
 from collections import Counter
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from dataclasses import asdict, dataclass
+from functools import lru_cache
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,10 @@ from uuid import uuid4
 
 from app.archetypes.cat5_orchestration.accuracy import evaluate_cat5_adjudication
 from app.archetypes.cat5_orchestration.erp_db import (
+    BUNDLE_VERSION,
+    BUNDLE_VERSION_V1,
+    GATE_VERSION,
+    GATE_VERSION_V1,
     GOVERNED_TOOLS,
     NAIVE_TOOLS,
     Cat5ErpSession,
@@ -72,6 +77,14 @@ CALL_TIMEOUT_S = 180.0
 TOOL_RESULT_HEAD_CHARS = 1500
 # Recorded only (not compared for superseding). v2: tool_use blocks run unless the turn hit max_tokens.
 LOOP_RULE = "v2-execute-tool-use-unless-truncated"
+
+# Policy gate fixed after the experiment (manual 2.1: the 1.5% band only for index-linked POs) and the bundle now
+# returns the PO currency notes. Records carry `gate_version` / `bundle_version` in settings; records written before
+# the fix lack them and are v1. Neither is in _SETTINGS_COMPARED: for the 11 default invoices the fixed gate returns
+# byte-identical output (tested), and the added bundle field does not bear on them (no inside-band rise on any of
+# them), so their records stay current. Only where the two gate versions disagree (inv-06) does a gate arm's record
+# count for its own gate version (see `gate_version_matters`).
+GATE_FIX_DATE = "2026-11-26"
 
 # The app's rung 1 now uses this same text (prompts.CAT5_FREE_CHOICE_PROTOCOL); one definition for both.
 NEUTRAL_PROTOCOL = CAT5_FREE_CHOICE_PROTOCOL
@@ -215,6 +228,8 @@ def current_settings(arm_id: str, preset_id: str) -> dict[str, Any]:
         "timeout_s": CALL_TIMEOUT_S,
         "fixture_version": CAT5_ABLATION_FIXTURE_VERSION,
         "loop_rule": LOOP_RULE,
+        "gate_version": GATE_VERSION,
+        "bundle_version": BUNDLE_VERSION,
         "invoice_fingerprint": invoice_fingerprint(preset_id),
         "arm_fingerprint": arm_fingerprint(arm_id),
     }
@@ -251,27 +266,65 @@ def insert_ablation_rows(conn: sqlite3.Connection, rows: dict[str, list[dict[str
 class AblationErpSession(Cat5ErpSession):
     """`Cat5ErpSession` on a fresh app-seeded in-memory ERP plus the ablation rows."""
 
-    def __init__(self, *, rung_id: str, extra_rows: dict[str, list[dict[str, Any]]] | None = None) -> None:
-        super().__init__(rung_id=rung_id)  # self.conn = create_seeded_erp_connection()
+    def __init__(
+        self,
+        *,
+        rung_id: str,
+        extra_rows: dict[str, list[dict[str, Any]]] | None = None,
+        gate_version: str = GATE_VERSION,
+        bundle_version: str = BUNDLE_VERSION,
+    ) -> None:
+        # self.conn = create_seeded_erp_connection()
+        super().__init__(rung_id=rung_id, gate_version=gate_version, bundle_version=bundle_version)
         insert_ablation_rows(self.conn, CAT5_ABLATION_ERP_ROWS if extra_rows is None else extra_rows)
 
     def all_vouchers(self) -> list[dict[str, Any]]:
         return [dict(r) for r in self.conn.execute("SELECT * FROM reconciliation_vouchers ORDER BY voucher_id")]
 
 
-def gate_output_for(preset_id: str) -> dict[str, Any]:
+def gate_output_for(preset_id: str, gate_version: str = GATE_VERSION) -> dict[str, Any]:
     """Run the app's deterministic gate on a fresh extended ERP for one invoice."""
     s = AblationErpSession(rung_id="bounded_sonnet_cached_gate")
     try:
-        return evaluate_deterministic_policy_gate(s.conn, CAT5_ABLATION_PRESETS_BY_ID[preset_id]["invoice_id"])
+        return evaluate_deterministic_policy_gate(
+            s.conn, CAT5_ABLATION_PRESETS_BY_ID[preset_id]["invoice_id"], gate_version=gate_version
+        )
     finally:
         s.close()
 
 
-def compare_with_gate(preset_id: str) -> dict[str, Any]:
+def record_gate_version(record: dict[str, Any]) -> str:
+    """Gate version a record ran against; records written before the fix lack the field and are v1."""
+    return str((record.get("settings") or {}).get("gate_version") or GATE_VERSION_V1)
+
+
+def record_bundle_version(record: dict[str, Any]) -> str:
+    return str((record.get("settings") or {}).get("bundle_version") or BUNDLE_VERSION_V1)
+
+
+def session_for_record(record: dict[str, Any], *, rung_id: str) -> AblationErpSession:
+    """A fresh ERP session with the tool versions the record ran against (for replaying its recorded tool calls)."""
+    return AblationErpSession(rung_id=rung_id, gate_version=record_gate_version(record),
+                              bundle_version=record_bundle_version(record))
+
+
+@lru_cache(maxsize=None)
+def gate_versions_disagree(preset_id: str) -> bool:
+    """True when the pre-fix (v1) and current gate return different output for this invoice."""
+    return json.dumps(gate_output_for(preset_id, GATE_VERSION_V1), sort_keys=True) != json.dumps(
+        gate_output_for(preset_id, GATE_VERSION), sort_keys=True
+    )
+
+
+def gate_version_matters(arm_id: str, preset_id: str) -> bool:
+    """A gate arm's outcome on an invoice where the gate versions disagree depends on the gate version (inv-06)."""
+    return bool(_arm(arm_id).gate) and preset_id in CAT5_ABLATION_PRESETS_BY_ID and gate_versions_disagree(preset_id)
+
+
+def compare_with_gate(preset_id: str, gate_version: str = GATE_VERSION) -> dict[str, Any]:
     """Hand-derived ground truth vs the gate: per-field differences (rupees within 0.005) + escalation."""
     gt = CAT5_ABLATION_PRESETS_BY_ID[preset_id]["ground_truth"]
-    g = gate_output_for(preset_id)
+    g = gate_output_for(preset_id, gate_version)
     gate_vals = {"decision": g.get("recommended_decision"), **{f: g.get(f) for f in VOUCHER_FIELDS[1:]}}
     diffs: dict[str, dict[str, Any]] = {}
     for f in VOUCHER_FIELDS:
@@ -544,17 +597,38 @@ def superseded_records(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]
     return out
 
 
+def is_current_gate(record: dict[str, Any]) -> bool:
+    """False only for a gate-arm record on an invoice where the gate versions disagree, run on a non-current gate.
+    Such a record is kept as before-fix evidence (reported by gate version, not superseded); its key is pending
+    again at the current gate."""
+    try:
+        matters = gate_version_matters(str(record["arm_id"]), str(record["preset_id"]))
+    except (KeyError, ValueError):
+        return True
+    return not matters or record_gate_version(record) == GATE_VERSION
+
+
 def select_pending(planned: Iterable[RunKey], existing: Iterable[dict[str, Any]]) -> list[RunKey]:
-    """A key is done only with an `ok` record at the current settings; errors and superseded records leave it pending."""
-    done = {record_key(r) for r in existing if r.get("status") == "ok" and is_current_settings(r)}
+    """A key is done only with an `ok` record at the current settings (and, where it matters, the current gate);
+    errors and superseded records leave it pending."""
+    done = {record_key(r) for r in existing if r.get("status") == "ok" and is_current_settings(r) and is_current_gate(r)}
     return [k for k in planned if k not in done]
 
 
 def latest_ok_current(records: Iterable[dict[str, Any]]) -> dict[RunKey, dict[str, Any]]:
     out: dict[RunKey, dict[str, Any]] = {}
     for r in records:
-        if r.get("status") == "ok" and is_current_settings(r):
+        if r.get("status") == "ok" and is_current_settings(r) and is_current_gate(r):
             out[record_key(r)] = r  # file order: later wins
+    return out
+
+
+def latest_ok_by_gate_version(records: Iterable[dict[str, Any]]) -> dict[str, dict[RunKey, dict[str, Any]]]:
+    """Latest ok record per key at current settings, split by the gate version it ran against."""
+    out: dict[str, dict[RunKey, dict[str, Any]]] = {}
+    for r in records:
+        if r.get("status") == "ok" and is_current_settings(r):
+            out.setdefault(record_gate_version(r), {})[record_key(r)] = r
     return out
 
 
@@ -1097,6 +1171,7 @@ def fixture_table() -> list[dict[str, Any]]:
                 "invoice_grand_total_inr": p["invoice_grand_total_inr"],
                 "source": p.get("source"),
                 "derivation_agrees_with_gate": cmp["agree"],
+                "derivation_agrees_with_recorded_gate": compare_with_gate(p["id"], GATE_VERSION_V1)["agree"],
                 "differences": cmp["differences"],
                 "in_default_matrix": p["id"] in CAT5_ABLATION_DEFAULT_INVOICE_IDS,
                 "group": "gate_disagreement" if p["id"] in CAT5_ABLATION_GATE_DISAGREEMENT else "default",
@@ -1120,61 +1195,96 @@ def _line1_rate(voucher: dict[str, Any] | None, dis: dict[str, Any]) -> str:
     return "other"
 
 
+def _gate_truth(values: dict[str, Any], preset: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **values,
+        "required_evidence_tables": preset["ground_truth"]["required_evidence_tables"],
+        "optimal_tool_calls": preset["ground_truth"]["optimal_tool_calls"],
+    }
+
+
+def _score_gate_group(
+    latest: dict[RunKey, dict[str, Any]],
+    arm_ids: Sequence[str],
+    pid: str,
+    dis: dict[str, Any],
+    gate_gt: dict[str, Any],
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Per-arm counts against both truths (manual first) for one set of records."""
+    per_arm: dict[str, Any] = {}
+    runs_out: list[dict[str, Any]] = []
+    for a in arm_ids:
+        recs = [r for (ka, kp, _), r in sorted(latest.items()) if ka == a and kp == pid]
+        counts = {"runs": len(recs), "matches_manual": 0, "matches_gate_output": 0, "neither": 0, "no_commit": 0}
+        decisions: Counter[str] = Counter()
+        line1: Counter[str] = Counter()
+        for r in recs:
+            v = r.get("committed_voucher")
+            manual_exact = score_record(r)["exact"]
+            gate_exact = evaluate_cat5_adjudication(
+                committed_voucher=v,
+                ground_truth=gate_gt,
+                tables_touched=r.get("tables_touched") or [],
+                total_tool_calls=int(r.get("total_tool_calls") or 0),
+                optimal_tool_calls=int(r.get("optimal_tool_calls") or 0),
+                steps_used=int(r.get("turns_used") or 0),
+                max_step_budget=int((r.get("settings") or {}).get("step_budget") or ARMS[a].step_budget),
+            ).exact_match
+            if not v:
+                cls = "no_commit"
+            elif manual_exact:
+                cls = "matches_manual"
+            elif gate_exact:
+                cls = "matches_gate_output"
+            else:
+                cls = "neither"
+            counts[cls] += 1
+            decisions[str((v or {}).get("decision") or "(no commit)")] += 1
+            rate = _line1_rate(v, dis)
+            line1[rate] += 1
+            runs_out.append({
+                "run_id": r.get("run_id"), "arm_id": a, "repeat_index": r.get("repeat_index"), "class": cls,
+                "gate_version": record_gate_version(r) if ARMS[a].gate else None,
+                "line1_rate": rate, "committed": ({f: v.get(f) for f in VOUCHER_FIELDS} if v else None),
+                "tools_called": [c.get("name") for c in _all_tool_calls(r)],
+                "final_message": r.get("final_message") or "",
+            })
+        per_arm[a] = {**counts, "decisions": dict(decisions), "line1_rate": dict(line1), "gate_arm": ARMS[a].gate}
+    return per_arm, runs_out
+
+
 def gate_disagreement_section(
     records: Sequence[dict[str, Any]],
     *,
     arm_ids: Sequence[str] = ARM_IDS,
     expected_repeats: int = 0,
 ) -> dict[str, Any]:
-    """Runs on invoices where the gate is wrong (inv-06): scored against both truths, never pooled."""
-    latest = latest_ok_current(records)
+    """Runs on the invoice where the pre-fix gate was wrong (inv-06): scored against both truths, never pooled.
+
+    `per_arm` / `runs` / `missing_keys` are the recorded experiment: no-gate arms plus gate arms on the pre-fix
+    gate (v1). `after_fix` holds the gate arms re-run on the current gate (empty until they are run); no-gate arms do
+    not depend on the gate and are not re-run."""
+    current = [r for r in records if r.get("status") == "ok" and is_current_settings(r)]
+    before: dict[RunKey, dict[str, Any]] = {}
+    after: dict[RunKey, dict[str, Any]] = {}
+    for r in current:  # file order: later wins
+        gate_arm = ARMS[r["arm_id"]].gate if r.get("arm_id") in ARMS else False
+        gv = record_gate_version(r)
+        if not gate_arm or gv == GATE_VERSION_V1:
+            before[record_key(r)] = r
+        if gate_arm and gv == GATE_VERSION:
+            after[record_key(r)] = r
+    gate_arms = [a for a in arm_ids if ARMS[a].gate]
     out: dict[str, Any] = {}
     for pid, dis in CAT5_ABLATION_GATE_DISAGREEMENT.items():
         preset = CAT5_ABLATION_PRESETS_BY_ID[pid]
-        gate_gt = {
-            **dis["gate_output_truth"],
-            "required_evidence_tables": preset["ground_truth"]["required_evidence_tables"],
-            "optimal_tool_calls": preset["ground_truth"]["optimal_tool_calls"],
-        }
-        per_arm: dict[str, Any] = {}
-        runs_out: list[dict[str, Any]] = []
-        for a in arm_ids:
-            recs = [r for (ka, kp, _), r in sorted(latest.items()) if ka == a and kp == pid]
-            counts = {"runs": len(recs), "matches_manual": 0, "matches_gate_output": 0, "neither": 0, "no_commit": 0}
-            decisions: Counter[str] = Counter()
-            line1: Counter[str] = Counter()
-            for r in recs:
-                v = r.get("committed_voucher")
-                manual_exact = score_record(r)["exact"]
-                gate_exact = evaluate_cat5_adjudication(
-                    committed_voucher=v,
-                    ground_truth=gate_gt,
-                    tables_touched=r.get("tables_touched") or [],
-                    total_tool_calls=int(r.get("total_tool_calls") or 0),
-                    optimal_tool_calls=int(r.get("optimal_tool_calls") or 0),
-                    steps_used=int(r.get("turns_used") or 0),
-                    max_step_budget=int((r.get("settings") or {}).get("step_budget") or ARMS[a].step_budget),
-                ).exact_match
-                if not v:
-                    cls = "no_commit"
-                elif manual_exact:
-                    cls = "matches_manual"
-                elif gate_exact:
-                    cls = "matches_gate_output"
-                else:
-                    cls = "neither"
-                counts[cls] += 1
-                decisions[str((v or {}).get("decision") or "(no commit)")] += 1
-                rate = _line1_rate(v, dis)
-                line1[rate] += 1
-                runs_out.append({
-                    "run_id": r.get("run_id"), "arm_id": a, "repeat_index": r.get("repeat_index"), "class": cls,
-                    "line1_rate": rate, "committed": ({f: v.get(f) for f in VOUCHER_FIELDS} if v else None),
-                    "tools_called": [c.get("name") for c in _all_tool_calls(r)],
-                    "final_message": r.get("final_message") or "",
-                })
-            per_arm[a] = {**counts, "decisions": dict(decisions), "line1_rate": dict(line1), "gate_arm": ARMS[a].gate}
+        per_arm, runs_out = _score_gate_group(before, arm_ids, pid, dis, _gate_truth(dis["gate_output_truth"], preset))
+        g2 = gate_output_for(pid, GATE_VERSION)
+        g2_truth = {"decision": g2.get("recommended_decision"), **{f: g2.get(f) for f in VOUCHER_FIELDS[1:]},
+                    "expected_escalation": bool(g2.get("escalation_required"))}
+        per_arm_after, runs_after = _score_gate_group(after, gate_arms, pid, dis, _gate_truth(g2_truth, preset))
         expected = plan_matrix(list(arm_ids), [pid], expected_repeats)
+        expected_after = plan_matrix(gate_arms, [pid], expected_repeats)
         out[pid] = {
             "ruling": dis["ruling"],
             "manual_text": CAT5_ABLATION_EXCLUDED_PENDING_REVIEW.get(pid, {}).get("manual_text", ""),
@@ -1183,15 +1293,30 @@ def gate_disagreement_section(
                                    preset["derivation"]["debit_note_deduction_inr"], preset["derivation"]["gst"],
                                    preset["derivation"]["decision"]],
             "gate_output_truth": dict(dis["gate_output_truth"]),
+            "gate_output_note": dis.get("gate_output_note", ""),
             "gate_calculation": list(dis["gate_calculation"]),
             "line1": dict(dis["line1"]),
-            "bundle_note": (
-                "fetch_3way_match_bundle does not return purchase_orders.currency (the PO currency notes), so bundle "
-                "arms cannot check the manual's index-linked-float condition; raw arms can (query_po_raw returns it)."
-            ),
+            "bundle_note": dis.get("bundle_note", ""),
+            "gate_fix": {
+                "fixed_on": GATE_FIX_DATE,
+                "gate_version_recorded": GATE_VERSION_V1,
+                "gate_version_current": GATE_VERSION,
+                "current_gate_output": g2_truth,
+                "current_gate_matches_manual": all(
+                    (g2_truth[f] == preset["ground_truth"][f]) if f in ("decision", "expected_escalation")
+                    else abs(float(g2_truth[f]) - float(preset["ground_truth"][f])) <= 0.005
+                    for f in (*VOUCHER_FIELDS, "expected_escalation")
+                ),
+            },
             "per_arm": per_arm,
             "runs": runs_out,
-            "missing_keys": [list(k) for k in expected if k not in latest],
+            "missing_keys": [list(k) for k in expected if k not in before],
+            "after_fix": {
+                "gate_version": GATE_VERSION,
+                "per_arm": per_arm_after,
+                "runs": runs_after,
+                "missing_keys": [list(k) for k in expected_after if k not in after],
+            },
         }
     return out
 
@@ -1207,9 +1332,22 @@ ANALYSIS_NOTES: tuple[str, ...] = (
     "with thinking disabled. The model-swap levers therefore also change thinking.",
     "Voucher ids in no-gate arms end in -UNB: those arms reuse the app session's unbounded_sonnet_loop rung id to "
     "disable the gate requirement, and the app derives the voucher-id suffix from the rung id. The model sees this id.",
-    "Latent gate gaps not exercised by the default fixtures: the gate ignores approved_freight_waiver_inr (2.2/2.3 "
-    "allow a freight-waiver amendment); it takes the GST rate from the first invoice line only; it does not implement "
-    "Trigger 3 (duplicate invoice or PAYMENT_FREEZE vendor). The 1.5% band gap is exercised by inv-06 (separate section).",
+    "Gate gaps not exercised by any recorded invoice, fixed on 2026-11-26 after the experiment: the gate ignored "
+    "approved_freight_waiver_inr (2.2/2.3 allow a freight-waiver amendment; it now raises the cap by the waivers on "
+    "signed, active amendments); it took the GST rate from the first invoice line only (it now applies each line's PO "
+    "GST rate when rates differ); it did not implement Trigger 3 (it now hard-blocks an invoice_id already posted in "
+    "reconciliation_vouchers or a vendor flagged PAYMENT_FREEZE). No recorded invoice has a waiver, mixed GST rates, "
+    "a prior voucher or a frozen vendor, so the gate returns byte-identical output for all 11 pooled invoices.",
+    "Gate fix (2026-11-26, after the experiment): the gate's 1.5% band now passes only when the PO's currency notes "
+    "(purchase_orders.currency) say the price is index-linked, as manual 2.1 requires; otherwise the line pays the PO "
+    "rate (price_rule WITHIN_1.5PCT_NOT_INDEX_LINKED_PO_RATE); the three gaps above were fixed at the same time "
+    "(gate v2-manual-aligned). fetch_3way_match_bundle (bundle v2-manual-aligned) now also returns "
+    "purchase_orders.currency, the vendor risk_flag, the invoice's posted vouchers and each line's PO GST rate, so a "
+    "bundle arm can check the same conditions as the gate. Records carry settings.gate_version / bundle_version (absent = v1, before the fix). "
+    "For the 11 pooled invoices the fixed gate returns byte-identical output and the added bundle fields do not "
+    "bear on them (none has a price rise inside the 1.5% band, a waiver, mixed rates, a prior voucher or a frozen "
+    "vendor), so their records stay current. On inv-06 the gate "
+    "arms are reported by gate version (before / after the fix).",
     "The Anthropic SDK client retries failed or timed-out calls (default max_retries=2) inside one recorded turn; a "
     "retried call is not visible in the records and may have been billed.",
     "Tool precision (the app's metric, min(optimal, total) / total) counts only fetch_3way_match_bundle, "
@@ -1269,6 +1407,7 @@ def summarise(
         "golden_scripted": [g for g in baseline_golden if g["preset_id"] in originals],
         "raw_free_sonnet": {p: group_metrics(sel("raw_free_sonnet", pid=p), arm_id="raw_free_sonnet") for p in originals} if "raw_free_sonnet" in arm_ids else {},
     }
+    gd_section = gate_disagreement_section(records, arm_ids=arm_ids, expected_repeats=expected_repeats)
     review = [
         _review_entry(r, scores[r["run_id"]])
         for r in used
@@ -1306,14 +1445,18 @@ def summarise(
         "for_lead_review": review,
         "data_quality": data_quality(records, used),
         "fixtures": fixture_table(),
-        "gate_disagreement": gate_disagreement_section(records, arm_ids=arm_ids, expected_repeats=expected_repeats),
+        "gate_disagreement": gd_section,
         "notes": list(ANALYSIS_NOTES),
         # Which records the tables use, so a reader without the app (validate_deck_claims.py) can select them.
         "run_ids": {
             "pooled": {a: [r["run_id"] for r in used if r["arm_id"] == a] for a in arm_ids},
+            # the recorded experiment (no-gate arms + gate arms on the pre-fix gate) and the after-fix gate-arm runs
             "gate_disagreement": {
-                a: [r["run_id"] for k, r in sorted(latest.items()) if k[0] == a and k[1] in CAT5_ABLATION_GATE_DISAGREEMENT]
-                for a in arm_ids
+                a: [r["run_id"] for g in gd_section.values() for r in g["runs"] if r["arm_id"] == a] for a in arm_ids
+            },
+            "gate_disagreement_after_fix": {
+                a: [r["run_id"] for g in gd_section.values() for r in g["after_fix"]["runs"] if r["arm_id"] == a]
+                for a in arm_ids if ARMS[a].gate
             },
         },
     }
@@ -1488,11 +1631,12 @@ def render_markdown(s: dict[str, Any]) -> str:
     L.append("")
     L.append("## Fixtures: hand derivation vs deterministic gate")
     L.append("")
-    L.append("| invoice | scenario | tier | hub | expected decision (manual) | escalation | grand total INR | agrees with gate | group |")
-    L.append("|---|---|---|---|---|---|---|---|---|")
+    L.append(f"| invoice | scenario | tier | hub | expected decision (manual) | escalation | grand total INR | agrees with the gate as recorded ({GATE_VERSION_V1}) | agrees with the current gate ({GATE_VERSION}) | group |")
+    L.append("|---|---|---|---|---|---|---|---|---|---|")
     for f in s["fixtures"]:
         L.append(f"| {f['preset_id']} | {f['scenario']} | {f['analysis_tier']} | {f['fc_hub']} | {f['expected_decision']} | "
-                 f"{f['expected_escalation']} | {f['invoice_grand_total_inr']:,.2f} | {f['derivation_agrees_with_gate']} | {f['group']} |")
+                 f"{f['expected_escalation']} | {f['invoice_grand_total_inr']:,.2f} | {f.get('derivation_agrees_with_recorded_gate')} | "
+                 f"{f['derivation_agrees_with_gate']} | {f['group']} |")
     L.append("")
     _render_gate_disagreement(L, s)
     L.append("")
@@ -1549,9 +1693,15 @@ def render_markdown(s: dict[str, Any]) -> str:
 
 def _render_gate_disagreement(L: list[str], s: dict[str, Any]) -> None:
     for pid, g in (s.get("gate_disagreement") or {}).items():
+        fx = g.get("gate_fix") or {}
         L.append(f"## When the deterministic gate is wrong ({pid})")
         L.append("")
         L.append(f"These runs never enter the pooled tables. {g['ruling']}")
+        if fx:
+            L.append("")
+            L.append(f"The gate was fixed on {fx['fixed_on']}, after the experiment ({fx['gate_version_recorded']} -> "
+                     f"{fx['gate_version_current']}). Every recorded run below used the pre-fix gate. The current gate "
+                     f"{'equals' if fx['current_gate_matches_manual'] else 'still differs from'} the manual derivation on {pid}.")
         L.append("")
         L.append(f"Manual {g['manual_text']}")
         L.append("")
@@ -1561,7 +1711,7 @@ def _render_gate_disagreement(L: list[str], s: dict[str, Any]) -> None:
                  f"debit {mt['debit_note_deduction_inr']:,.2f}, escalation {mt['expected_escalation']}.")
         for line in g["manual_calculation"]:
             L.append(f"  - {line}")
-        L.append(f"Gate output: {gt['decision']}, net {gt['authorized_net_principal_inr']:,.2f}, "
+        L.append(f"Gate output{' as recorded, before the fix' if fx else ''}: {gt['decision']}, net {gt['authorized_net_principal_inr']:,.2f}, "
                  f"GST payout {gt['authorized_gst_payout_inr']:,.2f}, escrow {gt['gst_escrow_holdback_inr']:,.2f}, "
                  f"debit {gt['debit_note_deduction_inr']:,.2f}, escalation {gt['expected_escalation']}.")
         for line in g["gate_calculation"]:
@@ -1570,6 +1720,9 @@ def _render_gate_disagreement(L: list[str], s: dict[str, Any]) -> None:
         L.append(g["bundle_note"])
         L.append("")
         ln = g["line1"]
+        if fx:
+            L.append(f"### Before the fix (recorded, gate {fx['gate_version_recorded']})")
+            L.append("")
         L.append(f"| arm | n | matches manual | matches gate output | neither | no commit | decisions committed | line 1 {ln['sku']} rate paid (PO {ln['po_rate']:,.0f} / billed {ln['billed_rate']:,.0f} / other) |")
         L.append("|---|---|---|---|---|---|---|---|")
         for a, m in g["per_arm"].items():
@@ -1591,6 +1744,37 @@ def _render_gate_disagreement(L: list[str], s: dict[str, Any]) -> None:
             fm = (r["final_message"] or "").replace("\n", " ")
             L.append(f"- {r['arm_id']} / r{r['repeat_index']} ({r['class']}, line 1 {r['line1_rate']}): committed {json.dumps(r['committed'])}; "
                      f"tools {', '.join(r['tools_called']) or 'none'}; final message: {fm[:600]}")
+        af = g.get("after_fix")
+        if af is not None:
+            L.append("")
+            L.append(f"### After the fix (gate {af['gate_version']}; gate arms only, no-gate arms are not re-run)")
+            L.append("")
+            cg = fx.get("current_gate_output") or {}
+            if cg:
+                L.append(f"Current gate output: {cg['decision']}, net {cg['authorized_net_principal_inr']:,.2f}, "
+                         f"GST payout {cg['authorized_gst_payout_inr']:,.2f}, escrow {cg['gst_escrow_holdback_inr']:,.2f}, "
+                         f"debit {cg['debit_note_deduction_inr']:,.2f}, escalation {cg['expected_escalation']}.")
+                L.append("")
+            L.append(f"| arm | n | matches manual | matches gate output | neither | no commit | decisions committed | line 1 {ln['sku']} rate paid (PO {ln['po_rate']:,.0f} / billed {ln['billed_rate']:,.0f} / other) |")
+            L.append("|---|---|---|---|---|---|---|---|")
+            for a, m in af["per_arm"].items():
+                if not m["runs"]:
+                    L.append(f"| {a} | 0 | - | - | - | - | not run yet | - |")
+                    continue
+                dec = ", ".join(f"{k} {v}" for k, v in m["decisions"].items()) or "-"
+                lr = m["line1_rate"]
+                L.append(f"| {a} | {m['runs']} | {m['matches_manual']} | {m['matches_gate_output']} | {m['neither']} | {m['no_commit']} | {dec} | "
+                         f"{lr.get('po_rate', 0)} / {lr.get('billed_rate', 0)} / {lr.get('other', 0)} |")
+            L.append("")
+            L.append("After the fix the gate output equals the manual derivation, so a run whose committed voucher carries its figures is counted under 'matches manual'.")
+            if af["missing_keys"]:
+                L.append(f"Missing keys (not run yet at {af['gate_version']}): {len(af['missing_keys'])}.")
+            for r in af["runs"]:
+                if r["class"] == "matches_manual":
+                    continue
+                fm = (r["final_message"] or "").replace("\n", " ")
+                L.append(f"- {r['arm_id']} / r{r['repeat_index']} ({r['class']}, line 1 {r['line1_rate']}): committed {json.dumps(r['committed'])}; "
+                         f"tools {', '.join(r['tools_called']) or 'none'}; final message: {fm[:600]}")
 
 
 # --------------------------------------------------------------------------------------------------
@@ -1609,7 +1793,7 @@ ARM_PLAIN: dict[str, tuple[str, str]] = {
     "raw_free_sonnet": ("Raw tables, large model", "Large model reads raw ERP tables and does the policy arithmetic itself"),
     "raw_free_sonnet_cached": ("+ cached policy manual", "Policy manual sent as a cached prefix"),
     "bundle_sonnet_cached": ("+ one narrow query", "One projected query replaces the raw table dumps"),
-    "bundle_gate_sonnet_cached": ("+ policy tool", "A deterministic policy tool computes the voucher; the model copies it"),
+    "bundle_gate_sonnet_cached": ("+ policy tool", "A deterministic policy tool computes the voucher; the committed voucher carries its figures"),
     "bundle_haiku_cached": ("Small model, no policy tool", "Narrow query and cache on the small model, which does the arithmetic"),
     "bundle_gate_haiku_escalate": ("Small model + policy tool + escalation", "Policy tool on the small model; large model takes over when the tool flags the invoice"),
 }
@@ -1720,6 +1904,7 @@ def build_ablation_portfolio(
     gd = []
     for pid, g in s["gate_disagreement"].items():
         per_arm = [{"arm_id": a, **v} for a, v in g["per_arm"].items()]
+        after_arms = [{"arm_id": a, **v} for a, v in ((g.get("after_fix") or {}).get("per_arm") or {}).items()]
         no_gate = [x for x in per_arm if not x["gate_arm"]]
         gated = [x for x in per_arm if x["gate_arm"]]
         gd.append({
@@ -1740,6 +1925,16 @@ def build_ablation_portfolio(
             "gate_match_gate_output": sum(x["matches_gate_output"] for x in gated),
             "gate_match_manual": sum(x["matches_manual"] for x in gated),
             "missing_keys": len(g["missing_keys"]),
+            "gate_output_note": g.get("gate_output_note", ""),
+            "gate_fixed_on": (g.get("gate_fix") or {}).get("fixed_on"),
+            "gate_version_recorded": (g.get("gate_fix") or {}).get("gate_version_recorded"),
+            "gate_version_current": (g.get("gate_fix") or {}).get("gate_version_current"),
+            "current_gate_output": (g.get("gate_fix") or {}).get("current_gate_output") or {},
+            "current_gate_matches_manual": (g.get("gate_fix") or {}).get("current_gate_matches_manual"),
+            "after_fix_per_arm": after_arms,
+            "after_fix_gate_runs": sum(x["runs"] for x in after_arms),
+            "after_fix_gate_match_manual": sum(x["matches_manual"] for x in after_arms),
+            "after_fix_missing_keys": len((g.get("after_fix") or {}).get("missing_keys") or []),
         })
     dq = s["data_quality"]
     pooled_ids = list(s["preset_ids"])

@@ -107,7 +107,7 @@ function VersionsTable({ portfolio }: { portfolio: Cat5AblationPortfolio }) {
 
 function nonExactSentence(portfolio: Cat5AblationPortfolio, arms: Cat5AblationArm[]): string | null {
   const misses = portfolio.non_exact_runs
-  if (misses.length === 0) return 'Every pooled run committed exactly the right voucher.'
+  if (misses.length === 0) return 'Every pooled run committed a voucher that matched exactly.'
   const byArm = new Map(arms.map((a) => [a.arm_id, a.label]))
   const parts = misses.map((m) => {
     const label = byArm.get(String(m.arm_id)) ?? 'one version'
@@ -118,9 +118,9 @@ function nonExactSentence(portfolio: Cat5AblationPortfolio, arms: Cat5AblationAr
       typeof exp.authorized_net_principal_inr === 'number' && typeof got.authorized_net_principal_inr === 'number'
         ? `, net principal off by ${inr(Math.abs(exp.authorized_net_principal_inr - got.authorized_net_principal_inr))}`
         : ''
-    return `“${label}” got ${fields} amount${fields === 1 ? '' : 's'} wrong on one run${diff}`
+    return `“${label}”: ${fields} amount${fields === 1 ? '' : 's'} did not match on one run${diff}`
   })
-  return `Wrong vouchers: ${parts.join('; ')}.`
+  return `Vouchers that did not match: ${parts.join('; ')}.`
 }
 
 function LeverTable({ portfolio }: { portfolio: Cat5AblationPortfolio }) {
@@ -193,17 +193,25 @@ function GateWrongBox({ gd, arms }: { gd: Cat5GateDisagreement; arms: Cat5Ablati
   const bundleRuns = bundleNoGate.reduce((s, p) => s + p.runs, 0)
   const pctOver =
     line.po_rate && line.billed_rate ? (((line.billed_rate - line.po_rate) / line.po_rate) * 100).toFixed(2) : null
+  const fixed = Boolean(gd.gate_fixed_on)
+  const afterRuns = gd.after_fix_gate_runs ?? 0
+  const afterMatch = gd.after_fix_gate_match_manual ?? 0
   return (
     <div className="mt-5 rounded-xl border border-amber-300 bg-amber-50/60 p-4">
-      <h3 className="text-xs font-extrabold uppercase tracking-wider text-amber-900">When the Policy Tool Is Wrong</h3>
+      <h3 className="text-xs font-extrabold uppercase tracking-wider text-amber-900">
+        When the Policy Tool {fixed ? 'Was' : 'Is'} Wrong
+      </h3>
       <p className="mt-1 text-[11px] leading-relaxed text-slate-800">
         Invoice <span className="font-mono">{gd.invoice_id}</span> bills line 1 at{' '}
         {line.billed_rate != null ? inr(line.billed_rate) : '—'} against a PO rate of{' '}
         {line.po_rate != null ? inr(line.po_rate) : '—'}
         {pctOver ? ` (+${pctOver}%)` : ''}
         {line.qty != null ? ` on ${line.qty.toLocaleString('en-IN')} units` : ''}. The policy manual allows a 1.5% band only
-        when the PO says its price floats with an index; this PO does not, so line 1 should be paid at the PO rate. The
-        deterministic policy tool applies the band anyway. This invoice is kept out of the totals above and reported here.
+        when the PO says its price floats with an index; this PO does not, so line 1 should be paid at the PO rate.{' '}
+        {fixed
+          ? 'When the experiment ran, the deterministic policy tool applied the band anyway.'
+          : 'The deterministic policy tool applies the band anyway.'}{' '}
+        This invoice is kept out of the totals above and reported here.
       </p>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <div className="rounded-lg bg-white p-3 ring-1 ring-slate-200">
@@ -217,7 +225,9 @@ function GateWrongBox({ gd, arms }: { gd: Cat5GateDisagreement; arms: Cat5Ablati
           </div>
         </div>
         <div className="rounded-lg bg-white p-3 ring-1 ring-rose-200">
-          <div className="text-[10px] font-bold uppercase text-slate-500">The policy tool's answer</div>
+          <div className="text-[10px] font-bold uppercase text-slate-500">
+            The policy tool's answer{fixed ? ', as recorded before the fix' : ''}
+          </div>
           <div className="mt-1 text-[11px] text-slate-800">
             {decision(g.decision)}: net {inr(g.authorized_net_principal_inr)}, GST {inr(g.authorized_gst_payout_inr)}, debit
             note {inr(g.debit_note_deduction_inr)}
@@ -236,9 +246,27 @@ function GateWrongBox({ gd, arms }: { gd: Cat5GateDisagreement; arms: Cat5Ablati
       )}
       {bundleRuns > 0 && (
         <p className="mt-1 text-[10px] leading-relaxed text-slate-600">
-          The narrow query does not return the PO's currency notes, so versions using it cannot read that condition from
-          the data; without the tool they still paid line 1 at the PO rate in {bundleAtPo} of {bundleRuns} runs.
+          {fixed ? 'When the experiment ran, the narrow query did not return' : 'The narrow query does not return'} the PO's
+          currency notes, so versions using it could not read that condition from the data; without the tool they still
+          paid line 1 at the PO rate in {bundleAtPo} of {bundleRuns} runs.
         </p>
+      )}
+      {fixed && (
+        <div className="mt-3 rounded-lg bg-white p-3 ring-1 ring-emerald-200">
+          <div className="text-[10px] font-bold uppercase text-emerald-800">Fixed since the experiment</div>
+          <p className="mt-1 text-[11px] leading-relaxed text-slate-800">
+            On {gd.gate_fixed_on} the policy tool was changed to apply the 1.5% band only to index-linked POs, and the
+            narrow query now returns the PO's currency notes. Three other gaps the manual covers were fixed at the same
+            time (approved freight waivers, GST at each line's own rate, and blocking a duplicate invoice or a frozen
+            vendor); none of the recorded invoices touches them.{' '}
+            {gd.current_gate_matches_manual
+              ? "On this invoice the tool now gives the manual's answer."
+              : "On this invoice the tool's answer still differs from the manual's."}{' '}
+            {afterRuns > 0
+              ? `Re-run with the fixed tool, ${afterMatch} of ${afterRuns} runs of the versions with the tool matched the manual.`
+              : 'The versions with the tool have not been re-run on the fixed tool yet; the results above are from before the fix.'}
+          </p>
+        </div>
       )}
     </div>
   )

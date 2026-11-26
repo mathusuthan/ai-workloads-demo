@@ -70,7 +70,7 @@ for turn in range(12):
     loop_history += [assistant(resp.content), user(execute_all(tool_uses))]  # whatever the stop_reason""",
     "bounded_sonnet_cached_gate": """# RUNG 2: Narrow bundle query + cached policy manual + deterministic policy gate (Sonnet 5.5)
 # One projected JOIN replaces the raw table dumps; the manual is sent as a cached prefix; the commit tool
-# refuses until run_policy_tolerance_gate has computed the figures, which the model copies.
+# refuses until run_policy_tolerance_gate has computed the figures, which the committed voucher carries.
 system_cached = [{
     "type": "text",
     "text": AP_POLICY_MANUAL_TEXT + GOVERNED_PROTOCOL,

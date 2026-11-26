@@ -432,10 +432,13 @@ def test_default_matrix_equals_gate_and_exclusions_differ() -> None:
         cmp = ab.compare_with_gate(pid)
         assert cmp["agree"], (pid, cmp["differences"])
     assert set(CAT5_ABLATION_EXCLUDED_PENDING_REVIEW) == {"inv-06"}
+    for pid in CAT5_ABLATION_DEFAULT_INVOICE_IDS:  # ... and with the pre-fix gate the experiment ran on
+        assert ab.compare_with_gate(pid, ab.GATE_VERSION_V1)["agree"], pid
     for pid in CAT5_ABLATION_EXCLUDED_PENDING_REVIEW:
-        cmp = ab.compare_with_gate(pid)
+        cmp = ab.compare_with_gate(pid, ab.GATE_VERSION_V1)  # the recorded disagreement
         assert not cmp["agree"]
         assert cmp["differences"]["decision"] == {"derivation": "APPROVE_PARTIAL_DEBIT_NOTE", "gate": "APPROVE_CLEAN"}
+        assert ab.compare_with_gate(pid)["agree"], ab.compare_with_gate(pid)["differences"]  # fixed gate = manual
     assert set(CAT5_ABLATION_DEFAULT_INVOICE_IDS) | set(CAT5_ABLATION_EXCLUDED_PENDING_REVIEW) == set(P)
 
 
@@ -744,10 +747,17 @@ def test_groups_and_both_truths_for_inv06() -> None:
     assert CAT5_ABLATION_GROUPS["gate_disagreement"] == ("inv-06",)
     pre = P["inv-06"]
     assert pre["ground_truth"]["decision"] == "APPROVE_PARTIAL_DEBIT_NOTE" and pre["ground_truth"]["debit_note_deduction_inr"] == 22800.0
-    g = ab.gate_output_for("inv-06")
+    # gate_output_truth is frozen: what the pre-fix gate returned on 2026-11-26 (reproduced by the v1 gate)
+    g = ab.gate_output_for("inv-06", ab.GATE_VERSION_V1)
     got = {"decision": g["recommended_decision"], **{f: g[f] for f in ab.VOUCHER_FIELDS[1:]}, "expected_escalation": g["escalation_required"]}
     assert pre["gate_output_truth"] == got == CAT5_ABLATION_GATE_DISAGREEMENT["inv-06"]["gate_output_truth"]
+    assert "before the fix" in CAT5_ABLATION_GATE_DISAGREEMENT["inv-06"]["gate_output_note"]
     assert "gate_output_truth" not in pre["ground_truth"]
+    # the FIXED gate now equals the manual derivation on inv-06
+    g2 = ab.gate_output_for("inv-06")
+    fixed = {"decision": g2["recommended_decision"], **{f: g2[f] for f in ab.VOUCHER_FIELDS[1:]}, "expected_escalation": g2["escalation_required"]}
+    assert fixed == {f: pre["ground_truth"][f] for f in (*ab.VOUCHER_FIELDS, "expected_escalation")}
+    assert g2["line_findings"][0]["price_rule"] == "WITHIN_1.5PCT_NOT_INDEX_LINKED_PO_RATE"
 
 
 def test_gate_disagreement_section_and_never_pooled() -> None:
@@ -760,12 +770,23 @@ def test_gate_disagreement_section_and_never_pooled() -> None:
             ("tool_use", [("commit_reconciliation_voucher", _commit_input(pre, **gate_vals))], ""), ("end_turn", [], "ok")])),
         run("bundle_haiku_cached", "inv-06", Scripted(bundle_script("inv-06", authorized_net_principal_inr=3600000.0))),
         run("raw_free_sonnet_cached", "inv-06", Scripted([("end_turn", [], "no commit")])),
-        run("bundle_gate_sonnet_cached", "inv-06", Scripted([
-            ("tool_use", [("fetch_3way_match_bundle", {"invoice_id": pre["invoice_id"]})], ""),
-            ("tool_use", [("run_policy_tolerance_gate", {"invoice_id": pre["invoice_id"]})], ""),
-            ("tool_use", [("commit_reconciliation_voucher", _commit_input(pre, **gate_vals))], ""), ("end_turn", [], "ok")])),
         run("bundle_sonnet_cached", "inv-04", Scripted(bundle_script("inv-04"))),
     ]
+    gated = run("bundle_gate_sonnet_cached", "inv-06", Scripted([
+        ("tool_use", [("fetch_3way_match_bundle", {"invoice_id": pre["invoice_id"]})], ""),
+        ("tool_use", [("run_policy_tolerance_gate", {"invoice_id": pre["invoice_id"]})], ""),
+        ("tool_use", [("commit_reconciliation_voucher", _commit_input(pre, **gate_vals))], ""), ("end_turn", [], "ok")]))
+    assert gated["settings"]["gate_version"] == ab.GATE_VERSION
+    legacy = json.loads(json.dumps(gated))  # a record written before the fix: no gate_version / bundle_version
+    for k in ("gate_version", "bundle_version"):
+        legacy["settings"].pop(k)
+    after = run("bundle_gate_sonnet_cached", "inv-06", Scripted([
+        ("tool_use", [("fetch_3way_match_bundle", {"invoice_id": pre["invoice_id"]})], ""),
+        ("tool_use", [("run_policy_tolerance_gate", {"invoice_id": pre["invoice_id"]})], ""),
+        ("tool_use", [("commit_reconciliation_voucher", _commit_input(pre))], ""), ("end_turn", [], "ok")]))
+    recs += [legacy, after]
+    assert ab.is_current_settings(legacy) and not ab.is_current_gate(legacy) and ab.is_current_gate(after)
+    assert not ab.superseded_records([legacy])  # before-fix evidence, not superseded
     s = ab.summarise(recs, preset_ids=["inv-04", "inv-06"], expected_repeats=1)
     assert s["preset_ids"] == ["inv-04"] and s["pooled_excludes"] == ["inv-06"]
     assert s["arms"]["bundle_sonnet_cached"]["runs"] == 1 and "inv-06" not in s["arms"]["bundle_sonnet_cached"]["by_invoice"]
@@ -779,10 +800,19 @@ def test_gate_disagreement_section_and_never_pooled() -> None:
     assert pa["raw_free_sonnet_cached"]["no_commit"] == 1 and pa["raw_free_sonnet_cached"]["decisions"] == {"(no commit)": 1}
     assert pa["bundle_gate_sonnet_cached"]["matches_gate_output"] == 1 and pa["bundle_gate_sonnet_cached"]["gate_arm"]
     assert pa["bundle_gate_haiku_escalate"]["runs"] == 0 and sec["missing_keys"] == [["bundle_gate_haiku_escalate", "inv-06", 0]]
+    af = sec["after_fix"]
+    assert af["gate_version"] == ab.GATE_VERSION and set(af["per_arm"]) == {"bundle_gate_sonnet_cached", "bundle_gate_haiku_escalate"}
+    assert af["per_arm"]["bundle_gate_sonnet_cached"]["matches_manual"] == 1 and af["per_arm"]["bundle_gate_haiku_escalate"]["runs"] == 0
+    assert af["missing_keys"] == [["bundle_gate_haiku_escalate", "inv-06", 0]]
+    assert sec["gate_fix"]["current_gate_matches_manual"] is True
+    assert s["run_ids"]["gate_disagreement"]["bundle_gate_sonnet_cached"] == [legacy["run_id"]]
+    assert s["run_ids"]["gate_disagreement_after_fix"]["bundle_gate_sonnet_cached"] == [after["run_id"]]
     md = ab.render_markdown(s)
+    assert "### Before the fix (recorded, gate v1-band-unconditional)" in md and "### After the fix (gate v2-manual-aligned" in md
+    assert "| bundle_gate_haiku_escalate | 0 | - | - | - | - | not run yet | - |" in md
     assert "## When the deterministic gate is wrong (inv-06)" in md
     assert "MAY pass ONLY when PO currency notes specify index-linked float" in md
-    assert "3,656,000.00" in md and "3,678,800.00" in md and "does not return purchase_orders.currency" in md
+    assert "3,656,000.00" in md and "3,678,800.00" in md and "did not return purchase_orders.currency" in md
     assert "| bundle_sonnet_cached | 1 | 1 | 0 | 0 | 0 | APPROVE_PARTIAL_DEBIT_NOTE 1 | 1 / 0 / 0 |" in md
     assert "| bundle_gate_sonnet_cached | 1 | 0 | 1 | 0 | 0 | APPROVE_CLEAN 1 | gate computes (n/a) |" in md
 

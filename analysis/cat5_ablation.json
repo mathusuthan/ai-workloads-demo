@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-26T03:18:47.001291+00:00",
+  "generated_at": "2026-11-26T05:02:14.908270+00:00",
   "fixture_version": "cat5-ablation-fixtures-2026-11-26.v1",
   "settings": {
     "max_tokens_per_turn": 4096,
@@ -123,12 +123,12 @@
     "inv-06": {
       "manual_text": "2.1: \"If `po_unit_price_inr < billed_unit_price_inr <= po_unit_price_inr * 1.015`: tiny FX/metal-surcharge rounding within `1.50%` MAY pass ONLY when PO currency notes specify index-linked float; otherwise standard landed DDP catalog POs default to PO unit rate unless amended.\"",
       "derivation": "PO is 'DDP Inside FC Dock', currency 'INR', no amendment -> L1 at PO rate 1,480; debit 22,800; APPROVE_PARTIAL_DEBIT_NOTE; net 3,656,000; GST 658,080.",
-      "gate_output": "price_rule WITHIN_1.5PCT_TOLERANCE -> billed 1,499 accepted; APPROVE_CLEAN; net 3,678,800; GST 662,184; debit 0; escalation_required false.",
-      "note": "Ruled by the lead: the manual derivation is ground truth and the gate is wrong; the gate is not changed. Runs as the separate `gate_disagreement` group. The gate always passes the 1.5% band; the manual passes it only for index-linked POs. fetch_3way_match_bundle does not return purchase_orders.currency."
+      "gate_output": "Pre-fix gate (as recorded): price_rule WITHIN_1.5PCT_TOLERANCE -> billed 1,499 accepted; APPROVE_CLEAN; net 3,678,800; GST 662,184; debit 0; escalation_required false. Fixed gate: WITHIN_1.5PCT_NOT_INDEX_LINKED_PO_RATE -> PO rate 1,480; equals the manual derivation.",
+      "note": "Ruled by the lead: the manual derivation is ground truth and the gate was wrong. Runs as the separate `gate_disagreement` group. The pre-fix gate always passed the 1.5% band; the manual passes it only for index-linked POs. Fixed 2026-11-26 (gate v2-manual-aligned; the bundle now returns purchase_orders.currency)."
     }
   },
   "expected_repeats": 3,
-  "record_count": 217,
+  "record_count": 223,
   "ok_runs_used": 198,
   "matrix": {
     "expected_runs": 198,
@@ -9069,6 +9069,7 @@
       "invoice_grand_total_inr": 2171200.0,
       "source": "app/data/cat5_fixtures.CAT5_PRESETS (unchanged)",
       "derivation_agrees_with_gate": true,
+      "derivation_agrees_with_recorded_gate": true,
       "differences": {},
       "in_default_matrix": true,
       "group": "default"
@@ -9084,6 +9085,7 @@
       "invoice_grand_total_inr": 3899900.0,
       "source": "app/data/cat5_fixtures.CAT5_PRESETS (unchanged)",
       "derivation_agrees_with_gate": true,
+      "derivation_agrees_with_recorded_gate": true,
       "differences": {},
       "in_default_matrix": true,
       "group": "default"
@@ -9099,6 +9101,7 @@
       "invoice_grand_total_inr": 3127000.0,
       "source": "app/data/cat5_fixtures.CAT5_PRESETS (unchanged)",
       "derivation_agrees_with_gate": true,
+      "derivation_agrees_with_recorded_gate": true,
       "differences": {},
       "in_default_matrix": true,
       "group": "default"
@@ -9114,6 +9117,7 @@
       "invoice_grand_total_inr": 2542900.0,
       "source": "cat5_ablation_fixtures (hand-derived)",
       "derivation_agrees_with_gate": true,
+      "derivation_agrees_with_recorded_gate": true,
       "differences": {},
       "in_default_matrix": true,
       "group": "default"
@@ -9129,6 +9133,7 @@
       "invoice_grand_total_inr": 2950000.0,
       "source": "cat5_ablation_fixtures (hand-derived)",
       "derivation_agrees_with_gate": true,
+      "derivation_agrees_with_recorded_gate": true,
       "differences": {},
       "in_default_matrix": true,
       "group": "default"
@@ -9143,29 +9148,9 @@
       "expected_escalation": true,
       "invoice_grand_total_inr": 4340984.0,
       "source": "cat5_ablation_fixtures (hand-derived)",
-      "derivation_agrees_with_gate": false,
-      "differences": {
-        "decision": {
-          "derivation": "APPROVE_PARTIAL_DEBIT_NOTE",
-          "gate": "APPROVE_CLEAN"
-        },
-        "authorized_net_principal_inr": {
-          "derivation": 3656000.0,
-          "gate": 3678800.0
-        },
-        "authorized_gst_payout_inr": {
-          "derivation": 658080.0,
-          "gate": 662184.0
-        },
-        "debit_note_deduction_inr": {
-          "derivation": 22800.0,
-          "gate": 0.0
-        },
-        "expected_escalation": {
-          "derivation": true,
-          "gate": false
-        }
-      },
+      "derivation_agrees_with_gate": true,
+      "derivation_agrees_with_recorded_gate": false,
+      "differences": {},
       "in_default_matrix": false,
       "group": "gate_disagreement"
     },
@@ -9180,6 +9165,7 @@
       "invoice_grand_total_inr": 3096320.0,
       "source": "cat5_ablation_fixtures (hand-derived)",
       "derivation_agrees_with_gate": true,
+      "derivation_agrees_with_recorded_gate": true,
       "differences": {},
       "in_default_matrix": true,
       "group": "default"
@@ -9195,6 +9181,7 @@
       "invoice_grand_total_inr": 3919370.0,
       "source": "cat5_ablation_fixtures (hand-derived)",
       "derivation_agrees_with_gate": true,
+      "derivation_agrees_with_recorded_gate": true,
       "differences": {},
       "in_default_matrix": true,
       "group": "default"
@@ -9210,6 +9197,7 @@
       "invoice_grand_total_inr": 5318850.0,
       "source": "cat5_ablation_fixtures (hand-derived)",
       "derivation_agrees_with_gate": true,
+      "derivation_agrees_with_recorded_gate": true,
       "differences": {},
       "in_default_matrix": true,
       "group": "default"
@@ -9225,6 +9213,7 @@
       "invoice_grand_total_inr": 3273900.0,
       "source": "cat5_ablation_fixtures (hand-derived)",
       "derivation_agrees_with_gate": true,
+      "derivation_agrees_with_recorded_gate": true,
       "differences": {},
       "in_default_matrix": true,
       "group": "default"
@@ -9240,6 +9229,7 @@
       "invoice_grand_total_inr": 3182460.0,
       "source": "cat5_ablation_fixtures (hand-derived)",
       "derivation_agrees_with_gate": true,
+      "derivation_agrees_with_recorded_gate": true,
       "differences": {},
       "in_default_matrix": true,
       "group": "default"
@@ -9255,6 +9245,7 @@
       "invoice_grand_total_inr": 5981420.0,
       "source": "cat5_ablation_fixtures (hand-derived)",
       "derivation_agrees_with_gate": true,
+      "derivation_agrees_with_recorded_gate": true,
       "differences": {},
       "in_default_matrix": true,
       "group": "default"
@@ -9262,7 +9253,7 @@
   ],
   "gate_disagreement": {
     "inv-06": {
-      "ruling": "Lead ruling: the manual derivation is correct and the gate is wrong. Manual 2.1 allows the 1.5% band only when the PO currency notes specify an index-linked float; this PO is plain DDP INR with no amendment, so line 1 pays at the PO rate. The gate's WITHIN_1.5PCT_TOLERANCE branch ignores that condition.",
+      "ruling": "Lead ruling: the manual derivation is correct and the gate is wrong. Manual 2.1 allows the 1.5% band only when the PO currency notes specify an index-linked float; this PO is plain DDP INR with no amendment, so line 1 pays at the PO rate. The gate's WITHIN_1.5PCT_TOLERANCE branch ignored that condition when the experiment ran; it was fixed on 2026-11-26 (the band now passes only on index-linked POs).",
       "manual_text": "2.1: \"If `po_unit_price_inr < billed_unit_price_inr <= po_unit_price_inr * 1.015`: tiny FX/metal-surcharge rounding within `1.50%` MAY pass ONLY when PO currency notes specify index-linked float; otherwise standard landed DDP catalog POs default to PO unit rate unless amended.\"",
       "manual_truth": {
         "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
@@ -9288,6 +9279,7 @@
         "debit_note_deduction_inr": 0.0,
         "expected_escalation": false
       },
+      "gate_output_note": "Gate output as recorded on 2026-11-26, before the fix (gate v1-band-unconditional).",
       "gate_calculation": [
         "L1 NM-CBL-1.5SQ-90M: 1,480 < 1,499 <= 1,502.20 -> price_rule WITHIN_1.5PCT_TOLERANCE -> rate 1,499 (billed); authorised 1,200 x 1,499 = 1,798,800; deduction 0.",
         "L2 NM-CBL-2.5SQ-90M: rate 2,350 (= PO); authorised 1,880,000.",
@@ -9299,7 +9291,21 @@
         "po_rate": 1480.0,
         "billed_rate": 1499.0
       },
-      "bundle_note": "fetch_3way_match_bundle does not return purchase_orders.currency (the PO currency notes), so bundle arms cannot check the manual's index-linked-float condition; raw arms can (query_po_raw returns it).",
+      "bundle_note": "When the experiment ran, fetch_3way_match_bundle did not return purchase_orders.currency (the PO currency notes), so bundle arms could not check the manual's index-linked-float condition; raw arms could (query_po_raw returns it). Since 2026-11-26 the bundle returns it (bundle v2-manual-aligned, which also adds the vendor risk_flag, any posted vouchers for the invoice and each line's PO GST rate); every recorded run used the earlier bundle.",
+      "gate_fix": {
+        "fixed_on": "2026-11-26",
+        "gate_version_recorded": "v1-band-unconditional",
+        "gate_version_current": "v2-manual-aligned",
+        "current_gate_output": {
+          "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
+          "authorized_net_principal_inr": 3656000.0,
+          "authorized_gst_payout_inr": 658080.0,
+          "gst_escrow_holdback_inr": 0.0,
+          "debit_note_deduction_inr": 22800.0,
+          "expected_escalation": true
+        },
+        "current_gate_matches_manual": true
+      },
       "per_arm": {
         "raw_free_sonnet": {
           "runs": 3,
@@ -9392,6 +9398,7 @@
           "arm_id": "raw_free_sonnet",
           "repeat_index": 0,
           "class": "matches_manual",
+          "gate_version": null,
           "line1_rate": "po_rate",
           "committed": {
             "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
@@ -9415,6 +9422,7 @@
           "arm_id": "raw_free_sonnet",
           "repeat_index": 1,
           "class": "matches_manual",
+          "gate_version": null,
           "line1_rate": "po_rate",
           "committed": {
             "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
@@ -9438,6 +9446,7 @@
           "arm_id": "raw_free_sonnet",
           "repeat_index": 2,
           "class": "matches_manual",
+          "gate_version": null,
           "line1_rate": "po_rate",
           "committed": {
             "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
@@ -9461,6 +9470,7 @@
           "arm_id": "raw_free_sonnet_cached",
           "repeat_index": 0,
           "class": "matches_manual",
+          "gate_version": null,
           "line1_rate": "po_rate",
           "committed": {
             "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
@@ -9484,6 +9494,7 @@
           "arm_id": "raw_free_sonnet_cached",
           "repeat_index": 1,
           "class": "matches_manual",
+          "gate_version": null,
           "line1_rate": "po_rate",
           "committed": {
             "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
@@ -9507,6 +9518,7 @@
           "arm_id": "raw_free_sonnet_cached",
           "repeat_index": 2,
           "class": "matches_manual",
+          "gate_version": null,
           "line1_rate": "po_rate",
           "committed": {
             "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
@@ -9530,6 +9542,7 @@
           "arm_id": "bundle_sonnet_cached",
           "repeat_index": 0,
           "class": "matches_manual",
+          "gate_version": null,
           "line1_rate": "po_rate",
           "committed": {
             "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
@@ -9549,6 +9562,7 @@
           "arm_id": "bundle_sonnet_cached",
           "repeat_index": 1,
           "class": "matches_manual",
+          "gate_version": null,
           "line1_rate": "po_rate",
           "committed": {
             "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
@@ -9568,6 +9582,7 @@
           "arm_id": "bundle_sonnet_cached",
           "repeat_index": 2,
           "class": "matches_manual",
+          "gate_version": null,
           "line1_rate": "po_rate",
           "committed": {
             "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
@@ -9587,6 +9602,7 @@
           "arm_id": "bundle_gate_sonnet_cached",
           "repeat_index": 0,
           "class": "matches_gate_output",
+          "gate_version": "v1-band-unconditional",
           "line1_rate": "billed_rate",
           "committed": {
             "decision": "APPROVE_CLEAN",
@@ -9607,6 +9623,7 @@
           "arm_id": "bundle_gate_sonnet_cached",
           "repeat_index": 1,
           "class": "matches_gate_output",
+          "gate_version": "v1-band-unconditional",
           "line1_rate": "billed_rate",
           "committed": {
             "decision": "APPROVE_CLEAN",
@@ -9627,6 +9644,7 @@
           "arm_id": "bundle_gate_sonnet_cached",
           "repeat_index": 2,
           "class": "matches_gate_output",
+          "gate_version": "v1-band-unconditional",
           "line1_rate": "billed_rate",
           "committed": {
             "decision": "APPROVE_CLEAN",
@@ -9647,6 +9665,7 @@
           "arm_id": "bundle_haiku_cached",
           "repeat_index": 0,
           "class": "matches_manual",
+          "gate_version": null,
           "line1_rate": "po_rate",
           "committed": {
             "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
@@ -9666,6 +9685,7 @@
           "arm_id": "bundle_haiku_cached",
           "repeat_index": 1,
           "class": "matches_manual",
+          "gate_version": null,
           "line1_rate": "po_rate",
           "committed": {
             "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
@@ -9685,6 +9705,7 @@
           "arm_id": "bundle_haiku_cached",
           "repeat_index": 2,
           "class": "matches_manual",
+          "gate_version": null,
           "line1_rate": "po_rate",
           "committed": {
             "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
@@ -9704,6 +9725,7 @@
           "arm_id": "bundle_gate_haiku_escalate",
           "repeat_index": 0,
           "class": "matches_gate_output",
+          "gate_version": "v1-band-unconditional",
           "line1_rate": "billed_rate",
           "committed": {
             "decision": "APPROVE_CLEAN",
@@ -9724,6 +9746,7 @@
           "arm_id": "bundle_gate_haiku_escalate",
           "repeat_index": 1,
           "class": "matches_gate_output",
+          "gate_version": "v1-band-unconditional",
           "line1_rate": "billed_rate",
           "committed": {
             "decision": "APPROVE_CLEAN",
@@ -9744,6 +9767,7 @@
           "arm_id": "bundle_gate_haiku_escalate",
           "repeat_index": 2,
           "class": "matches_gate_output",
+          "gate_version": "v1-band-unconditional",
           "line1_rate": "billed_rate",
           "committed": {
             "decision": "APPROVE_CLEAN",
@@ -9760,7 +9784,169 @@
           "final_message": "**Executive AP Audit Summary: INV-DL-2026-4157**\n\nVoucher **VCH-4157-HYB** is committed as **APPROVE_CLEAN**. Indraprastha Cables & Wires Ltd. (FC-DEL-03, PO-NM-DEL-4157) is cleared for payment.\n\n- **Principal:** INR 36,78,800.00 | **GST (18%):** INR 6,62,184.00 | **Total:** INR 43,40,984.00\n- **Debit note:** INR 0. All 2,000 units were accepted at GRN with no DOA rejections, and no freight was claimed.\n- **Compliance:** IRN ACTIVE_VERIFIED and GSTR-2B MATCHED_VERIFIED, so no GST escrow is needed.\n- **Watch item:** Line 1 is billed at ₹1,499 against a PO rate of ₹1,480 (+1.28%). It is within the 1.5% tolerance band, but no signed amendment supports it. The gate paid it at the billed rate, so Procurement should confirm the price change.\n\n**Sonnet escalation:** Did not fire. The gate returned escalation_required = false."
         }
       ],
-      "missing_keys": []
+      "missing_keys": [],
+      "after_fix": {
+        "gate_version": "v2-manual-aligned",
+        "per_arm": {
+          "bundle_gate_sonnet_cached": {
+            "runs": 3,
+            "matches_manual": 3,
+            "matches_gate_output": 0,
+            "neither": 0,
+            "no_commit": 0,
+            "decisions": {
+              "APPROVE_PARTIAL_DEBIT_NOTE": 3
+            },
+            "line1_rate": {
+              "po_rate": 3
+            },
+            "gate_arm": true
+          },
+          "bundle_gate_haiku_escalate": {
+            "runs": 3,
+            "matches_manual": 3,
+            "matches_gate_output": 0,
+            "neither": 0,
+            "no_commit": 0,
+            "decisions": {
+              "APPROVE_PARTIAL_DEBIT_NOTE": 3
+            },
+            "line1_rate": {
+              "po_rate": 3
+            },
+            "gate_arm": true
+          }
+        },
+        "runs": [
+          {
+            "run_id": "3d92c174-6bf4-40a5-b109-474b4ad81408",
+            "arm_id": "bundle_gate_sonnet_cached",
+            "repeat_index": 0,
+            "class": "matches_manual",
+            "gate_version": "v2-manual-aligned",
+            "line1_rate": "po_rate",
+            "committed": {
+              "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
+              "authorized_net_principal_inr": 3656000.0,
+              "authorized_gst_payout_inr": 658080.0,
+              "gst_escrow_holdback_inr": 0.0,
+              "debit_note_deduction_inr": 22800.0
+            },
+            "tools_called": [
+              "fetch_3way_match_bundle",
+              "run_policy_tolerance_gate",
+              "commit_reconciliation_voucher"
+            ],
+            "final_message": "**Executive AP Audit Summary: INV-DL-2026-4157 (voucher VCH-4157-BOU)**\n\n**Decision:** APPROVE_PARTIAL_DEBIT_NOTE. The gate verified it with no circuit-breaker triggers.\n\n- **Principal released:** INR 3,656,000.00 (GL 210100, T+43 MSMED-safe rail).\n- **GST payout:** INR 658,080.00 (GL 142810). The IRN is active and GSTR-2B is matched, so nothing goes to escrow.\n- **Debit note:** INR 22,800.00 (GL 520900, queue AP-DEBIT-RECON, SLA 12h). Line 1 was billed at INR 1,499 against the PO rate of INR 1,480. The PO is not index-linked and there is no signed amendment, so the rate is capped at INR 1,480 (19 × 1,200 units).\n- **Other checks:** Line 2 matches the PO exactly. Both lines were fully accepted at GRN, and no freight was claimed.\n- **Reconciliation:** 3,656,000 + 22,800 = 3,678,800, which equals the invoice taxable amount.\n- **GST variance:** The authorized GST is INR 4,104 below the invoiced GST of INR 662,184, because GST is paid only on the authorized principal."
+          },
+          {
+            "run_id": "9b91d194-f80e-4a5c-9292-4be4d1c6e9e8",
+            "arm_id": "bundle_gate_sonnet_cached",
+            "repeat_index": 1,
+            "class": "matches_manual",
+            "gate_version": "v2-manual-aligned",
+            "line1_rate": "po_rate",
+            "committed": {
+              "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
+              "authorized_net_principal_inr": 3656000.0,
+              "authorized_gst_payout_inr": 658080.0,
+              "gst_escrow_holdback_inr": 0.0,
+              "debit_note_deduction_inr": 22800.0
+            },
+            "tools_called": [
+              "fetch_3way_match_bundle",
+              "run_policy_tolerance_gate",
+              "commit_reconciliation_voucher"
+            ],
+            "final_message": "**Executive AP Audit Summary: INV-DL-2026-4157** (voucher **VCH-4157-BOU**, committed and gate-verified)\n\n**Decision:** APPROVE_PARTIAL_DEBIT_NOTE.\n\n- **Controls:** The IRN is active and verified, and GSTR-2B is matched. There is no circuit-breaker trigger, and the GRN shows full acceptance with no DOA.\n- **Price variance:** Line 1 was billed at INR 1,499 against the PO rate of INR 1,480 (+1.28%). The PO is not index-linked and has no signed amendment, so the rate is capped at INR 1,480. This produces a debit note of **INR 22,800** (1,200 units × INR 19). Line 2 matches the PO exactly.\n- **Authorized amounts:**\n  - Net principal: **INR 3,656,000**\n  - GST payout (18% on authorized principal): **INR 658,080**\n  - GST escrow: INR 0\n  - Freight: none claimed\n- **Routing:** Principal goes to GL 210100 on the T+43 MSMED-safe rail. GST goes to GL 142810. The debit note goes to GL 520900 and the AP-DEBIT-RECON queue (12h SLA). TDS 194Q is handled separately at payment release."
+          },
+          {
+            "run_id": "cbc0fef7-70a1-4def-83ec-daf38b42ddf3",
+            "arm_id": "bundle_gate_sonnet_cached",
+            "repeat_index": 2,
+            "class": "matches_manual",
+            "gate_version": "v2-manual-aligned",
+            "line1_rate": "po_rate",
+            "committed": {
+              "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
+              "authorized_net_principal_inr": 3656000.0,
+              "authorized_gst_payout_inr": 658080.0,
+              "gst_escrow_holdback_inr": 0.0,
+              "debit_note_deduction_inr": 22800.0
+            },
+            "tools_called": [
+              "fetch_3way_match_bundle",
+              "run_policy_tolerance_gate",
+              "commit_reconciliation_voucher"
+            ],
+            "final_message": "**Executive AP Audit Summary: INV-DL-2026-4157**\n\nVoucher **VCH-4157-BOU** is committed with the decision `APPROVE_PARTIAL_DEBIT_NOTE`. The policy gate verified the numbers before the commit.\n\n- **Compliance:** The IRN is active and verified, and the invoice is matched in GSTR-2B, so there is no GST escrow. No circuit breaker fired.\n- **Receipt:** Both lines were fully accepted at FC-DEL-03, with no DOA rejections or shortages.\n- **Price:** Line 1 was billed at INR 1,499 against the PO rate of INR 1,480. That is 1.28% over, but the PO is not index-linked and there is no signed amendment, so it is capped to the PO rate. This gives a deduction of INR 22,800. Line 2 matches the PO exactly.\n- **Freight:** None claimed.\n- **Payout:**\n\n| Item | Amount (INR) |\n|---|---|\n| Authorized principal | 3,656,000 |\n| GST released (18%) | 658,080 |\n| Debit note | 22,800 |\n| GST escrow | 0 |\n\n- **Routing:** The debit note goes to GL 520900 and queue AP-DEBIT-RECON (12h SLA). Principal is released to GL 210100 at T+43 under the MSMED rule."
+          },
+          {
+            "run_id": "1e8458da-2903-4996-aa5b-c41d9c1b06c4",
+            "arm_id": "bundle_gate_haiku_escalate",
+            "repeat_index": 0,
+            "class": "matches_manual",
+            "gate_version": "v2-manual-aligned",
+            "line1_rate": "po_rate",
+            "committed": {
+              "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
+              "authorized_net_principal_inr": 3656000.0,
+              "authorized_gst_payout_inr": 658080.0,
+              "gst_escrow_holdback_inr": 0.0,
+              "debit_note_deduction_inr": 22800.0
+            },
+            "tools_called": [
+              "fetch_3way_match_bundle",
+              "run_policy_tolerance_gate",
+              "commit_reconciliation_voucher"
+            ],
+            "final_message": "**Executive AP audit summary: INV-DL-2026-4157**\n\nVoucher **VCH-4157-HYB** is committed as **APPROVE_PARTIAL_DEBIT_NOTE**. Sonnet escalation fired, because the gate returned `escalation_required = true`.\n\n- **Checks passed:** the IRN is active and verified, and GSTR-2B is matched. No circuit-breaker was triggered. All 2,000 units were accepted at goods receipt, and freight is INR 0.\n- **Price variance:** Line 1 was billed at INR 1,499 against the PO rate of INR 1,480 (+1.28%). The PO is not index-linked and there is no signed amendment, so the price is capped at the PO rate. That gives a debit note of **INR 22,800**.\n- **Line 2:** it matches the PO exactly.\n- **Authorized principal:** INR 3,656,000.\n- **GST payout (18% on authorized principal):** INR 658,080.\n- **GST escrow:** INR 0.\n\nI re-checked the arithmetic myself: principal plus the debit note equals the taxable invoice total of INR 3,678,800."
+          },
+          {
+            "run_id": "820c6ec0-5ebe-421d-93fe-d6c10941b4f3",
+            "arm_id": "bundle_gate_haiku_escalate",
+            "repeat_index": 1,
+            "class": "matches_manual",
+            "gate_version": "v2-manual-aligned",
+            "line1_rate": "po_rate",
+            "committed": {
+              "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
+              "authorized_net_principal_inr": 3656000.0,
+              "authorized_gst_payout_inr": 658080.0,
+              "gst_escrow_holdback_inr": 0.0,
+              "debit_note_deduction_inr": 22800.0
+            },
+            "tools_called": [
+              "fetch_3way_match_bundle",
+              "run_policy_tolerance_gate",
+              "commit_reconciliation_voucher"
+            ],
+            "final_message": "**Executive AP Audit Summary: INV-DL-2026-4157**\n\nVoucher **VCH-4157-HYB** is committed with the decision **APPROVE_PARTIAL_DEBIT_NOTE**. The policy gate did flag `escalation_required=true`, so Sonnet escalation fired.\n\n- **Compliance:** The IRN is active and verified, GSTR-2B is matched, and no circuit-breaker fired.\n- **Goods receipt:** Both lines were fully accepted at FC-DEL-03, with no DOA rejects and no freight claimed.\n- **Price variance:** Line 1 was billed at INR 1,499 against the PO rate of INR 1,480. There is no signed amendment, so the rate is capped to the PO and INR 22,800 is deducted.\n- **Authorized amounts:**\n\n| Item | INR |\n|---|---|\n| Principal | 3,656,000 |\n| GST payout | 658,080 |\n| GST escrow | 0 |\n| Debit note | 22,800 |\n\n- **Check:** Principal plus the debit note equals the invoiced taxable total of INR 3,678,800."
+          },
+          {
+            "run_id": "3d75e3b9-f72c-4886-933f-7c6491e448e0",
+            "arm_id": "bundle_gate_haiku_escalate",
+            "repeat_index": 2,
+            "class": "matches_manual",
+            "gate_version": "v2-manual-aligned",
+            "line1_rate": "po_rate",
+            "committed": {
+              "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
+              "authorized_net_principal_inr": 3656000.0,
+              "authorized_gst_payout_inr": 658080.0,
+              "gst_escrow_holdback_inr": 0.0,
+              "debit_note_deduction_inr": 22800.0
+            },
+            "tools_called": [
+              "fetch_3way_match_bundle",
+              "run_policy_tolerance_gate",
+              "commit_reconciliation_voucher"
+            ],
+            "final_message": "**AP Audit Summary: INV-DL-2026-4157**\n\nVoucher **VCH-4157-HYB** is committed with decision `APPROVE_PARTIAL_DEBIT_NOTE`. The gate verified it.\n\n- **Match:** PO-NM-DEL-4157 against GRN-DEL-411/412 and the invoice. The IRN is active and verified, GSTR-2B is matched, and all quantities were accepted, with no DOA or shortage.\n- **Price:** Line 1 was billed at INR 1,499 against the PO rate of INR 1,480 (+1.28%). The PO is not index-linked and there is no signed amendment, so it is capped at the PO rate. That gives a debit note of INR 22,800 (1,200 × 19). Line 2 matches the PO exactly.\n- **Freight:** None claimed.\n- **Payout:** Net principal of INR 3,656,000 plus GST of INR 658,080 (18% of principal) is released, with no escrow. Principal plus the debit note equals the taxable total of INR 3,678,800.\n\n**Sonnet escalation:** The gate returned `escalation_required = true`, so Step 3 onward ran under the Sonnet escalation path. No hard block fired."
+          }
+        ],
+        "missing_keys": []
+      }
     }
   },
   "notes": [
@@ -9768,7 +9954,8 @@
     "The deterministic gate sets escalation_required whenever the debit note is above zero (or on 2+ discrepancies), so single-factor debit notes (DOA only, freight only, one price hike) escalate in the Haiku -> Sonnet arm even though manual 6.2 describes escalation for multi-factor disputes. expected_escalation follows the gate rule.",
     "Thinking differs by model in the app's call function: Sonnet runs with thinking {type: between_tools}, Haiku with thinking disabled. The model-swap levers therefore also change thinking.",
     "Voucher ids in no-gate arms end in -UNB: those arms reuse the app session's unbounded_sonnet_loop rung id to disable the gate requirement, and the app derives the voucher-id suffix from the rung id. The model sees this id.",
-    "Latent gate gaps not exercised by the default fixtures: the gate ignores approved_freight_waiver_inr (2.2/2.3 allow a freight-waiver amendment); it takes the GST rate from the first invoice line only; it does not implement Trigger 3 (duplicate invoice or PAYMENT_FREEZE vendor). The 1.5% band gap is exercised by inv-06 (separate section).",
+    "Gate gaps not exercised by any recorded invoice, fixed on 2026-11-26 after the experiment: the gate ignored approved_freight_waiver_inr (2.2/2.3 allow a freight-waiver amendment; it now raises the cap by the waivers on signed, active amendments); it took the GST rate from the first invoice line only (it now applies each line's PO GST rate when rates differ); it did not implement Trigger 3 (it now hard-blocks an invoice_id already posted in reconciliation_vouchers or a vendor flagged PAYMENT_FREEZE). No recorded invoice has a waiver, mixed GST rates, a prior voucher or a frozen vendor, so the gate returns byte-identical output for all 11 pooled invoices.",
+    "Gate fix (2026-11-26, after the experiment): the gate's 1.5% band now passes only when the PO's currency notes (purchase_orders.currency) say the price is index-linked, as manual 2.1 requires; otherwise the line pays the PO rate (price_rule WITHIN_1.5PCT_NOT_INDEX_LINKED_PO_RATE); the three gaps above were fixed at the same time (gate v2-manual-aligned). fetch_3way_match_bundle (bundle v2-manual-aligned) now also returns purchase_orders.currency, the vendor risk_flag, the invoice's posted vouchers and each line's PO GST rate, so a bundle arm can check the same conditions as the gate. Records carry settings.gate_version / bundle_version (absent = v1, before the fix). For the 11 pooled invoices the fixed gate returns byte-identical output and the added bundle fields do not bear on them (none has a price rise inside the 1.5% band, a waiver, mixed rates, a prior voucher or a frozen vendor), so their records stay current. On inv-06 the gate arms are reported by gate version (before / after the fix).",
     "The Anthropic SDK client retries failed or timed-out calls (default max_retries=2) inside one recorded turn; a retried call is not visible in the records and may have been billed.",
     "Tool precision (the app's metric, min(optimal, total) / total) counts only fetch_3way_match_bundle, run_policy_tolerance_gate and commit_reconciliation_voucher as optimal. A raw SELECT * tool is never credited, so a raw arm's precision is at most 1 / (number of calls) however few lookups it makes; it is not comparable between raw and bundle arms. Use the per-tool call counts instead.",
     "Loop rule (v2): a turn cut off by max_tokens ends the run and its tool_use blocks are recorded but not executed; tool_use blocks in any other turn are executed and the loop continues, whatever the stop_reason (the API can return end_turn together with tool_use). One v1 record that stopped on such a turn is superseded. The app's live runner follows the same rule."
@@ -10016,6 +10203,18 @@
         "05edaf44-bd9b-4de5-b5b0-0f6347bfcfd9",
         "706b1db1-cd49-4241-b5ec-b9bf461e0aba",
         "cedd3329-d76c-4855-aabd-4322c563d591"
+      ]
+    },
+    "gate_disagreement_after_fix": {
+      "bundle_gate_sonnet_cached": [
+        "3d92c174-6bf4-40a5-b109-474b4ad81408",
+        "9b91d194-f80e-4a5c-9292-4be4d1c6e9e8",
+        "cbc0fef7-70a1-4def-83ec-daf38b42ddf3"
+      ],
+      "bundle_gate_haiku_escalate": [
+        "1e8458da-2903-4996-aa5b-c41d9c1b06c4",
+        "820c6ec0-5ebe-421d-93fe-d6c10941b4f3",
+        "3d75e3b9-f72c-4886-933f-7c6491e448e0"
       ]
     }
   }

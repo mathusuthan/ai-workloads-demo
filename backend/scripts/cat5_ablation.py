@@ -10,8 +10,12 @@ skipped; `error` records stay in the file and their key is retried; records made
 Wrong vouchers, cap hits and truncated turns are `ok` outcomes and are never dropped or retried.
 
 Full tool results are stored once per sha256 in `tool_results.jsonl` next to the runs file.
-Order: repeat -> invoice -> arm. `--group gate_disagreement` runs inv-06 (the gate is wrong there; the analysis
-reports it in its own section and never pools it). A record whose run the v1 loop ended with tool_use blocks left
+Order: repeat -> invoice -> arm. `--group gate_disagreement` runs inv-06 (the pre-fix gate was wrong there; the
+analysis reports it in its own section and never pools it). The gate was fixed on 2026-11-26: new records carry
+settings.gate_version / bundle_version. On inv-06 a gate-arm record made on the pre-fix gate is kept as before-fix
+evidence (not superseded) and its key is pending again at the current gate; e.g.
+    .venv/bin/python scripts/cat5_ablation.py --invoices inv-06 --arms bundle_gate_sonnet_cached,bundle_gate_haiku_escalate
+runs those 6 keys. Every other record stays current (the fixed gate is byte-identical on the 11 default invoices). A record whose run the v1 loop ended with tool_use blocks left
 unexecuted on a non-truncated turn is superseded and its key is re-run. The budget guard counts the billed cost of every existing record and
 reserves each in-flight run's worst-case estimate; it stops launching runs that could cross --max-usd.
 """
@@ -43,6 +47,11 @@ from app.archetypes.cat5_orchestration.ablation import (  # noqa: E402
     plan_matrix,
     select_pending,
     superseded_records,
+    is_current_settings,
+    is_current_gate,
+    record_gate_version,
+    GATE_VERSION,
+    BUNDLE_VERSION,
 )
 from app.data.cat5_ablation_fixtures import (  # noqa: E402
     CAT5_ABLATION_GROUPS,
@@ -99,6 +108,11 @@ async def run_matrix(args: argparse.Namespace) -> int:
         f"{len(planned) - len(pending)} done at current settings, {len(pending)} pending. Existing records: {len(existing)} "
         f"({len(superseded_records(existing))} superseded); billed so far ${guard.spent_usd:.4f} of ${args.max_usd:.2f} cap."
     )
+    kept = [r for r in existing if r.get("status") == "ok" and is_current_settings(r) and not is_current_gate(r)]
+    if kept:
+        print(f"Kept as before-fix evidence (gate arm on an invoice where the fixed gate differs, run on "
+              f"{sorted({record_gate_version(r) for r in kept})}; not superseded, key pending at {GATE_VERSION}): {len(kept)}.")
+    print(f"Gate {GATE_VERSION}, bundle {BUNDLE_VERSION} (recorded in each new record's settings).")
     print(f"Invoices ({'--invoices' if args.invoices else 'group ' + args.group}): {', '.join(invoice_ids)}")
     print(f"Output: {out_path} (+ {blobs_path_for(out_path).name})")
 

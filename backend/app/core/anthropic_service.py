@@ -67,10 +67,20 @@ async def _run_unconstrained_prose(
     api_key: str,
     primary_model: str,
     fallback_models: list[str],
+    *,
+    max_tokens: int = 2048,
+    system_prompt: str | None = None,
+    timeout_s: float = 45.0,
+    max_retries: int | None = None,
 ) -> AnthropicRawResult:
-    """Shared single-pass unconstrained prose API helper (no schema; pre-response thinking off)."""
-    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=45.0)
-    system_prompt = get_sonnet_naive_system_prompt(sub_task)
+    """Shared single-pass unconstrained prose API helper (no schema; pre-response thinking off).
+
+    Keyword overrides (defaults = the app's behaviour) are used by the Category 1 ablation harness:
+    `system_prompt` replaces the naive prompt, `max_retries=None` keeps the SDK default."""
+    client = anthropic.AsyncAnthropic(
+        api_key=api_key, timeout=timeout_s, **({} if max_retries is None else {"max_retries": max_retries})
+    )
+    system_prompt = get_sonnet_naive_system_prompt(sub_task) if system_prompt is None else system_prompt
     thinking_cfg: dict[str, str] = (
         {"type": "between_tools"} if "sonnet" in primary_model else {"type": "disabled"}
     )
@@ -80,7 +90,7 @@ async def _run_unconstrained_prose(
         client,
         primary_model,
         fallback_models,
-        max_tokens=2048,
+        max_tokens=max_tokens,
         thinking=thinking_cfg,
         system=system_prompt,
         messages=[{"role": "user", "content": payload_text}],
@@ -102,7 +112,7 @@ async def _run_unconstrained_prose(
         structured={"mode": "unstructured_chat_prose", "char_length": len(raw_text)},
         system_prompt=system_prompt,
         request_params={
-            "max_tokens": 2048,
+            "max_tokens": max_tokens,
             "endpoint": "messages.create",
             "thinking": thinking_cfg,
         },
@@ -116,8 +126,12 @@ async def run_sonnet_naive(
     sub_task: str,
     api_key: str,
     redact_hint_text: str | None = None,
+    **prose_overrides: Any,
 ) -> AnthropicRawResult:
-    """Rung 1A Anti-Pattern: Verbose Unconstrained Prose Prompt on Sonnet 5.5."""
+    """Rung 1A Anti-Pattern: Verbose Unconstrained Prose Prompt on Sonnet 5.5.
+
+    `prose_overrides`: optional keyword overrides of `_run_unconstrained_prose` (max_tokens, system_prompt,
+    timeout_s, max_retries); none are passed by the app."""
     settings = get_settings()
     return await _run_unconstrained_prose(
         payload_text=payload_text,
@@ -125,6 +139,7 @@ async def run_sonnet_naive(
         api_key=api_key,
         primary_model=settings.anthropic_sonnet_model,
         fallback_models=["claude-sonnet-5-5", "claude-sonnet-4-6"],
+        **prose_overrides,
     )
 
 
@@ -132,8 +147,9 @@ async def run_haiku_naive(
     payload_text: str,
     sub_task: str,
     api_key: str,
+    **prose_overrides: Any,
 ) -> AnthropicRawResult:
-    """Rung 1B Ablation: Same Unconstrained Prose Single-Pass API Call on Haiku 5.5."""
+    """Rung 1B Ablation: Same Unconstrained Prose Single-Pass API Call on Haiku 5.5 (overrides as run_sonnet_naive)."""
     settings = get_settings()
     return await _run_unconstrained_prose(
         payload_text=payload_text,
@@ -141,6 +157,7 @@ async def run_haiku_naive(
         api_key=api_key,
         primary_model=settings.anthropic_haiku_model,
         fallback_models=["claude-haiku-5-5", "claude-haiku-4-5"],
+        **prose_overrides,
     )
 
 
@@ -149,25 +166,43 @@ async def run_haiku_calibrated(
     sub_task: str,
     schema: dict[str, Any],
     api_key: str,
+    *,
+    model: str | None = None,
+    fallback_models: list[str] | None = None,
+    max_tokens: int = 256,
+    thinking: dict[str, str] | None = None,
+    timeout_s: float = 30.0,
+    max_retries: int | None = None,
+    allow_tool_fallback: bool = True,
 ) -> AnthropicRawResult:
-    """Rung 2 Deck Lever: Haiku 5.5 + Strict JSON Schema (Compact Output -> 20:1–50:1 Asymmetry)."""
+    """Rung 2: Haiku 5.5 asked for the classification fields only, through a JSON schema (compact output).
+
+    Keyword overrides (defaults = the app's behaviour) are used by the Category 1 ablation harness: `model`
+    (+ `fallback_models`) runs the same prompt and schema on another model, `thinking` sets that model's thinking,
+    `allow_tool_fallback=False` keeps an unparsable/truncated JSON answer (structured={}) instead of silently
+    re-asking via tool use, and re-raises an API rejection instead of switching call path."""
     settings = get_settings()
-    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=30.0)
+    client = anthropic.AsyncAnthropic(
+        api_key=api_key, timeout=timeout_s, **({} if max_retries is None else {"max_retries": max_retries})
+    )
     system_prompt = get_haiku_calibrated_system_prompt(sub_task)
+    primary = model or settings.anthropic_haiku_model
+    fallbacks = fallback_models if fallback_models is not None else ["claude-haiku-5-5", "claude-haiku-4-5"]
+    thinking_cfg = thinking or {"type": "disabled"}
 
     t0 = time.perf_counter()
     request_params: dict[str, Any] = {
-        "max_tokens": 256,
-        "thinking": {"type": "disabled"},
+        "max_tokens": max_tokens,
+        "thinking": thinking_cfg,
         "output_config": {"format": {"type": "json_schema"}},
     }
     try:
         used_model, resp = await _create_with_fallback(
             client,
-            settings.anthropic_haiku_model,
-            ["claude-haiku-5-5", "claude-haiku-4-5"],
-            max_tokens=256,
-            thinking={"type": "disabled"},
+            primary,
+            fallbacks,
+            max_tokens=max_tokens,
+            thinking=thinking_cfg,
             system=system_prompt,
             output_config={
                 "format": {
@@ -180,8 +215,15 @@ async def run_haiku_calibrated(
         raw_text = "\n".join(
             b.text for b in resp.content if getattr(b, "type", None) == "text"
         ).strip()
-        structured = json.loads(raw_text) if raw_text else {}
+        try:
+            structured = json.loads(raw_text) if raw_text else {}
+        except json.JSONDecodeError:
+            if allow_tool_fallback:
+                raise
+            structured = {}
     except (anthropic.BadRequestError, TypeError, json.JSONDecodeError):
+        if not allow_tool_fallback:
+            raise
         request_params = {
             "max_tokens": 256,
             "thinking": {"type": "disabled"},

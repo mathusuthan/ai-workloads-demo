@@ -240,7 +240,11 @@ export function RungResultCard({ result, visible }: RungResultCardProps) {
                           : 'bg-amber-100 text-amber-900'
                       }`}
                     >
-                      {result.accuracy.schema_valid ? '100% Typed Schema' : '0% Schema (Regex)'}
+                      {result.accuracy.method === 'reader_model'
+                        ? 'Write-up · read by reader model'
+                        : result.rung_id === 'gemini_decision'
+                          ? 'Decisions API'
+                          : 'JSON schema'}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 font-mono text-xs font-extrabold">
@@ -278,6 +282,17 @@ export function RungResultCard({ result, visible }: RungResultCardProps) {
                     </span>
                   ))}
                 </div>
+                {result.accuracy.method === 'reader_model' && result.accuracy.method_note && (
+                  <p className="mt-2 text-[10px] leading-snug text-slate-500">{result.accuracy.method_note}</p>
+                )}
+              </div>
+            )}
+            {!result.accuracy && result.accuracy_note && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50/90 p-3 text-[11px] leading-snug text-slate-600">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-600">
+                  Accuracy vs. Ground Truth:{' '}
+                </span>
+                {result.accuracy_note}
               </div>
             )}
 
@@ -297,8 +312,9 @@ export function RungResultCard({ result, visible }: RungResultCardProps) {
                         result.rung_id === 'sonnet_naive' ? 'text-rose-900' : 'text-amber-950'
                       }`}
                     >
-                      Unbounded Prose Output ({f.output_tokens} tok @{' '}
-                      {result.rung_id === 'sonnet_naive' ? '$10/M' : '$0.50/M'} out)
+                      Write-Up Output ({f.output_tokens.toLocaleString()} tok @{' '}
+                      {result.rung_id === 'sonnet_naive' ? '$10/M' : '$0.50/M'} out
+                      {result.stop_reason ? ` · stopped: ${result.stop_reason === 'max_tokens' ? 'cut off at the cap' : result.stop_reason}` : ''})
                     </span>
                     <button
                       type="button"
@@ -313,7 +329,7 @@ export function RungResultCard({ result, visible }: RungResultCardProps) {
                         </>
                       ) : (
                         <>
-                          Inspect Prose <ChevronDown className="h-3 w-3" />
+                          Inspect Write-Up <ChevronDown className="h-3 w-3" />
                         </>
                       )}
                     </button>
@@ -331,7 +347,8 @@ export function RungResultCard({ result, visible }: RungResultCardProps) {
             {result.rung_id === 'haiku_calibrated' && (
               <div className="rounded-xl border border-blue-200 bg-blue-50/30 p-3">
                 <div className="text-[11px] font-bold text-blue-900">
-                  Strict JSON Schema Output ({f.output_tokens} tok)
+                  JSON Schema Output ({f.output_tokens} tok
+                  {result.stop_reason ? ` · stopped: ${result.stop_reason === 'max_tokens' ? 'cut off at the cap' : result.stop_reason}` : ''})
                 </div>
                 <pre className="mt-1.5 overflow-x-auto rounded-lg bg-slate-950 p-2.5 font-mono text-[11px] leading-relaxed text-emerald-300">
                   {JSON.stringify(result.structured_output, null, 2)}

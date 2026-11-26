@@ -542,7 +542,7 @@ export function Cat3Workbench({
               Hold <strong>Claude Sonnet 5.5</strong> ($2.00/M in · $10.00/M out) constant across a 10-turn IT &amp; HR
               Service Desk escalation: measure how <strong>Prefix Context Caching</strong> ($0.10/M reads, -95%) and{' '}
               <strong>Sliding-Window Memory Summarization</strong> cut quadratic <strong>O(N²)</strong> session cost — and
-              what the compacted memory forgets, scored against a fixed answer key.
+              what the compacted memory leaves out, scored against a fixed answer key.
             </p>
           </div>
 
@@ -890,7 +890,7 @@ export function Cat3Workbench({
                           {/* Transparent Summarizer Cost Accountability Box on Rung 3 */}
                           {isCompact && (
                             <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-[11px] text-emerald-950">
-                              <strong>Honest Compactor Accounting:</strong>{' '}
+                              <strong>Compactor Cost Included:</strong>{' '}
                               {s.summarizerCalls > 0
                                 ? `${s.summarizerCalls} Sonnet 5.5 JSON summarizer calls (${s.summarizerInTokens.toLocaleString()} in / ${s.summarizerOutTokens.toLocaleString()} out = $${(s.summarizerCostUsd * 1000).toFixed(2)}/1k sessions) included inside the $${s.costPer1kSessionsUsd.toFixed(2)}/1k total.`
                                 : 'Compaction fires starting at Turn 5 (window >= 4 turns). Scrub past T4 to inspect.'}

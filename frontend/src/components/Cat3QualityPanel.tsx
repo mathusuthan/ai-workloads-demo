@@ -115,7 +115,7 @@ export function Cat3QualityPanel({ results, portfolio }: Cat3QualityPanelProps) 
           <ShieldCheck className="h-4 w-4" />
           Answer Quality vs Cost · Scored Against a Fixed Answer Key
         </div>
-        <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">What Each Context Strategy Keeps — and What It Forgets</h2>
+        <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">What Each Context Strategy Keeps — and What It Leaves Out</h2>
         <p className="mt-1 max-w-4xl text-xs leading-relaxed text-slate-600">
           Every reply is checked for the specific IDs, amounts and dates the answer key expects. After Turn 10, each rung
           is asked six short questions about details from earlier turns. Cost is the full 10-turn session.
@@ -232,8 +232,8 @@ export function Cat3QualityPanel({ results, portfolio }: Cat3QualityPanelProps) 
                 </tbody>
               </table>
               <p className="mt-1.5 text-[10px] text-slate-500">
-                ✓ answered with the expected detail · ✗ declined: the assistant said it no longer had the detail · ✗ wrong:
-                it gave a different value. Open a cell to read the answer.
+                ✓ answered with the expected detail · ✗ declined: the reply said the detail was not available · ✗ wrong:
+                the reply gave a different value. Open a cell to read the answer.
               </p>
             </div>
           )}

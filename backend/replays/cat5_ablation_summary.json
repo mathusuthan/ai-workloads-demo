@@ -3,7 +3,7 @@
   "source": "cat5 ablation (ablation.summarise)",
   "source_file": "experiments/cat5_ablation/runs.jsonl",
   "fixture_version": "cat5-ablation-fixtures-2026-11-26.v1",
-  "record_count": 217,
+  "record_count": 223,
   "pooled_runs": 198,
   "gate_disagreement_runs": 18,
   "live_runs_used": 216,
@@ -1406,7 +1406,7 @@
     {
       "arm_id": "bundle_gate_sonnet_cached",
       "label": "+ policy tool",
-      "adds": "A deterministic policy tool computes the voucher; the model copies it",
+      "adds": "A deterministic policy tool computes the voucher; the committed voucher carries its figures",
       "runnable_in_app": true,
       "app_rung_id": "bounded_sonnet_cached_gate",
       "tool_set": "governed",
@@ -2989,7 +2989,7 @@
     {
       "preset_id": "inv-06",
       "invoice_id": "INV-DL-2026-4157",
-      "ruling": "Lead ruling: the manual derivation is correct and the gate is wrong. Manual 2.1 allows the 1.5% band only when the PO currency notes specify an index-linked float; this PO is plain DDP INR with no amendment, so line 1 pays at the PO rate. The gate's WITHIN_1.5PCT_TOLERANCE branch ignores that condition.",
+      "ruling": "Lead ruling: the manual derivation is correct and the gate is wrong. Manual 2.1 allows the 1.5% band only when the PO currency notes specify an index-linked float; this PO is plain DDP INR with no amendment, so line 1 pays at the PO rate. The gate's WITHIN_1.5PCT_TOLERANCE branch ignored that condition when the experiment ran; it was fixed on 2026-11-26 (the band now passes only on index-linked POs).",
       "manual_text": "2.1: \"If `po_unit_price_inr < billed_unit_price_inr <= po_unit_price_inr * 1.015`: tiny FX/metal-surcharge rounding within `1.50%` MAY pass ONLY when PO currency notes specify index-linked float; otherwise standard landed DDP catalog POs default to PO unit rate unless amended.\"",
       "manual_truth": {
         "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
@@ -3026,7 +3026,7 @@
         "po_rate": 1480.0,
         "billed_rate": 1499.0
       },
-      "bundle_note": "fetch_3way_match_bundle does not return purchase_orders.currency (the PO currency notes), so bundle arms cannot check the manual's index-linked-float condition; raw arms can (query_po_raw returns it).",
+      "bundle_note": "When the experiment ran, fetch_3way_match_bundle did not return purchase_orders.currency (the PO currency notes), so bundle arms could not check the manual's index-linked-float condition; raw arms could (query_po_raw returns it). Since 2026-11-26 the bundle returns it (bundle v2-manual-aligned, which also adds the vendor risk_flag, any posted vouchers for the invoice and each line's PO GST rate); every recorded run used the earlier bundle.",
       "per_arm": [
         {
           "arm_id": "raw_free_sonnet",
@@ -3124,7 +3124,55 @@
       "gate_runs": 6,
       "gate_match_gate_output": 6,
       "gate_match_manual": 0,
-      "missing_keys": 0
+      "missing_keys": 0,
+      "gate_output_note": "Gate output as recorded on 2026-11-26, before the fix (gate v1-band-unconditional).",
+      "gate_fixed_on": "2026-11-26",
+      "gate_version_recorded": "v1-band-unconditional",
+      "gate_version_current": "v2-manual-aligned",
+      "current_gate_output": {
+        "decision": "APPROVE_PARTIAL_DEBIT_NOTE",
+        "authorized_net_principal_inr": 3656000.0,
+        "authorized_gst_payout_inr": 658080.0,
+        "gst_escrow_holdback_inr": 0.0,
+        "debit_note_deduction_inr": 22800.0,
+        "expected_escalation": true
+      },
+      "current_gate_matches_manual": true,
+      "after_fix_per_arm": [
+        {
+          "arm_id": "bundle_gate_sonnet_cached",
+          "runs": 3,
+          "matches_manual": 3,
+          "matches_gate_output": 0,
+          "neither": 0,
+          "no_commit": 0,
+          "decisions": {
+            "APPROVE_PARTIAL_DEBIT_NOTE": 3
+          },
+          "line1_rate": {
+            "po_rate": 3
+          },
+          "gate_arm": true
+        },
+        {
+          "arm_id": "bundle_gate_haiku_escalate",
+          "runs": 3,
+          "matches_manual": 3,
+          "matches_gate_output": 0,
+          "neither": 0,
+          "no_commit": 0,
+          "decisions": {
+            "APPROVE_PARTIAL_DEBIT_NOTE": 3
+          },
+          "line1_rate": {
+            "po_rate": 3
+          },
+          "gate_arm": true
+        }
+      ],
+      "after_fix_gate_runs": 6,
+      "after_fix_gate_match_manual": 6,
+      "after_fix_missing_keys": 0
     }
   ],
   "data_quality": {
@@ -3169,7 +3217,8 @@
     "The deterministic gate sets escalation_required whenever the debit note is above zero (or on 2+ discrepancies), so single-factor debit notes (DOA only, freight only, one price hike) escalate in the Haiku -> Sonnet arm even though manual 6.2 describes escalation for multi-factor disputes. expected_escalation follows the gate rule.",
     "Thinking differs by model in the app's call function: Sonnet runs with thinking {type: between_tools}, Haiku with thinking disabled. The model-swap levers therefore also change thinking.",
     "Voucher ids in no-gate arms end in -UNB: those arms reuse the app session's unbounded_sonnet_loop rung id to disable the gate requirement, and the app derives the voucher-id suffix from the rung id. The model sees this id.",
-    "Latent gate gaps not exercised by the default fixtures: the gate ignores approved_freight_waiver_inr (2.2/2.3 allow a freight-waiver amendment); it takes the GST rate from the first invoice line only; it does not implement Trigger 3 (duplicate invoice or PAYMENT_FREEZE vendor). The 1.5% band gap is exercised by inv-06 (separate section).",
+    "Gate gaps not exercised by any recorded invoice, fixed on 2026-11-26 after the experiment: the gate ignored approved_freight_waiver_inr (2.2/2.3 allow a freight-waiver amendment; it now raises the cap by the waivers on signed, active amendments); it took the GST rate from the first invoice line only (it now applies each line's PO GST rate when rates differ); it did not implement Trigger 3 (it now hard-blocks an invoice_id already posted in reconciliation_vouchers or a vendor flagged PAYMENT_FREEZE). No recorded invoice has a waiver, mixed GST rates, a prior voucher or a frozen vendor, so the gate returns byte-identical output for all 11 pooled invoices.",
+    "Gate fix (2026-11-26, after the experiment): the gate's 1.5% band now passes only when the PO's currency notes (purchase_orders.currency) say the price is index-linked, as manual 2.1 requires; otherwise the line pays the PO rate (price_rule WITHIN_1.5PCT_NOT_INDEX_LINKED_PO_RATE); the three gaps above were fixed at the same time (gate v2-manual-aligned). fetch_3way_match_bundle (bundle v2-manual-aligned) now also returns purchase_orders.currency, the vendor risk_flag, the invoice's posted vouchers and each line's PO GST rate, so a bundle arm can check the same conditions as the gate. Records carry settings.gate_version / bundle_version (absent = v1, before the fix). For the 11 pooled invoices the fixed gate returns byte-identical output and the added bundle fields do not bear on them (none has a price rise inside the 1.5% band, a waiver, mixed rates, a prior voucher or a frozen vendor), so their records stay current. On inv-06 the gate arms are reported by gate version (before / after the fix).",
     "The Anthropic SDK client retries failed or timed-out calls (default max_retries=2) inside one recorded turn; a retried call is not visible in the records and may have been billed.",
     "Tool precision (the app's metric, min(optimal, total) / total) counts only fetch_3way_match_bundle, run_policy_tolerance_gate and commit_reconciliation_voucher as optimal. A raw SELECT * tool is never credited, so a raw arm's precision is at most 1 / (number of calls) however few lookups it makes; it is not comparable between raw and bundle arms. Use the per-tool call counts instead.",
     "Loop rule (v2): a turn cut off by max_tokens ends the run and its tool_use blocks are recorded but not executed; tool_use blocks in any other turn are executed and the loop continues, whatever the stop_reason (the API can return end_turn together with tool_use). One v1 record that stopped on such a turn is superseded. The app's live runner follows the same rule."
@@ -3417,6 +3466,18 @@
         "05edaf44-bd9b-4de5-b5b0-0f6347bfcfd9",
         "706b1db1-cd49-4241-b5ec-b9bf461e0aba",
         "cedd3329-d76c-4855-aabd-4322c563d591"
+      ]
+    },
+    "gate_disagreement_after_fix": {
+      "bundle_gate_sonnet_cached": [
+        "3d92c174-6bf4-40a5-b109-474b4ad81408",
+        "9b91d194-f80e-4a5c-9292-4be4d1c6e9e8",
+        "cbc0fef7-70a1-4def-83ec-daf38b42ddf3"
+      ],
+      "bundle_gate_haiku_escalate": [
+        "1e8458da-2903-4996-aa5b-c41d9c1b06c4",
+        "820c6ec0-5ebe-421d-93fe-d6c10941b4f3",
+        "3d75e3b9-f72c-4886-933f-7c6491e448e0"
       ]
     }
   },

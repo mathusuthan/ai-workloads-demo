@@ -20,6 +20,7 @@ import type {
   RungId,
   SubTaskType,
 } from '../types'
+import { Cat1AblationPanel } from './Cat1AblationPanel'
 import { FinOpsHud } from './FinOpsHud'
 import { NativeModal } from './NativeModal'
 import { RungResultCard } from './RungResultCard'
@@ -264,10 +265,11 @@ export function Cat1Workbench({
               {archetype.title} — {archetype.novamart_product_name}
             </h1>
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-600 sm:text-sm">
-              Compare treating NovaMart intake like a frontier chatbot (<strong>Sonnet 5.5</strong>) vs.
-              the deck’s lever (<strong>Haiku 5.5 + Strict JSON Schema &amp; Batch</strong>) vs.
-              non-autoregressive System-1 decision models (<strong>Gemini Decision 1</strong> &amp;{' '}
-              <strong>Jev</strong> rate-card comparator).
+              Compare asking a model for a four-part write-up (<strong>Sonnet 5.5</strong>, then{' '}
+              <strong>Haiku 5.5</strong>) with asking <strong>Haiku 5.5</strong> for just the classification
+              through a JSON schema, and with a non-autoregressive decision model (<strong>Gemini Decision 1</strong>;{' '}
+              <strong>Jev</strong> as a rate-card comparator). The experiment below the rungs shows which change
+              saves the money: asking for less and the smaller model, not the schema.
             </p>
           </div>
 
@@ -562,6 +564,8 @@ export function Cat1Workbench({
 
               {/* FinOps HUD */}
               <FinOpsHud runResponse={runResponse} />
+
+              <Cat1AblationPanel portfolio={runResponse.ablation_portfolio} />
             </>
           )}
         </div>
@@ -577,8 +581,9 @@ export function Cat1Workbench({
                   12-Item Queue Benchmark &amp; 6-Tier CFO Scale Projection
                 </h2>
                 <p className="mt-0.5 text-xs text-slate-600">
-                  Evaluates mixed Support Escalations + Cold-Start SKU feeds across Haiku 5.5 (Real-Time
-                  vs. 50% Message Batch), Gemini Decision 1, and Jev rate-card economics.
+                  Runs the mixed Support Escalations + Cold-Start SKU feed through the four rungs, with the Batch
+                  API price for the Haiku schema rung (computed at 50%, not run), Gemini Decision 1, and Jev
+                  rate-card economics.
                 </p>
               </div>
 
@@ -627,7 +632,7 @@ export function Cat1Workbench({
                       Model Accuracy vs. Cost Benchmark ({batchResponse.total_items} Ground-Truth Items)
                     </h3>
                     <span className="text-[11px] text-slate-500">
-                      Schema Contract Compliance vs. Field &amp; Exact-Verdict Accuracy
+                      Fields correct vs. ground truth · write-ups read by a reader model
                     </span>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -645,21 +650,23 @@ export function Cat1Workbench({
                                 : 'bg-amber-100 text-amber-900'
                             }`}
                           >
-                            {m.schema_compliance_pct.toFixed(0)}% schema
+                            {m.schema_compliance_pct === 100 ? 'Structured answer' : 'Free-text write-up'}
                           </span>
                         </div>
                         <div className="mt-2 flex items-baseline justify-between">
                           <div>
                             <div className="text-[10px] font-bold uppercase text-slate-400">
-                              Field Accuracy
+                              {m.schema_compliance_pct === 100 ? 'Fields Correct' : 'Usable & Correct'}
                             </div>
                             <div className="font-mono text-xl font-extrabold tabular-nums text-slate-900">
-                              {m.field_accuracy_pct.toFixed(1)}%
+                              {m.field_accuracy_pct == null ? 'not scored' : `${m.field_accuracy_pct.toFixed(1)}%`}
                             </div>
-                            <div className="font-mono text-[10px] text-slate-500">
-                              {m.fields_matched}/{m.fields_total} fields · {m.exact_items_matched}/
-                              {m.items_total} exact
-                            </div>
+                            {m.field_accuracy_pct != null && (
+                              <div className="font-mono text-[10px] text-slate-500">
+                                {m.fields_matched}/{m.fields_total} fields · {m.exact_items_matched}/
+                                {m.items_total} exact
+                              </div>
+                            )}
                           </div>
                           <div className="text-right">
                             <div className="text-[10px] font-bold uppercase text-slate-400">
@@ -706,8 +713,9 @@ export function Cat1Workbench({
                     }
                   >
                     <caption className="sr-only">
-                      6-tier unit economics and accuracy comparison across Anthropic Sonnet Prose, Haiku Prose,
-                      Haiku Strict JSON, Haiku Message Batch, Gemini Decision 1, and TypeSafe Jev.
+                      6-tier unit economics and accuracy comparison across the Sonnet write-up, the Haiku write-up,
+                      Haiku classification with a JSON schema, its Batch API price (computed), Gemini Decision 1, and
+                      TypeSafe Jev.
                     </caption>
                     <thead className="bg-slate-900 text-[11px] font-bold uppercase tracking-wider text-slate-200">
                       <tr>
@@ -801,7 +809,7 @@ export function Cat1Workbench({
                       {
                         '--label-2': '"Sub-task"',
                         '--label-3': '"Tokens"',
-                        '--label-4': '"Haiku 5.5 JSON"',
+                        '--label-4': '"Haiku 5.5 schema"',
                         '--label-5': '"Gemini Decision 1"',
                         '--label-6': '"Accuracy (S/HN/H/G)"',
                         '--label-7': '"Regex PII"',
@@ -809,7 +817,7 @@ export function Cat1Workbench({
                     }
                   >
                     <caption className="sr-only">
-                      Item-level classification outputs and ground-truth accuracy across Sonnet Prose, Haiku Prose, Haiku 5.5 strict schema, and Gemini Decision 1.
+                      Item-level classification outputs and ground-truth accuracy across the Sonnet write-up, the Haiku write-up, Haiku 5.5 with a JSON schema, and Gemini Decision 1.
                     </caption>
                     <thead className="bg-slate-900 text-[11px] font-bold uppercase tracking-wider text-slate-200">
                       <tr>
@@ -866,10 +874,10 @@ export function Cat1Workbench({
                           <td className="px-4 py-3 font-mono text-[10px]">
                             <div className="flex flex-wrap gap-1">
                               <span className="rounded bg-rose-50 px-1.5 py-0.5 text-rose-800 ring-1 ring-rose-200">
-                                S:{(item.sonnet_accuracy_pct ?? 0).toFixed(0)}%
+                                S:{item.sonnet_accuracy_pct == null ? '—' : `${item.sonnet_accuracy_pct.toFixed(0)}%`}
                               </span>
                               <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-900 ring-1 ring-amber-200">
-                                HN:{(item.haiku_naive_accuracy_pct ?? 0).toFixed(0)}%
+                                HN:{item.haiku_naive_accuracy_pct == null ? '—' : `${item.haiku_naive_accuracy_pct.toFixed(0)}%`}
                               </span>
                               <span className="rounded bg-blue-50 px-1.5 py-0.5 font-bold text-blue-800 ring-1 ring-blue-200">
                                 H:{(item.haiku_accuracy_pct ?? 0).toFixed(0)}%
@@ -894,6 +902,8 @@ export function Cat1Workbench({
                   </table>
                 </div>
               </section>
+
+              <Cat1AblationPanel portfolio={batchResponse.ablation_portfolio} />
             </>
           )}
         </div>
@@ -904,7 +914,7 @@ export function Cat1Workbench({
         open={inspectorOpen}
         onClose={() => setInspectorOpen(false)}
         title="Category 1 Architecture & SDK Inspector"
-        subtitle="Inspect the exact prompts, Anthropic Strict JSON Schema, and Gemini Decisions API spec"
+        subtitle="Inspect the call settings, the Rung 2 JSON schema, and the Gemini Decisions API questions"
         maxWidthClass="max-w-3xl"
       >
         <div className="space-y-4">
@@ -917,7 +927,7 @@ export function Cat1Workbench({
             {(
               [
                 ['code', 'Python SDK Comparison'],
-                ['schema', 'Rung 2 Strict JSON Schema'],
+                ['schema', 'Rung 2 JSON Schema'],
                 ['questions', 'Rung 3 Gemini Decision Questions'],
               ] as const
             ).map(([tid, label]) => (

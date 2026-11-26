@@ -363,7 +363,7 @@ CAT5_PRESETS: list[dict[str, Any]] = [
         "vendor_name": "Kaveri Smart Kitchens Pvt. Ltd.",
         "fc_hub": "FC-BLR-01",
         "title": "Invoice 1: MSMED T+43 Principal Release + 18% GSTR-2B Escrow Split",
-        "subtitle": "All 1,000 appliances accepted cleanly at FC-BLR-01, active NIC IRN, but GSTR-2B pending Nov 11 filing — Haiku handles cleanly end-to-end",
+        "subtitle": "All 1,000 appliances accepted cleanly at FC-BLR-01, active NIC IRN, but GSTR-2B pending Nov 11 filing — no escalation expected",
         "complexity_tier": "routine_policy_split",
         "invoice_grand_total_inr": 2171200.0,
         "ground_truth": {

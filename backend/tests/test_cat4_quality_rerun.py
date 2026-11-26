@@ -528,12 +528,12 @@ def test_break_even_hand_case() -> None:
 
 def test_plan_order_and_resume() -> None:
     plan = qr.plan_matrix(qr.RUNG_IDS, (1, 3), 3)
-    assert len(plan) == 24 and plan[:5] == [(r, 1, 0) for r in qr.RUNG_IDS] + [("naive_full_corpus", 3, 0)]
+    assert len(plan) == 24 and plan[:5] == [(r, 1, 0, "original") for r in qr.RUNG_IDS] + [("naive_full_corpus", 3, 0, "original")]
     cur = {"settings": {"synth_max_tokens": qr.SYNTH_MAX_TOKENS}}
     existing = [{"rung_id": "naive_full_corpus", "scale": 1, "repeat_index": 0, "status": "ok", **cur},
                 {"rung_id": "cached_full_corpus_citations", "scale": 1, "repeat_index": 0, "status": "error", **cur}]
     pending = qr.select_pending(plan, existing)
-    assert ("naive_full_corpus", 1, 0) not in pending and ("cached_full_corpus_citations", 1, 0) in pending
+    assert ("naive_full_corpus", 1, 0, "original") not in pending and ("cached_full_corpus_citations", 1, 0, "original") in pending
     assert len(pending) == 23
 
 
@@ -818,7 +818,8 @@ def test_golden_path_unscoped_and_judge_question_as_asked() -> None:
     assert qr.blinding_violations([{"text": ""}], EXPECTED_SCOPE, []) == []
     # golden scoring unchanged by the scope line
     s = qr.summarise([], keys=KEYS, golden=GOLDEN)["original_capture"]["groups"]
-    assert s["naive_full_corpus"]["fact_recall"]["hits"] == 52 and s["hybrid_rag_rerank_citations"]["fact_recall"]["hits"] == 51
+    # (rung 3's recording is its scoped_absence session since 2026-11-26: 49 hits; the original-format one had 51)
+    assert s["naive_full_corpus"]["fact_recall"]["hits"] == 52 and s["hybrid_rag_rerank_citations"]["fact_recall"]["hits"] == 49
 
 
 def test_judge_cli_default_cap_16() -> None:

@@ -47,9 +47,11 @@ ARCHETYPES_CATALOG = [
             "Catalog Tagging",
         ],
         "architectural_lever": (
-            "Route Tier 1 stateless triage to Flash/Haiku models with strict JSON schemas & batching "
-            "to cut unit cost by >80% — or step down to System-1 Decision models (Gemini Decision 1 / Jev) "
-            "for 0 output tokens on pure routing/classification."
+            "Route Tier 1 stateless triage to Flash/Haiku models and ask only for the classification fields, "
+            "not a write-up — the lab's experiment finds those two changes carry the >80% saving, while a strict "
+            "JSON schema guarantees the format at a little extra cost and batching halves the price (computed) — "
+            "or step down to System-1 Decision models (Gemini Decision 1 / Jev) for 0 output tokens on pure "
+            "routing/classification."
         ),
         "novamart_story": (
             "Processes 5M weekly seller feed updates and customer escalations: routes support tickets "
@@ -223,7 +225,7 @@ FINOPS_RULES = [
         "tiers": "TIERS 1–2 · BANDS 1–2 (CAT 1 & 2)",
         "title": "Right-Size Single-Pass & Output",
         "bullets": [
-            "Route Tier 1 stateless triage (Cat 1: 20:1–50:1 input asymmetry) to Haiku/Decision tiers with strict schemas.",
+            "Route Tier 1 stateless triage (Cat 1: 20:1–50:1 input asymmetry) to Haiku/Decision tiers and ask only for the classification (a schema guarantees the format).",
             "Bound Tier 2 drafting (Cat 2: 800–3k+ output) with section templates to control 5x output token pricing.",
         ],
         "impact": "Impact: lower unit inference cost",  # replaced by the measured range in /api/archetypes

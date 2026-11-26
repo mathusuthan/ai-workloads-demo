@@ -328,7 +328,7 @@ Rerun columns: hits/n over ok runs. Original columns: ✓/✗ per golden cell (�
 - Rerun calls whose returned model is not `claude-sonnet-5-5`: 0.
 - Original capture: turns not ending in `end_turn`: 0; model mismatches: 0.
 
-## Misses for review — probe answers that missed (34)
+## Probe answers that did not match, for review (34)
 
 ### `prefix_cached_summarized` · desk-01 · r0 · `d1-p2-prk-slot` (origin turn 2)
 
@@ -688,4 +688,4 @@ Both the reply and every `any_of` alternative are normalised the same way before
 
 Matching: an alternative is hit when it occurs in the normalised reply, with a boundary guard — an alternative starting with a letter/digit must not be preceded by a letter/digit, and one ending in a digit must not be followed by a digit.
 
-Turn facts are scored against the reply of their own turn; ledger facts against the turn-10 reply; probes against each probe's answer. Items whose reply was not recorded are omitted, not counted as misses. Rerun statistics use the latest ok record per (rung, session, repeat).
+Turn facts are scored against the reply of their own turn; ledger facts against the turn-10 reply; probes against each probe's answer. Items whose reply was not recorded are omitted, not counted as non-matches. Rerun statistics use the latest ok record per (rung, session, repeat).

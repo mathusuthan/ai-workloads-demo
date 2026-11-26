@@ -1,11 +1,12 @@
 # Six AI Workload Archetypes: experiment notes for the post series
 
-Source material for seven posts: one introduction and one post per archetype. Every number here comes from `analysis/deck_claims_validation.md` (regenerated 26 Nov 2026), the reruns and scoring in `analysis/cat6_fair_rerun.md`, `analysis/cat3_quality_rerun.md`, `analysis/cat4_quality_rerun.md`, `analysis/cat5_ablation.md` and `analysis/cat2_quality.md`, or the golden replays the lab app serves. Part 0 feeds the intro post; Parts 1–6 each feed one archetype post; the appendix holds the rate card and definitions that every post may need.
+Source material for seven posts: one introduction and one post per archetype. Every number here comes from `analysis/deck_claims_validation.md` (regenerated 26 Nov 2026), the reruns and scoring in `analysis/cat6_fair_rerun.md`, `analysis/cat3_quality_rerun.md`, `analysis/cat1_ablation.md`, `analysis/cat4_quality_rerun.md`, `analysis/cat5_ablation.md` and `analysis/cat2_quality.md`, or the golden replays the lab app serves. Part 0 feeds the intro post; Parts 1–6 each feed one archetype post; the appendix holds the rate card and definitions that every post may need.
 
 ## How to read the numbers
 
 - **The deck.** "Six Key AI Archetypes for AI Workloads" is a 9-slide guide by Eric Lam. It sorts enterprise AI work into six archetypes, gives each a typical token profile, and names one architectural lever per archetype. The experiment tests those claims.
 - **The lab.** Each archetype was built as a real workload at NovaMart, a fictional Indian omnichannel retailer (12M SKUs, 45,000 sellers, $2.4B GMV). All data is synthetic. Every workload was run live against the model APIs once and recorded.
+- **What is being compared.** These experiments compare system designs: what is asked for, how much context is sent, caching, tools, and which size of model does which step. They are not an assessment of any model. Where a row names a model, read it as that configuration in this setup, on these tasks.
 - **Rungs.** Each archetype was run several ways on the same inputs, from a naive version up to the governed version the deck recommends. Each way is called a rung.
 - **Models.** Claude Sonnet 5.5 and Claude Haiku 5.5 throughout. Archetype 1 also includes a Gemini Decision 1 rung.
 - **Cost.** Costs are recomputed from the recorded token counts at the rate card in the appendix, and quoted per 1,000 units of work (items, documents, sessions, and so on).
@@ -13,7 +14,7 @@ Source material for seven posts: one introduction and one post per archetype. Ev
   - *Billed*: what the recorded runs actually cost, cache hits and misses as they happened.
   - *Cold*: the first call has to write the cache. This is a single user starting from nothing.
   - *Warm*: the cached prefix is already there. This is a busy fleet in steady state.
-- **Sample sizes are small**: 12 items, 4 documents, 2 sessions (each run 3 times), 8 questions (each asked 3 times per version and corpus size), 12 invoices (each run 3 times per version), 3 incidents (each run 5 times). Quote the percentages as indicative results from one lab, not as benchmarks.
+- **Sample sizes are small**: 12 items (each run 3 times per version), 4 documents, 2 sessions (each run 3 times), 8 questions (each asked 3 times per version and corpus size), 12 invoices (each run 3 times per version), 3 incidents (each run 5 times). Quote the percentages as indicative results from one lab, not as benchmarks.
 
 ---
 
@@ -42,19 +43,19 @@ The deck closes with three rules:
 
 | # | Unit of work | Naive | Best governed rung | Cost cut | What happened to quality |
 |---|---|---:|---:|---:|---|
-| 1 | 1,000 items | $22.04 | $0.189 (Haiku, strict JSON) | −99.1% | Fields correct rose from 27/42 to 40/42 |
+| 1 | 1,000 items | $29.50 | $0.188 (Haiku, classification with JSON schema); $0.145 as plain text | −99.4% | On the same classification task the Haiku version matched 120 of 126 fields, against 126 for the Sonnet version |
 | 2 | 1,000 documents | $58.92 | $1.39 (Haiku, section template); $27.25 with the template on Sonnet | −98%; −54% | Every core fact kept, but a blind grader preferred the long draft in 16 of 16 comparisons; serious errors rose from 1 to 6 (Sonnet template) and 10 (Haiku template) |
 | 3 | 1,000 ten-turn sessions | $399 | $212 (cache + compaction); $240 with caching alone | −47%; −40% | Caching: no change. Compaction: new answers unaffected, but recall of earlier details fell from 36/36 to 2/36 |
 | 4 | 1,000 questions | $46 | $19 (cached corpus, warm); $24–25 with retrieval | −59%; −46% | Caching: best answers, no serious errors in 48. Retrieval: fine on the small corpus; on one three times larger, 6 to 8 answers in 24 had a serious error |
 | 5 | 1,000 invoices | $154 | $2.40 (one narrow query, Haiku computes the voucher) | −98% | 197 of 198 vouchers correct across six versions; the cheapest got all 33 |
-| 6 | 1,000 incidents | $696 | $56.20 (Haiku agents, Sonnet patch author, cold start) | −92% | Unchanged: every arm fixed 15 of 15 |
+| 6 | 1,000 incidents | $696 | $56.20 (Haiku agents, Sonnet patch author, cold start) | −92% | Unchanged: every arm fixed 15 of 15. The tasks were small; harder ones might separate the versions |
 
 ### The scorecard
 
 The scorecard has 31 rows: the deck's 26 testable claims plus five implicit ones we added, that the cheaper version loses no quality in Archetypes 1 to 5. Against the lab data:
 
-- **10 supported**: the measurement falls inside the claimed range or clears the threshold.
-- **18 partly supported**: the direction holds, but the magnitude is outside the range or a confound limits the conclusion.
+- **9 supported**: the measurement falls inside the claimed range or clears the threshold.
+- **19 partly supported**: the direction holds, but the magnitude is outside the range or a confound limits the conclusion.
 - **2 not supported**: our added rows for Archetypes 2 and 3. Templated drafts lose to the long draft on quality, and compacting old turns loses recall.
 - **1 not testable**: the per-developer daily token volume for swarms.
 
@@ -64,10 +65,10 @@ The Archetype 6 rows were re-judged on the fair rerun; none of the verdicts chan
 
 - **Most cost levers worked in the direction the deck says, and none of the deck's own claims was contradicted outright.** The exceptions are in Archetype 5, where the deterministic guardrail added cost and the step budget never came into play. The two rows scored not supported are quality costs the deck does not mention.
 - **The "60–80%" rule missed on both sides.** Changing the model as well as the prompt gave 98–99%. A template alone, on the same model, gave 54%.
-- **Cheaper was not worse where the work has a checkable right answer, and was worse where it does not.** The governed rungs were more accurate in Archetype 1 and equally accurate in Archetypes 5 and 6. In Archetype 2 the templated drafts kept every core fact but lost every blind comparison with the long draft, mostly by inventing owners and deadlines the template demanded; one added sentence allowing "not stated" removed nearly all of those errors but did not close the gap. In Archetype 3, caching cost nothing in quality, but compacting old turns bought an extra 11% saving at the price of nearly all recall of earlier details. In Archetype 4, caching the whole corpus gave the best answers, while answering from five retrieved clauses led the model to report terms as absent that it had simply not been shown.
+- **Where the work has a checkable right answer, the cheaper versions scored the same or close; where it does not, they scored lower.** In Archetype 1 the smaller-model version matched 120 of 126 fields against 126 for the larger-model version on the same task, and in Archetypes 5 and 6 the cheaper versions matched as often as the others. In Archetype 2 the templated drafts kept every core fact but were not preferred in any blind comparison with the long draft, mostly because they filled in owners and deadlines the template demanded and the source did not give; one added sentence allowing "not stated" removed nearly all of those errors but did not close the gap. In Archetype 3, caching cost nothing in quality, but compacting old turns bought an extra 11% saving at the price of nearly all recall of earlier details. In Archetype 4, caching the whole corpus gave the best answers, while answers built from five retrieved clauses reported terms as absent that were in clauses not sent; two added lines of instruction removed those claims and halved the serious errors.
 - **The deck's token bands describe context size, not the bill.** A ten-turn session peaks at 22k tokens of context but bills 163k prompt tokens, because every turn re-sends the history.
 - **The archetype ordering depends on the unit.** The deck's scale runs 1 < 2 < 3 < 4 < 5 << 6. Measured, 1 < 2 < {3, 4, 5} < 6 holds, but a ten-turn session moves more tokens than a whole invoice or a four-question audit.
-- **The Archetype 1 naive baseline is understated.** Most of its naive runs hit their output cap and were cut off, so the true naive cost is higher than shown. Archetype 6 had the same problem and was rerun without it.
+- **The first baselines were the weakest part of the experiment.** In Archetypes 1, 5 and 6 the naive version had been cut off at its output cap, scripted into extra steps, or asked to do a different job from the version it was compared with. Each was rerun against a fair baseline, and each time the headline saving or quality gap shrank or changed its cause.
 - **Output control and model choice dominate the cheap end; context control dominates the expensive end.** In Archetypes 1 and 2, output is 88–93% of the naive bill. In Archetypes 3, 5 and 6, input is 71–91% of it.
 
 ### Measured token scale
@@ -86,7 +87,7 @@ Median total tokens per unit of work, on the rung closest to what the deck descr
 
 ### What we got wrong while measuring
 
-Good material for the intro: the measurement itself needed eight corrections.
+Good material for the intro: the measurement itself needed ten corrections.
 
 - **Duplicate traces.** At the first audit the trace folder held 842 files but only 206 distinct runs. The rest were copies written each time the app replayed a recorded run; one run appeared 29 times. Averaging the raw folder weights each run by how often someone viewed it.
 - **A wrong price.** The rate card had Sonnet cache reads at $0.20 per million tokens; the published rate is $0.10. Every cached Sonnet rung was overstated by 2–10%.
@@ -95,11 +96,13 @@ Good material for the intro: the measurement itself needed eight corrections.
 - **A rigged comparison.** The first swarm experiment showed the naive swarm verifying 1 fix in 3 against 3 in 3 for the governed ones. The naive agents had been cut off at their output cap, and the capture script discarded governed runs that failed. Rerun fairly, every arm fixed 15 of 15 (Part 6).
 - **A check that failed good code.** One static security check flagged a harmless comparison because of a variable's name. Three correct patches were scored as failures until the check was fixed.
 - **A scripted baseline.** The naive invoice agent was told to make five lookups one at a time in a fixed order. Left to choose, it took about half the turns, and the saving credited to the governed design shrank accordingly (Part 5).
-- **A guardrail nobody had tested.** Writing new invoices by hand showed that the lab's deterministic policy tool misapplied one rule. Every run that trusted the tool repeated its error; every run that did the arithmetic itself got it right (Part 5).
+- **A guardrail nobody had tested.** Writing new invoices by hand showed that the lab's deterministic policy tool misapplied one rule. Every run that used the tool committed its figure; every run without it matched the manual (Part 5).
+- **A comparison of two different jobs.** The classification baseline was asked for a four-part write-up and the lever for four fields. Most of the saving credited to the JSON schema came from asking for less; the schema itself added cost (Part 1).
+- **A scorer that could not be trusted.** Free-text answers were scored by keyword search. Checked against a reader model on the same answers, it was wrong in both directions by up to 17 points (Part 1).
 
 ### Limits to state in the intro
 
-- Samples are small. Archetypes 3, 4, 5 and 6 were repeated (3, 3, 3 and 5 times); Archetypes 1 and 2 ran once, apart from the Archetype 2 follow-up.
+- Samples are small. Archetypes 1, 3, 4 and 5 were run 3 times each and Archetype 6 5 times; Archetype 2's original drafts ran once, and its follow-up 3 times.
 - Archetype 2's quality grades come from one model acting as a blind grader, with its serious findings checked by hand. Archetype 4's answers were graded the same way, in one pass.
 - Several rungs change more than one thing at a time, so a saving cannot always be split between levers.
 - All data is synthetic and the corpus sizes are at the low end of the deck's bands.
@@ -108,7 +111,9 @@ Good material for the intro: the measurement itself needed eight corrections.
 
 ## Part 1: Classification, extraction and routing
 
-**One-line result:** a small model with a strict JSON schema cost 99% less than a large model writing prose, and got more fields right.
+**One-line result:** asking for a classification instead of a write-up cut cost by about 90%, and a smaller model cut it by a further 95% with about five points fewer fields matched; the strict JSON schema, which the first version of this experiment credited, added 30% to the cost and changed no answer.
+
+This section uses the ablation of 26 Nov 2026: 252 live runs (seven versions, twelve items, three runs each), with nothing cut off and every run kept.
 
 ### What the deck says
 
@@ -124,56 +129,102 @@ The NovaMart Intake and Catalog Gate, tested on 12 items across two tasks:
 - **Support ticket triage (6 items).** Examples: a damaged-goods email exposing a payment card and phone number; a seller settlement dispute exposing Aadhaar and PAN tax IDs; a suspected account takeover from a voice transcript.
 - **Seller SKU tagging (6 items).** Examples: a "100% pure mulberry silk" kurta whose care-label scan contradicts the listing; a 27,000 mAh power bank missing its air-freight certificate; a clean espresso grinder that should auto-publish.
 
-Accuracy was scored on 42 ground-truth fields across the 12 items. PII masking is done by a separate deterministic regex step, not by the model.
+Half the items are long (about 1,100 tokens) and half short (about 150). Each has a known right answer on three or four fields, 42 fields in all: for tickets the queue, priority, automatic action and whether personal data is present; for SKUs the category, compliance status and whether the listing contradicts itself. PII masking is done by a separate deterministic step, not by the model.
+
+Seven versions, changing one thing at a time:
+
+| Version | Model | What is asked for | Answer format |
+|---|---|---|---|
+| Sonnet write-up | Sonnet 5.5 | A four-part analyst write-up: summary, routing with reasoning, a personal-data audit, next steps | Free text |
+| Sonnet classification, plain text | Sonnet 5.5 | Only the fields, chosen from the allowed values | One line per field |
+| Sonnet classification, schema | Sonnet 5.5 | Only the fields | Strict JSON schema |
+| Haiku write-up | Haiku 5.5 | The same write-up | Free text |
+| Haiku classification, plain text | Haiku 5.5 | Only the fields | One line per field |
+| Haiku classification, schema | Haiku 5.5 | Only the fields | Strict JSON schema |
+| Gemini Decision | Gemini Decision 1 | A set of decision questions | Decisions API, no generated text |
+
+Scoring: structured answers are compared with the right answer field by field. Free-text answers are first read by a separate model (Opus 5.5), which records what the answer says for each field without being shown the right answer or which version wrote it; those fields are then compared the same way.
 
 ### Results
 
-| Rung | Cost per 1,000 items | vs naive | Prompt tokens (median) | Output tokens (median) | Output share of cost |
-|---|---:|---:|---:|---:|---:|
-| Sonnet 5.5, free-text prose | $22.04 | — | 790 | 2,048 | 93% |
-| Haiku 5.5, free-text prose | $1.02 | −95.4% | 790 | 2,048 | 92% |
-| Haiku 5.5, strict JSON schema | $0.189 | −99.1% | 1,387 | 100 | 28% |
-| Gemini Decision 1, decisions API | $0.099 | −99.6% | 972 | 0 | 0% |
-| Haiku 5.5, strict JSON, Batch API | $0.094 | −99.6% | 1,387 | 100 | 28% |
+Each row is 36 runs and 126 fields.
 
-| Rung | Fields correct (of 42) | Items fully correct (of 12) | Valid schema output |
-|---|---:|---:|---:|
-| Sonnet 5.5, free-text prose | 27 | 2 | 0 |
-| Haiku 5.5, free-text prose | 24 | 1 | 0 |
-| Haiku 5.5, strict JSON schema | 40 | 11 | 12 |
-| Gemini Decision 1 | 41 | 11 | 12 |
+| Version | Fields correct | Items fully correct | Cost per 1,000 items | Output tokens (median) | Response time (median) |
+|---|---:|---:|---:|---:|---:|
+| Sonnet write-up | 69 | 6 | $29.50 | 2,739 | 22.1 s |
+| Sonnet classification, plain text | 126 | 36 | $2.89 | 88 | 1.9 s |
+| Sonnet classification, schema | 126 | 36 | $3.77 | 96 | 2.0 s |
+| Haiku write-up | 69 | 3 | $1.25 | 2,283 | 11.2 s |
+| Haiku classification, plain text | 120 | 33 | $0.145 | 88 | 1.1 s |
+| Haiku classification, schema | 120 | 33 | $0.188 | 98 | 1.4 s |
+| Gemini Decision | 123 | 33 | $0.099 | 0 | 0.5 s |
+
+The Batch API would halve the two schema rows, to $1.88 and $0.094. That price is computed, not run.
+
+What each change did:
+
+| Change | Cost | Fields correct |
+|---|---:|---|
+| Write-up → classification only (Sonnet) | −90% | 69 → 126 |
+| Write-up → classification only (Haiku) | −88% | 69 → 120 |
+| Plain text → JSON schema (Sonnet) | +30% | 126 → 126 |
+| Plain text → JSON schema (Haiku) | +30% | 120 → 120 |
+| Sonnet → Haiku (classification, either format) | −95% | 126 → 120 |
+| Haiku schema → Gemini Decision | −47% | 120 → 123 |
+| Everything: Sonnet write-up → Haiku schema | −99.4% | 69 → 120 |
+
+**Read the write-up rows with care.** The write-up prompt never lists the allowed values, so a write-up cannot be expected to use them. Its score is how often one allowed value could be read off it and was right. In 44 of 126 fields per model the write-up addressed the question without committing to a single allowed value, for example "Status: HOLD / DO NOT PUBLISH. Route to Compliance Audit." That is a measure of usability as a classification, not of reasoning.
+
+Where the scores differed:
+
+- **Haiku with the schema:** 6 fields did not match, all on two tickets. On the seller settlement dispute the answer gave a priority one level above the reference and the security escalation, in two of three runs; on the damaged-goods ticket it gave a different queue and action once. The plain-text Haiku version also had 6 fields that did not match.
+- **Gemini Decision:** 3 fields did not match, the same one each time: a short ticket whose reference answer is that it contains personal data was answered "no", in three of three runs.
+
+### How the first version went wrong
+
+The first version of this experiment reported a 99.1% saving from "small model plus strict JSON schema", and fields correct rising from 27 to 40 of 42. Three things were wrong with that:
+
+- **The two versions were doing different jobs.** The baseline was asked for a four-part write-up and the lever for four fields. The saving was credited to the schema; most of it comes from asking for less.
+- **The baseline answers were cut off.** Eleven of twelve Sonnet write-ups hit the 2,048-token cap, some mid-sentence. Uncapped, they run to about 2,700 tokens, so the true baseline cost was a third higher than reported.
+- **The accuracy scoring could not be trusted.** Write-ups were scored by searching the text for keywords and taking the first match. Against the reader model on the same answers, that scorer was 14 points too low on plain-text classifications and up to 17 points too high on write-ups, and the two agreed on only 24 or 25 of 42 fields on the original answers.
 
 ### Deck claims against the data
 
 | Claim | Measured | Verdict |
 |---|---|---|
-| Input 500–1,500 tokens | Raw payloads 581–1,472; with schema and system prompt 856–2,063 | Partly |
-| Output 10–100 tokens | 71–135, median 100 | Partly |
-| Input:output of 20:1 to 50:1 | Median 13:1 | Partly |
-| Small model + schema + batching cuts cost >80% | −99.1%; the schema alone on the same model gives −81.5% | Supported |
-| No accuracy loss | 27/42 → 40/42 | Supported |
+| Input 500–1,500 tokens | Raw payloads 581–1,472; with instructions and schema 859–2,066 | Partly |
+| Output 10–100 tokens | 71–125 with the schema, median 98 | Partly |
+| Input:output of 20:1 to 50:1 | About 13:1 | Partly |
+| Small model + strict JSON schema + batching cuts cost >80% | −99.4% overall. The classification-only request gives −90% and the small model −95%; the schema adds 30%; batching was priced, not run | Partly |
+| …without losing accuracy (our addition; the deck does not claim it) | Haiku 120 of 126 against Sonnet's 126 on the same task; Gemini 123 | Partly |
 
 ### Points worth making in the post
 
-- **The schema alone clears the deck's bar.** Haiku prose to Haiku JSON is −81.5% with no model change. The schema caps output at about 100 tokens where prose ran to 2,048.
-- **Output is the bill.** In the prose rungs, output is 92–93% of cost. With the schema it is 28%.
-- **The schema makes the prompt bigger and the bill smaller.** It adds about 600 prompt tokens per item and still cuts cost by four fifths.
-- **Structure improved accuracy.** Prose answers were scored by generous text matching and still lost. The prose rungs produced no machine-readable output at all.
-- **The naive cost is a lower bound.** 11 of 12 Sonnet prose runs and 8 of 12 Haiku prose runs hit the 2,048-token output cap.
-- **Latency moved the same way.** On one ticket, Sonnet prose took 15.4 s, Haiku prose 9.7 s, Haiku JSON 1.9 s and Gemini Decision 0.9 s.
-- **Scale illustration.** NovaMart's story has 5 million items a week. Extrapolating from these 12 items: about $110,000 a week on Sonnet prose, about $940 on Haiku JSON, about $470 through the Batch API.
+- **The biggest lever is the request, not the model or the format.** Asking for four fields instead of a four-part write-up cut cost by about 90% on either model, and made the answer usable.
+- **The schema is insurance, and it has a premium.** It added about 400 prompt tokens and 30% to the cost, and changed no answer. All 72 plain-text classification answers were readable without it. What it buys is a guarantee that every answer will parse.
+- **The smaller-model version cost a twentieth as much and matched slightly fewer fields.** 95% against 100% in this setup, with every difference on two of the twelve items.
+- **Output is the bill in a write-up, and almost nothing in a classification.** A write-up produces about 2,700 tokens from a 790-token prompt. A classification produces about 90.
+- **A write-up is not a worse classification; it is a different product.** It never commits to "queue: billing". If the system needs a routing decision, ask for one.
+- **How you score matters as much as what you run.** The keyword scorer was wrong in both directions. A reader model that never sees the right answer, followed by an exact comparison, gave a consistent result; it read back 100 of 100 fields correctly on a check where the answer was known.
+- **Speed follows output.** The write-up took 22 seconds on Sonnet; the classification took 2, and Gemini's decision call half a second.
+- **Scale illustration.** NovaMart's story has 5 million items a week. Extrapolating from these runs: about $147,500 a week for Sonnet write-ups, about $940 for Haiku with the schema, about $725 for Haiku in plain text, about $470 through the Batch API.
 
 ### Caveats
 
-- The input-to-output ratio came in below the deck's range because real schema output is about 100 tokens, not 10–50.
-- The Gemini Decision 1 price was not checked against a published rate card.
-- A decision model returns labels and probabilities only; it cannot rewrite text, so it cannot mask PII inline.
+- Twelve items, three runs each, with the right answer defined on 42 fields. The five-point gap between Haiku and Sonnet is six fields on two items.
+- The free-text answers were read by a single model in one pass.
+- The Gemini version is not like for like: its questions differ from the schema (priority comes from a severity score), and its price was not checked against a published rate card.
+- A decision model returns labels and probabilities only; it cannot rewrite text, so it cannot mask personal data inline.
+- Batch pricing is computed from the published discount; no batch job was run.
+- Sonnet and Haiku ran with different thinking settings, as the app configures them.
+
+Full results: `analysis/cat1_ablation.md`. Raw records: `backend/experiments/cat1_ablation/runs.jsonl` and `extractions.jsonl`.
 
 ---
 
 ## Part 2: Generative synthesis and drafting
 
-**One-line result:** a section template halved the cost of a draft and made it clearer and tighter, but a blind grader preferred the long draft every time, and the template itself pushed both models to invent owners and deadlines. One added sentence, allowing the template to say "not stated", removed almost all of those errors at no cost.
+**One-line result:** a section template halved the cost of a draft and made it clearer and tighter, but a blind grader preferred the long draft every time, and under the template the drafts filled in owners and deadlines the source did not give. One added sentence, allowing the template to say "not stated", removed almost all of those errors at no cost.
 
 Cost figures are from the original 12 recorded drafts. Quality was added on 25 Nov 2026 by scoring those same drafts; nothing was redrafted.
 
@@ -251,12 +302,12 @@ Numbers that do not appear in the source:
 
 Of the 17 serious errors, most are the same kind: an owner or a deadline the source never gave.
 
-- **Invented deadlines.** The audit-report source asks for "time-bound" milestones but states no dates. Both templated drafts supplied their own: "Within 30 days", "Within 45 days", "Q1 2027".
-- **Invented owners.** The safety-filing source attributes its commitments only to "Management". The templated drafts named teams such as "Customer Safety Operations".
+- **Deadlines not in the source.** The audit-report source asks for "time-bound" milestones but states no dates. Both templated drafts contained dates of their own: "Within 30 days", "Within 45 days", "Q1 2027".
+- **Owners not in the source.** The safety-filing source attributes its commitments only to "Management". The templated drafts named teams such as "Customer Safety Operations".
 - **Misassigned obligations.** In the partnership brief, pre-positioning stock is the brand's condition for a lower fee. Both templated drafts made it a NovaMart manager's task, and the Haiku draft attached a deadline that belongs to a different milestone.
 - **The unbounded draft's one serious error** was of the same kind: a quarterly reporting commitment that is not in the source.
 
-The template requires an owner and a time window for every action. Across the eight templated drafts, the grader flagged an owner or deadline the source does not support in 16 of 24 action items, 8 for each model, and 12 of those were serious. The one document whose source names its owners and dates had none. Where the source left a field open, the model filled it anyway.
+The template requires an owner and a time window for every action. Across the eight templated drafts, the grader flagged an owner or deadline the source does not support in 16 of 24 action items, 8 for each model, and 12 of those were serious. The one document whose source names its owners and dates had none. Where the source left a field open, the draft still contained an entry for it.
 
 ### Follow-up: letting the template say "not stated"
 
@@ -283,8 +334,8 @@ What it shows:
 - **One sentence removed almost all the serious errors, at no cost.** Across 24 drafts each, serious errors fell from 42 to 3.
 - **Accuracy grades rose by about a point** on both models. The Sonnet template's 4.2 is in the range of the long draft's 3.9, though those are different drafts.
 - **It did not close the gap to the long draft.** The long draft was still preferred 15 times in 16. The grader now split on accuracy (long draft 11, new template 1, tie 4) and chose the long draft every time on usefulness to the reader.
-- **An honest blank scores lower on actionability.** A plan that says "owner not stated" is less actionable than one that names an owner, even an invented one. The grade fell from 3.7 to 3.1 on Sonnet and from 3.3 to 2.7 on Haiku.
-- **The small model over-corrected.** Haiku wrote "not stated" for all 36 owners, including on the document whose source names them. Sonnet kept 8 owners the source did give. Supporting facts covered fell as a result, from 110 to 94 of 120 on Sonnet and from 104 to 92 on Haiku.
+- **A stated blank scores lower on actionability.** A plan that says "owner not stated" is graded as less actionable than one that names an owner, including one the source does not give. The grade fell from 3.7 to 3.1 on Sonnet and from 3.3 to 2.7 on Haiku.
+- **The two model sizes applied the sentence differently.** The Haiku drafts wrote "not stated" for all 36 owners, including on the document whose source names them. The Sonnet drafts kept 8 owners the source gives. Supporting facts covered fell as a result, from 110 to 94 of 120 on Sonnet and from 104 to 92 on Haiku.
 - **The fresh original-template drafts reproduced the first finding.** By a mechanical check, 48 of their 72 owners and 32 of their 72 time windows had no support in the source.
 
 ### Deck claims against the data
@@ -304,9 +355,9 @@ What it shows:
 - **The template trades cheap tokens for expensive ones.** It adds about 1,200 prompt tokens and removes about 3,200 output tokens. At 5× output pricing that is a 54% saving.
 - **Nothing essential was dropped.** All three versions carried every core fact, and the templated drafts were graded clearer and far more concise.
 - **The long draft still won every comparison.** The grader weighed accuracy first, and the templated drafts lost on it.
-- **A required field is an instruction to fill it.** The template demands an owner and a time window per action. When the source had none, both models invented one. This is a property of the template, not of the cheaper model: the Sonnet template made the same kind of error.
-- **The long draft's extra numbers were honest.** Of 46 numbers not found in the source, 44 were correct arithmetic on source figures, and one was a rounding slip (3.195 described as "over 3.2×").
-- **The small model added errors of its own.** The Haiku drafts had 10 serious errors against Sonnet's 6 on the same template, including obligations assigned to the wrong party.
+- **A required field is an instruction to fill it.** The template demands an owner and a time window per action. When the source had none, the drafts supplied one. The pattern follows the template, not the model size: it appeared with the template on both models.
+- **The long draft's extra numbers were mostly derived from the source.** Of 46 numbers not found in the source, 44 were correct arithmetic on source figures, and one described 3.195 as "over 3.2×".
+- **Serious errors were more frequent in the Haiku drafts.** They had 10 against 6 for the Sonnet drafts on the same template, including obligations assigned to a different party from the one in the source.
 - **Section-level review is its own saving.** Fixing one section costs half of a full redraft, and editing by hand costs nothing. Given where the errors sit, the action plan is the section to review.
 - **Checking is cheap.** Grading all 12 drafts three times and comparing them head to head took 60 calls and about $5.
 - **Speed.** On one brief, the unbounded draft took 39.5 s; the templated drafts took 12–14 s.
@@ -392,11 +443,11 @@ Average cost of a single turn:
 | Full history, cached prefix | 203/207 (98%) | 110/147 (75%) | 39/51 (76%) | 41/51 (80%) | 30/45 (67%) | 36/36 |
 | Cached prefix plus compaction | 205/207 (99%) | 91/147 (62%) | 24/51 (47%) | 37/51 (73%) | 30/45 (67%) | 2/36 |
 
-What the compacting version did with the 34 recall questions it missed, checked by hand:
+What the compacting version answered on the 34 recall questions where it did not give the reference value, checked by hand:
 
 - **33 declined.** It said the detail was not in its session memory and pointed the user to where to find it.
 - **1 gave a labelled estimate** of a dollar amount, $1,780 against a true $1,775, worked out from a figure in the latest message.
-- **None invented a value.**
+- **None stated a value that was not in the session.**
 
 Its two correct answers were the same detail both times: the laptop serial number, which the summariser had chosen to keep.
 
@@ -416,7 +467,7 @@ Its two correct answers were the same detail both times: the laptop serial numbe
 - **Compaction is a trade, and at ten turns a poor one.** It saved a further 11% ($240 to $212 per 1,000 sessions) and the assistant could then recall 2 of 36 earlier details.
 - **What compaction keeps and loses.** Answers to new questions were unaffected, at 99%. The gist of the session survived. What went was the exact values: IDs, invoice numbers, dates, names, amounts.
 - **The loss follows the compaction boundary.** In the final summary, details from turns 1–3 (compacted first) fell from 76% to 47%. Details from turns 7–9, still held verbatim at that point, were kept equally well by every version.
-- **It failed honestly.** Asked for something it had lost, the assistant said so and suggested where to look. It did not make values up. That makes the forgetting visible to the user, which is the safer failure.
+- **Missing details were reported as missing.** Asked for a detail that was no longer in its context, the assistant said so and suggested where to look in 33 of 34 cases, and in none did it state a different value. The gap is therefore visible to the user.
 - **The saving should grow with session length.** Uncompacted context grows by about 1,250 tokens a turn; compacted, by about 290. Ten turns is early in that curve. Longer sessions were not tested.
 - **The memory's design is a choice.** This compactor keeps at most 14 short items and costs about $32 per 1,000 sessions. A memory that pins every user-supplied identifier would cost more tokens and forget less. That variant was not tested.
 - **Even full history loses detail in a capped summary.** With everything in context, the turn-10 summary still carried only about three quarters of the key details, because it is limited to 250 words.
@@ -440,7 +491,7 @@ Full results: `analysis/cat3_quality_rerun.md`. Raw records: `backend/experiment
 
 ## Part 4: Multi-document RAG and deep ingestion
 
-**One-line result:** caching the whole corpus gave the best answers and the lowest steady-state cost; retrieval was cheaper for a short session but, once look-alike contracts were added, it began telling the reader that terms were "not in the documents" when they were.
+**One-line result:** caching the whole corpus gave the best answers and the lowest steady-state cost; retrieval was cheaper for a short session but, once look-alike contracts were added, it began telling the reader that terms were "not in the documents" when they were. Two added lines of instruction removed those claims and halved the serious errors, without closing the gap to caching.
 
 This section uses the rerun of 26 Nov 2026: 192 live answers (four versions, two corpus sizes, three sessions of eight questions each), scored against an answer key and graded blind.
 
@@ -536,6 +587,30 @@ Nearly all of the retrieval versions' serious errors are the same statement: tha
 
 The answer format asks every answer to name a sign-off gate, such as a bank certificate or an escrow. When the five clauses in front of the model did not contain one, it reported that the documents had none. With the whole corpus in context, that error did not occur.
 
+### Follow-up: telling the model it may not have seen everything
+
+On 26 Nov 2026 the answer instructions for the two retrieval versions were changed in two lines. The sign-off gate is to be named "as stated in the text provided", with "None stated in the text provided" written when there is none. And one rule was added: when something is not in the text provided, say so; do not say the documents or the deal room lack it. Nothing else changed.
+
+The two retrieval versions were rerun at both corpus sizes, three sessions of eight questions each, and graded the same way. Each cell is 24 answers.
+
+| Version | Corpus | Answers claiming the contracts lack a term: before → after | Answers with a serious error: before → after | Correctness (1–5): before → after |
+|---|---|---|---|---|
+| Keyword search plus rerank | 1× | 9 → 0 | 0 → 2 | 4.7 → 4.5 |
+| | 3× | 12 → 0 | 8 → 3 | 4.0 → 4.3 |
+| Combined | 1× | 12 → 0 | 1 → 0 | 4.5 → 4.8 |
+| | 3× | 13 → 0 | 6 → 2 | 4.4 → 4.5 |
+
+What it shows:
+
+- **The false claims disappeared.** Before, 46 of 96 retrieval answers said the contracts lacked something. After, none did; 84 said instead that it was not in the text provided.
+- **Serious errors roughly halved,** from 15 to 7 of 96, and from 14 to 5 of 48 on the larger corpus.
+- **Key facts stated did not change, and cost per question fell slightly,** to $0.023–0.026, because the answers were a little shorter. That moves the point at which caching the whole corpus becomes cheaper than keyword retrieval from 9 and 18 questions per cache write to 12 and 22.
+- **It was not a gain in every cell.** On the small corpus the keyword-retrieval version went from 0 to 2 answers with a serious error.
+- **It narrows the gap to the cached full corpus without closing it.** Caching had no serious errors in 48 answers. The grader, who can see every clause, still marks an answer down when it says a term is not in the text provided and the term exists elsewhere.
+- **The reader still does not get the answer.** "Not in the text I was given" is accurate, and it tells the reader to look further, but the question stays open.
+
+The change was measured on the retrieval versions only, and the lab app now uses it for its retrieval version. Its effect on the versions that see the whole corpus was not tested, and those versions keep the original instructions.
+
 ### Deck claims against the data
 
 | Claim | Measured | Verdict |
@@ -543,19 +618,19 @@ The answer format asks every answer to name a sign-off gate, such as a bank cert
 | Input 15k–100k+ tokens | 18.5k per question at 1×, 54k at 3×; 6k when only five clauses are sent | Supported |
 | Output 400–1,500 tokens | Median 1,036, range 760–2,992; 150 of 192 answers in range | Partly |
 | Ratio 20:1 to 100:1 | 21:1 at 1×, 62:1 at 3× | Supported |
-| Pair hybrid retrieval with context caching | The pairing found every needed clause and no wrong-supplier clauses at retrieval cost, but answered less accurately than the cached full corpus | Partly |
-| …without losing answer quality (our addition; the deck does not claim it) | Caching: no loss. Retrieval on the larger corpus: 6 to 8 answers in 24 with a serious error, against 0 | Partly |
+| Pair hybrid retrieval with context caching | The pairing kept 99–100% of the needed clauses, passed on no wrong-supplier clauses, and cost the least per question from a cold start. After the instruction change its serious errors (0 and 2 of 24) are not clearly above the cached full corpus's, though its answers are still graded lower | Supported |
+| …without losing answer quality (our addition; the deck does not claim it) | Caching: no loss. Retrieval after the instruction change: 2 to 3 answers in 24 with a serious error against 0, and lower correctness grades; before it, 6 to 8 on the larger corpus | Partly |
 
 ### Points worth making in the post
 
 - **Caching beats retrieval on quality when the corpus fits in context.** The cached full corpus had no serious errors in 48 answers and the highest correctness grade at both sizes.
 - **Which is cheaper depends on traffic.** An eight-question session from a cold cache is cheapest with retrieval on the larger corpus ($0.026–0.028 against $0.038 a question). Steady traffic against a warm cache is cheapest with caching ($0.019). The crossover is 9 questions per cache write at 1× and 18 at 3×, and the cache lasts five minutes between uses.
 - **Cached cost barely grows with the corpus.** Tripling the corpus raised the uncached cost per question 2.6 times. Warm cached cost rose 3%.
-- **Keyword retrieval broke down among look-alike documents.** With two other suppliers' contracts added, it delivered 86% of the needed clauses instead of 99%, and one clause in five it passed on was from the wrong supplier.
+- **Keyword retrieval returned fewer of the needed clauses among look-alike documents.** With two other suppliers' contracts added, it delivered 86% of the needed clauses instead of 99%, and one clause in five it passed on was from another supplier.
 - **The deck's pairing fixes retrieval, cheaply.** Letting the small model read the whole cached corpus found every needed clause and passed on nothing from another supplier, for the same cost as keyword retrieval. The cache it needs costs under a cent to write.
 - **But perfect retrieval is not the same as full context.** The combined version still had a serious error in 6 of 24 answers on the larger corpus. Five clauses answer the question asked; they cannot show what else the contracts say.
 - **"Not found" from a retrieval system means "not in what I was shown".** The dominant error was a confident statement that the documents lacked a term. A reader has no way to tell that from a true absence.
-- **Nobody confused the suppliers.** Even with three near-identical deal rooms in one prompt, no version attributed one supplier's terms to another.
+- **No answer mixed up the suppliers.** Even with three near-identical deal rooms in one prompt, no version attributed one supplier's terms to another.
 - **Citations held up without filtering.** The original experiment rejected uncited answers and tried again. Here every answer was kept, and all 144 were cited.
 - **The cheapest good answer had no citations.** Pasting everything with no cache scored 4.5 for correctness, above both retrieval versions on the larger corpus, at two to six times the cost and with nothing for a reviewer to check.
 
@@ -565,7 +640,8 @@ The answer format asks every answer to name a sign-off gate, such as a bank cert
 - One grading pass per answer by a single model. Its serious findings were checked against the contracts by hand.
 - The largest corpus is 54k tokens. The comparison will change where a corpus no longer fits in context or a cache write becomes too expensive to repeat.
 - The keyword search was tuned on these questions and this supplier, so its results on the small corpus are optimistic.
-- The answer format's request for a sign-off gate is what exposes the partial-context error. A different format would expose it less often; it would not remove the cause.
+- The answer format's request for a sign-off gate is what exposes the partial-context error. The follow-up shows better instructions reduce it; they do not remove the cause, which is that the model answers from five clauses.
+- The follow-up's before and after figures come from separate sets of sessions with the same questions, three sessions each.
 - Break-even points depend on answer length. Cited answers ran longer in this rerun than in the original capture, which had put the 1× crossover at 5 questions.
 
 Full results: `analysis/cat4_quality_rerun.md`. Raw records: `backend/experiments/cat4_quality/runs.jsonl` and `judgements.jsonl`. Answer key: `backend/app/data/cat4_quality_keys.json`.
@@ -635,8 +711,10 @@ The twelfth invoice is reported separately, because writing it exposed a bug in 
 
 - **The case.** One line is billed 1.28% above the purchase-order price. The manual allows a rise within 1.5% only on purchase orders marked as index-linked. This one is not, so the line should be paid at the purchase-order price and the difference deducted.
 - **The tool.** It allows any rise within 1.5% and approves the invoice in full: an overpayment of ₹26,904.
-- **The result.** In all 12 runs where the model worked out the voucher itself, it followed the manual and made the deduction. In all 6 runs that used the policy tool, the model committed the tool's wrong figure.
-- **A detail worth quoting.** In one of those six, Haiku flagged the overrun for review in its summary, noted that "the gate allowed it under the 1.5% rounding band", and committed the full payment anyway.
+- **The result.** In all 12 runs where the model worked out the voucher itself, it followed the manual and made the deduction. In all 6 runs that used the policy tool, the committed voucher carried the tool's figure, as those versions are instructed to do.
+- **A detail from the records.** In one of those six runs the summary flagged the overrun for review and noted that "the gate allowed it under the 1.5% rounding band". The committed voucher was the tool's full payment, which is what that version's instructions require.
+
+- **The fix.** The tool was corrected afterwards to apply the manual's condition. Rerun with the corrected tool, all 6 runs committed the right voucher. Three other gaps found while writing the new invoices were fixed at the same time: approved freight waivers were ignored, the tax rate was taken from the first line only, and there was no check for duplicate invoices or frozen vendors. None of the twelve invoices exercises those three, so no result here depends on them.
 
 ### How the first version went wrong
 
@@ -658,21 +736,22 @@ The first version of this experiment reported an 80% saving from a step budget, 
 ### Points worth making in the post
 
 - **The saving came from two plain things.** Fetch only the columns you need (−61%), and use the smallest model that gets it right (−94%). Together with caching they took the cost from $154 to $2.40 per 1,000 invoices.
-- **The model did the policy arithmetic correctly on its own.** Across the versions with no policy tool, 143 of 144 vouchers were right, including the case where the tool itself was wrong.
-- **A guardrail written in code moves the error; it does not remove it.** When the tool was right it added a turn and 18% to the cost. When it was wrong, every run that trusted it was wrong, and one model noticed and deferred to it anyway.
+- **Without the policy tool, the vouchers matched the hand-derived answers in 143 of 144 runs,** including the case where the tool itself was wrong.
+- **A guardrail written in code moves the error; it does not remove it.** When the tool was right it added a turn and 18% to the cost. When it was wrong, every run that used it committed its figure, as instructed.
 - **So test the guardrail as hard as the model.** The bug surfaced only because the new invoices' answers were worked out by hand from the manual first and then compared with the tool.
 - **The step budget was insurance, not a saving.** Every version finished in 3 or 4 turns with a cap of 12 available.
 - **Eager escalation is expensive.** The Haiku-first design hands off to Sonnet whenever the tool reports any deduction, which was 15 runs in 33. It cost nine times as much as Haiku alone and was no more accurate.
 - **Caching helps less when tool output dominates.** The cached manual is under 9k tokens of a 68k prompt; the rest is raw table dumps that change on every invoice. Caching alone saved 28% from a cold start and 41% warm.
 - **Offer a tool and it gets used.** Free to choose, the model still made the unneeded vendor-history lookup in 28 of 33 runs.
-- **The one wrong voucher in 198** was a slip of exactly ₹1,000,000 by Sonnet on the most complex invoice, in a version working from raw table dumps.
+- **One voucher in 198 did not match.** It differed from the reference by exactly ₹1,000,000 on the most complex invoice, in the cached raw-table version.
 - **The bill is almost all input.** Even in the cheapest version, a run reads about 29k tokens and writes about 1.5k.
 
 ### Caveats
 
 - Twelve invoices, three runs each. Every version scored at or near 100%, so the experiment cannot detect small differences in accuracy.
 - The policy rules are simple and fully written down. A deterministic tool may earn its place on messier cases, or for audit reasons this experiment does not measure.
-- The policy tool's bug is specific to this lab. The general point is that the tool was trusted without being tested.
+- The policy tool's bug is specific to this lab, and has since been fixed. The general point is that the tool was trusted without being tested.
+- The tool still hands off to Sonnet on any deduction, where the manual describes escalation only for disputes with several problems. That rule was left as it is.
 - The policy manual shown to every version mentions the narrow query, the policy tool and a four-step budget by name, including to versions that do not have them. None tried to call a tool it lacked.
 - Sonnet and Haiku ran with different thinking settings, as the app configures them, so the model swap changes both.
 - Costs here start every run from a cold cache; a busy system would sit between the cold and warm columns.
@@ -684,6 +763,8 @@ Full results: `analysis/cat5_ablation.md`. Raw records: `backend/experiments/cat
 ## Part 6: Multi-agent swarms and automated engineering
 
 **One-line result:** isolating the agents, caching the shared prefix and tiering the models cut the cost of a verified fix about twelvefold; they made no difference to whether the fix was correct.
+
+**Read this result with one limit in mind: harder tasks might give a different result.** Every version solved every task here, and the tasks were small, single-module fixes. On harder work (changes across several files, longer chains of agent turns, larger codebases) the versions could differ in how often they get the fix right, and the cost ranking could change too. That was not tested.
 
 This section uses the fair rerun of 25 Nov 2026 (60 live runs). It replaces the first version of the experiment, which reported the shared-bus swarm verifying 1 fix in 3. That result was an artefact; the story of why is below and is worth telling in the post.
 
@@ -768,7 +849,7 @@ The first run of this experiment reported the shared-bus swarm verifying 1 fix i
 - **Isolation plus caching is the biggest single step.** The shared bus re-sends about 43k tokens of manual and noise on every turn at full price. Isolated agents send about 2k fresh tokens each and read the rest from cache at a 95% discount.
 - **Asking for "exhaustive" output is expensive and buys nothing.** It produced five times the output and took five times as long, for the same result.
 - **Tiering pays more when the cache is warm.** A cold tiered run writes the cached prefix twice, once per model. That is why tiering saves 44% cold and 58% warm.
-- **When everything passes, cost per verified outcome is just cost per run.** The metric earns its keep only when failure rates differ. Here its real contribution was different: computing it honestly is what exposed the flaws in the first version.
+- **When everything passes, cost per verified outcome is just cost per run.** The metric earns its keep only when failure rates differ. Here its real contribution was different: computing it without discarding any run is what exposed the flaws in the first version.
 - **Verification needs verifying.** A static check that fails safe code is as misleading as a test that passes broken code.
 - **The retry never fired.** In 45 gated runs the first patch always passed, so the check-and-retry loop cost nothing and its benefit is unmeasured.
 - **The daily-volume claim in context.** One arm-1 run moves about 267k tokens, so the deck's 1.5M–10M per developer per day equals roughly 6–37 such runs. For the isolated swarms it would take roughly 25–160.
@@ -776,7 +857,7 @@ The first run of this experiment reported the shared-bus swarm verifying 1 fix i
 ### Caveats
 
 - **Ceiling effect.** Every arm scored 100%, so this experiment cannot detect a difference in correctness. Fifteen out of fifteen still leaves a 95% interval of 80–100%.
-- **The tasks are small.** Each is a fix to one small module, made in five turns. Harder, multi-file work over more turns is where context pollution would be expected to matter, and it was not tested.
+- **The tasks are small, and harder ones might perform differently.** Each is a fix to one small module, made in five turns. Harder, multi-file work over more turns is where context pollution would be expected to matter. It was not tested, so the finding that the versions are equally correct should not be carried over to harder tasks.
 - **Arm 1 differs from arm 2 in two ways:** the instructions, and the absence of the check-and-retry loop. Since the retry never fired, the 33% is attributable to the instructions.
 - **The scoring check was changed after seeing the results.** Both scores are reported; the correction was verified against deliberately unsafe code, which still fails.
 - **Cost figures here start every run cold.** A fleet sharing one cached prefix would sit between the cold and warm columns.
@@ -818,7 +899,8 @@ US dollars per million tokens.
 - Full validation report: `analysis/deck_claims_validation.md` (and `.json` for raw values).
 - Script that produces it: `backend/scripts/validate_deck_claims.py`.
 - Recorded runs: `backend/replays/cat{1..6}_golden_replays.json`.
-- Trace files: `backend/traces/` (994 files, 244 distinct canonical runs).
+- Trace files: `backend/traces/` (1,074 files, 244 distinct canonical runs).
+- Archetype 1 ablation: `analysis/cat1_ablation.md`, with raw records in `backend/experiments/cat1_ablation/`.
 - Archetype 5 ablation: `analysis/cat5_ablation.md`, with raw records in `backend/experiments/cat5_ablation/`.
 - Archetype 4 rerun: `analysis/cat4_quality_rerun.md`, with raw records in `backend/experiments/cat4_quality/`.
 - Archetype 2 quality scoring: `analysis/cat2_quality.md`, with grader records in `backend/experiments/cat2_quality/judgements.jsonl`.

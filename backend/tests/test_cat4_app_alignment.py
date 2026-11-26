@@ -121,8 +121,11 @@ def test_committed_golden_provenance_and_billing() -> None:
     assert prov["source"] == "cat4 quality rerun" and "repeat_index 0" in prov["selection_rule"]
     assert "audit-02 q1 was billed as a cache read" in prov["billing_note"]
     assert "cached_rerank_hybrid" in prov["not_mapped"]
+    assert prov["answer_formats"] == {"naive_full_corpus": "original", "cached_full_corpus_citations": "original",
+                                      "hybrid_rag_rerank_citations": "scoped_absence"}
     for pid, p in g["presets"].items():
         assert set(p["rungs"]) == set(APP_RUNGS)
+        assert {rid: v["answer_format"] for rid, v in p["provenance"].items()} == prov["answer_formats"]
         for rid, qs in p["rungs"].items():
             assert all(q["stop_reason"] and q["judgement"] for q in qs)
             assert all(q["max_tokens"] == runner.CAT4_SYNTH_MAX_TOKENS for q in qs)
@@ -145,8 +148,15 @@ def test_replay_api_includes_quality_and_portfolio(client: TestClient, pid: str)
     data = resp.json()
     assert (data["billing_note"] is None) == (pid == "audit-01")
     pf = data["quality_portfolio"]
-    assert pf and pf["answers_scored"] == 192 and pf["matrix_complete"] is True
+    # 4 versions x 2 sizes in their adopted format + the 2 retrieval versions' "before" (original) cells = 12 x 24 answers
+    assert pf and pf["answers_scored"] == 288 and pf["matrix_complete"] is True and len(pf["cells"]) == 12
     assert {c["rung_id"] for c in pf["cells"]} == set(APP_RUNGS) | {"cached_rerank_hybrid"}
+    assert {(c["rung_id"], c["answer_format"]) for c in pf["cells"] if c["adopted"]} == {
+        ("naive_full_corpus", "original"), ("cached_full_corpus_citations", "original"),
+        ("hybrid_rag_rerank_citations", "scoped_absence"), ("cached_rerank_hybrid", "scoped_absence")}
+    assert {c["rung_id"] for c in pf["cells"] if not c["adopted"]} == {"hybrid_rag_rerank_citations", "cached_rerank_hybrid"}
+    assert pf["format_change"]["rungs"] == ["hybrid_rag_rerank_citations", "cached_rerank_hybrid"]
+    assert {r["rung_id"]: r["answer_format"] for r in data["results"]}["hybrid_rag_rerank_citations"] == "scoped_absence"
     assert {c["runnable_in_app"] for c in pf["cells"] if c["rung_id"] == "cached_rerank_hybrid"} == {False}
     golden = runner.load_cat4_replays()["presets"][pid]["rungs"]
     for r in data["results"]:
@@ -267,7 +277,15 @@ def test_validator_cat4_lever_and_implicit_rows(monkeypatch: pytest.MonkeyPatch,
     assert res["categories"]["cat4"]["source"] == "quality rerun"
     lever = c4["Pair hybrid retrieval (reranking + chunk filtering) with context caching"]
     implicit = c4["…without losing answer quality (implicit)"]
-    assert lever["verdict"] == implicit["verdict"] == "PARTLY SUPPORTED"
-    assert "paired rung" in lever["measured"] and "Wilson" in implicit["note"]
+    # Re-evaluated on each version's adopted answer format (retrieval versions: scoped_absence). Lever row: its written
+    # Wilson rule (the note reports the original-format sessions give the same verdict). Implicit row: the shared
+    # implicit-row rule (IMPLICIT_RULE): no clear loss, but lower point estimates -> PARTLY.
+    assert lever["verdict"] == "SUPPORTED" and implicit["verdict"] == "PARTLY SUPPORTED"
+    assert "Implicit-row rule: no clear loss is detected, but point estimates are lower" in implicit["note"]
+    assert "paired rung" in lever["measured"] and "Wilson" in implicit["note"] and "Wilson" in lever["note"]
+    assert "before the 2026-11-26 answer-format change" in lever["measured"] and "original-format sessions gives SUPPORTED" in lever["note"]
+    assert "Before the retrieval versions' 2026-11-26 answer-format change it did" in implicit["note"]
+    assert set(res["categories"]["cat4"]["per_question_before"]) == {
+        f"{r}|{s}|original" for r in ("hybrid_rag_rerank_citations", "cached_rerank_hybrid") for s in (1, 3)}
     md = mod.render_markdown(res)
     assert "Source: the quality rerun, " in md and "golden replays (the quality-rerun records could not be read)" not in md

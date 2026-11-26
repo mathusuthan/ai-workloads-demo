@@ -1,7 +1,7 @@
 """Seed backend/traces/ from the golden replays.
 
 Default: clears every prior `live_captured_seed` trace (all categories) and re-seeds Categories 1-6.
-`--cat3-only` / `--cat4-only` / `--cat5-only` / `--cat6-only`: appends that category's seeds only, without deleting or rewriting any other
+`--cat1-only` / `--cat3-only` / `--cat4-only` / `--cat5-only` / `--cat6-only`: appends that category's seeds only, without deleting or rewriting any other
 trace (older seeds of that category stay on disk and are superseded by the new ones).
 """
 
@@ -15,12 +15,13 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND_DIR))
 
-from app.archetypes.cat1_triage.accuracy import evaluate_rung_accuracy  # noqa: E402
 from app.archetypes.cat1_triage.pii import scrub_pii_deterministic  # noqa: E402
 from app.archetypes.cat1_triage.runner import (  # noqa: E402
-    _build_rung_result,
+    load_cat1_ablation_portfolio,
     load_golden_replays,
     persist_cat1_trace,
+    rung_result_from_replay,
+    score_rung,
 )
 from app.archetypes.cat2_drafting.runner import (  # noqa: E402
     CAT2_RUNG_TO_PATTERN,
@@ -48,10 +49,8 @@ from app.archetypes.cat3_assistants.scoring import (  # noqa: E402
     fact_hit,
     probes_for,
 )
-from app.archetypes.cat4_rag.prompts import (  # noqa: E402
-    get_cat4_haiku_reranker_system_prompt,
-    get_cat4_synthesis_system_prompt,
-)
+from app.archetypes.cat4_rag.answer_formats import synthesis_system_prompt as cat4_synthesis_system_prompt  # noqa: E402
+from app.archetypes.cat4_rag.prompts import get_cat4_haiku_reranker_system_prompt  # noqa: E402
 from app.archetypes.cat4_rag.runner import (  # noqa: E402
     CAT4_RERANK_MAX_TOKENS,
     CAT4_RUNG_TO_PATTERN,
@@ -120,146 +119,55 @@ def _clear_prior_seeds(traces_dir: Path) -> int:
     return removed
 
 
-def seed_all() -> None:
-    settings = get_settings()
-    removed = _clear_prior_seeds(settings.traces_dir)
-    if removed:
-        print(f"Cleared {removed} prior seed trace(s).")
+def seed_cat1() -> int:
+    """Seed Category 1 traces (one per item x rung) from cat1_golden_replays.json; appends only.
+
+    When the golden replays come from the ablation (scripts/build_cat1_golden_from_ablation.py) the traces carry the
+    real stop reason, thinking tokens, the cap the run used, the ablation provenance and, for write-ups, the reader
+    model's accuracy; older Category 1 seeds stay on disk and are superseded by these (newest seed per
+    category/model/pattern/item)."""
+    from app.archetypes.cat1_triage.ablation import ABLATION_GOLDEN_SOURCE
 
     replays = load_golden_replays()
+    from_ablation = (replays.get("provenance") or {}).get("source") == ABLATION_GOLDEN_SOURCE
+    source_endpoint = "build_cat1_golden_from_ablation.py" if from_ablation else "capture_live_replays.py"
+    portfolio = load_cat1_ablation_portfolio()
     preset_replays = replays.get("presets") or {}
     extra_replays = replays.get("batch_items") or {}
-
     written = 0
+    for item in list(CAT1_PRESETS) + list(CAT1_EXTRA_BATCH_ITEMS):
+        iid, sub_task, payload = item["id"], item["sub_task"], item["payload"]
+        src = preset_replays.get(iid) or extra_replays.get(iid)
+        if not src:
+            continue
+        stored = src.get("rungs")
+        if stored is None:
+            from app.archetypes.cat1_triage.runner import _legacy_batch_rungs
 
-    for preset in CAT1_PRESETS:
-        pid = preset["id"]
-        sub_task = preset["sub_task"]
-        payload = preset["payload"]
+            stored = _legacy_batch_rungs(src)
+        prov = src.get("provenance") or {}
         pii = scrub_pii_deterministic(payload)
-        rungs = preset_replays[pid]["rungs"]
-        run_group = f"seed-{pid}"
-
-        naive_cost = _build_rung_result(
-            rung_id="sonnet_naive",
-            model_id=rungs["sonnet_naive"]["model_id"],
-            provider=rungs["sonnet_naive"]["provider"],
-            latency_ms=int(rungs["sonnet_naive"]["latency_ms"]),
-            input_tokens=int(rungs["sonnet_naive"]["input_tokens"]),
-            output_tokens=int(rungs["sonnet_naive"]["output_tokens"]),
-            structured_output=rungs["sonnet_naive"].get("structured_output") or {},
-            raw_text_preview=rungs["sonnet_naive"].get("raw_text_preview"),
-        ).finops.total_cost_usd
-
-        for rung_id in ("sonnet_naive", "haiku_naive", "haiku_calibrated", "gemini_decision"):
-            if rung_id not in rungs:
-                continue
-            r_data = rungs[rung_id]
-            res = _build_rung_result(
-                rung_id=rung_id,
-                model_id=r_data["model_id"],
-                provider=r_data["provider"],
-                latency_ms=int(r_data["latency_ms"]),
-                input_tokens=int(r_data["input_tokens"]),
-                output_tokens=int(r_data["output_tokens"]),
-                structured_output=r_data.get("structured_output") or {},
-                raw_text_preview=r_data.get("raw_text_preview"),
-                decision_probabilities=r_data.get("decision_probabilities"),
-            )
-            if naive_cost > 0:
-                res.savings_vs_naive_pct = round(
-                    ((naive_cost - res.finops.total_cost_usd) / naive_cost) * 100, 2
-                )
-            gt = dict(preset.get("ground_truth") or {})
-            extra_meta: dict[str, object] = {
-                "source_endpoint": "capture_live_replays.py",
-                "savings_vs_naive_pct": res.savings_vs_naive_pct,
-            }
-            if gt:
-                res.accuracy = evaluate_rung_accuracy(
-                    rung_id=rung_id,
-                    sub_task=sub_task,
-                    ground_truth=gt,
-                    structured_output=res.structured_output,
-                    raw_text=res.raw_text_preview,
-                )
-                extra_meta["accuracy"] = res.accuracy.model_dump()
-            persist_cat1_trace(
-                source_mode="live_captured_seed",
-                run_group_id=run_group,
-                item_id=pid,
-                item_title=preset["title"],
-                sub_task=sub_task,
-                payload_text=payload,
-                rung_res=res,
-                pii_result=pii,
-                extra_metadata=extra_meta,
-            )
-            written += 1
-
-    for item in CAT1_EXTRA_BATCH_ITEMS:
-        iid = item["id"]
-        sub_task = item["sub_task"]
-        payload = item["payload"]
-        pii = scrub_pii_deterministic(payload)
-        b = extra_replays[iid]
-        run_group = f"seed-{iid}"
+        run_group = f"seed-cat1-ablation-{iid}" if from_ablation else f"seed-{iid}"
         gt = dict(item.get("ground_truth") or {})
-
-        s_raw = b.get("sonnet_raw_text") or ""
-        hn_raw = b.get("haiku_naive_raw_text") or ""
-        s_res = _build_rung_result(
-            rung_id="sonnet_naive",
-            model_id="claude-sonnet-5-5",
-            provider="Anthropic",
-            latency_ms=int(b.get("sonnet_latency_ms", 4200)),
-            input_tokens=int(b.get("sonnet_input_tokens", b["input_tokens"])),
-            output_tokens=int(b.get("sonnet_output_tokens", 285)),
-            structured_output={"mode": "unstructured_chat_prose", "char_length": len(s_raw)},
-            raw_text_preview=s_raw,
-        )
-        hn_res = _build_rung_result(
-            rung_id="haiku_naive",
-            model_id="claude-haiku-5-5",
-            provider="Anthropic",
-            latency_ms=int(b.get("haiku_naive_latency_ms", 2600)),
-            input_tokens=int(b.get("haiku_naive_input_tokens", b["input_tokens"])),
-            output_tokens=int(b.get("haiku_naive_output_tokens", 285)),
-            structured_output={"mode": "unstructured_chat_prose", "char_length": len(hn_raw)},
-            raw_text_preview=hn_raw,
-        )
-        h_res = _build_rung_result(
-            rung_id="haiku_calibrated",
-            model_id="claude-haiku-5-5",
-            provider="Anthropic",
-            latency_ms=int(b["haiku_latency_ms"]),
-            input_tokens=int(b["input_tokens"]),
-            output_tokens=int(b["haiku_output_tokens"]),
-            structured_output=b["haiku_decision"],
-            raw_text_preview=json.dumps(b["haiku_decision"]),
-        )
-        g_res = _build_rung_result(
-            rung_id="gemini_decision",
-            model_id="gemini-decision-1",
-            provider="Google Gemini Decisions API",
-            latency_ms=int(b["gemini_latency_ms"]),
-            input_tokens=int(b.get("gemini_input_tokens", b["input_tokens"])),
-            output_tokens=0,
-            structured_output=b["gemini_decision"],
-            decision_probabilities=None,
-        )
-
-        for rung_res in (s_res, hn_res, h_res, g_res):
-            extra_meta_b: dict[str, object] = {"source_endpoint": "capture_live_replays.py"}
+        naive_cost = rung_result_from_replay("sonnet_naive", stored["sonnet_naive"]).finops.total_cost_usd
+        for rung_id in ("sonnet_naive", "haiku_naive", "haiku_calibrated", "gemini_decision"):
+            if rung_id not in stored:
+                continue
+            r_data = stored[rung_id]
+            res = rung_result_from_replay(rung_id, r_data)
+            if naive_cost > 0:
+                res.savings_vs_naive_pct = round(((naive_cost - res.finops.total_cost_usd) / naive_cost) * 100, 2)
+            meta: dict[str, object] = {"source_endpoint": source_endpoint, "savings_vs_naive_pct": res.savings_vs_naive_pct}
             if gt:
-                rung_res.accuracy = evaluate_rung_accuracy(
-                    rung_id=rung_res.rung_id,
-                    sub_task=sub_task,
-                    ground_truth=gt,
-                    structured_output=rung_res.structured_output,
-                    raw_text=rung_res.raw_text_preview,
-                )
-                extra_meta_b["accuracy"] = rung_res.accuracy.model_dump()
+                score_rung(res, sub_task, gt, reader_extraction=r_data.get("reader_extraction"), portfolio=portfolio)
+                if res.accuracy is not None:
+                    meta["accuracy"] = res.accuracy.model_dump()
+                if res.accuracy_note:
+                    meta["accuracy_note"] = res.accuracy_note
+            if from_ablation:
+                p = prov.get(rung_id) or {}
+                meta.update({"ablation_arm_id": p.get("arm_id"), "ablation_run_id": p.get("run_id"), "repeat_index": p.get("repeat_index"),
+                             "max_tokens": r_data.get("max_tokens"), "truncated": r_data.get("truncated")})
             persist_cat1_trace(
                 source_mode="live_captured_seed",
                 run_group_id=run_group,
@@ -267,11 +175,26 @@ def seed_all() -> None:
                 item_title=item["title"],
                 sub_task=sub_task,
                 payload_text=payload,
-                rung_res=rung_res,
+                rung_res=res,
                 pii_result=pii,
-                extra_metadata=extra_meta_b,
+                request_params_override=r_data.get("request_params") if from_ablation else None,
+                stop_reason=r_data.get("stop_reason") if from_ablation else None,
+                thinking_tokens=int(r_data.get("thinking_tokens") or 0),
+                extra_metadata=meta,
             )
             written += 1
+    return written
+
+
+def seed_all() -> None:
+    settings = get_settings()
+    removed = _clear_prior_seeds(settings.traces_dir)
+    if removed:
+        print(f"Cleared {removed} prior seed trace(s).")
+
+    written = 0
+
+    written += seed_cat1()
 
     # Seed Category 2 traces from cat2_golden_replays.json
     cat2_replays = load_cat2_replays()
@@ -634,8 +557,10 @@ def seed_cat4() -> int:
             "hybrid_rag_rerank_citations",
         ):
             raw_queries = rungs_map.get(rung_id) or []
-            sys_inst = get_cat4_synthesis_system_prompt(
-                with_citations=(rung_id != "naive_full_corpus")
+            # the prompt the recording was made with (golden provenance; pre-2026-11-26 recordings: original)
+            fmt = str((rung_prov.get(rung_id) or {}).get("answer_format") or "original")
+            sys_inst = cat4_synthesis_system_prompt(
+                with_citations=(rung_id != "naive_full_corpus"), answer_format=fmt
             )
             run_group = f"seed-cat4-rerun-{pid}-{rung_id}" if from_rerun else f"seed-cat4-{pid}-{rung_id}"
             prov = rung_prov.get(rung_id) or {}
@@ -644,7 +569,7 @@ def seed_cat4() -> int:
                 qnum = int(rq["question_number"])
                 model_id = str(rq.get("model_id") or "claude-sonnet-5-5")
                 asked = str(rq.get("question_as_asked") or rq["question"])
-                meta = {"source_endpoint": source_endpoint, "question_id": qid}
+                meta = {"source_endpoint": source_endpoint, "question_id": qid, "answer_format": fmt}
                 if from_rerun:
                     meta.update({"rerun_run_id": prov.get("run_id"), "repeat_index": prov.get("repeat_index"),
                                  "scale": prov.get("scale"), "session_q_index": rq.get("session_q_index")})
@@ -925,6 +850,11 @@ def seed_cat6() -> int:
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
+        "--cat1-only",
+        action="store_true",
+        help="append Category 1 seed traces only; no other trace is deleted or rewritten",
+    )
+    ap.add_argument(
         "--cat6-only",
         action="store_true",
         help="append Category 6 seed traces only; no other trace is deleted or rewritten",
@@ -945,8 +875,12 @@ def main(argv: list[str] | None = None) -> None:
         help="append Category 4 seed traces only; no other trace is deleted or rewritten",
     )
     args = ap.parse_args(argv)
-    if sum(map(bool, (args.cat3_only, args.cat4_only, args.cat5_only, args.cat6_only))) > 1:
-        ap.error("--cat3-only, --cat4-only, --cat5-only and --cat6-only are mutually exclusive")
+    if sum(map(bool, (args.cat1_only, args.cat3_only, args.cat4_only, args.cat5_only, args.cat6_only))) > 1:
+        ap.error("--cat1-only, --cat3-only, --cat4-only, --cat5-only and --cat6-only are mutually exclusive")
+    if args.cat1_only:
+        n = seed_cat1()
+        print(f"Seeded {n} Category 1 trace files into {get_settings().traces_dir} (append-only)")
+        return
     if args.cat5_only:
         n = seed_cat5()
         print(f"Seeded {n} Category 5 trace files into {get_settings().traces_dir} (append-only)")

@@ -13,7 +13,7 @@ Rungs (the first three exactly as the app runs them, through the app's builders 
                                 the question and returns the top-5 chunk ids (same schema); Sonnet synthesises
                                 over exactly those chunks with citations as rung 3 does. No BM25 stage.
 
-Every rerun question is asked as `scoped_question(q)`: one fixed supplier-scope line built from DEAL_ROOM_PROFILE,
+Every rerun question is asked as `scoped_question(q)`: one fixed supplier-scope line built from DEAL_ROOM_PROFILE (scope.py),
 a blank line, then the original text (same for all rungs and scales; the golden capture was asked without it).
 Records hold raw tokens only (never dollars); costs come from `app.core.pricing.compute_run_finops` at
 analysis time. Every answer is kept — zero-citation answers, truncations and contamination are data.
@@ -38,6 +38,15 @@ from typing import Any
 from uuid import uuid4
 
 from app.archetypes.cat3_assistants.scoring import normalise_text
+from app.archetypes.cat4_rag.answer_formats import (  # noqa: F401 — ADOPTED_* re-exported for scripts
+    ADOPTED_ANSWER_FORMAT,
+    ADOPTED_ON,
+    ANSWER_FORMATS,
+    DEFAULT_ANSWER_FORMAT,
+    adopted_answer_format,
+    instruction_changes,
+    synthesis_system_prompt,
+)
 from app.archetypes.cat4_rag.prompts import (
     get_cat4_haiku_reranker_system_prompt,
     get_cat4_synthesis_system_prompt,
@@ -69,7 +78,7 @@ from app.archetypes.cat4_rag.schemas import RERANK_JSON_SCHEMA
 from app.archetypes.cat6_swarms.fair_rerun import wilson_interval
 from app.core.anthropic_service import AnthropicRawResult
 from app.core.pricing import MODEL_RATES, compute_run_finops
-from app.data.cat4_fixtures import CAT4_PRESETS, DEAL_ROOM_PROFILE
+from app.data.cat4_fixtures import CAT4_PRESETS
 
 SCHEMA_VERSION = 1
 BACKEND_DIR = Path(__file__).resolve().parents[3]
@@ -115,18 +124,8 @@ def question_key(preset_id: str, question_id: str) -> str:
     return f"{preset_id}/{question_id}"
 
 
-SCOPE_LINE_TEMPLATE = "Deal room under audit: {deal_room_id} (supplier: {supplier_legal_name}). Answer for this supplier's contracts only."
-
-
-def scope_line() -> str:
-    """The fixed supplier-scope line prepended to every rerun question (all rungs, both scales)."""
-    return SCOPE_LINE_TEMPLATE.format(deal_room_id=DEAL_ROOM_PROFILE["deal_room_id"],
-                                      supplier_legal_name=DEAL_ROOM_PROFILE["supplier_legal_name"])
-
-
-def scoped_question(question: str) -> str:
-    """Scope line, a blank line, then the original question text. The golden capture was asked without it."""
-    return f"{scope_line()}\n\n{question}"
+# The scope line lives in scope.py (shared with the app runner); re-exported here unchanged.
+from app.archetypes.cat4_rag.scope import SCOPE_LINE_TEMPLATE, scope_line, scoped_question  # noqa: E402,F401
 
 
 # --------------------------------------------------------------------------------------------------
@@ -384,6 +383,7 @@ async def run_question(
     synth_call: SynthCall,
     rerank_call: RerankCall,
     max_retries: int | None = DEFAULT_MAX_RETRIES,
+    answer_format: str = DEFAULT_ANSWER_FORMAT,
 ) -> dict[str, Any]:
     """One question on one rung; raises on API failure (the session loop records it)."""
     q = scoped_question(str(q_spec["question"]))  # BM25 query, reranker query and synthesis user message
@@ -463,7 +463,7 @@ async def run_question(
         raise ValueError(f"unknown rung {rung_id}")
 
     synth = await synth_call(
-        system_prompt=get_cat4_synthesis_system_prompt(with_citations=doc_blocks is not None),
+        system_prompt=synthesis_system_prompt(with_citations=doc_blocks is not None, answer_format=answer_format),
         user_question=q,
         documents_for_blocks=doc_blocks,
         uncached_corpus_text=uncached_text,
@@ -505,8 +505,11 @@ async def execute_session(
     synth_call: SynthCall | None = None,
     rerank_call: RerankCall | None = None,
     max_retries: int | None = DEFAULT_MAX_RETRIES,
+    answer_format: str = DEFAULT_ANSWER_FORMAT,
 ) -> dict[str, Any]:
     """One session (8 questions, sequential); never raises. Stops at the first failed question."""
+    if answer_format not in ANSWER_FORMATS:
+        raise ValueError(f"unknown answer_format {answer_format!r}; expected one of {ANSWER_FORMATS}")
     if synth_call is None or rerank_call is None:
         from app.core.anthropic_service import run_cat4_haiku_reranker, run_cat4_rag_synthesis
 
@@ -528,7 +531,7 @@ async def execute_session(
         "settings": {"synth_max_tokens": SYNTH_MAX_TOKENS, "rerank_max_tokens": RERANK_MAX_TOKENS,
                      "synth_timeout_s": SYNTH_TIMEOUT_S, "rerank_timeout_s": RERANK_TIMEOUT_S,
                      "max_retries": max_retries, "bm25_top_k": BM25_TOP_K, "rerank_top_k": RERANK_TOP_K,
-                     "question_scope_line": scope_line()},
+                     "question_scope_line": scope_line(), "answer_format": answer_format},
         "answers": [],
     }
     t0 = time.perf_counter()
@@ -538,7 +541,8 @@ async def execute_session(
                 "expected_chunk_ids": list(q_spec.get("expected_chunk_ids") or [])}
         try:
             ans = await run_question(rung_id=rung_id, corpus=corpus, q_spec=q_spec, nonce=nonce, api_key=api_key,
-                                     synth_call=synth_call, rerank_call=rerank_call, max_retries=max_retries)
+                                     synth_call=synth_call, rerank_call=rerank_call, max_retries=max_retries,
+                                     answer_format=answer_format)
             record["answers"].append({**base, **ans})
         except Exception as exc:  # noqa: BLE001 — recorded, never raised
             record["answers"].append({**base, "status": "error", "error_message": f"{type(exc).__name__}: {exc}"[:1000],
@@ -551,43 +555,60 @@ async def execute_session(
     return record
 
 
-RunKey = tuple[str, int, int]  # (rung, scale, repeat)
+RunKey = tuple[str, int, int, str]  # (rung, scale, repeat, answer_format)
+
+
+def answer_format_of(record: dict[str, Any]) -> str:
+    """The session's answer format; records from before the variant existed carry none and are "original"."""
+    return str((record.get("settings") or {}).get("answer_format") or DEFAULT_ANSWER_FORMAT)
 
 
 def record_key(record: dict[str, Any]) -> RunKey:
-    return (str(record["rung_id"]), int(record["scale"]), int(record["repeat_index"]))
+    return (str(record["rung_id"]), int(record["scale"]), int(record["repeat_index"]), answer_format_of(record))
 
 
-def plan_matrix(rungs: Sequence[str], scales: Sequence[int], repeats: int) -> list[RunKey]:
-    """Ordered by repeat, then scale, then rung."""
-    return [(r, s, i) for i in range(repeats) for s in scales for r in rungs]
+def _norm_key(key: Sequence[Any]) -> RunKey:
+    """(rung, scale, repeat) keys from before the variant are the original format."""
+    return (str(key[0]), int(key[1]), int(key[2]), str(key[3]) if len(key) > 3 else DEFAULT_ANSWER_FORMAT)
+
+
+def plan_matrix(rungs: Sequence[str], scales: Sequence[int], repeats: int,
+                answer_format: str = DEFAULT_ANSWER_FORMAT) -> list[RunKey]:
+    """Ordered by repeat, then scale, then rung (one answer format per plan)."""
+    return [(r, s, i, answer_format) for i in range(repeats) for s in scales for r in rungs]
 
 
 def is_current_settings(record: dict[str, Any]) -> bool:
-    """False for a session recorded at a different synthesis output cap than SYNTH_MAX_TOKENS (or with no settings)."""
-    return (record.get("settings") or {}).get("synth_max_tokens") == SYNTH_MAX_TOKENS
+    """False for a session recorded at a different synthesis output cap than SYNTH_MAX_TOKENS (or with no settings),
+    or with an answer format this harness does not know. The answer format itself never supersedes: a variant
+    session is a separate key, and records without one are the original format."""
+    settings = record.get("settings") or {}
+    return settings.get("synth_max_tokens") == SYNTH_MAX_TOKENS and answer_format_of(record) in ANSWER_FORMATS
 
 
 def superseded_sessions(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{"rung_id": r.get("rung_id"), "scale": r.get("scale"), "repeat_index": r.get("repeat_index"), "run_id": r.get("run_id"),
              "status": r.get("status"), "synth_max_tokens": (r.get("settings") or {}).get("synth_max_tokens"),
-             "current_synth_max_tokens": SYNTH_MAX_TOKENS}
+             "current_synth_max_tokens": SYNTH_MAX_TOKENS, "answer_format": answer_format_of(r)}
             for r in records if not is_current_settings(r)]
 
 
-def select_pending(planned: Iterable[RunKey], existing: Iterable[dict[str, Any]]) -> list[RunKey]:
-    """A key is done only with an ok record at the current settings; superseded records leave it pending."""
+def select_pending(planned: Iterable[Sequence[Any]], existing: Iterable[dict[str, Any]]) -> list[Any]:
+    """A key is done only with an ok record at the current settings and the same answer format; superseded records
+    leave it pending. Planned keys are returned as given."""
     done = {record_key(r) for r in existing if r.get("status") == "ok" and is_current_settings(r)}
-    return [k for k in planned if k not in done]
+    return [k for k in planned if _norm_key(k) not in done]
 
 
-def latest_ok_sessions(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Latest ok record per key at the current settings (superseded sessions are never used)."""
+def latest_ok_sessions(records: Iterable[dict[str, Any]], *, answer_format: str | None = None) -> list[dict[str, Any]]:
+    """Latest ok record per key at the current settings (superseded sessions are never used); every answer format
+    unless `answer_format` is given."""
     latest: dict[RunKey, dict[str, Any]] = {}
     for r in records:
-        if r.get("status") == "ok" and is_current_settings(r):
+        if r.get("status") == "ok" and is_current_settings(r) and answer_format in (None, answer_format_of(r)):
             latest[record_key(r)] = r
-    return [latest[k] for k in sorted(latest, key=lambda k: (RUNG_IDS.index(k[0]) if k[0] in RUNG_IDS else 99, k[1], k[2]))]
+    return [latest[k] for k in sorted(latest, key=lambda k: (ANSWER_FORMATS.index(k[3]),
+                                                            RUNG_IDS.index(k[0]) if k[0] in RUNG_IDS else 99, k[1], k[2]))]
 
 
 def load_jsonl(path: Path | str) -> list[dict[str, Any]]:
@@ -902,12 +923,16 @@ def _rate(mid: str):
     return MODEL_RATES[mid]
 
 
-def estimate_session(rung_id: str, scale: int, cpt: CharsPerToken, *, typical_out: dict[str, int] | None = None) -> dict[str, Any]:
+def estimate_session(rung_id: str, scale: int, cpt: CharsPerToken, *, typical_out: dict[str, int] | None = None,
+                     answer_format: str = DEFAULT_ANSWER_FORMAT) -> dict[str, Any]:
     """Estimated prompt tokens and $ for one session (typical output and worst case = max_tokens)."""
     typical_out = typical_out or {"synthesis": 1050, "rerank": 450}
     corpus = build_scaled_corpus(scale)
     son, hai = _rate(SONNET_MODEL_ID), _rate(HAIKU_MODEL_ID)
-    scope = len(scope_line()) + 2  # the golden calibration questions had no scope line
+    # the golden calibration questions had no scope line; a variant answer format adds its extra prompt characters
+    extra = (len(synthesis_system_prompt(with_citations=True, answer_format=answer_format))
+             - len(synthesis_system_prompt(with_citations=True)))
+    scope = len(scope_line()) + 2 + extra
     plain_tok = (len(build_uncached_corpus_text(corpus.hydrated_docs)) + 1200 + scope) / cpt.plain
     block_tok = sum(len(b["data"]) + len(b["block_title"]) + len(b["block_context"]) for b in build_rung2_doc_blocks(corpus.hydrated_docs)) / cpt.doc_blocks
     chunk_tok = statistics.fmean(c["char_count"] for c in corpus.flat_chunks) * RERANK_TOP_K / cpt.doc_blocks + (1200 + scope) / cpt.doc_blocks
@@ -984,7 +1009,8 @@ async def run_sessions(
     async def one(key: RunKey, reserved: float) -> None:
         try:
             rec = await execute_session(rung_id=key[0], scale=key[1], repeat_index=key[2], api_key=api_key,
-                                        synth_call=synth_call, rerank_call=rerank_call, max_retries=max_retries)
+                                        synth_call=synth_call, rerank_call=rerank_call, max_retries=max_retries,
+                                        answer_format=_norm_key(key)[3])
             guard.settle(reserved, rec)
             counts["ok" if rec["status"] == "ok" else "error"] += 1
             on_record(rec)
@@ -1169,7 +1195,8 @@ def judge_items(scope: str, *, golden: dict[str, Any] | None = None, records: Se
             for a in r.get("answers") or []:
                 if a.get("status") == "ok":
                     items.append({**a, "source": "rerun", "rung_id": r["rung_id"], "scale": r["scale"],
-                                  "repeat_index": r["repeat_index"], "run_id": r["run_id"]})
+                                  "repeat_index": r["repeat_index"], "run_id": r["run_id"],
+                                  "answer_format": answer_format_of(r)})
     return items
 
 
@@ -1181,7 +1208,11 @@ def judge_question(item: dict[str, Any]) -> str:
 
 
 def judge_call_id(item: dict[str, Any], judge_repeat: int) -> str:
-    return (f"judge:{item['source']}:{item['rung_id']}:s{item['scale']}:r{item['repeat_index']}:"
+    """Deterministic id. A non-original answer format is part of it (original ids are unchanged, so existing
+    judgements still match)."""
+    fmt = item.get("answer_format") or DEFAULT_ANSWER_FORMAT
+    tag = "" if fmt == DEFAULT_ANSWER_FORMAT else f"{fmt}:"
+    return (f"judge:{item['source']}:{item['rung_id']}:s{item['scale']}:r{item['repeat_index']}:{tag}"
             f"{item['preset_id']}:{item['question_id']}:j{judge_repeat}")
 
 
@@ -1195,6 +1226,7 @@ def plan_judge_calls(items: Sequence[dict[str, Any]], *, repeats: int = JUDGE_RE
                 "call_id": judge_call_id(it, j), "judge_repeat": j, "source": it["source"], "rung_id": it["rung_id"],
                 "scale": it["scale"], "repeat_index": it["repeat_index"], "preset_id": it["preset_id"],
                 "question_id": it["question_id"], "run_id": it.get("run_id"),
+                "answer_format": it.get("answer_format") or DEFAULT_ANSWER_FORMAT,
                 "answer_sha256": _sha(it.get("answer_markdown") or ""),
                 "prompt_sha256": _sha(*(b["text"] for b in system), user),
                 "system": system, "user": user, "question": question,
@@ -1309,6 +1341,7 @@ async def execute_judge_call(planned: dict[str, Any], *, judge_call: JudgeCall, 
         "schema_version": SCHEMA_VERSION,
         **{k: planned[k] for k in ("call_id", "judge_repeat", "source", "rung_id", "scale", "repeat_index",
                                    "preset_id", "question_id", "run_id", "answer_sha256", "prompt_sha256")},
+        "answer_format": planned.get("answer_format") or DEFAULT_ANSWER_FORMAT,
         "status": "error", "error_type": None, "error_message": None, "judge_model_requested": JUDGE_MODEL,
         "settings": {"max_tokens": max_tokens, "thinking": dict(JUDGE_THINKING), "effort": JUDGE_EFFORT,
                      "timeout_s": JUDGE_TIMEOUT_S, "max_retries": 0},
@@ -1409,6 +1442,132 @@ async def run_judge_plan(
     if tasks:
         await asyncio.gather(*tasks)
     return {**counts, "budget_stopped": budget_stopped, "spent_usd": guard.spent_usd}
+
+
+# --------------------------------------------------------------------------------------------------
+# Absence claims (deterministic detector)
+# --------------------------------------------------------------------------------------------------
+# An ABSENCE CLAIM is a sentence asserting that the source material lacks something. Two forms:
+#   "corpus"  the documents / deal room / contracts / agreements / record / (unqualified) text contain, specify or
+#             state no X ("The documents specify no banking NOC or escrow gate.") — unsupported when the answering
+#             model saw only part of the deal room;
+#   "scoped"  the claim is limited to what was provided ("X is not in the text provided", "None stated in the text
+#             provided", "the excerpts give no X", "no X appears in these excerpts").
+# Statements about a named document ("the MSA does not specify …") or about the real world ("no penalty applies")
+# are not flagged. Validated against the judge's absence-type material errors (`validate_absence_detector`).
+
+_ABS_NOUNS = (r"(?:documents?|deal[- ]?room|contracts?|agreements?|corpus|records?|files?|materials?|text|excerpts?|"
+              r"extracts?|chunks?|passages?|clauses? provided|sources?)")
+_ABS_LOC = (rf"(?P<loc>(?:the|these|this|those)\s+(?:[\w'’-]+\s+){{0,3}}?{_ABS_NOUNS}"
+            r"(?:\s+(?:provided|supplied|given|retrieved|available)(?:\s+(?:to\s+(?:me|you)|here))?)?)")
+_ABS_SUBJ = _ABS_LOC.replace("?P<loc>", "?P<subj>")
+_ABS_VERB = (r"(?:contains?|includes?|specif(?:y|ies)|states?|gives?|provides?|names?|mentions?|lists?|quantif(?:y|ies)|"
+             r"sets? out|discloses?|identif(?:y|ies)|defines?|imposes?|requires?|establish(?:es)?|stipulates?|"
+             r"address(?:es)?|references?|shows?|has|have)")
+_ABS_VERB_BASE = (r"(?:contain|include|specify|state|give|provide|name|mention|list|quantify|set out|disclose|identify|"
+                  r"define|impose|require|establish|stipulate|address|reference|show|have)")
+_ABSENCE_RES: tuple[re.Pattern[str], ...] = (
+    # "<subject> contains/specifies/states no X" ; "<subject> … does not specify X" ; "<subject> is silent on"
+    re.compile(rf"\b{_ABS_SUBJ}\s+(?:[^.;:!?]{{0,90}}?\s)?(?:{_ABS_VERB}\s+no\b|(?:do|does|did)\s+not\s+(?:\w+\s+)?{_ABS_VERB_BASE}\b|"
+               rf"(?:is|are)\s+silent\b)"),
+    # "no X appears / is stated in <loc>" ; "none (is) stated in <loc>"
+    re.compile(rf"\b(?:no|none)\b[^.;:!?]{{0,80}}?\b(?:appears?|is|are|exists?|was|were|stated|specified|given|provided|named|found)"
+               rf"(?:\s+(?:stated|specified|given|provided|included|found|mentioned|set out|present))?\s+(?:in|within|among)\s+{_ABS_LOC}"),
+    # "X is not in <loc>" ; "not stated in <loc>" ; "nowhere in <loc>"
+    re.compile(rf"\b(?:not|nowhere)\s+(?:(?:stated|specified|given|provided|included|found|present|contained|mentioned|set out|"
+               rf"addressed|quantified)\s+)?(?:in|within)\s+{_ABS_LOC}"),
+    # "X is (currently) missing from <loc>" / "… missing here"
+    re.compile(rf"\b(?:is|are|remains?)\s+(?:currently\s+)?missing\s+(?:(?:from|in)\s+{_ABS_LOC}|(?P<here>here)\b)"),
+)
+_SCOPED_QUALIFIER = re.compile(r"\b(?:provided|supplied|given|retrieved|available|cited|excerpts?|extracts?|chunks?|passages?|here)\b")
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+|\n+")
+
+
+def _plain_sentence(s: str) -> str:
+    t = re.sub(r"[*_`#>]+", "", s)
+    t = re.sub(r"^\s*(?:[-•]|\d+[.)])\s*", "", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def absence_claims(text: str) -> list[dict[str, str]]:
+    """Every sentence in `text` that asserts the source lacks something, with its form ("corpus" or "scoped")."""
+    out: list[dict[str, str]] = []
+    for raw in _SENTENCE_SPLIT.split(strip_citation_markup(text or "")):
+        sent = _plain_sentence(raw)
+        low = sent.lower().replace("’", "'")
+        for rx in _ABSENCE_RES:
+            m = rx.search(low)
+            if not m:
+                continue
+            gd = m.groupdict()
+            phrase = gd.get("loc") or gd.get("subj") or gd.get("here") or ""
+            form = "scoped" if (gd.get("here") or _SCOPED_QUALIFIER.search(phrase)) else "corpus"
+            out.append({"form": form, "sentence": sent[:300], "matched": m.group(0)[:160]})
+            break
+    return out
+
+
+def absence_summary(text: str) -> dict[str, Any]:
+    claims = absence_claims(text)
+    return {"corpus_claims": sum(1 for c in claims if c["form"] == "corpus"),
+            "scoped_claims": sum(1 for c in claims if c["form"] == "scoped"), "claims": claims}
+
+
+def judge_absence_errors(judgement: dict[str, Any]) -> list[dict[str, Any]]:
+    """Material judge errors whose quoted claim is an absence claim and whose source quote is not ABSENT — the
+    "says the documents lack a term that is present" kind — each with the detector's form."""
+    out = []
+    for e in (judgement.get("parsed") or {}).get("factual_errors") or []:
+        if e.get("severity") != "material" or str(e.get("source_quote_or_absent") or "").strip().upper() == "ABSENT":
+            continue
+        claims = absence_claims(e.get("claim_quote") or "")
+        if claims:
+            out.append({**e, "form": claims[0]["form"]})
+    return out
+
+
+# The validator's keyword rule for "claims the documents lack something" (scripts/validate_deck_claims.py,
+# `_cat4_absence_issue_text`), kept here verbatim so the detector is validated on the same 18 known claims.
+KNOWN_ABSENCE_KEYWORDS = re.compile(r"\bno\b|\bnot (in|state|specify|quantif|give|contain)|missing|does not|do not|absent|cannot be quantified")
+
+
+def validate_absence_detector(records: Sequence[dict[str, Any]], judgements: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """Detector vs the known absence claims: the judge's material errors on the two retrieval rungs (original format)
+    whose claim matches the validator's keyword rule. Also lists every corpus-form hit on the cached full-corpus
+    answers (that rung saw every clause, so a corpus-form claim there is either true or a false positive)."""
+    jidx = _judgement_index(judgements)
+    known, fp_cached = [], []
+    for r in latest_ok_sessions(records, answer_format=DEFAULT_ANSWER_FORMAT):
+        for a in r.get("answers") or []:
+            if a.get("status") != "ok":
+                continue
+            key = ("rerun", r["rung_id"], int(r["scale"]), int(r["repeat_index"]), a["preset_id"], a["question_id"], DEFAULT_ANSWER_FORMAT)
+            sha = _sha(a.get("answer_markdown") or "")
+            js = [j for j in jidx.get(key, []) if j.get("answer_sha256") == sha and j.get("run_id") == r.get("run_id")]
+            where = {"rung_id": r["rung_id"], "scale": int(r["scale"]), "repeat_index": int(r["repeat_index"]),
+                     "question": question_key(a["preset_id"], a["question_id"])}
+            if r["rung_id"] in RETRIEVAL_RUNGS:
+                for j in js:
+                    for e in j["parsed"]["factual_errors"]:
+                        if e["severity"] == "material" and KNOWN_ABSENCE_KEYWORDS.search(e["claim_quote"].lower()):
+                            on_quote = absence_claims(e["claim_quote"])
+                            known.append({**where, "claim_quote": e["claim_quote"],
+                                          "detected": bool(on_quote), "form": on_quote[0]["form"] if on_quote else None})
+            if r["rung_id"] == "cached_full_corpus_citations":
+                for c in absence_claims(a.get("answer_markdown") or ""):
+                    if c["form"] == "corpus":
+                        fp_cached.append({**where, "sentence": c["sentence"],
+                                          "judge_material_errors": sum(1 for j in js for e in j["parsed"]["factual_errors"] if e["severity"] == "material")})
+    hits = [k for k in known if k["detected"]]
+    return {
+        "known_claims": len(known),
+        "detected": len(hits),
+        "recall": (len(hits) / len(known)) if known else None,
+        "detected_by_form": dict(Counter(k["form"] for k in hits)),
+        "missed": [k for k in known if not k["detected"]],
+        "known": known,
+        "cached_full_corpus_corpus_form_hits": fp_cached,
+    }
 
 
 # --------------------------------------------------------------------------------------------------
@@ -1518,6 +1677,23 @@ def summarise_group(answers: Sequence[dict[str, Any]], scores: Sequence[dict[str
         "cache_write_premium_usd": _mean(premiums) if premiums else 0.0,
         "tokens": _tokens(answers),
         "judge": pool_judgements(judgements),
+        "absence": pool_absence(answers, judgements),
+    }
+
+
+def pool_absence(answers: Sequence[dict[str, Any]], judgements: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """Detector counts over the answers, plus the judge's absence-type material errors over the judged answers."""
+    summ = [absence_summary(a.get("answer_markdown") or "") for a in answers]
+    ok = [j for j in judgements if j.get("status") == "ok" and j.get("parsed")]
+    jerr = [judge_absence_errors(j) for j in ok]
+    return {
+        "answers_with_corpus_form_claim": measure(sum(1 for x in summ if x["corpus_claims"]), len(summ)),
+        "answers_with_scoped_form_claim": measure(sum(1 for x in summ if x["scoped_claims"]), len(summ)),
+        "corpus_form_claims": sum(x["corpus_claims"] for x in summ),
+        "scoped_form_claims": sum(x["scoped_claims"] for x in summ),
+        "answers_saying_none_stated_in_text_provided": sum(1 for a in answers if "none stated in the text provided" in (a.get("answer_markdown") or "").lower()),
+        "judged_answers_with_unsupported_absence_claim": measure(sum(1 for e in jerr if e), len(ok)) if ok else None,
+        "judged_absence_errors_by_form": dict(Counter(x["form"] for e in jerr for x in e)) if ok else None,
     }
 
 
@@ -1528,7 +1704,8 @@ def _judgement_index(judgements: Sequence[dict[str, Any]]) -> dict[tuple, list[d
         if r.get("status") == "ok":
             latest[r["call_id"]] = r
     for r in latest.values():
-        idx.setdefault((r["source"], r["rung_id"], int(r["scale"]), int(r["repeat_index"]), r["preset_id"], r["question_id"]), []).append(r)
+        idx.setdefault((r["source"], r["rung_id"], int(r["scale"]), int(r["repeat_index"]), r["preset_id"], r["question_id"],
+                        r.get("answer_format") or DEFAULT_ANSWER_FORMAT), []).append(r)
     return idx
 
 
@@ -1600,10 +1777,11 @@ def summarise(
 
     used_judgements: set[str] = set()
 
-    def judged(src: str, a: dict[str, Any], rung: str, scale: int, rep: int, run_id: str | None = None) -> list[dict[str, Any]]:
+    def judged(src: str, a: dict[str, Any], rung: str, scale: int, rep: int, run_id: str | None = None,
+               fmt: str = DEFAULT_ANSWER_FORMAT) -> list[dict[str, Any]]:
         """Judgements of exactly this answer (same answer text; same session for rerun answers)."""
         sha = _sha(a.get("answer_markdown") or "")
-        out = [j for j in jidx.get((src, rung, scale, rep, a["preset_id"], a["question_id"]), [])
+        out = [j for j in jidx.get((src, rung, scale, rep, a["preset_id"], a["question_id"], fmt), [])
                if j.get("answer_sha256") == sha and (src == "golden" or j.get("run_id") == run_id)]
         used_judgements.update(j["call_id"] for j in out)
         return out
@@ -1611,27 +1789,30 @@ def summarise(
     groups: dict[str, Any] = {}
     per_question: dict[str, Any] = {}
     review: dict[str, list[dict[str, Any]]] = {"material_errors": [], "contaminated_answers": []}
-    for rung in RUNG_IDS:
-        for scale in SCALES:
-            sess = [r for r in ok if r["rung_id"] == rung and int(r["scale"]) == scale]
-            if not sess:
-                continue
-            answers, scores, js = [], [], []
-            for r in sess:
-                for a in r["answers"]:
-                    s = score_answer(a, rung_id=rung, corpus=corpora[scale], keys=keys, contamination=contamination)
-                    answers.append(a)
-                    scores.append(s)
-                    jj = judged("rerun", a, rung, scale, int(r["repeat_index"]), r.get("run_id"))
-                    js += jj
-                    _collect_review(review, "rerun", rung, scale, int(r["repeat_index"]), a, s, jj)
-            groups[f"{rung}|{scale}"] = {"rung_id": rung, "scale": scale, **summarise_group(answers, scores, len(sess), js)}
-            for pid, q in session_questions():
-                qa = [(a, s) for a, s in zip(answers, scores) if a["preset_id"] == pid and a["question_id"] == q["question_id"]]
-                qj = [j for a, _ in qa for j in js if j["preset_id"] == pid and j["question_id"] == q["question_id"]]
-                per_question[f"{rung}|{scale}|{pid}/{q['question_id']}"] = {
-                    "rung_id": rung, "scale": scale, "question": question_key(pid, q["question_id"]),
-                    **summarise_group([a for a, _ in qa], [s for _, s in qa], len(sess), qj)}
+    for fmt in ANSWER_FORMATS:
+        for rung in RUNG_IDS:
+            for scale in SCALES:
+                sess = [r for r in ok if r["rung_id"] == rung and int(r["scale"]) == scale and answer_format_of(r) == fmt]
+                if not sess:
+                    continue
+                answers, scores, js = [], [], []
+                for r in sess:
+                    for a in r["answers"]:
+                        s = score_answer(a, rung_id=rung, corpus=corpora[scale], keys=keys, contamination=contamination)
+                        answers.append(a)
+                        scores.append(s)
+                        jj = judged("rerun", a, rung, scale, int(r["repeat_index"]), r.get("run_id"), fmt)
+                        js += jj
+                        _collect_review(review, "rerun", rung, scale, int(r["repeat_index"]), a, s, jj, fmt)
+                gkey = group_key(rung, scale, fmt)
+                groups[gkey] = {"rung_id": rung, "scale": scale, "answer_format": fmt,
+                                **summarise_group(answers, scores, len(sess), js)}
+                for pid, q in session_questions():
+                    qa = [(a, s) for a, s in zip(answers, scores) if a["preset_id"] == pid and a["question_id"] == q["question_id"]]
+                    qj = [j for a, _ in qa for j in js if j["preset_id"] == pid and j["question_id"] == q["question_id"]]
+                    per_question[f"{gkey}|{pid}/{q['question_id']}"] = {
+                        "rung_id": rung, "scale": scale, "answer_format": fmt, "question": question_key(pid, q["question_id"]),
+                        **summarise_group([a for a, _ in qa], [s for _, s in qa], len(sess), qj)}
     # original capture (golden, scale 1, n = 1)
     golden = golden if golden is not None else load_golden()
     g_groups: dict[str, Any] = {}
@@ -1664,6 +1845,7 @@ def summarise(
             "groups": groups,
             "per_question": per_question,
             "break_even": break_even_tables(groups),
+            "break_even_adopted": break_even_tables(groups, adopted=True),
             "data_quality": {**data_quality(current), "superseded_sessions": superseded_sessions(records),
                              **judge_data_quality(judgements, used_judgements,
                                                   expected=sum(len(r["answers"]) for r in ok) + len(g_answers))},
@@ -1673,12 +1855,22 @@ def summarise(
         "judge": {"records": len(judgements), "ok": sum(1 for j in judgements if j.get("status") == "ok"),
                   "spend_usd": sum(judgement_cost_usd(j) for j in judgements)},
         "for_lead_review": review,
+        "answer_formats": sorted({answer_format_of(r) for r in ok}, key=ANSWER_FORMATS.index),
+        "absence_detector_validation": validate_absence_detector(current, judgements),
     }
 
 
+def group_key(rung: str, scale: int, answer_format: str = DEFAULT_ANSWER_FORMAT) -> str:
+    """'rung|scale' for the original format (unchanged keys); 'rung|scale|format' for a variant."""
+    return f"{rung}|{scale}" if answer_format == DEFAULT_ANSWER_FORMAT else f"{rung}|{scale}|{answer_format}"
+
+
 def _collect_review(review: dict[str, list[dict[str, Any]]], source: str, rung: str, scale: int, rep: int,
-                    a: dict[str, Any], s: dict[str, Any], judged: Sequence[dict[str, Any]]) -> None:
+                    a: dict[str, Any], s: dict[str, Any], judged: Sequence[dict[str, Any]],
+                    fmt: str = DEFAULT_ANSWER_FORMAT) -> None:
     where = {"source": source, "rung_id": rung, "scale": scale, "repeat_index": rep, "question": question_key(a["preset_id"], a["question_id"])}
+    if fmt != DEFAULT_ANSWER_FORMAT:
+        where["answer_format"] = fmt
     if s["contamination"]["contaminated"]:
         text = str(a.get("answer_markdown") or "")
         quotes = []
@@ -1694,9 +1886,10 @@ def _collect_review(review: dict[str, list[dict[str, Any]]], source: str, rung: 
                 review["material_errors"].append({**where, "judge_call_id": j["call_id"], **e})
 
 
-def break_even_tables(groups: dict[str, Any]) -> dict[str, Any]:
+def break_even_tables(groups: dict[str, Any], *, adopted: bool = False) -> dict[str, Any]:
     """Per scale: questions sharing one cache write at which A becomes cheaper than B (warm per-question cost +
-    one-off cache-write premium, both measured)."""
+    one-off cache-write premium, both measured). Original-format groups by default; `adopted=True` uses each rung's
+    adopted answer format (retrieval rungs: scoped_absence sessions; full-corpus rungs: original)."""
     out: dict[str, Any] = {}
     pairs = [("cached_full_corpus_citations", "hybrid_rag_rerank_citations"),
              (NEW_RUNG, "hybrid_rag_rerank_citations"),
@@ -1704,7 +1897,8 @@ def break_even_tables(groups: dict[str, Any]) -> dict[str, Any]:
     for scale in SCALES:
         rows = []
         for a, b in pairs:
-            ga, gb = groups.get(f"{a}|{scale}"), groups.get(f"{b}|{scale}")
+            fa, fb = (adopted_answer_format(a), adopted_answer_format(b)) if adopted else (DEFAULT_ANSWER_FORMAT,) * 2
+            ga, gb = groups.get(group_key(a, scale, fa)), groups.get(group_key(b, scale, fb))
             if not ga or not gb:
                 continue
             ca, cb = ga["cost_per_question"]["warm"]["total"], gb["cost_per_question"]["warm"]["total"]
@@ -1720,7 +1914,7 @@ def break_even_tables(groups: dict[str, Any]) -> dict[str, Any]:
 # App-facing portfolio (replays/cat4_quality_summary.json)
 # --------------------------------------------------------------------------------------------------
 
-PORTFOLIO_SCHEMA_VERSION = 1
+PORTFOLIO_SCHEMA_VERSION = 2  # 2: answer formats (retrieval versions shown before / now)
 GOLDEN_REPEAT_INDEX = 0
 GOLDEN_SCALE = 1
 
@@ -1729,9 +1923,13 @@ def _cell_from_group(g: dict[str, Any]) -> dict[str, Any]:
     ret = g.get("retrieval") or {}
     j = g.get("judge") or {}
     cost = g["cost_per_question"]
+    fmt = g.get("answer_format") or DEFAULT_ANSWER_FORMAT
+    ab = g.get("absence") or {}
     return {
         "rung_id": g["rung_id"],
         "runnable_in_app": g["rung_id"] in APP_RUNG_IDS,
+        "answer_format": fmt,
+        "adopted": fmt == adopted_answer_format(g["rung_id"]),
         "scale": int(g["scale"]),
         "sessions": int(g["sessions"]),
         "answers": int(g["answers"]),
@@ -1767,13 +1965,17 @@ def _cell_from_group(g: dict[str, Any]) -> dict[str, Any]:
         "cost_per_question_billed_sonnet_usd": cost["billed"]["sonnet"],
         "cost_per_question_billed_haiku_usd": cost["billed"]["haiku"],
         "cache_write_premium_usd": g.get("cache_write_premium_usd") or 0.0,
+        "answers_with_documents_lack_claim": ab.get("answers_with_corpus_form_claim"),
+        "answers_with_not_in_text_provided_claim": ab.get("answers_with_scoped_form_claim"),
+        "judged_answers_with_unsupported_absence_claim": ab.get("judged_answers_with_unsupported_absence_claim"),
     }
 
 
 def _question_row(v: dict[str, Any]) -> dict[str, Any]:
     j = v.get("judge") or {}
     return {
-        "rung_id": v["rung_id"], "scale": int(v["scale"]), "question": v["question"], "answers": int(v["answers"]),
+        "rung_id": v["rung_id"], "scale": int(v["scale"]), "answer_format": v.get("answer_format") or DEFAULT_ANSWER_FORMAT,
+        "question": v["question"], "answers": int(v["answers"]),
         "fact_recall": v["fact_recall"], "citations_per_answer_mean": v["citations_per_answer_mean"],
         "zero_citation_answers": v["zero_citation_answers"], "citations_at_expected": v["citations_at_expected"],
         "expected_chunk_recall": v["expected_chunk_recall"],
@@ -1795,17 +1997,26 @@ def build_quality_portfolio(
 ) -> dict[str, Any]:
     """Pooled rerun picture for the app, from the same `summarise()` path as scripts/analyze_cat4_quality.py.
 
-    `cells`: every rung x scale (n = sessions x 8 answers). `golden_mapped`: per rung x question for the sessions the
-    app's recorded runs come from (repeat 0, scale 1). Deterministic: no timestamps."""
+    `cells`: every rung x scale in the rung's adopted answer format (`adopted: true`, what the app runs now), plus
+    the retrieval rungs' original-format cells (`adopted: false`, "before"); full-corpus rungs appear once (their
+    format was not changed). n = sessions x 8 answers. Break-even uses the adopted cells. `golden_mapped`: per rung x
+    question for the sessions the app's recorded runs come from (repeat 0, scale 1, adopted format). Deterministic."""
     keys = keys or load_quality_keys()
+    retrieval = [r for r in RUNG_IDS if adopted_answer_format(r) != DEFAULT_ANSWER_FORMAT]
+    # each rung's adopted format, plus the original ("before") for rungs whose format changed
+    records = [r for r in records if answer_format_of(r) in (adopted_answer_format(r.get("rung_id", "")), DEFAULT_ANSWER_FORMAT)]
     full = summarise(records, keys=keys, golden=golden if golden is not None else {"presets": {}}, judgements=judgements)
     mapped_records = [r for r in latest_ok_sessions(records)
-                      if int(r["repeat_index"]) == GOLDEN_REPEAT_INDEX and int(r["scale"]) == GOLDEN_SCALE]
+                      if int(r["repeat_index"]) == GOLDEN_REPEAT_INDEX and int(r["scale"]) == GOLDEN_SCALE
+                      and answer_format_of(r) == adopted_answer_format(r["rung_id"])]
     mapped = summarise(mapped_records, keys=keys, golden={"presets": {}}, judgements=judgements)
     rr = full["rerun"]
     dq = rr["data_quality"]
     cells = [_cell_from_group(g) for g in rr["groups"].values()]
+    cells.sort(key=lambda c: (RUNG_IDS.index(c["rung_id"]), c["scale"], not c["adopted"]))
     sessions = sorted({c["sessions"] for c in cells})
+    expected_cells = len(RUNG_IDS) * len(SCALES) + len(retrieval) * len(SCALES)
+    changes = instruction_changes()
     return {
         "schema_version": PORTFOLIO_SCHEMA_VERSION,
         "source": "cat4 quality rerun",
@@ -1826,13 +2037,29 @@ def build_quality_portfolio(
         "scales": list(SCALES),
         "corpus": {k: {"documents": v["documents"], "chunks": v["chunks"], "chars": v["chars"]} for k, v in full["corpus"].items()},
         "synth_max_tokens": SYNTH_MAX_TOKENS,
-        "matrix_complete": len(cells) == len(RUNG_IDS) * len(SCALES) and len(sessions) == 1,
+        "matrix_complete": len(cells) == expected_cells and all(c["adopted"] or c["rung_id"] in retrieval for c in cells)
+                           and len(sessions) == 1,
+        "adopted_answer_formats": {r: adopted_answer_format(r) for r in RUNG_IDS},
+        "format_change": {
+            "adopted_on": ADOPTED_ON,
+            "answer_format": "scoped_absence",
+            "rungs": retrieval,
+            "removed": changes["removed"],
+            "added": changes["added"],
+            "note": ("Retrieval versions only: their answers now say a term is not in the text provided instead of saying "
+                     "the documents lack it. Before and after are separate session sets (3 sessions of 8 questions per "
+                     "version and corpus size each). The full-corpus versions were not changed or re-measured."),
+        },
         "cells": cells,
+        "break_even_basis": ("Each version's adopted answer format: the retrieval versions' scoped_absence sessions, the "
+                             "full-corpus versions' original sessions (measured warm cost per question + one-off cache-write premium)."),
         "break_even": {scale: [{k: r[k] for k in ("a", "b", "premium_a_usd", "per_question_a_usd", "premium_b_usd",
                                                     "per_question_b_usd", "n_star", "questions", "verdict")} for r in rows]
-                       for scale, rows in rr["break_even"].items()},
+                       for scale, rows in rr["break_even_adopted"].items()},
         "golden_mapped": {
-            "selection_rule": f"repeat_index {GOLDEN_REPEAT_INDEX}, corpus scale {GOLDEN_SCALE}, every rung",
+            "selection_rule": (f"repeat_index {GOLDEN_REPEAT_INDEX}, corpus scale {GOLDEN_SCALE}, every rung, in the rung's "
+                               "adopted answer format"),
+            "answer_formats": {r["rung_id"]: answer_format_of(r) for r in mapped_records},
             "run_ids": {r["rung_id"]: r["run_id"] for r in mapped_records},
             "questions": [_question_row(v) for v in mapped["rerun"]["per_question"].values()],
         },

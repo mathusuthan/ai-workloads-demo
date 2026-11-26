@@ -1,6 +1,6 @@
 # Category 6 fair rerun — results
 
-Generated: 2026-11-25T15:29:13.001929+00:00
+Generated: 2026-11-26T05:02:58.111650+00:00
 
 Records read: 60 · ok runs used (latest ok per key): 60 · superseded ok records: 0 · error records: 0 · expected matrix: 4 arms × 3 presets × 5 repeats = 60 runs (complete, balanced).
 
@@ -58,7 +58,7 @@ CpO using first-attempt verification instead:
 | `tiered_gate` | inc-02 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $55.57 | $55.57 | $32.08 | $0.0556 |
 | `tiered_gate` | inc-03 | 5 | 0 | 5/5 | 5/5 | 50/50 | 50/50 | 0 (0) | $59.40 | $59.40 | $35.92 | $0.0594 |
 
-## Failure breakdown (final patch not verified)
+## Runs whose final patch was not verified
 
 | Arm | Final-failed runs | Runs failing ci_unit | Runs failing adversarial | Runs failing ast | Failing checks ci_unit / adversarial / ast | Patch author stopped on max_tokens | No fenced patch |
 |---|---|---|---|---|---|---|---|

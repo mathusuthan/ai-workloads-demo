@@ -140,7 +140,7 @@ export function Cat2QualityPanel({ results, portfolio }: Cat2QualityPanelProps) 
           <ShieldCheck className="h-4 w-4" />
           Draft Quality vs Cost · Graded Blind
         </div>
-        <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">What the Cheaper Drafts Gave Up</h2>
+        <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">Where the Cheaper Drafts Scored Differently</h2>
         <p className="mt-1 max-w-4xl text-xs leading-relaxed text-slate-600">
           Graded blind by a model that was not one of those under test (Claude Opus 5.5), three passes per draft; one
           draft per version per source document. Key facts are checked against a fixed answer key.

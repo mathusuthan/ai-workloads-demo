@@ -131,6 +131,14 @@ function supplierCell(c: Cat4PortfolioCell, portfolio: Cat4QualityPortfolio): st
     : '—'
 }
 
+function plainInstruction(line: string): string {
+  return line.replace(/^-\s*/, '').replace(/\*\*/g, '')
+}
+
+function Before({ text }: { text: string | null }) {
+  return text ? <span className="block text-[9px] font-normal text-slate-400">before: {text}</span> : null
+}
+
 function neededCell(c: Cat4PortfolioCell): string {
   if (c.recall_after_rerank) {
     const p = pct(c.recall_after_rerank)
@@ -150,7 +158,13 @@ export function Cat4QualityPanel({ results, portfolio, cacheMode }: Cat4QualityP
   ).sort((a, b) => a - b)
 
   const cells = portfolio?.cells ?? []
-  const cell = (rung: string, scale: number) => cells.find((c) => c.rung_id === rung && c.scale === scale)
+  // the version's current answer format; retrieval versions also have a "before" (original-format) cell
+  const cell = (rung: string, scale: number) =>
+    cells.find((c) => c.rung_id === rung && c.scale === scale && c.adopted !== false)
+  const beforeCell = (rung: string, scale: number) =>
+    cells.find((c) => c.rung_id === rung && c.scale === scale && c.adopted === false)
+  const change = portfolio?.format_change ?? null
+  const changedVersions = new Set(change?.rungs ?? [])
   const scales = portfolio?.scales ?? []
   const versions = VERSION_ORDER.filter((v) => cells.some((c) => c.rung_id === v))
 
@@ -161,7 +175,7 @@ export function Cat4QualityPanel({ results, portfolio, cacheMode }: Cat4QualityP
           <ShieldCheck className="h-4 w-4" />
           Answer Quality vs Cost · Answer Key + Blind Grader
         </div>
-        <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">Is the Cheaper Answer Still Right?</h2>
+        <h2 className="mt-0.5 text-lg font-extrabold text-slate-900">How the Cheaper Answers Compare</h2>
         <p className="mt-1 max-w-4xl text-xs leading-relaxed text-slate-600">
           Each answer is checked for the specific amounts, dates, clauses and parties a fixed answer key expects, and its
           citations are checked against the clauses the question needs. A separate grader model, which never sees which
@@ -314,8 +328,16 @@ export function Cat4QualityPanel({ results, portfolio, cacheMode }: Cat4QualityP
               version with two other suppliers' look-alike contracts added. Cost per question is shown for an 8-question
               session that starts with a cold cache, and with the cache already warm.
             </p>
+            {change && change.added.length > 0 && (
+              <div className="mt-2 max-w-4xl rounded-lg bg-emerald-50 px-3 py-2 text-[11px] leading-relaxed text-emerald-950 ring-1 ring-emerald-200">
+                <span className="font-extrabold">What changed on {change.adopted_on}:</span> the retrieval versions' answer
+                instructions. Their sign-off bullet changed from “{plainInstruction(change.removed[0] ?? '')}” to “
+                {plainInstruction(change.added[0])}”, and one rule was added: “{plainInstruction(change.added[1] ?? '')}”{' '}
+                {change.note} Those rows show the current numbers, with the numbers from before the change underneath.
+              </div>
+            )}
             <div className="mt-2 overflow-x-auto">
-              <table className="w-full min-w-[900px] border-collapse text-left text-[11px]">
+              <table className="w-full min-w-[1000px] border-collapse text-left text-[11px]">
                 <thead>
                   <tr className="border-b border-slate-200 text-[10px] uppercase text-slate-500">
                     <th className="py-1.5 pr-3 font-bold">Version</th>
@@ -323,6 +345,7 @@ export function Cat4QualityPanel({ results, portfolio, cacheMode }: Cat4QualityP
                     <th className="py-1.5 pr-3 text-right font-bold">Cost / question (cold session · warm)</th>
                     <th className="py-1.5 pr-3 text-right font-bold">Key facts stated</th>
                     <th className="py-1.5 pr-3 text-right font-bold">Answers with a serious error</th>
+                    <th className="py-1.5 pr-3 text-right font-bold">Answers saying the documents lack something</th>
                     <th className="py-1.5 pr-3 text-right font-bold">Needed clauses found</th>
                     <th className="py-1.5 pr-3 text-right font-bold">Other suppliers' clauses passed to the answering model</th>
                   </tr>
@@ -332,6 +355,7 @@ export function Cat4QualityPanel({ results, portfolio, cacheMode }: Cat4QualityP
                     scales.map((sc, i) => {
                       const c = cell(v, sc)
                       if (!c) return null
+                      const b = beforeCell(v, sc)
                       return (
                         <tr key={`${v}-${sc}`} className={`align-top ${i === scales.length - 1 ? 'border-b border-slate-200' : ''}`}>
                           <td className="py-1.5 pr-3 text-slate-800">
@@ -343,22 +367,48 @@ export function Cat4QualityPanel({ results, portfolio, cacheMode }: Cat4QualityP
                                     measured in the rerun, not runnable here
                                   </span>
                                 )}
+                                {changedVersions.has(v) && change && (
+                                  <span className="ml-1.5 rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-800">
+                                    answer instructions changed {change.adopted_on}
+                                  </span>
+                                )}
                               </>
                             )}
                           </td>
                           <td className="py-1.5 pr-3 text-slate-600">{sizeLabel(portfolio, sc)}</td>
                           <td className="py-1.5 pr-3 text-right font-mono text-slate-900">
                             {money(c.cost_per_question_billed_usd)} · {money(c.cost_per_question_warm_usd)}
+                            <Before text={b ? `${money(b.cost_per_question_billed_usd)} · ${money(b.cost_per_question_warm_usd)}` : null} />
                           </td>
-                          <td className="py-1.5 pr-3 text-right font-mono">{frac(c.fact_recall)}</td>
+                          <td className="py-1.5 pr-3 text-right font-mono">
+                            {frac(c.fact_recall)}
+                            <Before text={b ? frac(b.fact_recall) : null} />
+                          </td>
                           <td
                             className={`py-1.5 pr-3 text-right font-mono ${
                               (c.answers_with_material_error?.hits ?? 0) > 0 ? 'font-bold text-rose-700' : 'text-slate-900'
                             }`}
                           >
                             {c.judged > 0 ? frac(c.answers_with_material_error) : '—'}
+                            {c.correctness_mean != null && (
+                              <span className="block text-[9px] font-normal text-slate-500">grade {c.correctness_mean.toFixed(2)}/5</span>
+                            )}
+                            <Before
+                              text={
+                                b && b.judged > 0
+                                  ? `${frac(b.answers_with_material_error)}${b.correctness_mean != null ? ` · grade ${b.correctness_mean.toFixed(2)}/5` : ''}`
+                                  : null
+                              }
+                            />
                           </td>
-                          <td className="py-1.5 pr-3 text-right font-mono">{neededCell(c)}</td>
+                          <td className="py-1.5 pr-3 text-right font-mono">
+                            {frac(c.answers_with_documents_lack_claim)}
+                            <Before text={b ? frac(b.answers_with_documents_lack_claim) : null} />
+                          </td>
+                          <td className="py-1.5 pr-3 text-right font-mono">
+                            {neededCell(c)}
+                            <Before text={b && b.recall_after_rerank ? neededCell(b) : null} />
+                          </td>
                           <td className="py-1.5 pr-3 text-right font-mono">{supplierCell(c, portfolio)}</td>
                         </tr>
                       )
@@ -376,12 +426,22 @@ export function Cat4QualityPanel({ results, portfolio, cacheMode }: Cat4QualityP
                 return text ? <li key={sc}>• {text}</li> : null
               })}
             </ul>
+            {changedVersions.size > 0 && (
+              <p className="mt-1 text-[10px] text-slate-500">
+                Break-even uses each version's current answer format (the retrieval versions' sessions after the change).
+              </p>
+            )}
             <p className="mt-3 text-[10px] leading-relaxed text-slate-500">
               Method: {portfolio.answers_scored} answers — {versions.length} versions × {scales.length} corpus sizes ×{' '}
-              {portfolio.sessions_per_cell ?? 'several'} sessions of {portfolio.questions_per_session} questions — each
-              graded blind{portfolio.judge_passes === 1 ? ' once' : ` ${portfolio.judge_passes} times`} by a model not under
-              test{portfolio.judge_model ? ` (${portfolio.judge_model})` : ''}, plus a fixed answer key. Every rerun question
-              carried a one-line note naming the supplier under audit.
+              {portfolio.sessions_per_cell ?? 'several'} sessions of {portfolio.questions_per_session} questions
+              {changedVersions.size > 0
+                ? `, plus the same again for the ${changedVersions.size} retrieval versions before their answer instructions changed (separate sessions)`
+                : ''}{' '}
+              — each graded blind{portfolio.judge_passes === 1 ? ' once' : ` ${portfolio.judge_passes} times`} by a model
+              not under test{portfolio.judge_model ? ` (${portfolio.judge_model})` : ''}, plus a fixed answer key. Every
+              rerun question carried a one-line note naming the supplier under audit. "Documents lack something" counts
+              answers with a sentence saying the documents, deal room or contracts contain no such term (a fixed pattern
+              check, not the grader).
             </p>
           </>
         )}

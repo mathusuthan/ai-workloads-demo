@@ -46,6 +46,10 @@ class RungAccuracyEvaluation(BaseModel):
     field_accuracy_pct: float
     exact_match: bool
     field_checks: list[FieldCheckResult] = Field(default_factory=list)
+    # How the fields were read: "structured_output" (schema / decisions API), "reader_model" (a write-up read by the
+    # ablation's blind extraction model, replay only) or "keyword_match" (the regex extractor; kept for comparison).
+    method: Literal["structured_output", "reader_model", "keyword_match"] = "structured_output"
+    method_note: str | None = None
 
 
 class ModelAccuracyRollup(BaseModel):
@@ -55,12 +59,13 @@ class ModelAccuracyRollup(BaseModel):
     schema_compliance_pct: float
     fields_matched: int
     fields_total: int
-    field_accuracy_pct: float
+    field_accuracy_pct: float | None
     exact_items_matched: int
     items_total: int
-    exact_match_pct: float
+    exact_match_pct: float | None
     cost_per_1k_usd: float
     notes: str
+    scoring_method: str = "structured_output"
 
 
 class RungExecutionResult(BaseModel):
@@ -79,6 +84,12 @@ class RungExecutionResult(BaseModel):
     savings_vs_naive_pct: float = 0.0
     architectural_notes: list[str] = Field(default_factory=list)
     accuracy: RungAccuracyEvaluation | None = None
+    # Why `accuracy` is absent although the item has ground truth (e.g. a live write-up: no reader model in the app).
+    accuracy_note: str | None = None
+    stop_reason: str | None = None
+    thinking_tokens: int = 0
+    max_tokens: int | None = None
+    truncated: bool | None = None
 
 
 class PiiRedactionResult(BaseModel):
@@ -123,6 +134,7 @@ class Cat1RunResponse(BaseModel):
     pii_redaction: PiiRedactionResult
     system1_boundary_note: str
     ground_truth: dict[str, Any] | None = None
+    ablation_portfolio: Cat1AblationPortfolio | None = None
 
 
 class Cat1BatchRequest(BaseModel):
@@ -143,12 +155,12 @@ class BatchItemResult(BaseModel):
     haiku_latency_ms: int
     gemini_latency_ms: int
     ground_truth: dict[str, Any] = Field(default_factory=dict)
-    sonnet_accuracy_pct: float = 0.0
-    haiku_naive_accuracy_pct: float = 0.0
+    sonnet_accuracy_pct: float | None = 0.0
+    haiku_naive_accuracy_pct: float | None = 0.0
     haiku_accuracy_pct: float = 0.0
     gemini_accuracy_pct: float = 0.0
-    sonnet_exact: bool = False
-    haiku_naive_exact: bool = False
+    sonnet_exact: bool | None = False
+    haiku_naive_exact: bool | None = False
     haiku_exact: bool = False
     gemini_exact: bool = False
 
@@ -178,6 +190,170 @@ class Cat1BatchResponse(BaseModel):
     cfo_comparison: list[CfoScaleRow]
     summary_callout: str
     accuracy_rollup: list[ModelAccuracyRollup] = Field(default_factory=list)
+    ablation_portfolio: Cat1AblationPortfolio | None = None
+
+
+# --- Category 1 seven-version ablation (replays/cat1_ablation_summary.json) ---
+
+
+class Cat1AblationAccuracyCell(BaseModel):
+    fields_correct: int | None = None
+    fields_total: int | None = None
+    field_accuracy_pct: float | None = None
+    wilson95: list[float] | None = None
+    items_fully_correct: int | None = None
+    items: int = 0
+    input_tokens_median: float | None = None
+
+
+class Cat1AblationArm(BaseModel):
+    arm_id: str
+    label: str
+    what: str
+    model: str
+    task: str
+    output_format: str
+    runnable_in_app: bool
+    app_rung_id: str | None = None
+    given_allowed_labels: bool
+    scored_by: str
+    max_tokens: int | None = None
+    thinking: str | None = None
+    runs: int
+    scored_runs: int
+    fields_correct: int | None = None
+    fields_total: int | None = None
+    field_accuracy_pct: float | None = None
+    wilson95: list[float] | None = None
+    items_fully_correct: int | None = None
+    items: int = 0
+    by_field: dict[str, dict[str, int]] = Field(default_factory=dict)
+    by_sub_task: dict[str, Cat1AblationAccuracyCell] = Field(default_factory=dict)
+    by_group: dict[str, Cat1AblationAccuracyCell] = Field(default_factory=dict)
+    cost_per_1k_items_usd: float | None = None
+    batch_cost_per_1k_items_usd_computed: float | None = None
+    input_tokens_median: float | None = None
+    input_tokens_min: float | None = None
+    input_tokens_max: float | None = None
+    output_tokens_median: float | None = None
+    output_tokens_min: float | None = None
+    output_tokens_max: float | None = None
+    thinking_tokens_total: int = 0
+    io_ratio_median: float | None = None
+    latency_ms_median: float | None = None
+    truncated: int = 0
+    stop_reasons: dict[str, int] = Field(default_factory=dict)
+    model_mismatches: int = 0
+    schema_parse_failures: int | None = None
+    keyword_fields_correct: int | None = None
+    keyword_field_accuracy_pct: float | None = None
+    reader_value_counts: dict[str, int] | None = None
+    extractor_agreement: dict[str, int] | None = None
+
+
+class Cat1AblationLever(BaseModel):
+    lever: str
+    kind: str
+    label: str
+    from_arm: str
+    to_arm: str
+    cost_from: float | None = None
+    cost_to: float | None = None
+    cost_change_pct: float | None = None
+    fields_from: int | None = None
+    fields_to: int | None = None
+    fields_total: int | None = None
+    accuracy_change_pp: float | None = None
+    comparable_accuracy: bool = True
+
+
+class Cat1AblationScoringRow(BaseModel):
+    arm_id: str
+    label: str
+    fields_total: int | None = None
+    keyword_fields_correct: int | None = None
+    keyword_field_accuracy_pct: float | None = None
+    reader_fields_correct: int | None = None
+    reader_field_accuracy_pct: float | None = None
+    difference_pp: float | None = None
+    extractor_agreement: dict[str, int] | None = None
+    reader_value_counts: dict[str, int] | None = None
+
+
+class Cat1AblationMiss(BaseModel):
+    arm_id: str
+    item_id: str
+    item_title: str
+    sub_task: str
+    field: str
+    field_label: str
+    expected: Any = None
+    returned: Any = None
+    repeats: list[int] = Field(default_factory=list)
+    runs_missed: int
+    runs_total: int
+
+
+class Cat1AblationOriginalRow(BaseModel):
+    arm_id: str
+    app_rung_id: str
+    responses: int
+    truncated_at_cap: int | None = None
+    cap: int | None = None
+    output_tokens_median: float | None = None
+    output_tokens_max: float | None = None
+    cost_per_1k_items_usd: float | None = None
+    keyword_fields_correct: int | None = None
+    keyword_field_accuracy_pct: float | None = None
+    reader_fields_correct: int | None = None
+    reader_field_accuracy_pct: float | None = None
+    reader_status: str | None = None
+    extractor_agreement: dict[str, int] | None = None
+    fields_correct: int | None = None
+    fields_total: int | None = None
+    field_accuracy_pct: float | None = None
+
+
+class Cat1AblationPending(BaseModel):
+    planned: int
+    done: int
+    pending: int
+    status: str
+    what: str
+    fields_agree: int | None = None
+    fields: int | None = None
+
+
+class Cat1AblationPortfolio(BaseModel):
+    schema_version: int
+    source: str
+    source_files: dict[str, str] = Field(default_factory=dict)
+    items: int
+    presets: int
+    batch_items: int
+    repeats: int
+    runs_per_arm: int
+    planned_runs: int
+    ok_runs: int
+    ground_truth_fields_per_repeat: int
+    fields_per_arm: int
+    reader_model: str
+    reader_passes: int
+    settings: dict[str, Any] = Field(default_factory=dict)
+    arms: list[Cat1AblationArm] = Field(default_factory=list)
+    levers: list[Cat1AblationLever] = Field(default_factory=list)
+    scoring_comparison: list[Cat1AblationScoringRow] = Field(default_factory=list)
+    write_up_note: dict[str, Any] = Field(default_factory=dict)
+    classification_text_readable: dict[str, int] = Field(default_factory=dict)
+    misses: list[Cat1AblationMiss] = Field(default_factory=list)
+    original_capture: list[Cat1AblationOriginalRow] = Field(default_factory=list)
+    original_capture_note: str = ""
+    pending: dict[str, Cat1AblationPending] = Field(default_factory=dict)
+    deck_profile: dict[str, Any] = Field(default_factory=dict)
+    data_quality: dict[str, Any] = Field(default_factory=dict)
+    run_ids: dict[str, list[str]] = Field(default_factory=dict)
+    extraction_history: dict[str, Any] = Field(default_factory=dict)
+    golden_mapping: dict[str, Any] = Field(default_factory=dict)
 
 
 # --- Category 2: Generative Synthesis & Drafting ---
@@ -758,6 +934,8 @@ class Cat4RungQuality(BaseModel):
 class Cat4PortfolioCell(BaseModel):
     rung_id: str
     runnable_in_app: bool
+    answer_format: str = "original"
+    adopted: bool = True  # the rung's current format; False = the retrieval versions' "before" (original) cells
     scale: int
     sessions: int
     answers: int
@@ -793,6 +971,18 @@ class Cat4PortfolioCell(BaseModel):
     cost_per_question_billed_sonnet_usd: float | None = None
     cost_per_question_billed_haiku_usd: float | None = None
     cache_write_premium_usd: float = 0.0
+    answers_with_documents_lack_claim: Cat4Measure | None = None
+    answers_with_not_in_text_provided_claim: Cat4Measure | None = None
+    judged_answers_with_unsupported_absence_claim: Cat4Measure | None = None
+
+
+class Cat4FormatChange(BaseModel):
+    adopted_on: str
+    answer_format: str
+    rungs: list[str] = Field(default_factory=list)
+    removed: list[str] = Field(default_factory=list)
+    added: list[str] = Field(default_factory=list)
+    note: str = ""
 
 
 class Cat4BreakEven(BaseModel):
@@ -810,6 +1000,7 @@ class Cat4BreakEven(BaseModel):
 class Cat4PortfolioQuestion(BaseModel):
     rung_id: str
     scale: int
+    answer_format: str = "original"
     question: str
     answers: int
     fact_recall: Cat4Measure
@@ -827,6 +1018,7 @@ class Cat4PortfolioQuestion(BaseModel):
 class Cat4GoldenMapped(BaseModel):
     selection_rule: str
     run_ids: dict[str, str] = Field(default_factory=dict)
+    answer_formats: dict[str, str] = Field(default_factory=dict)
     questions: list[Cat4PortfolioQuestion] = Field(default_factory=list)
 
 
@@ -853,7 +1045,10 @@ class Cat4QualityPortfolio(BaseModel):
     corpus: dict[str, dict[str, int]] = Field(default_factory=dict)
     synth_max_tokens: int | None = None
     matrix_complete: bool = True
+    adopted_answer_formats: dict[str, str] = Field(default_factory=dict)
+    format_change: Cat4FormatChange | None = None
     cells: list[Cat4PortfolioCell] = Field(default_factory=list)
+    break_even_basis: str | None = None
     break_even: dict[str, list[Cat4BreakEven]] = Field(default_factory=dict)
     golden_mapped: Cat4GoldenMapped | None = None
 
@@ -917,6 +1112,7 @@ class Cat4RungSummary(BaseModel):
     avg_reranker_recall_pct: float | None = None
     total_latency_ms: int = 0
     architectural_notes: list[str] = Field(default_factory=list)
+    answer_format: str | None = None  # synthesis prompt format of this run / recording (answer_formats.py)
     quality: Cat4RungQuality | None = None
     quality_unavailable_reason: str | None = None
 
@@ -1200,6 +1396,17 @@ class Cat5GateDisagreement(BaseModel):
     gate_match_gate_output: int = 0
     gate_match_manual: int = 0
     missing_keys: int = 0
+    # The gate was fixed after the experiment; the counts above are the recorded (pre-fix) runs.
+    gate_output_note: str = ""
+    gate_fixed_on: str | None = None
+    gate_version_recorded: str | None = None
+    gate_version_current: str | None = None
+    current_gate_output: dict[str, Any] = Field(default_factory=dict)
+    current_gate_matches_manual: bool | None = None
+    after_fix_per_arm: list[Cat5GateDisagreementArm] = Field(default_factory=list)
+    after_fix_gate_runs: int = 0
+    after_fix_gate_match_manual: int = 0
+    after_fix_missing_keys: int = 0
 
 
 class Cat5AblationPortfolio(BaseModel):

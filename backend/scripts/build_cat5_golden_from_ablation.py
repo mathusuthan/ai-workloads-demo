@@ -42,12 +42,12 @@ from app.archetypes.cat5_orchestration.ablation import (  # noqa: E402
     APP_RUNG_FOR_ARM,
     ARMS,
     GOLDEN_REPEAT_INDEX,
-    AblationErpSession,
     _sha,
     build_ablation_portfolio,
     latest_ok_current,
     load_jsonl,
     original_scripted_golden,
+    session_for_record,
 )
 from app.data.cat5_ablation_fixtures import CAT5_ABLATION_PRESETS_BY_ID  # noqa: E402
 
@@ -80,7 +80,7 @@ def convert_record(record: dict[str, Any]) -> dict[str, Any]:
     """One ablation run -> one golden rung, with tool traces rebuilt by deterministic replay."""
     arm = ARMS[record["arm_id"]]
     rung_id = APP_RUNG_FOR_ARM[record["arm_id"]]
-    session = AblationErpSession(rung_id=arm.session_rung_id)
+    session = session_for_record(record, rung_id=arm.session_rung_id)  # the tool versions the run used
     steps: list[dict[str, Any]] = []
     circuit = False
     try:

@@ -858,18 +858,23 @@ CAT5_ABLATION_PRESETS: list[dict[str, Any]] = [
 ]
 CAT5_ABLATION_PRESETS_BY_ID: dict[str, dict[str, Any]] = {p["id"]: p for p in CAT5_ABLATION_PRESETS}
 
-# Hand derivation vs `evaluate_deterministic_policy_gate` disagreements (verified in the tests).
-# Lead ruling (2026-11-26): the manual derivation is correct and the gate is wrong for inv-06; ground_truth
-# stays the manual derivation. The gate is app code behind recorded data and is NOT changed. inv-06 runs as
-# the separate `gate_disagreement` group and never enters the pooled tables.
+# Hand derivation vs `evaluate_deterministic_policy_gate` disagreements.
+# Lead ruling (2026-11-26): the manual derivation is correct and the gate was wrong for inv-06; ground_truth
+# stays the manual derivation. inv-06 runs as the separate `gate_disagreement` group and never enters the pooled
+# tables. The gate was fixed on 2026-11-26, after the experiment (gate v2-manual-aligned): it now equals the
+# manual derivation on inv-06 (tested). The recorded runs used the pre-fix gate (v1-band-unconditional);
+# `gate_output_truth` is what that gate returned, frozen here so the recorded result stays reproducible.
 CAT5_ABLATION_GATE_DISAGREEMENT: dict[str, dict[str, Any]] = {
     "inv-06": {
         "ruling": (
             "Lead ruling: the manual derivation is correct and the gate is wrong. Manual 2.1 allows the 1.5% band only "
             "when the PO currency notes specify an index-linked float; this PO is plain DDP INR with no amendment, so "
-            "line 1 pays at the PO rate. The gate's WITHIN_1.5PCT_TOLERANCE branch ignores that condition."
+            "line 1 pays at the PO rate. The gate's WITHIN_1.5PCT_TOLERANCE branch ignored that condition when the "
+            "experiment ran; it was fixed on 2026-11-26 (the band now passes only on index-linked POs)."
         ),
-        # What `evaluate_deterministic_policy_gate` computes (checked against the live gate in the tests).
+        # Gate output as recorded on 2026-11-26, before the fix (gate v1-band-unconditional). Frozen: the tests check
+        # it against the v1 gate (replay mode), not against the current gate, which now equals the manual derivation.
+        "gate_output_note": "Gate output as recorded on 2026-11-26, before the fix (gate v1-band-unconditional).",
         "gate_output_truth": {
             "decision": "APPROVE_CLEAN",
             "authorized_net_principal_inr": 3678800.0,
@@ -888,6 +893,13 @@ CAT5_ABLATION_GATE_DISAGREEMENT: dict[str, dict[str, Any]] = {
         "line1": {"sku": "NM-CBL-1.5SQ-90M", "qty": 1200, "po_rate": 1480.0, "billed_rate": 1499.0},
         "net_principal_if_po_rate": 3656000.0,
         "net_principal_if_billed_rate": 3678800.0,
+        "bundle_note": (
+            "When the experiment ran, fetch_3way_match_bundle did not return purchase_orders.currency (the PO currency "
+            "notes), so bundle arms could not check the manual's index-linked-float condition; raw arms could "
+            "(query_po_raw returns it). Since 2026-11-26 the bundle returns it (bundle v2-manual-aligned, which also "
+            "adds the vendor risk_flag, any posted vouchers for the invoice and each line's PO GST rate); every "
+            "recorded run used the earlier bundle."
+        ),
     },
 }
 
@@ -900,11 +912,12 @@ CAT5_ABLATION_EXCLUDED_PENDING_REVIEW: dict[str, dict[str, Any]] = {
             "landed DDP catalog POs default to PO unit rate unless amended.\""
         ),
         "derivation": "PO is 'DDP Inside FC Dock', currency 'INR', no amendment -> L1 at PO rate 1,480; debit 22,800; APPROVE_PARTIAL_DEBIT_NOTE; net 3,656,000; GST 658,080.",
-        "gate_output": "price_rule WITHIN_1.5PCT_TOLERANCE -> billed 1,499 accepted; APPROVE_CLEAN; net 3,678,800; GST 662,184; debit 0; escalation_required false.",
+        "gate_output": "Pre-fix gate (as recorded): price_rule WITHIN_1.5PCT_TOLERANCE -> billed 1,499 accepted; APPROVE_CLEAN; net 3,678,800; GST 662,184; debit 0; escalation_required false. Fixed gate: WITHIN_1.5PCT_NOT_INDEX_LINKED_PO_RATE -> PO rate 1,480; equals the manual derivation.",
         "note": (
-            "Ruled by the lead: the manual derivation is ground truth and the gate is wrong; the gate is not changed. "
-            "Runs as the separate `gate_disagreement` group. The gate always passes the 1.5% band; the manual passes it "
-            "only for index-linked POs. fetch_3way_match_bundle does not return purchase_orders.currency."
+            "Ruled by the lead: the manual derivation is ground truth and the gate was wrong. Runs as the separate "
+            "`gate_disagreement` group. The pre-fix gate always passed the 1.5% band; the manual passes it only for "
+            "index-linked POs. Fixed 2026-11-26 (gate v2-manual-aligned; the bundle now returns "
+            "purchase_orders.currency)."
         ),
     },
 }

@@ -6,9 +6,13 @@ Usage (from backend/):
 
 One session = one rung answering the 8 audit questions in order (audit-01 q1-q4, then audit-02 q1-q4) on one
 corpus scale. Questions inside a session run sequentially; sessions run concurrently (--concurrency).
-Append-only and resumable: a (rung, scale, repeat) key with an `ok` record at the current synthesis cap is skipped (a record
-at another `settings.synth_max_tokens` is superseded and its key re-run); `error` records stay in
-the file and their key is retried. No answer is ever dropped for a quality reason (zero-citation answers,
+Append-only and resumable: a (rung, scale, repeat, answer format) key with an `ok` record at the current synthesis cap is
+skipped (a record at another `settings.synth_max_tokens` is superseded and its key re-run); `error` records stay in
+the file and their key is retried. `--answer-format` picks the synthesis prompt (default `original`, the app's prompt;
+`scoped_absence` is the variant in app/archetypes/cat4_rag/answer_formats.py; `adopted` = each rung's current format,
+retrieval rungs scoped_absence and full-corpus rungs original); it is recorded in each session's settings and each
+format is a separate key, so existing records stay current. The bare default stays `original` on purpose: a bare
+rerun reproduces the matrix of record (complete, so it plans nothing) and never switches prompts silently. No answer is ever dropped for a quality reason (zero-citation answers,
 truncations and contamination are data). Records hold tokens only; dollars are computed at analysis time.
 """
 
@@ -28,6 +32,7 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 os.environ.setdefault("NOVAMART_TRACES_DIR", str(Path(tempfile.gettempdir()) / "novamart_cat4_quality_rerun"))
 
+from app.archetypes.cat4_rag.answer_formats import ANSWER_FORMATS, DEFAULT_ANSWER_FORMAT, adopted_answer_format  # noqa: E402
 from app.archetypes.cat4_rag.quality_rerun import (  # noqa: E402
     RUNG_IDS,
     RUNS_PATH,
@@ -37,12 +42,15 @@ from app.archetypes.cat4_rag.quality_rerun import (  # noqa: E402
     build_scaled_corpus,
     calibrate_chars_per_token,
     corpus_size,
+    answer_format_of,
+    estimate_judge_plan,
     estimate_session,
     is_current_settings,
+    latest_ok_sessions,
     load_golden,
     load_jsonl,
     load_quality_keys,
-    plan_matrix,
+    plan_judge_calls,
     prompt_tokens,
     run_sessions,
     select_pending,
@@ -61,7 +69,7 @@ def _session_line(rec: dict[str, Any]) -> str:
     calls = [c for a in answers for c in a.get("calls") or []]
     cites = [len(a.get("citations") or []) for a in answers if a.get("status") == "ok"]
     stops = sorted({str(c.get("stop_reason")) for c in calls})
-    line = (f"{rec['rung_id']:<30} scale={rec['scale']} r{rec['repeat_index']} | answers {len(answers)}/8 | "
+    line = (f"{rec['rung_id']:<30} scale={rec['scale']} r{rec['repeat_index']} {answer_format_of(rec)} | answers {len(answers)}/8 | "
             f"prompt={sum(prompt_tokens(c) for c in calls):,} out={sum(int(c.get('output_tokens') or 0) for c in calls):,} | "
             f"citations/answer={cites} | stop={','.join(stops)} | billed=${session_billed_usd(rec):.4f} | wall={rec.get('wall_s', 0):.1f}s")
     if rec.get("status") != "ok":
@@ -79,14 +87,17 @@ async def main(args: argparse.Namespace) -> int:
     keys = load_quality_keys()
     out_path = Path(args.out)
     existing = load_jsonl(out_path)
-    planned = plan_matrix(rungs, scales, args.repeats)
+    fmt = args.answer_format
+    fmt_of = {r: (adopted_answer_format(r) if fmt == "adopted" else fmt) for r in rungs}
+    # same order as plan_matrix (repeat, scale, rung), each rung in its chosen format
+    planned = [(r, s, i, fmt_of[r]) for i in range(args.repeats) for s in scales for r in rungs]
     pending = select_pending(planned, existing)
     guard = BudgetGuard(args.max_usd, existing)
     cpt = calibrate_chars_per_token(load_golden())
-    est = {(r, s): estimate_session(r, s, cpt) for r in rungs for s in scales}
+    est = {(r, s): estimate_session(r, s, cpt, answer_format=fmt_of[r]) for r in rungs for s in scales}
 
     print(f"Matrix: {len(rungs)} rungs x scales {scales} x {args.repeats} repeats = {len(planned)} sessions "
-          f"({len(planned) * 8} answers); {len(planned) - len(pending)} already ok, {len(pending)} pending.")
+          f"({len(planned) * 8} answers), answer format {fmt}; {len(planned) - len(pending)} already ok, {len(pending)} pending.")
     superseded = [r for r in existing if not is_current_settings(r)]
     if superseded:
         print(f"Superseded records (different synth_max_tokens than {SYNTH_MAX_TOKENS}): {len(superseded)}; ignored (a key counts as done only with an ok record at the current cap).")
@@ -101,11 +112,19 @@ async def main(args: argparse.Namespace) -> int:
         for (r, s), e in est.items():
             print(f"  {r:<30} scale={s}  prompt≈{e['prompt_tokens']:>8,} tok  max rerank prompt≈{e['max_rerank_prompt_tokens']:>7,}"
                   f"  typical ${e['typical_usd']:.4f}  worst ${e['worst_case_usd']:.4f}")
-        typ = sum(est[(r, s)]["typical_usd"] for r, s, _ in pending)
-        worst = sum(est[(r, s)]["worst_case_usd"] for r, s, _ in pending)
-        print(f"\nPending sessions ({len(pending)}): typical ≈ ${typ:.2f}, worst case ≈ ${worst:.2f} (cap ${args.max_usd:.2f}).")
-        for i, (r, s, rep) in enumerate(pending, 1):
-            print(f"  {i:>3}. repeat={rep} scale={s} {r}")
+        typ = sum(est[(k[0], k[1])]["typical_usd"] for k in pending)
+        worst = sum(est[(k[0], k[1])]["worst_case_usd"] for k in pending)
+        print(f"\nPending sessions ({len(pending)}): typical ≈ ${typ:.2f}, worst case ≈ ${worst:.2f} "
+              f"(cap ${args.max_usd:.2f} includes the ${guard.spent_usd:.2f} already billed: a live run needs "
+              f"--max-usd ≥ {guard.spent_usd + worst:.2f} to launch every pending session).")
+        for i, k in enumerate(pending, 1):
+            print(f"  {i:>3}. repeat={k[2]} scale={k[1]} {k[0]} {k[3]}")
+        jest = judge_estimate_for(pending, existing)
+        if jest:
+            print(f"\nJudging the {jest['answers']} answers these sessions would produce (scripts/cat4_quality_judge.py, same "
+                  f"prompt and path; proxy answers = the existing original-format answers of the same rung x scale): "
+                  f"typical ≈ ${jest['typical_usd']:.2f}, worst case ≈ ${jest['worst_case_usd']:.2f} "
+                  f"(prefix ≈{jest['prefix_tokens_est']:,} tok, user ≈{jest['user_tokens_est']:,} tok).")
         print("Dry run: no API calls made.")
         return 0
     if not pending:
@@ -130,13 +149,30 @@ async def main(args: argparse.Namespace) -> int:
 
     result = await run_sessions(pending, api_key=api_key, guard=guard,
                                 worst_case_usd=lambda k: est[(k[0], k[1])]["worst_case_usd"],
-                                on_record=on_record, concurrency=args.concurrency)
+                                on_record=on_record, concurrency=args.concurrency)  # key[3] = answer format
     print(f"Finished {result['ok']} ok + {result['error']} error sessions; billed total ${result['spent_usd']:.4f} (cap ${args.max_usd:.2f}).")
     if result["budget_stopped"]:
         print(f"BUDGET STOP: {result['skipped_budget']} sessions not launched because their worst case would cross "
               f"--max-usd ${args.max_usd:.2f}. Re-run with a higher cap to resume.")
         return BUDGET_EXIT_CODE
     return 0
+
+
+def judge_estimate_for(pending: list[Any], existing: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Judge cost for the answers the pending sessions would produce, using the existing original-format answers of
+    the same rung x scale as stand-ins for their length (None when no stand-in exists)."""
+    proxies = {(r["rung_id"], int(r["scale"])): r for r in latest_ok_sessions(existing, answer_format=DEFAULT_ANSWER_FORMAT)}
+    items = []
+    for k in pending:
+        rec = proxies.get((k[0], k[1]))
+        if rec is None:
+            return None
+        for a in rec["answers"]:
+            items.append({**a, "source": "rerun", "rung_id": k[0], "scale": k[1], "repeat_index": k[2],
+                          "run_id": "dry-run", "answer_format": k[3]})
+    if not items:
+        return None
+    return {"answers": len(items), **estimate_judge_plan(plan_judge_calls(items))}
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -147,6 +183,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--concurrency", type=int, default=3, help="concurrent sessions (default 3)")
     ap.add_argument("--max-usd", type=float, default=20.0, help="billed-cost cap incl. existing records (default 20)")
     ap.add_argument("--out", default=str(RUNS_PATH), help="append-only JSONL path")
+    ap.add_argument("--answer-format", choices=[*ANSWER_FORMATS, "adopted"], default=DEFAULT_ANSWER_FORMAT,
+                    help="synthesis prompt format (default original = the legacy prompt every recorded matrix used; "
+                         "adopted = each rung's current format)")
     ap.add_argument("--dry-run", action="store_true", help="print plan + cost estimate and exit")
     return ap.parse_args(argv)
 

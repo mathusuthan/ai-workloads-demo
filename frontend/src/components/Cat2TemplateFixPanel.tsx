@@ -186,7 +186,7 @@ export function Cat2TemplateFixPanel({ fix }: Cat2TemplateFixPanelProps) {
         <div className="font-extrabold uppercase tracking-wider text-amber-800">Trade-offs</div>
         <ul className="mt-1 list-disc space-y-0.5 pl-4">
           <li>
-            An honest blank is graded as less actionable: actionability went from{' '}
+            A stated blank was graded as less actionable: actionability went from{' '}
             {models.map((m, i) => (
               <span key={m}>
                 {i > 0 && '; '}
@@ -198,7 +198,7 @@ export function Cat2TemplateFixPanel({ fix }: Cat2TemplateFixPanelProps) {
           </li>
           {hFix && (
             <li>
-              The small model wrote &ldquo;not stated&rdquo; for {hFix.owner.not_stated === hFix.action_items ? 'every' : hFix.owner.not_stated} owner
+              The Haiku version wrote &ldquo;not stated&rdquo; for {hFix.owner.not_stated === hFix.action_items ? 'every' : hFix.owner.not_stated} owner
               {hFix.owner.not_stated === hFix.action_items ? '' : 's'} ({hFix.owner.not_stated} of {hFix.action_items}), including on{' '}
               {docsWithSourceOwners} of the {c.documents} documents where its original-template owners were names found in the source.
             </li>

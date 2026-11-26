@@ -9,10 +9,8 @@ from typing import Any
 from uuid import uuid4
 from fastapi import HTTPException, Request
 
-from app.archetypes.cat4_rag.prompts import (
-    get_cat4_haiku_reranker_system_prompt,
-    get_cat4_synthesis_system_prompt,
-)
+from app.archetypes.cat4_rag.answer_formats import adopted_answer_format, rung_synthesis_system_prompt
+from app.archetypes.cat4_rag.prompts import get_cat4_haiku_reranker_system_prompt
 from app.archetypes.cat4_rag.retriever import (
     BM25_TOP_K,
     RERANK_TOP_K,
@@ -21,6 +19,7 @@ from app.archetypes.cat4_rag.retriever import (
     rank_chunks_bm25,
 )
 from app.archetypes.cat4_rag.schemas import RERANK_JSON_SCHEMA
+from app.archetypes.cat4_rag.scope import scoped_question
 from app.config import get_settings
 from app.core.anthropic_service import (
     run_cat4_haiku_reranker,
@@ -94,6 +93,7 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, str | None, list[str]]:
                 "Requests no citations — a reviewer has to search the 7 agreements to check each claim.",
                 # replaced with this audit's measured answer quality by _apply_measured_claims
                 "Answer quality for this audit is scored against the answer key in the results panel.",
+                "Prompt not changed: the 2026-11-26 answer-format change applies to the retrieval version only, and this version was not re-measured.",
             ],
         )
     if rung_id == "cached_full_corpus_citations":
@@ -106,6 +106,7 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, str | None, list[str]]:
                 "Native citations point at exact document spans a reviewer can check; a citation shows where a claim came from, not that the claim is right.",
                 # replaced with this audit's measured answer quality by _apply_measured_claims
                 "Answer quality for this audit is scored against the answer key in the results panel.",
+                "Prompt not changed: the 2026-11-26 answer-format change applies to the retrieval version only, and this version was not re-measured.",
             ],
         )
     return (
@@ -118,6 +119,9 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, str | None, list[str]]:
             "100% of Haiku reranker spend is included here, so its cost comparison with Rung 1 is like-for-like.",
             # replaced with this audit's measured answer quality by _apply_measured_claims
             "The answering model sees only the retrieved chunks, so a clause retrieval misses can't be cited or used.",
+            # replaced with the rerun's measured before -> after by _apply_measured_claims
+            "Since 2026-11-26 this version's answer prompt says to report a missing term as 'not in the text provided' "
+            "instead of saying the documents lack it, because it sees only the retrieved clauses.",
         ],
     )
 
@@ -368,10 +372,34 @@ def _frac(m: Any) -> str:
     return f"{m.hits}/{m.total}" if m is not None else "n/a"
 
 
-def _portfolio_cell(portfolio: Cat4QualityPortfolio | None, rung_id: str, scale: int) -> Cat4PortfolioCell | None:
+def _portfolio_cell(portfolio: Cat4QualityPortfolio | None, rung_id: str, scale: int,
+                    *, adopted: bool = True) -> Cat4PortfolioCell | None:
+    """The rerun cell for (rung, scale) in the rung's current answer format, or its 'before' (original) cell."""
     if portfolio is None:
         return None
-    return next((c for c in portfolio.cells if c.rung_id == rung_id and c.scale == scale), None)
+    return next((c for c in portfolio.cells if c.rung_id == rung_id and c.scale == scale and c.adopted == adopted), None)
+
+
+def _format_change_text(portfolio: Cat4QualityPortfolio | None, rung_id: str) -> str | None:
+    """Measured before -> now for a rung whose answer format changed (None without both cells at both sizes)."""
+    pairs = [(_portfolio_cell(portfolio, rung_id, sc, adopted=False), _portfolio_cell(portfolio, rung_id, sc)) for sc in (1, 3)]
+    if not all(b and n and b.answer_format != n.answer_format and b.answers_with_documents_lack_claim
+               and n.answers_with_documents_lack_claim and b.answers_with_material_error and n.answers_with_material_error
+               and b.correctness_mean is not None and n.correctness_mean is not None for b, n in pairs):
+        return None
+    (b1, n1), (b3, n3) = pairs
+    date = portfolio.format_change.adopted_on if portfolio and portfolio.format_change else "2026-11-26"
+    return (
+        f"Since {date} this version's answer prompt says to report a missing term as 'not in the text provided' instead "
+        f"of saying the documents lack it. In the rerun ({n1.answers} answers per corpus size, before → now, separate "
+        f"sessions): answers saying the documents lack something {b1.answers_with_documents_lack_claim.hits} → "
+        f"{n1.answers_with_documents_lack_claim.hits} (7 documents) and {b3.answers_with_documents_lack_claim.hits} → "
+        f"{n3.answers_with_documents_lack_claim.hits} (21 documents); answers with a serious error "
+        f"{b1.answers_with_material_error.hits} → {n1.answers_with_material_error.hits} and "
+        f"{b3.answers_with_material_error.hits} → {n3.answers_with_material_error.hits}; grader correctness "
+        f"{b1.correctness_mean:.2f} → {n1.correctness_mean:.2f} and {b3.correctness_mean:.2f} → {n3.correctness_mean:.2f}. "
+        "The full-corpus versions were not changed or re-measured."
+    )
 
 
 def _audit_quality_text(res: Cat4RungSummary) -> str | None:
@@ -450,6 +478,10 @@ def _apply_measured_claims(
                 extra += f" and retrieval kept {fmt_pct((cell.recall_after_rerank.rate or 0) * 100)} of the expected clauses after reranking"
             text += extra + "."
         set_note(res, 2, text)
+    if hybrid:
+        change = _format_change_text(portfolio, "hybrid_rag_rerank_citations")
+        if change:
+            set_note(hybrid, 3, change)
 
 
 def _apply_cross_rung_savings(results: list[Cat4RungSummary]) -> None:
@@ -485,6 +517,9 @@ async def _run_live_cat4_query_for_rung(
 ) -> tuple[Cat4QueryResult, dict[str, Any]]:
     doc_by_id = {d["doc_id"]: d for d in hydrated_docs}
     q_text = str(q_spec["question"])
+    # The question as the models receive it: the supplier-scope line + the original text, in the BM25 query, the
+    # reranker query and the synthesis message (as in the quality rerun). `question` stays the original text.
+    q_asked = scoped_question(q_text)
     expected_docs = list(q_spec.get("expected_doc_ids") or [])
     expected_chunks = list(q_spec.get("expected_chunk_ids") or [])
     full_est_tokens = max(1, round(total_corpus_chars / 2.4))
@@ -508,9 +543,9 @@ async def _run_live_cat4_query_for_rung(
         doc_blocks = build_rung2_doc_blocks(hydrated_docs)
         use_cache = True
     else:
-        bm25_ranked = rank_chunks_bm25(q_text, flat_chunks, top_k=BM25_TOP_K)
+        bm25_ranked = rank_chunks_bm25(q_asked, flat_chunks, top_k=BM25_TOP_K)
         candidates = [c for c in bm25_ranked if c["is_bm25_candidate"]]
-        rerank_payload_text = build_reranker_payload(q_text, candidates)
+        rerank_payload_text = build_reranker_payload(q_asked, candidates)
         rerank_raw = await run_cat4_haiku_reranker(
             rerank_payload=rerank_payload_text,
             system_prompt=get_cat4_haiku_reranker_system_prompt(),
@@ -538,8 +573,9 @@ async def _run_live_cat4_query_for_rung(
 
     with_citations = doc_blocks is not None
     synth_raw = await run_cat4_rag_synthesis(
-        system_prompt=get_cat4_synthesis_system_prompt(with_citations=with_citations),
-        user_question=q_text,
+        # per-rung prompt (answer_formats.ADOPTED_ANSWER_FORMAT): retrieval rung = scoped_absence, others = legacy
+        system_prompt=rung_synthesis_system_prompt(rung_id, with_citations=with_citations),
+        user_question=q_asked,
         documents_for_blocks=doc_blocks,
         uncached_corpus_text=uncached_text,
         use_prefix_cache=use_cache,
@@ -585,7 +621,7 @@ async def _run_live_cat4_query_for_rung(
         question_number=int(q_spec["question_number"]),
         topic_tag=str(q_spec["topic_tag"]),
         question=q_text,
-        question_as_asked=q_text,
+        question_as_asked=q_asked,
         stop_reason=synth_raw.stop_reason,
         expected_doc_ids=expected_docs,
         expected_chunk_ids=expected_chunks,
@@ -612,10 +648,12 @@ async def _run_live_cat4_query_for_rung(
         "question_number": q_res.question_number,
         "topic_tag": q_res.topic_tag,
         "question": q_text,
+        "question_as_asked": q_asked,
         "model_id": synth_raw.model_id,
         "latency_ms": synth_raw.latency_ms,
         "stop_reason": synth_raw.stop_reason,
         "max_tokens": CAT4_SYNTH_MAX_TOKENS,
+        "answer_format": adopted_answer_format(rung_id),
         "input_tokens": synth_raw.input_tokens,
         "output_tokens": synth_raw.output_tokens,
         "cache_creation_tokens": synth_raw.cache_creation_tokens,
@@ -796,8 +834,8 @@ def _persist_cat4_rung_traces(
         item_title=f"{preset_title} · 4-Query Deal-Room Rollup",
         model_id=res.model_id,
         pattern=res.pattern,
-        system_instruction=get_cat4_synthesis_system_prompt(
-            with_citations=(res.rung_id != "naive_full_corpus")
+        system_instruction=rung_synthesis_system_prompt(
+            res.rung_id, with_citations=(res.rung_id != "naive_full_corpus")
         ),
         payload_text="\n".join(f"Q{q.question_number}: {q.question}" for q in res.queries),
         status=res.status,
@@ -821,6 +859,7 @@ def _persist_cat4_rung_traces(
             "native_document_citations": res.rung_id != "naive_full_corpus",
             "queries": len(res.queries),
             "max_tokens": CAT4_SYNTH_MAX_TOKENS,
+            "answer_format": res.answer_format or adopted_answer_format(res.rung_id),
         },
         stop_reason=_rollup_stop_reason([q.stop_reason for q in res.queries]),
         extra_metadata={"source_endpoint": source_endpoint, "rung_id": res.rung_id},
@@ -931,11 +970,23 @@ def _cat4_callout(
         )
     c3 = _portfolio_cell(portfolio, "cached_full_corpus_citations", 3)
     h3 = _portfolio_cell(portfolio, "hybrid_rag_rerank_citations", 3)
+    h3_before = _portfolio_cell(portfolio, "hybrid_rag_rerank_citations", 3, adopted=False)
     if c3 and h3 and c3.answers_with_material_error and h3.answers_with_material_error:
         text += (
             f" In the rerun with a 3× corpus, {c3.answers_with_material_error.hits}/{c3.judged} cached full-corpus "
-            f"answers had a serious error vs {h3.answers_with_material_error.hits}/{h3.judged} with retrieval."
+            f"answers had a serious error vs {h3.answers_with_material_error.hits}/{h3.judged} with retrieval"
         )
+        if h3_before and h3_before.answers_with_material_error and h3_before.answer_format != h3.answer_format:
+            date = portfolio.format_change.adopted_on if portfolio and portfolio.format_change else "2026-11-26"
+            lack_b, lack_n = h3_before.answers_with_documents_lack_claim, h3.answers_with_documents_lack_claim
+            text += (
+                f" — {h3_before.answers_with_material_error.hits}/{h3_before.judged} before the retrieval version's answer "
+                f"format changed on {date}"
+                + (f" (answers saying the documents lack something: {lack_b.hits} → {lack_n.hits})" if lack_b and lack_n else "")
+                + ". The full-corpus versions were not changed or re-measured."
+            )
+        else:
+            text += "."
     return text
 
 
@@ -976,6 +1027,8 @@ async def execute_cat4_run(
                 raw_queries=r_queries,
                 total_corpus_chars=total_chars,
             )
+            # the recording's format (golden provenance); recordings from before answer formats were the legacy prompt
+            summary.answer_format = str(((preset_trace.get("provenance") or {}).get(rung_id) or {}).get("answer_format") or "original")
             summary.quality, summary.quality_unavailable_reason = build_rung_quality(
                 summary.queries,
                 rung_id=rung_id,
@@ -1008,6 +1061,7 @@ async def execute_cat4_run(
                     summary.queries, rung_id=rid, preset_id=preset["id"], judgements=None,
                     grader_unavailable_reason=LIVE_GRADER_REASON,
                 )
+                summary.answer_format = adopted_answer_format(rid)
                 return summary
             except Exception as exc:
                 return finalize_cat4_rung_summary(
@@ -1124,6 +1178,7 @@ async def execute_cat4_adhoc_query(
                 summary.queries, rung_id=rid, preset_id=req.preset_id, judgements=None,
                 grader_unavailable_reason=LIVE_GRADER_REASON,
             )
+            summary.answer_format = adopted_answer_format(rid)
             return summary
         except Exception as exc:
             return finalize_cat4_rung_summary(

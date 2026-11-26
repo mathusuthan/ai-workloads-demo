@@ -168,7 +168,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
             )
     add("")
 
-    add("## Failure breakdown (final patch not verified)")
+    add("## Runs whose final patch was not verified")
     add("")
     add(
         "| Arm | Final-failed runs | Runs failing ci_unit | Runs failing adversarial | Runs failing ast | "

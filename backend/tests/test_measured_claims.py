@@ -47,9 +47,27 @@ def test_cat1_notes_quote_measured_output_and_savings(preset: str, sub_task: str
     r = _run("cat1", preset_id=preset, sub_task=sub_task)
     prose, schema = r["haiku_naive"], r["haiku_calibrated"]
     same_model_cut = (1 - schema["finops"]["total_cost_usd"] / prose["finops"]["total_cost_usd"]) * 100
-    assert f"caps output at {schema['finops']['output_tokens']:,} tokens" in _notes(schema)
+    assert f"classification-only answer is {schema['finops']['output_tokens']:,} output tokens" in _notes(schema)
     assert f"cutting cost {fmt_pct(same_model_cut)} on the same model" in _notes(schema)
-    assert f"cuts {fmt_pct(prose['savings_vs_naive_pct'])} vs Sonnet 5.5 prose" in _notes(prose)
+    assert f"cuts {fmt_pct(prose['savings_vs_naive_pct'])} vs the Sonnet 5.5 write-up" in _notes(prose)
+    # The saving is attributed as measured in the ablation: asking for less and the smaller model, not the schema.
+    pf = r["_response"]["ablation_portfolio"]
+    lev = {lv["lever"]: lv for lv in pf["levers"]}
+    ask = lev["write-up → classification-only text (haiku)"]["cost_change_pct"]
+    sch = lev["text → schema (haiku)"]["cost_change_pct"]
+    assert f"asking for the classification instead of a write-up (−{fmt_pct(-ask)} on Haiku" in _notes(schema)
+    assert f"The JSON schema itself cost +{fmt_pct(sch)} over the same classification asked as plain text" in _notes(schema)
+    assert "compresses output" not in _notes(schema) and "Strict JSON schema caps" not in _notes(schema)
+    assert "default thinking" not in _notes(prose)
+
+
+def test_cat1_live_write_up_is_not_scored_and_says_why() -> None:
+    from app.archetypes.cat1_triage.runner import live_prose_accuracy_note, load_cat1_ablation_portfolio
+
+    note = live_prose_accuracy_note(load_cat1_ablation_portfolio())
+    assert note.startswith("Not scored live") and "under-scored plain-text classifications by about 14 points" in note
+    assert "over-scored write-ups by 4–17 points" in note
+    assert live_prose_accuracy_note(None).startswith("Not scored live")
 
 
 def test_cat2_badge_and_notes_quote_measured_values() -> None:
@@ -151,6 +169,10 @@ def test_cat4_fallback_copy_is_number_free_and_makes_no_unsupported_claims() -> 
         title, badge, _, notes = cat4_runner._rung_metadata(rid)
         blob += [badge, *notes]
         assert not any(ch.isdigit() for ch in notes[2])
+        # note 3: the 2026-11-26 answer-format change (retrieval rung) / "not changed" (full-corpus rungs); no measured numbers
+        assert ("not in the text provided" in notes[3]) == (rid == "hybrid_rag_rerank_citations")
+        assert notes[3].startswith("Prompt not changed") == (rid != "hybrid_rag_rerank_citations")
+        assert not any(ch.isdigit() for ch in notes[3].replace("2026-11-26", ""))
     text = " ".join(blob).lower()
     for banned in ("95%", "zero-hallucination", "without chunking or missing", "linearly", "decisive"):
         assert banned not in text

@@ -306,7 +306,7 @@ def render_markdown(s: dict[str, Any], *, in_path: Path, golden_path: Path) -> s
         add(f"  - {x}")
     add("")
 
-    add(f"## Misses for review — probe answers that missed ({len(s['misses_for_review'])})")
+    add(f"## Probe answers that did not match, for review ({len(s['misses_for_review'])})")
     add("")
     if not s["misses_for_review"]:
         add("None (or no probe answers recorded yet).")
@@ -332,7 +332,7 @@ def render_markdown(s: dict[str, Any], *, in_path: Path, golden_path: Path) -> s
     add("")
     add(
         "Turn facts are scored against the reply of their own turn; ledger facts against the turn-10 reply; "
-        "probes against each probe's answer. Items whose reply was not recorded are omitted, not counted as misses. "
+        "probes against each probe's answer. Items whose reply was not recorded are omitted, not counted as non-matches. "
         "Rerun statistics use the latest ok record per (rung, session, repeat)."
     )
     add("")

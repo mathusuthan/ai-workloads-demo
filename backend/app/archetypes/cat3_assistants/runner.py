@@ -525,7 +525,7 @@ def _quality_callout(
     early_s, early_c = sq.ledger_by_origin.get("1-3"), cq.ledger_by_origin.get("1-3")
     if sq.probe_accuracy is not None and cq.probe_accuracy is not None:
         text = (
-            f"Quality trade-off: with compaction the assistant answered {_frac(sq.probe_accuracy)} recall questions "
+            f"Quality trade-off: with compaction this version answered {_frac(sq.probe_accuracy)} recall questions "
             f"about earlier turns vs {_frac(cq.probe_accuracy)} with full history, and its final summary kept "
             f"{_frac(early_s)} turn 1–3 details vs {_frac(early_c)}"
         )

@@ -152,6 +152,51 @@ JUDGE_HEAD = ["group", "judged", "correctness mean (1–5)", "completeness mean 
               "answers with ≥1 material error", "answers the question"]
 
 
+def _glabel(g: dict[str, Any]) -> str:
+    """Group label; a non-original answer format is named (original-format labels are unchanged)."""
+    fmt = g.get("answer_format") or "original"
+    return f"{SHORT[g['rung_id']]} · s{g['scale']}" + ("" if fmt == "original" else f" · {fmt}")
+
+
+def _absence_rows(groups: list[tuple[str, dict[str, Any]]]) -> list[list[str]]:
+    rows = []
+    for label, g in groups:
+        a = g.get("absence") or {}
+        j = g.get("judge") or {}
+        by = a.get("judged_absence_errors_by_form")
+        rows.append([label, str(g["answers"]), _p(a.get("answers_with_corpus_form_claim")), _p(a.get("answers_with_scoped_form_claim")),
+                     f"{a.get('corpus_form_claims', 0)} / {a.get('scoped_form_claims', 0)}",
+                     str(a.get("answers_saying_none_stated_in_text_provided", 0)),
+                     _p(a.get("judged_answers_with_unsupported_absence_claim")),
+                     "n/a" if by is None else f"{by.get('corpus', 0)} / {by.get('scoped', 0)}",
+                     _p(j.get("answers_with_material_error")), _f(j.get("correctness_mean")), _p(g["fact_recall"])])
+    return rows
+
+
+ABSENCE_HEAD = ["group", "answers", "answers saying the documents lack something (detector)",
+                "answers saying it is not in the text provided (detector)", "claims: documents-lack / not-in-text-provided",
+                "answers writing \"None stated in the text provided\"",
+                "judged answers with an unsupported absence claim (judge material error)",
+                "those judge errors: documents-lack / not-in-text-provided", "answers with ≥1 material error",
+                "correctness mean", "key-fact recall"]
+
+
+def _detector_validation_lines(v: dict[str, Any] | None) -> list[str]:
+    if not v:
+        return ["No rerun records to validate the detector on.", ""]
+    L = [f"Known absence claims: the judge's material errors on the two retrieval rungs (original answer format) whose "
+         f"quoted claim matches the validation report's keyword rule — {v['known_claims']}. Detector flags "
+         f"{v['detected']}/{v['known_claims']}" + (f" ({v['recall'] * 100:.0f}%)" if v["recall"] is not None else "")
+         + f"; by form: {', '.join(f'{k} {n}' for k, n in sorted(v['detected_by_form'].items())) or '—'}.", ""]
+    if v["missed"]:
+        L += ["Missed:", ""] + [f"- {m['rung_id']} s{m['scale']} r{m['repeat_index']} {m['question']}: {m['claim_quote']}" for m in v["missed"]] + [""]
+    hits = v["cached_full_corpus_corpus_form_hits"]
+    L += [f"Documents-lack claims the detector finds in cached full-corpus answers (that rung saw every clause; the judge "
+          f"reported a material error on {sum(1 for h in hits if h['judge_material_errors'])} of these answers): {len(hits)}.", ""]
+    L += [f"- s{h['scale']} r{h['repeat_index']} {h['question']}: {h['sentence']}" for h in hits] + [""]
+    return L
+
+
 def _break_even_rows(rows: list[dict[str, Any]]) -> list[list[str]]:
     return [[f"{SHORT[r['a']]} vs {SHORT[r['b']]}", _usd(r["premium_a_usd"]), _usd(r["per_question_a_usd"]),
              _usd(r["premium_b_usd"]), _usd(r["per_question_b_usd"]),
@@ -222,7 +267,7 @@ def render(summary: dict[str, Any], args: argparse.Namespace, n_judgements: int)
     L += _table(JUDGE_HEAD, _judge_rows(g_groups))
 
     L += ["## Rerun (rung × scale)", ""]
-    groups = [(f"{SHORT[g['rung_id']]} · s{g['scale']}", g) for g in rr["groups"].values()]
+    groups = [(_glabel(g), g) for g in rr["groups"].values()]
     if not groups:
         L += ["No ok rerun sessions yet (`scripts/cat4_quality_rerun.py` has not been run, or every session errored).", ""]
     else:
@@ -234,6 +279,13 @@ def render(summary: dict[str, Any], args: argparse.Namespace, n_judgements: int)
               "text (the whole corpus at scale 3, or ≥ 1 distractor chunk selected); it is not counted as contamination.", ""]
         L += _table(CONTAM_HEAD, _contam_rows(groups))
         L += ["### Judge", ""] + _table(JUDGE_HEAD, _judge_rows(groups))
+        L += ["### Absence claims", ""]
+        L += ["Deterministic detector over each answer: a sentence saying the documents / deal room / contracts / text "
+              "contain, specify or state no X (documents-lack form), or that X is not in the text provided / the excerpts "
+              "(not-in-text-provided form). The judge column counts answers whose material errors include such a "
+              "claim about a term the documents do contain. Answer formats: "
+              + ", ".join(f"`{f}`" for f in summary.get("answer_formats") or ["original"]) + ".", ""]
+        L += _table(ABSENCE_HEAD, _absence_rows(groups))
         L += ["### Cost per question (USD, mean over answers)", ""] + _table(COST_HEAD, _cost_rows(groups))
         L += ["### Tokens per call", ""] + _table(TOKEN_HEAD, _token_rows(groups))
         L += ["### Break-even (questions sharing one cache write)", ""]
@@ -241,10 +293,16 @@ def render(summary: dict[str, Any], args: argparse.Namespace, n_judgements: int)
               "(write − read) rate) and c_r = measured warm cost per question. N* = (P_a − P_b) / (c_b − c_a).", ""]
         for scale, rows in rr["break_even"].items():
             L += [f"Scale {scale}:", ""] + (_table(BE_HEAD, _break_even_rows(rows)) if rows else ["No comparable pairs yet.", ""])
+        has_variant = any((g.get("answer_format") or "original") != "original" for _, g in groups)
+        if has_variant and rr.get("break_even_adopted") and rr["break_even_adopted"] != rr["break_even"]:
+            L += ["Adopted answer formats (what the app and its portfolio use: retrieval versions on their scoped_absence "
+                  "sessions, full-corpus versions on the original):", ""]
+            for scale, rows in rr["break_even_adopted"].items():
+                L += [f"Scale {scale} (adopted):", ""] + (_table(BE_HEAD, _break_even_rows(rows)) if rows else ["No comparable pairs yet.", ""])
         L += ["### Per question", ""]
         prow = []
         for v in rr["per_question"].values():
-            prow.append([f"{SHORT[v['rung_id']]} · s{v['scale']}", v["question"], _p(v["fact_recall"]), _p(v["fact_recall_supplier_specific"]),
+            prow.append([_glabel(v), v["question"], _p(v["fact_recall"]), _p(v["fact_recall_supplier_specific"]),
                          _f(v["citations_per_answer_mean"], 1) if v["citations_requested"] else "—",
                          _p(v["zero_citation_answers"]) if v["citations_requested"] else "—",
                          _p(v["contaminated_answers"]),
@@ -258,7 +316,7 @@ def render(summary: dict[str, Any], args: argparse.Namespace, n_judgements: int)
     for v in rr["per_question"].values():
         z = v.get("zero_citation_answers")
         if z and z["hits"]:
-            zero.append([f"{SHORT[v['rung_id']]} · s{v['scale']}", v["question"], f"{z['hits']}/{z['total']}"])
+            zero.append([_glabel(v), v["question"], f"{z['hits']}/{z['total']}"])
     for r, g in oc["groups"].items():
         for qk, s in g["per_question"].items():
             if s["zero_citations"]:
@@ -275,13 +333,14 @@ def render(summary: dict[str, Any], args: argparse.Namespace, n_judgements: int)
     else:
         L += ["No contaminated answers.", ""]
 
+    L += ["## Absence-claim detector validation", ""] + _detector_validation_lines(summary.get("absence_detector_validation"))
     L += ["## For lead review", ""]
     L += ["Items a person should read before quoting any number from this file.", ""]
     me = summary["for_lead_review"]["material_errors"]
     if me:
         L += ["### Material errors reported by the judge", ""]
         L += _table(["source", "group", "question", "claim", "problem", "source quote"],
-                    [[m["source"], f"{SHORT[m['rung_id']]} · s{m['scale']} r{m['repeat_index']}", m["question"],
+                    [[m["source"], f"{_glabel(m)} r{m['repeat_index']}", m["question"],
                       m["claim_quote"].replace("|", "\\|")[:200], m["problem"].replace("|", "\\|")[:200],
                       m["source_quote_or_absent"].replace("|", "\\|")[:200]] for m in me])
     else:

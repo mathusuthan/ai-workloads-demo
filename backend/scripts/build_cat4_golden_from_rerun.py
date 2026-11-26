@@ -50,7 +50,9 @@ from app.archetypes.cat4_rag.quality_rerun import (  # noqa: E402
     load_quality_keys,
     scope_line,
     _sha,
+    answer_format_of,
 )
+from app.archetypes.cat4_rag.answer_formats import ADOPTED_ON, adopted_answer_format, instruction_changes  # noqa: E402
 from app.archetypes.cat4_rag.retriever import (  # noqa: E402
     BM25_TOP_K,
     RERANK_TOP_K,
@@ -75,14 +77,18 @@ BILLING_NOTE = (
 
 
 def select_session(records: Iterable[dict[str, Any]], rung_id: str) -> dict[str, Any]:
-    """Latest ok record at the current settings for (rung, scale 1, repeat 0) — the analysis' rule."""
+    """Latest ok record at the current settings for (rung, scale 1, repeat 0) in the rung's adopted answer format
+    (answer_formats.ADOPTED_ANSWER_FORMAT: retrieval rung = scoped_absence, full-corpus rungs = original) — the
+    analysis' rule. Fixed in advance, never chosen by outcome."""
+    fmt = adopted_answer_format(rung_id)
     chosen = None
     for r in records:
         if (r.get("status") == "ok" and is_current_settings(r) and r.get("rung_id") == rung_id
+                and answer_format_of(r) == fmt
                 and int(r.get("scale", -1)) == GOLDEN_SCALE and int(r.get("repeat_index", -1)) == GOLDEN_REPEAT_INDEX):
             chosen = r
     if chosen is None:
-        raise ValueError(f"No ok rerun record for {rung_id} / scale {GOLDEN_SCALE} / repeat {GOLDEN_REPEAT_INDEX}")
+        raise ValueError(f"No ok rerun record for {rung_id} / scale {GOLDEN_SCALE} / repeat {GOLDEN_REPEAT_INDEX} / {fmt}")
     return chosen
 
 
@@ -189,6 +195,7 @@ def build_golden(records: list[dict[str, Any]], judgements: list[dict[str, Any]]
                           for a in answers]
             prov[rid] = {
                 "run_id": rec["run_id"],
+                "answer_format": answer_format_of(rec),
                 "repeat_index": int(rec["repeat_index"]),
                 "scale": int(rec["scale"]),
                 "session_nonce": rec.get("session_nonce"),
@@ -205,8 +212,13 @@ def build_golden(records: list[dict[str, Any]], judgements: list[dict[str, Any]]
             "source_file": source_file,
             "judgements_file": judgements_file,
             "selection_rule": (f"fixed pre-declared mapping: repeat_index {GOLDEN_REPEAT_INDEX}, corpus scale {GOLDEN_SCALE}, "
-                               "each of the three app rungs; the session's 8 questions split by audit preset "
-                               "(not selected by outcome)"),
+                               "each of the three app rungs in its adopted answer format; the session's 8 questions split "
+                               "by audit preset (not selected by outcome)"),
+            "answer_formats": {rid: adopted_answer_format(rid) for rid in APP_RUNG_IDS},
+            "answer_format_note": (f"Since {ADOPTED_ON} the retrieval rung (hybrid_rag_rerank_citations) is recorded from its "
+                                   "scoped_absence sessions — the synthesis prompt that reports a missing term as 'not in the "
+                                   "text provided'; the full-corpus rungs stay on the original prompt (not changed or "
+                                   "re-measured). Instruction lines added: " + " | ".join(instruction_changes()["added"])),
             "keys_version": keys_version,
             "question_scope_line": scope_line(),
             "question_note": "`question` is the original text shown in the app; `question_as_asked` is what the model received.",

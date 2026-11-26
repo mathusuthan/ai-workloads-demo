@@ -52,7 +52,7 @@ def rule1_measured_impact() -> str | None:
     """Impact line for FinOps rule 1 (Cat 1 & 2), measured on the golden replays.
 
     Range of per-item cost reduction for every rule-1 lever vs its naive baseline:
-    Cat 1 Haiku + strict JSON and Gemini Decision vs Sonnet prose; Cat 2 Sonnet section template and
+    Cat 1 Haiku classification + JSON schema and Gemini Decision vs the Sonnet write-up; Cat 2 Sonnet section template and
     Haiku section template vs unbounded Sonnet.
     """
     cuts: list[float] = []
