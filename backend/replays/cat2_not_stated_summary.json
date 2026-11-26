@@ -1,0 +1,439 @@
+{
+  "schema_version": 1,
+  "source": "cat2 not-stated follow-up (blind judge)",
+  "source_files": {
+    "drafts": "experiments/cat2_not_stated/drafts.jsonl",
+    "judgements": "experiments/cat2_not_stated/judgements.jsonl"
+  },
+  "app_template": "template_original",
+  "added_instruction": "For each action-plan item, give the owner and the time window only if the source states them. If the source does not name an owner, or gives no date or time window, write exactly `Not stated in source` in that field. Never supply an owner, team, date or deadline the source does not give.",
+  "not_stated_literal": "Not stated in source",
+  "keys_version": "2026-11-25.3",
+  "judge_model": "claude-opus-5-5",
+  "judge_models_returned": [
+    "claude-opus-5-5"
+  ],
+  "judge_passes_per_draft": 1,
+  "counts": {
+    "drafts": 48,
+    "drafts_planned": 48,
+    "drafts_per_cell": 12,
+    "drafts_per_document_model_template": 3,
+    "documents": 4,
+    "truncated": 0,
+    "judge_ok_calls": 112,
+    "judge_error_records": 0,
+    "rubric_calls": 48,
+    "pairwise_vs_original_calls": 48,
+    "pairwise_vs_unbounded_calls": 16
+  },
+  "field_rules": [
+    "not_stated: the field, lowercased with every non-letter run collapsed to one space, is exactly 'not stated in source' (so case, backticks, quotes, hyphens and a trailing period do not matter); anything longer that merely contains the phrase is not 'not_stated'.",
+    "Owner supported: the whole owner string occurs in the source, or after splitting it on , ; / ( ) [ ] + and ' - ', every piece (leading 'the' dropped) contains a capital letter and occurs verbatim, case-sensitive, as a whole-word phrase in the source. A piece joined by 'and' / '&' / 'or' is split further only if every part has at least two words (two names or two teams); otherwise it must occur whole, with 'and' and '&' interchangeable. A piece without a capital letter, or not found, makes the owner unsupported.",
+    "Time window supported: the whole window string occurs in the source (case-insensitive), or every date/time expression in it is found in the source after canonicalisation — dates as (month, day, year; a missing year on either side matches), month names, quarters/halves/fiscal years (Q1 FY2027 != Q1 2027), durations ('30 days' = '30-day'), clock times (hh:mm, zone ignored), T+N, week numbers, years, and any other token containing a digit verbatim. A window with no such expression ('Ongoing', 'Pre-launch') is unsupported.",
+    "'supported' only means the name or date occurs in the source; it does not check that the source assigns this action to that owner or date (the judge's errors cover attribution). When unsure the rule says unsupported."
+  ],
+  "cells": [
+    {
+      "arm": "template_original",
+      "model_key": "sonnet",
+      "drafts": 12,
+      "action_items": 36,
+      "owner": {
+        "supported": 14,
+        "not_stated": 0,
+        "unsupported": 22
+      },
+      "time_window": {
+        "supported": 23,
+        "not_stated": 0,
+        "unsupported": 13
+      },
+      "owner_not_stated_by_preset": {
+        "brief-01": 0,
+        "brief-02": 0,
+        "reg-01": 0,
+        "reg-02": 0
+      },
+      "owner_supported_by_preset": {
+        "brief-01": 7,
+        "brief-02": 4,
+        "reg-01": 0,
+        "reg-02": 3
+      },
+      "serious_per_draft": 1.25,
+      "minor_per_draft": 3.0,
+      "serious_total": 15,
+      "flagged_items_total": 25,
+      "rubric": {
+        "factual_accuracy": 3.25,
+        "coverage": 3.75,
+        "clarity": 5.0,
+        "actionability": 3.6666666666666665,
+        "concision": 4.333333333333333
+      },
+      "core_facts": {
+        "hits": 96,
+        "total": 96
+      },
+      "detail_facts": {
+        "hits": 110,
+        "total": 120
+      },
+      "cost_per_1k_docs_usd": 27.191833333333335,
+      "output_tokens_mean": 1747.8333333333333,
+      "truncated": 0
+    },
+    {
+      "arm": "template_original",
+      "model_key": "haiku",
+      "drafts": 12,
+      "action_items": 36,
+      "owner": {
+        "supported": 10,
+        "not_stated": 0,
+        "unsupported": 26
+      },
+      "time_window": {
+        "supported": 17,
+        "not_stated": 0,
+        "unsupported": 19
+      },
+      "owner_not_stated_by_preset": {
+        "brief-01": 0,
+        "brief-02": 0,
+        "reg-01": 0,
+        "reg-02": 0
+      },
+      "owner_supported_by_preset": {
+        "brief-01": 3,
+        "brief-02": 5,
+        "reg-01": 2,
+        "reg-02": 0
+      },
+      "serious_per_draft": 2.25,
+      "minor_per_draft": 3.4166666666666665,
+      "serious_total": 27,
+      "flagged_items_total": 27,
+      "rubric": {
+        "factual_accuracy": 2.6666666666666665,
+        "coverage": 3.5833333333333335,
+        "clarity": 4.416666666666667,
+        "actionability": 3.25,
+        "concision": 4.083333333333333
+      },
+      "core_facts": {
+        "hits": 93,
+        "total": 96
+      },
+      "detail_facts": {
+        "hits": 104,
+        "total": 120
+      },
+      "cost_per_1k_docs_usd": 1.3897166666666667,
+      "output_tokens_mean": 1808.0833333333333,
+      "truncated": 0
+    },
+    {
+      "arm": "template_not_stated",
+      "model_key": "sonnet",
+      "drafts": 12,
+      "action_items": 36,
+      "owner": {
+        "supported": 8,
+        "not_stated": 28,
+        "unsupported": 0
+      },
+      "time_window": {
+        "supported": 21,
+        "not_stated": 15,
+        "unsupported": 0
+      },
+      "owner_not_stated_by_preset": {
+        "brief-01": 5,
+        "brief-02": 6,
+        "reg-01": 9,
+        "reg-02": 8
+      },
+      "owner_supported_by_preset": {
+        "brief-01": 4,
+        "brief-02": 3,
+        "reg-01": 0,
+        "reg-02": 1
+      },
+      "serious_per_draft": 0.0,
+      "minor_per_draft": 1.9166666666666667,
+      "serious_total": 0,
+      "flagged_items_total": 4,
+      "rubric": {
+        "factual_accuracy": 4.166666666666667,
+        "coverage": 3.4166666666666665,
+        "clarity": 4.166666666666667,
+        "actionability": 3.0833333333333335,
+        "concision": 4.0
+      },
+      "core_facts": {
+        "hits": 94,
+        "total": 96
+      },
+      "detail_facts": {
+        "hits": 94,
+        "total": 120
+      },
+      "cost_per_1k_docs_usd": 26.816333333333333,
+      "output_tokens_mean": 1694.0833333333333,
+      "truncated": 0
+    },
+    {
+      "arm": "template_not_stated",
+      "model_key": "haiku",
+      "drafts": 12,
+      "action_items": 36,
+      "owner": {
+        "supported": 0,
+        "not_stated": 36,
+        "unsupported": 0
+      },
+      "time_window": {
+        "supported": 22,
+        "not_stated": 14,
+        "unsupported": 0
+      },
+      "owner_not_stated_by_preset": {
+        "brief-01": 9,
+        "brief-02": 9,
+        "reg-01": 9,
+        "reg-02": 9
+      },
+      "owner_supported_by_preset": {
+        "brief-01": 0,
+        "brief-02": 0,
+        "reg-01": 0,
+        "reg-02": 0
+      },
+      "serious_per_draft": 0.25,
+      "minor_per_draft": 2.5833333333333335,
+      "serious_total": 3,
+      "flagged_items_total": 6,
+      "rubric": {
+        "factual_accuracy": 3.8333333333333335,
+        "coverage": 3.5833333333333335,
+        "clarity": 4.083333333333333,
+        "actionability": 2.6666666666666665,
+        "concision": 4.083333333333333
+      },
+      "core_facts": {
+        "hits": 92,
+        "total": 96
+      },
+      "detail_facts": {
+        "hits": 92,
+        "total": 120
+      },
+      "cost_per_1k_docs_usd": 1.3552333333333333,
+      "output_tokens_mean": 1722.9166666666667,
+      "truncated": 0
+    }
+  ],
+  "head_to_head": {
+    "vs_original": {
+      "all": {
+        "overall": {
+          "wins": 47,
+          "losses": 1,
+          "ties": 0
+        },
+        "accuracy": {
+          "wins": 47,
+          "losses": 1,
+          "ties": 0
+        },
+        "usefulness_to_reader": {
+          "wins": 40,
+          "losses": 8,
+          "ties": 0
+        },
+        "calls": 48,
+        "position_consistency": {
+          "pairs": 24,
+          "consistent": 23
+        }
+      },
+      "by_model": {
+        "sonnet": {
+          "overall": {
+            "wins": 23,
+            "losses": 1,
+            "ties": 0
+          },
+          "accuracy": {
+            "wins": 23,
+            "losses": 1,
+            "ties": 0
+          },
+          "usefulness_to_reader": {
+            "wins": 20,
+            "losses": 4,
+            "ties": 0
+          },
+          "calls": 24,
+          "position_consistency": {
+            "pairs": 12,
+            "consistent": 11
+          }
+        },
+        "haiku": {
+          "overall": {
+            "wins": 24,
+            "losses": 0,
+            "ties": 0
+          },
+          "accuracy": {
+            "wins": 24,
+            "losses": 0,
+            "ties": 0
+          },
+          "usefulness_to_reader": {
+            "wins": 20,
+            "losses": 4,
+            "ties": 0
+          },
+          "calls": 24,
+          "position_consistency": {
+            "pairs": 12,
+            "consistent": 12
+          }
+        }
+      }
+    },
+    "vs_unbounded": {
+      "all": {
+        "overall": {
+          "wins": 1,
+          "losses": 15,
+          "ties": 0
+        },
+        "accuracy": {
+          "wins": 1,
+          "losses": 11,
+          "ties": 4
+        },
+        "usefulness_to_reader": {
+          "wins": 0,
+          "losses": 16,
+          "ties": 0
+        },
+        "calls": 16,
+        "position_consistency": {
+          "pairs": 8,
+          "consistent": 7
+        }
+      },
+      "by_model": {
+        "sonnet": {
+          "overall": {
+            "wins": 1,
+            "losses": 7,
+            "ties": 0
+          },
+          "accuracy": {
+            "wins": 1,
+            "losses": 6,
+            "ties": 1
+          },
+          "usefulness_to_reader": {
+            "wins": 0,
+            "losses": 8,
+            "ties": 0
+          },
+          "calls": 8,
+          "position_consistency": {
+            "pairs": 4,
+            "consistent": 3
+          }
+        },
+        "haiku": {
+          "overall": {
+            "wins": 0,
+            "losses": 8,
+            "ties": 0
+          },
+          "accuracy": {
+            "wins": 0,
+            "losses": 5,
+            "ties": 3
+          },
+          "usefulness_to_reader": {
+            "wins": 0,
+            "losses": 8,
+            "ties": 0
+          },
+          "calls": 8,
+          "position_consistency": {
+            "pairs": 4,
+            "consistent": 4
+          }
+        }
+      }
+    }
+  },
+  "example": {
+    "rule": "reg-02, sonnet, repeat 0, action items in order (fixed in advance, not chosen by outcome)",
+    "preset_id": "reg-02",
+    "model_key": "sonnet",
+    "repeat_index": 0,
+    "items": [
+      {
+        "slot": 1,
+        "original": {
+          "milestone": "Deploy legal-suffix fuzzy canonicalizer with instant micro-deposit name verification to resolve LLC versus Pvt Ltd mismatches before any escrow hold activates.",
+          "owner": "Head of Engineering, Seller Identity Platform",
+          "time_window": "Q1 2027",
+          "owner_class": "unsupported",
+          "window_class": "unsupported"
+        },
+        "not_stated": {
+          "milestone": "Deploy legal-suffix normalizer (LLC/Pvt Ltd/Inc) with instant micro-deposit name check to cut false-positive 409 holds by 65% before activation.",
+          "owner": "Not stated in source",
+          "time_window": "Not stated in source",
+          "owner_class": "not_stated",
+          "window_class": "not_stated"
+        }
+      },
+      {
+        "slot": 2,
+        "original": {
+          "milestone": "Enforce regex masking at seller portal ingestion plus tokenized tax-document vault so no SSN, PAN or card data reaches support tickets.",
+          "owner": "Chief Information Security Officer",
+          "time_window": "Immediate; attestation next committee cycle",
+          "owner_class": "unsupported",
+          "window_class": "unsupported"
+        },
+        "not_stated": {
+          "milestone": "Maintain zero-PII ticket vault with deterministic regex masking at seller portal ingestion and tokenized secure tax-document upload, keeping SSN/PAN out of tickets.",
+          "owner": "Not stated in source",
+          "time_window": "Not stated in source",
+          "owner_class": "not_stated",
+          "window_class": "not_stated"
+        }
+      },
+      {
+        "slot": 3,
+        "original": {
+          "milestone": "Stand up the 12-hour priority fast-lane for eligible Platinum sellers and clear the backlog of holds aged beyond 72 hours.",
+          "owner": "Head of Treasury Operations",
+          "time_window": "Within 60 days",
+          "owner_class": "unsupported",
+          "window_class": "unsupported"
+        },
+        "not_stated": {
+          "milestone": "Launch dedicated 12-hour SLA fast-lane for false-positive holds on qualifying Platinum sellers to cut arbitration exposure from 48-hour breaches.",
+          "owner": "Treasury Operations",
+          "time_window": "Not stated in source",
+          "owner_class": "supported",
+          "window_class": "not_stated"
+        }
+      }
+    ]
+  }
+}

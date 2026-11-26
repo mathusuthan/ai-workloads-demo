@@ -128,9 +128,34 @@ def test_cat4_badge_and_notes_quote_measured_values() -> None:
     r = _run("cat4", preset_id="audit-01")
     naive, hybrid = r["naive_full_corpus"], r["hybrid_rag_rerank_citations"]
     avg_red = sum(q["context_reduction_pct"] for q in hybrid["queries"]) / len(hybrid["queries"])
-    assert hybrid["badge_text"] == f"Lever 2: ~{fmt_pct(avg_red)} Token Pruning + Citations"
+    assert hybrid["badge_text"] == f"Lever 2: ~{fmt_pct(avg_red)} of Corpus Not Sent + Citations"
     cut = (1 - hybrid["single_query_cold_per_1k_usd"] / naive["single_query_cold_per_1k_usd"]) * 100
     assert f"cuts single cold-query cost {fmt_pct(cut)} vs Rung 1" in _notes(hybrid)
+    cached = r["cached_full_corpus_citations"]
+    prompt = cached["total_uncached_input_tokens"] + cached["total_cache_creation_tokens"] + cached["total_cache_read_tokens"]
+    share = fmt_pct(cached["total_cache_read_tokens"] / prompt * 100)
+    assert cached["badge_text"] == f"Lever 1: {share} of Prompt Tokens from Cache + Citations"
+    for rung in (naive, cached, hybrid):  # note 3: this audit's measured quality
+        q = rung["quality"]["audit"]
+        kf = q["key_facts"]
+        assert f"stated {kf['hits']}/{kf['total']} key contract facts" in rung["architectural_notes"][2]
+        assert f"{q['correctness_mean']:.2f}/5" in rung["architectural_notes"][2]
+
+
+def test_cat4_fallback_copy_is_number_free_and_makes_no_unsupported_claims() -> None:
+    from app.archetypes.cat4_rag import runner as cat4_runner
+
+    blob = []
+    for rid in ("naive_full_corpus", "cached_full_corpus_citations", "hybrid_rag_rerank_citations"):
+        title, badge, _, notes = cat4_runner._rung_metadata(rid)
+        blob += [badge, *notes]
+        assert not any(ch.isdigit() for ch in notes[2])
+    text = " ".join(blob).lower()
+    for banned in ("95%", "zero-hallucination", "without chunking or missing", "linearly", "decisive"):
+        assert banned not in text
+    summ = cat4_runner.finalize_cat4_rung_summary(rung_id="cached_full_corpus_citations", model_id="m", queries=[])
+    cat4_runner._apply_measured_claims([summ], None)  # no ok rung -> fallback copy stays
+    assert summ.badge_text == "Lever 1: Cache Reads + Citations"
 
 
 @pytest.mark.parametrize("preset", ["inv-01", "inv-02", "inv-03"])

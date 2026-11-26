@@ -35,11 +35,11 @@ def get_cat4_haiku_reranker_system_prompt() -> str:
 
 
 CAT4_CODE_SNIPPETS: dict[str, str] = {
-    "naive_full_corpus": """# RUNG 1 ANTI-PATTERN: Uncached Full-Corpus Stuffing (~17k+ tok re-billed per query)
-# Sends all 7 Deal-Room documents as plain text on every question — zero cache_control, zero native citations!
+    "naive_full_corpus": """# RUNG 1 ANTI-PATTERN: Uncached Full-Corpus Stuffing (the whole corpus is re-billed on every query)
+# Sends all 7 Deal-Room documents as plain text on every question — no cache_control, no citations requested.
 resp = await client.messages.create(
     model="claude-sonnet-5-5",
-    max_tokens=2048,
+    max_tokens=4096,
     thinking={"type": "between_tools"},
     system=DILIGENCE_SYNTHESIS_PROMPT,
     messages=[{
@@ -47,8 +47,9 @@ resp = await client.messages.create(
         "content": f"=== FULL 7-DOC DEAL ROOM ===\\n{all_7_docs_text}\\n\\nQUESTION: {query}",
     }],
 )""",
-    "cached_full_corpus_citations": """# RUNG 2 LEVER 1: Document Block Prefix Caching (-95% Cache Read) + Native Character Citations
-# Attaches cache_control on the 7th document block so Q2..Q4 hit $0.10/M cache reads across the entire deal room!
+    "cached_full_corpus_citations": """# RUNG 2 LEVER 1: Document Block Prefix Caching + Native Citations
+# Attaches cache_control on the 7th document block: the first query writes the prefix ($2.50/M), later queries
+# within the cache lifetime read it ($0.10/M). Citations point at exact spans; they show where a claim came from.
 doc_blocks = [
     {
         "type": "document",
@@ -61,14 +62,14 @@ doc_blocks = [
 ]
 resp = await client.messages.create(
     model="claude-sonnet-5-5",
-    max_tokens=2048,
+    max_tokens=4096,
     thinking={"type": "between_tools"},
     system=DILIGENCE_SYNTHESIS_PROMPT,
     messages=[{"role": "user", "content": [*doc_blocks, {"type": "text", "text": query}]}],
 )
 # IMPORTANT: Join TextBlock.text with "" (empty string) to preserve unbroken sentences around citations!""",
     "hybrid_rag_rerank_citations": """# RUNG 3 LEVER 2: Hybrid BM25 (28 -> 10) + Haiku 5.5 Rerank (10 -> 5) + Native Citations
-# Prunes ~82% of irrelevant contract text BEFORE Sonnet 5.5 synthesis — wins on 1–2 cold queries & 100k+ corpora!
+# Sends only the 5 reranked chunks to Sonnet 5.5; a clause retrieval misses can't be cited or used.
 bm25_top10 = rank_chunks_bm25(query, all_28_chunks, top_k=10)
 rerank = await client.messages.create(
     model="claude-haiku-5-5",  # $0.10/M in · $0.50/M out (thinking disabled)
@@ -81,7 +82,7 @@ rerank = await client.messages.create(
 top5_doc_blocks = [as_document_block(chunk, citations=True) for chunk in pick_top5(rerank)]
 resp = await client.messages.create(
     model="claude-sonnet-5-5",
-    max_tokens=2048,
+    max_tokens=4096,
     thinking={"type": "between_tools"},
     system=DILIGENCE_SYNTHESIS_PROMPT,
     messages=[{"role": "user", "content": [*top5_doc_blocks, {"type": "text", "text": query}]}],

@@ -43,6 +43,7 @@ import type {
   CreditShieldCredentials,
 } from '../types'
 import { NativeModal } from './NativeModal'
+import { Cat4QualityPanel } from './Cat4QualityPanel'
 
 interface Cat4WorkbenchProps {
   archetype: ArchetypeSpec
@@ -259,7 +260,7 @@ export function Cat4Workbench({
               : rawWriteCost + rawReadCost
             ).toFixed(2)
           ),
-          'Synthesis Output (5x)': Number(outCost1k.toFixed(2)),
+          'Answer Output': Number(outCost1k.toFixed(2)),
           'Haiku Reranker': Number(rerankCost1k.toFixed(2)),
         }
       })
@@ -465,7 +466,7 @@ export function Cat4Workbench({
                   ? 'Running 4-Query Audit...'
                   : creds.mode === 'live'
                     ? 'Run Live 3-Rung Deal-Room Audit'
-                    : 'Replay Verified 4-Query Audit'}
+                    : 'Replay Recorded 4-Query Audit'}
               </span>
             </button>
           </div>
@@ -484,6 +485,9 @@ export function Cat4Workbench({
           {/* RAG Callout Banner */}
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-950">
             {runResponse.rag_callout}
+            {runResponse.billing_note && (
+              <p className="mt-1.5 font-normal text-amber-900">{runResponse.billing_note}</p>
+            )}
           </div>
 
           {/* 3-Rung Deal-Room Arena Cards */}
@@ -612,16 +616,16 @@ export function Cat4Workbench({
                           <Quote className="h-3 w-3" />
                           {res.avg_citations_per_query > 0
                             ? `${res.avg_citations_per_query} Native Spans/Q`
-                            : '0 Verifiable Citations'}
+                            : 'No citations requested'}
                         </span>
                         {res.avg_doc_coverage_pct > 0 && (
                           <span className="rounded-md bg-blue-100 px-2 py-0.5 font-bold text-blue-900">
-                            {res.avg_doc_coverage_pct}% Gold-Doc Coverage
+                            {res.avg_doc_coverage_pct}% of expected documents cited
                           </span>
                         )}
                         {res.avg_reranker_recall_pct !== null && (
                           <span className="rounded-md bg-amber-100 px-2 py-0.5 font-bold text-amber-950">
-                            {res.avg_reranker_recall_pct}% Reranker Recall
+                            {res.avg_reranker_recall_pct}% of needed clauses kept after rerank
                           </span>
                         )}
                       </div>
@@ -642,6 +646,12 @@ export function Cat4Workbench({
             })}
           </section>
 
+          <Cat4QualityPanel
+            results={runResponse.results}
+            portfolio={runResponse.quality_portfolio}
+            cacheMode={cacheMode}
+          />
+
           {/* Charts: Query-Count Crossover & Cost Component Breakdown */}
           <section className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -651,7 +661,9 @@ export function Cat4Workbench({
                     Queries per Deal Room Crossover ($ / 1,000 Deal Rooms)
                   </h2>
                   <p className="text-[11px] text-slate-500">
-                    Why Hybrid RAG (Rung 3) wins on 1–4 cold queries &amp; huge corpora while Prefix Caching (Rung 2) wins at high query reuse
+                    Cost only. Built from this audit's measured per-question costs; beyond the questions actually asked the
+                    lines are a straight-line projection that assumes the cache stays warm and each extra question costs
+                    the measured average. Answer quality is shown separately above.
                   </p>
                 </div>
               </div>
@@ -707,7 +719,8 @@ export function Cat4Workbench({
                   4-Query Audit Cost Attribution ($ / 1,000 Audits)
                 </h2>
                 <p className="text-[11px] text-slate-500">
-                  Shows exact Uncached Input vs. Prefix Cache W/R vs. 5x Output vs. On-Ledger Haiku Reranker spend
+                  This audit's measured tokens split by component at list rates: uncached input, cache writes and reads,
+                  answer output, and the small-model reranker
                 </p>
               </div>
               <div className="h-72 w-full">
@@ -720,7 +733,7 @@ export function Cat4Workbench({
                     <Legend wrapperStyle={{ fontSize: '11px' }} />
                     <Bar dataKey="Uncached Input" stackId="a" fill="#f97316" />
                     <Bar dataKey="Prefix Cache W/R" stackId="a" fill="#3b82f6" />
-                    <Bar dataKey="Synthesis Output (5x)" stackId="a" fill="#1e293b" />
+                    <Bar dataKey="Answer Output" stackId="a" fill="#1e293b" />
                     <Bar dataKey="Haiku Reranker" stackId="a" fill="#10b981" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -736,7 +749,7 @@ export function Cat4Workbench({
                   Interactive Clause Citation Verifier &amp; 3-Stage Retrieval Funnel X-Ray
                 </div>
                 <h2 className="text-base font-extrabold">
-                  Click any inline citation badge [1], [2] to verify the exact character-offset clause in the 7-doc Deal Room
+                  Click any inline citation badge [1], [2] to see the contract span it points to — a citation shows where a claim came from, not that it is right
                 </h2>
               </div>
 
@@ -838,12 +851,12 @@ export function Cat4Workbench({
                         </span>
                         {activeQueryResult.citations.length > 0 ? (
                           <span className="rounded bg-emerald-100 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-900">
-                            {activeQueryResult.citations.length} Verifiable Citations (
-                            {activeQueryResult.doc_citation_coverage_pct}% Gold Docs)
+                            {activeQueryResult.citations.length} citations (
+                            {activeQueryResult.doc_citation_coverage_pct}% of expected documents cited)
                           </span>
                         ) : (
                           <span className="rounded bg-rose-100 px-2 py-0.5 font-mono text-[10px] font-bold text-rose-800">
-                            Uncited Plain Text (No DocumentBlock Grounding)
+                            No citations requested — check each claim against the contracts by hand
                           </span>
                         )}
                       </div>
@@ -1026,7 +1039,7 @@ export function Cat4Workbench({
                             Pruned <strong>{hybridQ.context_reduction_pct.toFixed(1)}%</strong> of corpus chars ·{' '}
                             {hybridQ.reranker_recall_pct !== null && (
                               <>
-                                Gold-Clause Recall: <strong>{hybridQ.reranker_recall_pct}%</strong> ·{' '}
+                                Needed clauses kept after rerank: <strong>{hybridQ.reranker_recall_pct}%</strong> ·{' '}
                               </>
                             )}
                             Haiku Rerank Cost:{' '}
@@ -1196,7 +1209,8 @@ export function Cat4Workbench({
                       CFO Deal-Room Scale Simulator ({monthlyAudits.toLocaleString()} 4-Query Audits / Month)
                     </h2>
                     <p className="text-[11px] text-slate-500">
-                      Monthly &amp; Annualized spend projection across NovaMart supplier onboarding, M&amp;A, and quarterly tax audits
+                      Straight-line projection: this audit's measured cost per 4-question audit × monthly volume. It
+                      ignores cache lifetime between audits and volume discounts, and says nothing about answer quality.
                     </p>
                   </div>
                 </div>

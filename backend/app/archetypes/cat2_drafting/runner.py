@@ -46,6 +46,7 @@ from app.models import (
     Cat2RunResponse,
     Cat2RungQuality,
     Cat2RungResult,
+    Cat2TemplateFix,
     Cat2SectionRegenRequest,
     Cat2SectionRegenResponse,
     HitlCostComparison,
@@ -59,6 +60,12 @@ CAT2_RUNG_TO_PATTERN: dict[str, str] = {
 }
 HITL_REGEN_PATTERN = "hitl_section_regen"
 CAT2_QUALITY_SUMMARY_FILE = "cat2_quality_summary.json"
+CAT2_TEMPLATE_FIX_FILE = "cat2_not_stated_summary.json"
+FIX_MODEL_FOR_RUNG = {"sonnet_templated": "sonnet", "haiku_templated": "haiku"}
+FIX_POINTER_FALLBACK = (
+    "A follow-up that lets the template write \"Not stated in source\" was measured separately; "
+    "its results are not loaded here."
+)
 REPLAY_GRADES_STALE_REASON = (
     "The stored grades are for a different version of this draft, so only the free checks are shown."
 )
@@ -332,6 +339,65 @@ def _apply_quality_claims(results: list[Cat2RungResult], portfolio: Cat2QualityP
                 f"the grader flagged an owner or deadline the source does not support in {p.action_items.flagged} "
                 f"of {p.action_items.total} action items.",
             )
+
+
+def load_cat2_template_fix() -> Cat2TemplateFix | None:
+    """replays/cat2_not_stated_summary.json (scripts/build_cat2_not_stated_summary.py); None if absent or invalid.
+    Independent of mode and preset: it describes a measured follow-up, not this run."""
+    path = Path(get_settings().replays_dir) / CAT2_TEMPLATE_FIX_FILE
+    if not path.is_file():
+        return None
+    try:
+        return Cat2TemplateFix.model_validate(json.loads(path.read_text(encoding="utf-8")))
+    except (ValueError, OSError):
+        return None
+
+
+def _fix_cell(fix: Cat2TemplateFix, arm: str, model_key: str):
+    return next((c for c in fix.cells if c.arm == arm and c.model_key == model_key), None)
+
+
+def _fix_pointer(rung_id: str, fix: Cat2TemplateFix | None) -> str:
+    m = FIX_MODEL_FOR_RUNG.get(rung_id)
+    if fix is None or m is None:
+        return FIX_POINTER_FALLBACK
+    o, n = _fix_cell(fix, "template_original", m), _fix_cell(fix, "template_not_stated", m)
+    if o is None or n is None or o.serious_per_draft is None or n.serious_per_draft is None:
+        return FIX_POINTER_FALLBACK
+    return (
+        "Measured fix, not used by the app: one added sentence letting the template write \"Not stated in source\" "
+        f"cut serious errors per draft from {o.serious_per_draft:.2f} to {n.serious_per_draft:.2f} and owners / time windows "
+        f"not found in the source from {o.owner.unsupported} / {o.time_window.unsupported} to {n.owner.unsupported} / "
+        f"{n.time_window.unsupported} of {n.action_items} action items ({n.drafts} fresh drafts per template on this model)."
+    )
+
+
+def _apply_fix_pointers(results: list[Cat2RungResult], fix: Cat2TemplateFix | None) -> None:
+    """Append the follow-up pointer to the templated rungs' owner/time-window note (note 4) when it exists."""
+    for r in results:
+        if r.status == "ok" and r.rung_id in FIX_MODEL_FOR_RUNG and len(r.architectural_notes) > 3:
+            set_note(r, 3, f"{r.architectural_notes[3]} {_fix_pointer(r.rung_id, fix)}")
+
+
+def _fix_callout(results: list[Cat2RungResult], fix: Cat2TemplateFix | None) -> str:
+    if fix is None:
+        return ""
+    ok = {r.rung_id for r in results if r.status == "ok"}
+    pairs = [(m, _fix_cell(fix, "template_original", m), _fix_cell(fix, "template_not_stated", m))
+             for rid, m in FIX_MODEL_FOR_RUNG.items() if rid in ok]
+    pairs = [(m, o, n) for m, o, n in pairs if o and n and o.serious_per_draft is not None and n.serious_per_draft is not None]
+    ub = (fix.head_to_head.get("vs_unbounded") or None)
+    ub_all = ub.all if ub else None
+    if not pairs or ub_all is None:
+        return ""
+    before = " / ".join(f"{o.serious_per_draft:.2f}" for _, o, _ in pairs)
+    after = " / ".join(f"{n.serious_per_draft:.2f}" for _, _, n in pairs)
+    names = " / ".join("Sonnet" if m == "sonnet" else "Haiku" for m, _, _ in pairs)
+    return (
+        f" A measured fix (one sentence letting the template write \"Not stated in source\") cut serious errors per "
+        f"templated draft from {before} to {after} ({names}), but the long draft was still preferred in "
+        f"{ub_all.overall.losses} of {ub_all.calls} comparisons; the app keeps the original template."
+    )
 
 
 def _quality_callout(results: list[Cat2RungResult], portfolio: Cat2QualityPortfolio | None) -> str:
@@ -733,6 +799,8 @@ async def execute_cat2_run(
             summary=quality_summary,
         )
     _apply_quality_claims(results, portfolio)
+    template_fix = load_cat2_template_fix()
+    _apply_fix_pointers(results, template_fix)
 
     # Persist partitioned traces (category / use_case / model / pattern)
     for res in results:
@@ -789,7 +857,7 @@ async def execute_cat2_run(
         f"5x Output Tax: Unbounded Sonnet 5.5 emitted {unb_out:,} output tokens "
         f"({unb_share:.1f}% of its draft's bill). Section templates & length bounds cut Sonnet 5.5 output "
         f"to {tmp_out:,} tokens (-{tmp_save:.1f}% cost on the same model), and the same template on Haiku 5.5 cuts "
-        f"draft cost by -{h_save:.1f}%." + _quality_callout(results, portfolio)
+        f"draft cost by -{h_save:.1f}%." + _quality_callout(results, portfolio) + _fix_callout(results, template_fix)
     )
 
     return Cat2RunResponse(
@@ -802,6 +870,7 @@ async def execute_cat2_run(
         haiku_batch_comparator=haiku_batch,
         output_tax_callout=callout,
         quality_portfolio=portfolio,
+        template_fix=template_fix,
     )
 
 

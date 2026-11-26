@@ -316,6 +316,93 @@ class Cat2QualityPortfolio(BaseModel):
     pairwise: dict[str, Cat2PairwiseBlock]
 
 
+class Cat2FieldClasses(BaseModel):
+    supported: int
+    not_stated: int
+    unsupported: int
+
+
+class Cat2TemplateFixCell(BaseModel):
+    arm: Literal["template_original", "template_not_stated"]
+    model_key: Literal["sonnet", "haiku"]
+    drafts: int
+    action_items: int
+    owner: Cat2FieldClasses
+    time_window: Cat2FieldClasses
+    owner_not_stated_by_preset: dict[str, int] = Field(default_factory=dict)
+    owner_supported_by_preset: dict[str, int] = Field(default_factory=dict)
+    serious_per_draft: float | None = None
+    minor_per_draft: float | None = None
+    serious_total: int | None = None
+    flagged_items_total: int | None = None
+    rubric: dict[str, float | None] = Field(default_factory=dict)
+    core_facts: Cat2Count
+    detail_facts: Cat2Count
+    cost_per_1k_docs_usd: float | None = None
+    output_tokens_mean: float | None = None
+    truncated: int = 0
+
+
+class Cat2FixRecord(BaseModel):
+    wins: int
+    losses: int
+    ties: int
+
+
+class Cat2FixHeadToHead(BaseModel):
+    overall: Cat2FixRecord
+    accuracy: Cat2FixRecord
+    usefulness_to_reader: Cat2FixRecord
+    calls: int
+    position_consistency: dict[str, int] = Field(default_factory=dict)
+
+
+class Cat2FixComparison(BaseModel):
+    all: Cat2FixHeadToHead | None = None
+    by_model: dict[str, Cat2FixHeadToHead] = Field(default_factory=dict)
+
+
+class Cat2FixActionItem(BaseModel):
+    milestone: str | None = None
+    owner: str | None = None
+    time_window: str | None = None
+    owner_class: str
+    window_class: str
+
+
+class Cat2FixExampleSlot(BaseModel):
+    slot: int
+    original: Cat2FixActionItem
+    not_stated: Cat2FixActionItem
+
+
+class Cat2FixExample(BaseModel):
+    rule: str
+    preset_id: str
+    model_key: str
+    repeat_index: int
+    items: list[Cat2FixExampleSlot] = Field(default_factory=list)
+
+
+class Cat2TemplateFix(BaseModel):
+    """Measured follow-up (replays/cat2_not_stated_summary.json): the template plus one sentence permitting
+    "Not stated in source". Shown beside the app's rungs; the app itself still uses the original template."""
+
+    schema_version: int
+    source: str
+    app_template: str
+    added_instruction: str
+    not_stated_literal: str
+    keys_version: str | None = None
+    judge_model: str
+    judge_passes_per_draft: int
+    counts: dict[str, int]
+    field_rules: list[str] = Field(default_factory=list)
+    cells: list[Cat2TemplateFixCell]
+    head_to_head: dict[str, Cat2FixComparison]
+    example: Cat2FixExample | None = None
+
+
 class Cat2RungResult(BaseModel):
     rung_id: Cat2RungId
     rung_title: str
@@ -355,6 +442,7 @@ class Cat2RunResponse(BaseModel):
     haiku_batch_comparator: FinOpsBreakdown | None = None
     output_tax_callout: str
     quality_portfolio: Cat2QualityPortfolio | None = None
+    template_fix: Cat2TemplateFix | None = None
 
 
 class Cat2SectionRegenRequest(BaseModel):
@@ -598,11 +686,185 @@ class Cat4RetrievalChunkTrace(BaseModel):
     is_expected_gold: bool = False
 
 
+class Cat4Measure(BaseModel):
+    """hits/total with an optional rate and Wilson 95% interval (None when total == 0 or not computed)."""
+
+    hits: int
+    total: int
+    rate: float | None = None
+    ci_low: float | None = None
+    ci_high: float | None = None
+
+
+class Cat4GraderError(BaseModel):
+    claim_quote: str
+    problem: str
+    source_quote: str
+
+
+class Cat4GraderVerdict(BaseModel):
+    """Blind grader's verdict on this exact answer (recorded in the quality rerun; never run live)."""
+
+    grader_model: str
+    correctness: int
+    completeness: int
+    correctness_justification: str = ""
+    completeness_justification: str = ""
+    answers_the_question: Literal["yes", "partly", "no"]
+    material_errors: list[Cat4GraderError] = Field(default_factory=list)
+    minor_error_count: int = 0
+
+
+class Cat4QuestionQuality(BaseModel):
+    question_id: str
+    question_number: int
+    key_facts: Cat4Measure
+    missed_facts: list[str] = Field(default_factory=list)
+    citations_requested: bool
+    citation_count: int | None = None
+    zero_citations: bool | None = None
+    citations_at_expected: Cat4Measure | None = None
+    expected_clause_recall: Cat4Measure | None = None
+    retrieval_recall: Cat4Measure | None = None
+    stop_reason: str | None = None
+    grader: Cat4GraderVerdict | None = None
+
+
+class Cat4AuditQuality(BaseModel):
+    questions: int
+    key_facts: Cat4Measure
+    key_facts_supplier_specific: Cat4Measure
+    citations_requested: bool
+    citations_at_expected: Cat4Measure | None = None
+    expected_clause_recall: Cat4Measure | None = None
+    zero_citation_answers: int | None = None
+    retrieval_recall: Cat4Measure | None = None
+    judged: int = 0
+    correctness_mean: float | None = None
+    completeness_mean: float | None = None
+    material_errors: int | None = None
+    answers_with_material_error: int | None = None
+
+
+class Cat4RungQuality(BaseModel):
+    """Deterministic answer-key scores (app/data/cat4_quality_keys.json) + the recorded blind grade per question."""
+
+    keys_version: str | None = None
+    audit: Cat4AuditQuality
+    questions: list[Cat4QuestionQuality] = Field(default_factory=list)
+    grader_unavailable_reason: str | None = None
+
+
+class Cat4PortfolioCell(BaseModel):
+    rung_id: str
+    runnable_in_app: bool
+    scale: int
+    sessions: int
+    answers: int
+    fact_recall: Cat4Measure
+    fact_recall_supplier_specific: Cat4Measure
+    fact_recall_non_specific: Cat4Measure
+    citations_requested: bool
+    citations_per_answer_mean: float | None = None
+    zero_citation_answers: Cat4Measure | None = None
+    expected_chunk_recall: Cat4Measure | None = None
+    citations_at_expected: Cat4Measure | None = None
+    cited_support: Cat4Measure | None = None
+    contaminated_answers: Cat4Measure
+    value_contaminated_answers: Cat4Measure
+    value_contaminated_unattributed_answers: Cat4Measure | None = None
+    citation_contaminated_answers: Cat4Measure
+    exposure_answers: Cat4Measure | None = None
+    recall_after_bm25: Cat4Measure | None = None
+    recall_after_rerank: Cat4Measure | None = None
+    distractors_selected: Cat4Measure | None = None
+    backfilled: int | None = None
+    invalid_picks: int | None = None
+    judged: int = 0
+    correctness_mean: float | None = None
+    completeness_mean: float | None = None
+    material_errors: int | None = None
+    minor_errors: int | None = None
+    answers_with_material_error: Cat4Measure | None = None
+    answers_the_question: dict[str, int] = Field(default_factory=dict)
+    cost_per_question_billed_usd: float | None = None
+    cost_per_question_cold_usd: float | None = None
+    cost_per_question_warm_usd: float | None = None
+    cost_per_question_billed_sonnet_usd: float | None = None
+    cost_per_question_billed_haiku_usd: float | None = None
+    cache_write_premium_usd: float = 0.0
+
+
+class Cat4BreakEven(BaseModel):
+    a: str
+    b: str
+    premium_a_usd: float
+    per_question_a_usd: float
+    premium_b_usd: float
+    per_question_b_usd: float
+    n_star: float | None = None
+    questions: int | None = None
+    verdict: str
+
+
+class Cat4PortfolioQuestion(BaseModel):
+    rung_id: str
+    scale: int
+    question: str
+    answers: int
+    fact_recall: Cat4Measure
+    citations_per_answer_mean: float | None = None
+    zero_citation_answers: Cat4Measure | None = None
+    citations_at_expected: Cat4Measure | None = None
+    expected_chunk_recall: Cat4Measure | None = None
+    recall_after_rerank: Cat4Measure | None = None
+    correctness_mean: float | None = None
+    completeness_mean: float | None = None
+    material_errors: int | None = None
+    cost_per_question_billed_usd: float | None = None
+
+
+class Cat4GoldenMapped(BaseModel):
+    selection_rule: str
+    run_ids: dict[str, str] = Field(default_factory=dict)
+    questions: list[Cat4PortfolioQuestion] = Field(default_factory=list)
+
+
+class Cat4QualityPortfolio(BaseModel):
+    """Pooled quality-rerun picture (replays/cat4_quality_summary.json): 4 versions x 2 corpus sizes."""
+
+    schema_version: int = 1
+    source: str
+    source_file: str | None = None
+    judgements_file: str | None = None
+    keys_version: str | None = None
+    judge_model: str | None = None
+    judge_passes: int = 1
+    scope_line: str | None = None
+    record_count: int
+    ok_sessions: int
+    error_records: int = 0
+    superseded_records: int = 0
+    answers_scored: int
+    answers_judged: int
+    sessions_per_cell: int | None = None
+    questions_per_session: int
+    scales: list[int] = Field(default_factory=list)
+    corpus: dict[str, dict[str, int]] = Field(default_factory=dict)
+    synth_max_tokens: int | None = None
+    matrix_complete: bool = True
+    cells: list[Cat4PortfolioCell] = Field(default_factory=list)
+    break_even: dict[str, list[Cat4BreakEven]] = Field(default_factory=dict)
+    golden_mapped: Cat4GoldenMapped | None = None
+
+
 class Cat4QueryResult(BaseModel):
     question_id: str
     question_number: int
     topic_tag: str
     question: str
+    question_as_asked: str | None = None
+    stop_reason: str | None = None
     expected_doc_ids: list[str] = Field(default_factory=list)
     expected_chunk_ids: list[str] = Field(default_factory=list)
     answer_markdown: str
@@ -616,6 +878,7 @@ class Cat4QueryResult(BaseModel):
     warm_query_cost_usd: float
     reranker_finops: FinOpsBreakdown | None = None
     reranker_latency_ms: int = 0
+    reranker_stop_reason: str | None = None
     retrieval_funnel: list[Cat4RetrievalChunkTrace] = Field(default_factory=list)
     bm25_recall_pct: float | None = None
     reranker_recall_pct: float | None = None
@@ -654,6 +917,8 @@ class Cat4RungSummary(BaseModel):
     avg_reranker_recall_pct: float | None = None
     total_latency_ms: int = 0
     architectural_notes: list[str] = Field(default_factory=list)
+    quality: Cat4RungQuality | None = None
+    quality_unavailable_reason: str | None = None
 
 
 class Cat4RunRequest(BaseModel):
@@ -681,6 +946,8 @@ class Cat4RunResponse(BaseModel):
     approx_corpus_tokens: int
     results: list[Cat4RungSummary]
     rag_callout: str
+    billing_note: str | None = None
+    quality_portfolio: Cat4QualityPortfolio | None = None
 
 
 class Cat4AdhocQueryRequest(BaseModel):
@@ -701,6 +968,7 @@ class Cat4AdhocQueryResponse(BaseModel):
     preset_id: str
     question: str
     results: list[Cat4RungSummary]
+    quality_portfolio: Cat4QualityPortfolio | None = None
 
 
 # --- Category 5: Autonomous Process Orchestration (3-Way ERP Invoice Agent) ---

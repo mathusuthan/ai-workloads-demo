@@ -45,6 +45,8 @@ from app.models import (
     Cat4AdhocQueryRequest,
     Cat4AdhocQueryResponse,
     Cat4AnswerSegment,
+    Cat4PortfolioCell,
+    Cat4QualityPortfolio,
     Cat4CitationSpan,
     Cat4QueryResult,
     Cat4RetrievalChunkTrace,
@@ -63,6 +65,10 @@ CAT4_RUNG_TO_PATTERN: dict[str, str] = {
     "hybrid_rag_rerank_citations": "hybrid_bm25_haiku_rerank_citations",
 }
 RERANKER_PATTERN = "haiku_cross_chunk_reranker"
+# Synthesis output cap. 2,048 truncated 3 of 64 answers in the quality-rerun pilot (the live path raises on
+# truncation), so the app and the rerun both use 4,096. The reranker keeps 800.
+CAT4_SYNTH_MAX_TOKENS = 4096
+CAT4_RERANK_MAX_TOKENS = 800
 
 
 def _preset_map() -> dict[str, dict[str, Any]]:
@@ -85,27 +91,33 @@ def _rung_metadata(rung_id: str) -> tuple[str, str, str | None, list[str]]:
             [
                 # replaced with the measured prompt size by _apply_measured_claims
                 "Sends all 7 Deal-Room documents as plain uncached user text on every query ($2.00/M input).",
-                "Produces zero verifiable Document Block citations — analysts must manually Cmd+F across 7 agreements to verify claims.",
+                "Requests no citations — a reviewer has to search the 7 agreements to check each claim.",
+                # replaced with this audit's measured answer quality by _apply_measured_claims
+                "Answer quality for this audit is scored against the answer key in the results panel.",
             ],
         )
     if rung_id == "cached_full_corpus_citations":
         return (
             "2. Cached Full Corpus + Native Citations",
-            "Lever 1: 95% Cache Reads + Citations",
+            "Lever 1: Cache Reads + Citations",  # measured cache-read share added by _apply_measured_claims
             None,
             [
-                "Attaches cache_control={'type': 'ephemeral'} on the 7th DocumentBlock: Q1 writes prefix ($2.50/M), Q2+ hit $0.10/M cache reads.",
-                "Native Anthropic Citations return character-exact doc spans without chunking or missing subtle override clauses.",
+                "Attaches cache_control={'type': 'ephemeral'} on the 7th DocumentBlock: the first question writes the prefix ($2.50/M), later questions read it ($0.10/M).",
+                "Native citations point at exact document spans a reviewer can check; a citation shows where a claim came from, not that the claim is right.",
+                # replaced with this audit's measured answer quality by _apply_measured_claims
+                "Answer quality for this audit is scored against the answer key in the results panel.",
             ],
         )
     return (
         "3. Hybrid BM25 + Haiku Rerank + Citations",
-        "Lever 2: Token Pruning + Citations",  # measured pruning % added by _apply_measured_claims
+        "Lever 2: Retrieval + Citations",  # measured share of corpus not sent added by _apply_measured_claims
         "claude-haiku-5-5",
         [
-            "Deterministic BM25 retrieves top-10 of 28 clauses; Haiku 5.5 ($0.10/M) reranks to top-5 decisive chunks for Sonnet synthesis.",
+            "Deterministic BM25 retrieves top-10 of 28 clauses; Haiku 5.5 ($0.10/M) reranks them to 5 chunks for Sonnet synthesis.",
             # replaced with the measured single-query saving by _apply_measured_claims
             "100% of Haiku reranker spend is included here, so its cost comparison with Rung 1 is like-for-like.",
+            # replaced with this audit's measured answer quality by _apply_measured_claims
+            "The answering model sees only the retrieved chunks, so a clause retrieval misses can't be cited or used.",
         ],
     )
 
@@ -249,7 +261,7 @@ def persist_cat4_trace(
         system_instruction=system_instruction,
         parameters=request_params
         or {
-            "max_tokens": 2048,
+            "max_tokens": CAT4_SYNTH_MAX_TOKENS,
             "endpoint": "messages.create",
             "thinking": {"type": "between_tools"},
         },
@@ -352,10 +364,44 @@ def finalize_cat4_rung_summary(
     )
 
 
-def _apply_measured_claims(results: list[Cat4RungSummary]) -> None:
-    """Rewrite result-dependent rung badges/notes with numbers measured on this audit."""
+def _frac(m: Any) -> str:
+    return f"{m.hits}/{m.total}" if m is not None else "n/a"
+
+
+def _portfolio_cell(portfolio: Cat4QualityPortfolio | None, rung_id: str, scale: int) -> Cat4PortfolioCell | None:
+    if portfolio is None:
+        return None
+    return next((c for c in portfolio.cells if c.rung_id == rung_id and c.scale == scale), None)
+
+
+def _audit_quality_text(res: Cat4RungSummary) -> str | None:
+    """'On this audit: …' sentence from the rung's quality block; None when unscored."""
+    q = res.quality
+    if q is None:
+        return None
+    a = q.audit
+    parts = [f"stated {_frac(a.key_facts)} key contract facts"]
+    if a.citations_requested and a.citations_at_expected is not None:
+        parts.append(f"{_frac(a.citations_at_expected)} citations pointed at the expected clauses")
+    if a.retrieval_recall is not None:
+        parts.append(f"retrieval found {_frac(a.retrieval_recall)} expected clauses")
+    if a.judged:
+        parts.append(
+            f"the blind grader gave {a.correctness_mean:.2f}/5 for correctness and found a serious error in "
+            f"{a.answers_with_material_error}/{a.judged} answers"
+        )
+    return f"On this audit it {', '.join(parts[:-1])}{', and ' if len(parts) > 1 else ''}{parts[-1]}."
+
+
+def _apply_measured_claims(
+    results: list[Cat4RungSummary],
+    portfolio: Cat4QualityPortfolio | None = None,
+) -> None:
+    """Rewrite result-dependent rung badges/notes with numbers measured on this audit (and the rerun)."""
     ok = {r.rung_id: r for r in results if r.status == "ok" and r.queries}
-    naive, hybrid = ok.get("naive_full_corpus"), ok.get("hybrid_rag_rerank_citations")
+    naive = ok.get("naive_full_corpus")
+    cached = ok.get("cached_full_corpus_citations")
+    hybrid = ok.get("hybrid_rag_rerank_citations")
     if naive:
         per_q = round(naive.total_uncached_input_tokens / len(naive.queries))
         set_note(
@@ -364,9 +410,15 @@ def _apply_measured_claims(results: list[Cat4RungSummary]) -> None:
             f"Sends all 7 Deal-Room documents ({per_q:,} prompt tok per query) as plain uncached user text "
             "on every query ($2.00/M input).",
         )
+    if cached:
+        prompt = cached.total_uncached_input_tokens + cached.total_cache_creation_tokens + cached.total_cache_read_tokens
+        if prompt > 0 and cached.total_cache_read_tokens > 0:
+            cached.badge_text = (
+                f"Lever 1: {fmt_pct(cached.total_cache_read_tokens / prompt * 100)} of Prompt Tokens from Cache + Citations"
+            )
     if hybrid:
         avg_red = sum(q.context_reduction_pct for q in hybrid.queries) / len(hybrid.queries)
-        hybrid.badge_text = f"Lever 2: ~{fmt_pct(avg_red)} Token Pruning + Citations"
+        hybrid.badge_text = f"Lever 2: ~{fmt_pct(avg_red)} of Corpus Not Sent + Citations"
         synth_prompt = round(
             sum(q.finops.input_tokens + q.finops.cache_creation_tokens + q.finops.cache_read_tokens for q in hybrid.queries)
             / len(hybrid.queries)
@@ -374,8 +426,8 @@ def _apply_measured_claims(results: list[Cat4RungSummary]) -> None:
         set_note(
             hybrid,
             0,
-            "Deterministic BM25 retrieves top-10 of 28 clauses; Haiku 5.5 ($0.10/M) reranks to top-5 decisive "
-            f"chunks for Sonnet synthesis (~{synth_prompt:,}-tok synthesis prompt).",
+            "Deterministic BM25 retrieves top-10 of 28 clauses; Haiku 5.5 ($0.10/M) reranks them to 5 chunks "
+            f"for Sonnet synthesis (~{synth_prompt:,}-tok synthesis prompt).",
         )
         cut = pct_cut(naive.single_query_cold_per_1k_usd, hybrid.single_query_cold_per_1k_usd) if naive else None
         if cut is not None:
@@ -384,6 +436,20 @@ def _apply_measured_claims(results: list[Cat4RungSummary]) -> None:
                 1,
                 f"100% of Haiku reranker spend is included here — cuts single cold-query cost {fmt_pct(cut)} vs Rung 1.",
             )
+    # note 2 of every rung: this audit's quality (+ the rerun at the larger corpus for the two levers)
+    for res in (naive, cached, hybrid):
+        if res is None:
+            continue
+        text = _audit_quality_text(res)
+        if text is None:
+            continue
+        cell = _portfolio_cell(portfolio, res.rung_id, 3)
+        if cell is not None and cell.judged and cell.answers_with_material_error is not None:
+            extra = f" In the rerun with a 3× corpus (two other suppliers' look-alike contracts added), {cell.answers_with_material_error.hits}/{cell.judged} answers had a serious error"
+            if cell.recall_after_rerank is not None:
+                extra += f" and retrieval kept {fmt_pct((cell.recall_after_rerank.rate or 0) * 100)} of the expected clauses after reranking"
+            text += extra + "."
+        set_note(res, 2, text)
 
 
 def _apply_cross_rung_savings(results: list[Cat4RungSummary]) -> None:
@@ -425,6 +491,7 @@ async def _run_live_cat4_query_for_rung(
 
     rerank_finops: FinOpsBreakdown | None = None
     rerank_latency = 0
+    rerank_stop: str | None = None
     rerank_payload_text: str | None = None
     rerank_raw_structured: dict[str, Any] | None = None
     funnel: list[Cat4RetrievalChunkTrace] = []
@@ -449,9 +516,10 @@ async def _run_live_cat4_query_for_rung(
             system_prompt=get_cat4_haiku_reranker_system_prompt(),
             schema=RERANK_JSON_SCHEMA,
             api_key=api_key,
-            max_tokens=800,
+            max_tokens=CAT4_RERANK_MAX_TOKENS,
         )
         rerank_latency = rerank_raw.latency_ms
+        rerank_stop = rerank_raw.stop_reason
         rerank_finops = compute_run_finops(
             model_id=rerank_raw.model_id,
             input_tokens=rerank_raw.input_tokens,
@@ -476,7 +544,7 @@ async def _run_live_cat4_query_for_rung(
         uncached_corpus_text=uncached_text,
         use_prefix_cache=use_cache,
         api_key=api_key,
-        max_tokens=2048,
+        max_tokens=CAT4_SYNTH_MAX_TOKENS,
     )
     fin = compute_run_finops(
         model_id=synth_raw.model_id,
@@ -517,6 +585,8 @@ async def _run_live_cat4_query_for_rung(
         question_number=int(q_spec["question_number"]),
         topic_tag=str(q_spec["topic_tag"]),
         question=q_text,
+        question_as_asked=q_text,
+        stop_reason=synth_raw.stop_reason,
         expected_doc_ids=expected_docs,
         expected_chunk_ids=expected_chunks,
         answer_markdown=synth_raw.raw_text,
@@ -530,6 +600,7 @@ async def _run_live_cat4_query_for_rung(
         warm_query_cost_usd=warm_cost,
         reranker_finops=rerank_finops,
         reranker_latency_ms=rerank_latency,
+        reranker_stop_reason=rerank_stop,
         retrieval_funnel=funnel,
         bm25_recall_pct=bm25_recall,
         reranker_recall_pct=rerank_recall,
@@ -543,7 +614,8 @@ async def _run_live_cat4_query_for_rung(
         "question": q_text,
         "model_id": synth_raw.model_id,
         "latency_ms": synth_raw.latency_ms,
-        "stop_reason": synth_raw.stop_reason or "end_turn",
+        "stop_reason": synth_raw.stop_reason,
+        "max_tokens": CAT4_SYNTH_MAX_TOKENS,
         "input_tokens": synth_raw.input_tokens,
         "output_tokens": synth_raw.output_tokens,
         "cache_creation_tokens": synth_raw.cache_creation_tokens,
@@ -554,6 +626,7 @@ async def _run_live_cat4_query_for_rung(
         "context_chars_sent": ctx_chars_sent,
         "context_reduction_pct": reduction_pct,
         "reranker_model_id": rerank_finops.model_id if rerank_finops else None,
+        "reranker_stop_reason": rerank_stop,
         "reranker_latency_ms": rerank_latency,
         "reranker_input_tokens": rerank_finops.input_tokens if rerank_finops else 0,
         "reranker_output_tokens": rerank_finops.output_tokens if rerank_finops else 0,
@@ -660,6 +733,8 @@ def _build_cat4_summary_from_replay(
                 question_number=int(rq["question_number"]),
                 topic_tag=str(rq["topic_tag"]),
                 question=str(rq["question"]),
+                question_as_asked=rq.get("question_as_asked") or str(rq["question"]),
+                stop_reason=rq.get("stop_reason"),
                 expected_doc_ids=expected_docs,
                 expected_chunk_ids=expected_chunks,
                 answer_markdown=str(rq["answer_markdown"]),
@@ -673,6 +748,7 @@ def _build_cat4_summary_from_replay(
                 warm_query_cost_usd=warm_cost,
                 reranker_finops=rerank_fin,
                 reranker_latency_ms=int(rq.get("reranker_latency_ms") or 0),
+                reranker_stop_reason=rq.get("reranker_stop_reason"),
                 retrieval_funnel=[
                     Cat4RetrievalChunkTrace(**f) for f in (rq.get("retrieval_funnel") or [])
                 ],
@@ -684,6 +760,13 @@ def _build_cat4_summary_from_replay(
         )
 
     return finalize_cat4_rung_summary(rung_id=rung_id, model_id=used_model, queries=q_results)
+
+
+def _rollup_stop_reason(stops: list[str | None]) -> str | None:
+    """end_turn only when every query ended normally; otherwise the first other recorded stop reason."""
+    if stops and all(s == "end_turn" for s in stops):
+        return "end_turn"
+    return next((s for s in stops if s != "end_turn"), None)
 
 
 def _persist_cat4_rung_traces(
@@ -737,8 +820,9 @@ def _persist_cat4_rung_traces(
             "prefix_cache_enabled": res.rung_id == "cached_full_corpus_citations",
             "native_document_citations": res.rung_id != "naive_full_corpus",
             "queries": len(res.queries),
+            "max_tokens": CAT4_SYNTH_MAX_TOKENS,
         },
-        stop_reason="end_turn",
+        stop_reason=_rollup_stop_reason([q.stop_reason for q in res.queries]),
         extra_metadata={"source_endpoint": source_endpoint, "rung_id": res.rung_id},
     )
     if res.rung_id == "hybrid_rag_rerank_citations":
@@ -771,14 +855,88 @@ def _persist_cat4_rung_traces(
                         ]
                     },
                     request_params={
-                        "max_tokens": 800,
+                        "max_tokens": CAT4_RERANK_MAX_TOKENS,
                         "thinking": {"type": "disabled"},
                         "output_config": {"format": {"type": "json_schema"}},
                     },
                     json_schema=RERANK_JSON_SCHEMA,
-                    stop_reason="end_turn",
+                    stop_reason=q.reranker_stop_reason,
                     extra_metadata={"source_endpoint": source_endpoint, "question_id": q.question_id},
                 )
+
+
+def build_rung_quality(*args: Any, **kwargs: Any):
+    """Lazy import: app.archetypes.cat4_rag.quality imports quality_rerun, which imports this module's builders."""
+    from app.archetypes.cat4_rag.quality import build_rung_quality as _impl
+
+    return _impl(*args, **kwargs)
+
+
+def load_cat4_quality_portfolio() -> Cat4QualityPortfolio | None:
+    from app.archetypes.cat4_rag.quality import load_cat4_quality_portfolio as _impl
+
+    return _impl()
+
+
+LIVE_GRADER_REASON = (
+    "The blind grader is not run live (each grade is a paid call); recorded runs carry one grade per answer."
+)
+
+
+def _replay_billing_note(preset_trace: dict[str, Any]) -> str | None:
+    """Honest billing note when the recorded cached rung's first question READ a cache another audit wrote."""
+    qs = (preset_trace.get("rungs") or {}).get("cached_full_corpus_citations") or []
+    if not qs:
+        return None
+    first = qs[0]
+    if int(first.get("cache_creation_tokens") or 0) == 0 and int(first.get("cache_read_tokens") or 0) > 0:
+        return (
+            "Recorded billing: this audit ran in the same session right after the other audit, so its first question "
+            "read the document cache that audit had written — no cache write was billed here. The cold-audit figures "
+            "model a fresh cache write for this audit."
+        )
+    return None
+
+
+def _cat4_callout(
+    naive: Cat4RungSummary | None,
+    cached: Cat4RungSummary | None,
+    hybrid: Cat4RungSummary | None,
+    *,
+    total_chars: int,
+    portfolio: Cat4QualityPortfolio | None,
+) -> str:
+    if not (naive and cached and hybrid):
+        return (
+            "Category 4 contrasts Uncached Full-Corpus Stuffing vs. Document-Block Prefix Caching + Native Citations "
+            "vs. Hybrid BM25 + Haiku 5.5 Reranking + Native Citations."
+        )
+    text = (
+        f"4-question deal-room audit (7 documents · {round(total_chars / 2.4):,} est. tok): uncached full-corpus "
+        f"stuffing costs ${naive.cost_per_1k_audits_cold_usd:.2f}/1k audits and returns no citations. Caching the "
+        f"corpus with native citations costs ${cached.cost_per_1k_audits_cold_usd:.2f}/1k from a cold cache "
+        f"(${cached.cost_per_1k_audits_warm_usd:.2f}/1k warm). BM25 + Haiku rerank sends "
+        f"~{sum(q.context_reduction_pct for q in hybrid.queries) / len(hybrid.queries):.0f}% less of the corpus to the "
+        f"answering model for ${hybrid.cost_per_1k_audits_cold_usd:.2f}/1k (Haiku rerank included)."
+    )
+    qs = [(r, r.quality) for r in (naive, cached, hybrid)]
+    if all(q is not None and q.audit.judged for _, q in qs):
+        text += (
+            " Answer quality on this audit (key facts stated · grader correctness · answers with a serious error): "
+            + "; ".join(
+                f"Rung {i + 1} {_frac(q.audit.key_facts)} · {q.audit.correctness_mean:.2f}/5 · {q.audit.answers_with_material_error}/{q.audit.judged}"
+                for i, (_, q) in enumerate(qs)
+            )
+            + "."
+        )
+    c3 = _portfolio_cell(portfolio, "cached_full_corpus_citations", 3)
+    h3 = _portfolio_cell(portfolio, "hybrid_rag_rerank_citations", 3)
+    if c3 and h3 and c3.answers_with_material_error and h3.answers_with_material_error:
+        text += (
+            f" In the rerun with a 3× corpus, {c3.answers_with_material_error.hits}/{c3.judged} cached full-corpus "
+            f"answers had a serious error vs {h3.answers_with_material_error.hits}/{h3.judged} with retrieval."
+        )
+    return text
 
 
 async def execute_cat4_run(
@@ -812,14 +970,21 @@ async def execute_cat4_run(
                     status_code=404,
                     detail=f"Replay trace missing rung `{rung_id}` on {preset['id']}.",
                 )
-            results.append(
-                _build_cat4_summary_from_replay(
-                    rung_id=rung_id,
-                    preset=preset,
-                    raw_queries=r_queries,
-                    total_corpus_chars=total_chars,
-                )
+            summary = _build_cat4_summary_from_replay(
+                rung_id=rung_id,
+                preset=preset,
+                raw_queries=r_queries,
+                total_corpus_chars=total_chars,
             )
+            summary.quality, summary.quality_unavailable_reason = build_rung_quality(
+                summary.queries,
+                rung_id=rung_id,
+                preset_id=preset["id"],
+                judgements=[rq.get("judgement") for rq in r_queries],
+                grader_unavailable_reason="This recorded run carries no grade.",
+            )
+            results.append(summary)
+        billing_note = _replay_billing_note(preset_trace)
         mode_used = "replay"
     else:
         creds = credit_shield.resolve_live_credentials(
@@ -839,6 +1004,10 @@ async def execute_cat4_run(
                     total_corpus_chars=total_chars,
                     api_key=creds.anthropic_api_key or "",
                 )
+                summary.quality, summary.quality_unavailable_reason = build_rung_quality(
+                    summary.queries, rung_id=rid, preset_id=preset["id"], judgements=None,
+                    grader_unavailable_reason=LIVE_GRADER_REASON,
+                )
                 return summary
             except Exception as exc:
                 return finalize_cat4_rung_summary(
@@ -853,10 +1022,12 @@ async def execute_cat4_run(
         if creds.uses_server_budget:
             total_spend = sum(r.cold_audit_cost_usd for r in results if r.status == "ok")
             credit_shield.record_server_spend(total_spend)
+        billing_note = None
         mode_used = "live"
 
+    portfolio = load_cat4_quality_portfolio()
     _apply_cross_rung_savings(results)
-    _apply_measured_claims(results)
+    _apply_measured_claims(results, portfolio)
 
     for res in results:
         _persist_cat4_rung_traces(
@@ -877,21 +1048,7 @@ async def execute_cat4_run(
         (r for r in results if r.rung_id == "hybrid_rag_rerank_citations" and r.status == "ok"),
         None,
     )
-    if naive and cached and hybrid:
-        callout = (
-            f"4-Query Deal-Room Audit FinOps (7 Docs · {round(total_chars / 2.4):,} est. tok): "
-            f"Uncached Full-Corpus Stuffing costs ${naive.cost_per_1k_audits_cold_usd:.2f}/1k audits with 0 verifiable citations. "
-            f"Prefix Caching + Native Citations cuts 4-query audit spend to ${cached.cost_per_1k_audits_cold_usd:.2f}/1k cold "
-            f"(${cached.cost_per_1k_audits_warm_usd:.2f}/1k warm, -{cached.savings_vs_naive_cold_pct:.1f}% cold). "
-            f"Hybrid BM25 + Haiku Rerank prunes ~{hybrid.queries[0].context_reduction_pct:.0f}% of irrelevant clauses for "
-            f"${hybrid.single_query_cold_per_1k_usd:.2f}/1k on a single cold query (-{100 - (hybrid.single_query_cold_per_1k_usd / max(0.001, naive.single_query_cold_per_1k_usd)) * 100:.1f}% vs naive) "
-            f"and ${hybrid.cost_per_1k_audits_cold_usd:.2f}/1k across the 4-query audit (${hybrid.reranker_cost_usd * 1000:.2f}/1k Haiku rerank included)!"
-        )
-    else:
-        callout = (
-            "Category 4 contrasts Uncached Full-Corpus Stuffing vs. Document-Block Prefix Caching + Native Citations "
-            "vs. Hybrid BM25 + Haiku 5.5 Reranking + Native Citations."
-        )
+    callout = _cat4_callout(naive, cached, hybrid, total_chars=total_chars, portfolio=portfolio)
 
     return Cat4RunResponse(
         mode_used=mode_used,  # type: ignore[arg-type]
@@ -905,6 +1062,8 @@ async def execute_cat4_run(
         approx_corpus_tokens=max(1, round(total_chars / 2.4)),
         results=results,
         rag_callout=callout,
+        billing_note=billing_note,
+        quality_portfolio=portfolio,
     )
 
 
@@ -956,11 +1115,16 @@ async def execute_cat4_adhoc_query(
                 total_corpus_chars=total_chars,
                 api_key=creds.anthropic_api_key or "",
             )
-            return finalize_cat4_rung_summary(
+            summary = finalize_cat4_rung_summary(
                 rung_id=rid,
                 model_id=q_res.finops.model_id,
                 queries=[q_res],
             )
+            summary.quality, summary.quality_unavailable_reason = build_rung_quality(
+                summary.queries, rung_id=rid, preset_id=req.preset_id, judgements=None,
+                grader_unavailable_reason=LIVE_GRADER_REASON,
+            )
+            return summary
         except Exception as exc:
             return finalize_cat4_rung_summary(
                 rung_id=rid,
@@ -971,8 +1135,9 @@ async def execute_cat4_adhoc_query(
             )
 
     results = list(await asyncio.gather(*(_safe_adhoc(r) for r in req.rungs)))
+    portfolio = load_cat4_quality_portfolio()
     _apply_cross_rung_savings(results)
-    _apply_measured_claims(results)
+    _apply_measured_claims(results, portfolio)
 
     if creds.uses_server_budget:
         total_spend = sum(r.cold_audit_cost_usd for r in results if r.status == "ok")
@@ -993,4 +1158,5 @@ async def execute_cat4_adhoc_query(
         preset_id=req.preset_id,
         question=q_text,
         results=results,
+        quality_portfolio=portfolio,
     )

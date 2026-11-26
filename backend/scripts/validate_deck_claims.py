@@ -3,7 +3,7 @@
 Reads these sources and writes a JSON + Markdown report:
 
 1. backend/traces/            -> de-duplication audit (how many traces are distinct runs)
-2. backend/replays/*.json     -> the canonical dataset for Categories 1, 2, 4 and 5: one record per (item x rung),
+2. backend/replays/*.json     -> the canonical dataset for Categories 1, 2 and 5: one record per (item x rung),
                                  with per-call token counts and the model that served each call
 3. backend/experiments/cat3_quality/runs.jsonl (read-only) + backend/replays/cat3_quality_summary.json
                                  (fallback analysis/cat3_quality_rerun.json)
@@ -13,7 +13,15 @@ Reads these sources and writes a JSON + Markdown report:
 4. backend/replays/cat2_quality_summary.json (fallback analysis/cat2_quality.json)
                               -> Category 2: blind LLM-judge quality of the 12 stored drafts (rubric, serious errors,
                                  head-to-head preference) and the deterministic fact key
-5. backend/experiments/cat6_fair_rerun/runs.jsonl (read-only) + analysis/cat6_fair_rerun.json
+   backend/replays/cat2_not_stated_summary.json (fallback analysis/cat2_not_stated.json)
+                              -> Category 2 follow-up: the template plus one "Not stated in source" sentence, 48 fresh
+                                 drafts (shown beside the app's template; it is not the app's template)
+5. backend/experiments/cat4_quality/runs.jsonl (read-only) + backend/replays/cat4_quality_summary.json
+                                 (fallback analysis/cat4_quality_rerun.json)
+                              -> Category 4: all quality-rerun records (4 rungs x 2 corpus sizes x 3 sessions of
+                                 8 questions = 192 answers) for cost and tokens; answer-key and blind-grader quality
+                                 and the break-even tables from the summary (falls back to the golden replays)
+6. backend/experiments/cat6_fair_rerun/runs.jsonl (read-only) + analysis/cat6_fair_rerun.json
                               -> Category 6: all fair-rerun records (4 arms x 3 incidents x 5 repeats);
                                  verdicts from the summary's `rescored` section (current sandbox),
                                  falling back to the as-recorded verdicts in the JSONL
@@ -30,6 +38,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import statistics as st
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -43,8 +52,18 @@ CAT3_QUALITY_SUMMARY = REPLAYS / "cat3_quality_summary.json"
 CAT3_QUALITY_ANALYSIS = OUT_DIR / "cat3_quality_rerun.json"
 CAT2_QUALITY_SUMMARY = REPLAYS / "cat2_quality_summary.json"
 CAT2_QUALITY_ANALYSIS = OUT_DIR / "cat2_quality.json"
+CAT2_FIX_SUMMARY = REPLAYS / "cat2_not_stated_summary.json"
+CAT2_FIX_ANALYSIS = OUT_DIR / "cat2_not_stated.json"
+CAT2_FIX_ARMS = ["template_original", "template_not_stated"]
 CAT2_DIMS = ["factual_accuracy", "coverage", "clarity", "actionability", "concision"]
 CAT2_VERDICTS = ["derived_correct", "derived_incorrect", "not_in_source_unverifiable", "not_a_claim", "no_majority"]
+CAT4_RERUN = BACKEND / "experiments" / "cat4_quality" / "runs.jsonl"
+CAT4_QUALITY_SUMMARY = REPLAYS / "cat4_quality_summary.json"
+CAT4_QUALITY_ANALYSIS = OUT_DIR / "cat4_quality_rerun.json"
+CAT4_SYNTH_MAX_TOKENS = 4096  # records at another synthesis cap are superseded (the 2,048-cap pilot)
+CAT4_APP_MAX_TOKENS_BEFORE = 2048
+CAT4_RUNGS = ["naive_full_corpus", "cached_full_corpus_citations", "hybrid_rag_rerank_citations", "cached_rerank_hybrid"]
+CAT4_SCALES = [1, 3]
 CAT6_RERUN = BACKEND / "experiments" / "cat6_fair_rerun" / "runs.jsonl"
 CAT6_RERUN_SUMMARY = OUT_DIR / "cat6_fair_rerun.json"
 CAT6_ARMS = ["shared_bus_original", "shared_bus_matched_gate", "isolated_cached_gate", "tiered_gate"]
@@ -412,6 +431,55 @@ def cat2_quality():
         return None, {"file": None, "reason": "neither backend/replays/cat2_quality_summary.json nor analysis/cat2_quality.json could be read"}
 
 
+def cat2_fix():
+    """Category 2 follow-up ("Not stated in source" sentence): (normalised data, source info) or (None, reason)."""
+    def cell_out(arm, m, drafts, items, owner, window, serious, rubric, cost, detail):
+        return {"arm": arm, "model": m, "drafts": drafts, "items": items, "owner": owner, "window": window, "serious": serious,
+                "rubric": rubric, "cost_per_1k": cost, "detail": detail}
+    try:
+        d = json.loads(CAT2_FIX_SUMMARY.read_text())
+        cells = {(c["arm"], c["model_key"]): cell_out(c["arm"], c["model_key"], c["drafts"], c["action_items"], c["owner"], c["time_window"],
+                                                      c["serious_per_draft"], c["rubric"], c["cost_per_1k_docs_usd"], c["detail_facts"]) for c in d["cells"]}
+        h2h = {k: {dim: d["head_to_head"][k]["all"][dim] for dim in ("overall", "accuracy", "usefulness_to_reader")} | {"calls": d["head_to_head"][k]["all"]["calls"]}
+               for k in ("vs_original", "vs_unbounded")}
+        return {"cells": cells, "h2h": h2h, "added_instruction": d["added_instruction"]}, {
+            "file": "backend/replays/cat2_not_stated_summary.json", "drafts": d["counts"]["drafts"], "per_cell": d["counts"]["drafts_per_document_model_template"],
+            "judge_calls": d["counts"]["judge_ok_calls"], "judge_model": d["judge_model"], "passes": d["judge_passes_per_draft"]}
+    except (OSError, KeyError, TypeError, json.JSONDecodeError):
+        pass
+    try:
+        d = json.loads(CAT2_FIX_ANALYSIS.read_text())
+        cells = {}
+        for g in d["groups"].values():
+            cells[(g["arm"], g["model_key"])] = cell_out(g["arm"], g["model_key"], g["drafts"], g["action_items"], g["owner"], g["time_window"],
+                                                         g["serious_per_draft"]["mean"], {k: v["mean"] for k, v in g["rubric"].items()},
+                                                         g["cost_per_1k_docs_usd"]["mean"], g["detail_facts"])
+        def rec(b):
+            return {dim: {"wins": b[dim]["not_stated_wins"], "losses": b[dim]["other_wins"], "ties": b[dim]["ties"]} for dim in ("overall", "accuracy", "usefulness_to_reader")} | {"calls": b["calls"]}
+        h2h = {"vs_original": rec(d["pairwise"]["matched"]["all"]), "vs_unbounded": rec(d["pairwise"]["vs_unbounded"]["all"])}
+        return {"cells": cells, "h2h": h2h, "added_instruction": d["design"]["added_instruction"]}, {
+            "file": "analysis/cat2_not_stated.json", "drafts": d["drafts_data_quality"]["ok_drafts"], "per_cell": d["design"]["repeats"],
+            "judge_calls": d["judge_data_quality"]["ok_calls"], "judge_model": d["design"]["judge_model"], "passes": d["design"]["judge_passes_per_draft"]}
+    except (OSError, KeyError, TypeError, json.JSONDecodeError):
+        return None, {"file": None, "reason": "neither backend/replays/cat2_not_stated_summary.json nor analysis/cat2_not_stated.json could be read"}
+
+
+def _cat2_fix_sentence(f2):
+    """One sentence on the follow-up for the implicit-row note and Issue 12 (empty when absent)."""
+    if not f2:
+        return ""
+    c = {(k if isinstance(k, tuple) else tuple(k.split("|"))): v for k, v in f2["cells"].items()}
+    o = [c[("template_original", m)] for m in ("sonnet", "haiku")]
+    n = [c[("template_not_stated", m)] for m in ("sonnet", "haiku")]
+    ub = f2["h2h"]["vs_unbounded"]
+    return (f" Follow-up (not the app's template): one added sentence letting the template write \"Not stated in source\" cut serious errors per draft from "
+            f"{o[0]['serious']:.2f} / {o[1]['serious']:.2f} to {n[0]['serious']:.2f} / {n[1]['serious']:.2f} (Sonnet / Haiku, {n[0]['drafts']} fresh drafts each) "
+            f"and raised accuracy from {o[0]['rubric']['factual_accuracy']:.2f} / {o[1]['rubric']['factual_accuracy']:.2f} to "
+            f"{n[0]['rubric']['factual_accuracy']:.2f} / {n[1]['rubric']['factual_accuracy']:.2f}, but actionability fell "
+            f"({o[0]['rubric']['actionability']:.2f} / {o[1]['rubric']['actionability']:.2f} → {n[0]['rubric']['actionability']:.2f} / {n[1]['rubric']['actionability']:.2f}) "
+            f"and the long draft is still preferred in {ub['overall']['losses']} of {ub['calls']} comparisons.")
+
+
 def cat3_quality():
     """Per-rung answer-key scores: (rung -> measures, source file label) or (None, reason)."""
     try:
@@ -436,22 +504,109 @@ def cat3_quality():
         return None, {"file": None, "reason": "neither backend/replays/cat3_quality_summary.json nor analysis/cat3_quality_rerun.json could be read"}
 
 
+def cat4_rerun_records():
+    """Latest ok quality-rerun record per (rung, scale, repeat) at the current synthesis cap; None if absent."""
+    try:
+        lines = CAT4_RERUN.read_text().splitlines()
+    except OSError:
+        return None
+    latest = {}
+    for line in lines:
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        if r.get("status") == "ok" and (r.get("settings") or {}).get("synth_max_tokens") == CAT4_SYNTH_MAX_TOKENS:
+            latest[(r["rung_id"], int(r["scale"]), int(r["repeat_index"]))] = r
+    return [latest[k] for k in sorted(latest)] or None
+
+
+def _cat4_key(rung, scale):
+    return f"{rung}|{scale}"
+
+
 def cat4_units():
-    d = load(4)
+    """(units keyed 'rung|scale', source label, call stats). One unit = one 4-question audit; each rerun session
+    (8 questions) is split into its two audits. Falls back to the golden replays (scale 1) without the rerun."""
+    recs = cat4_rerun_records()
     units = defaultdict(list)
-    for aid, p in d["presets"].items():
-        for rung, qs in p["rungs"].items():
+    if recs is None:
+        for aid, p in load(4)["presets"].items():
+            for rung, qs in p["rungs"].items():
+                calls, per_q = [], []
+                for q in qs:
+                    qc = [call(q["model_id"], q["input_tokens"], q["output_tokens"], q["cache_creation_tokens"], q["cache_read_tokens"], role="synthesis")]
+                    if q.get("reranker_model_id"):
+                        qc.append(call(q["reranker_model_id"], q["reranker_input_tokens"], q["reranker_output_tokens"], role="rerank"))
+                    calls += qc
+                    per_q.append({"q": q["question_id"], "calls": qc, "citations": len(q.get("citations") or []),
+                                  "stop_reason": q.get("stop_reason"), "thinking": int(q.get("thinking_tokens") or 0)})
+                units[_cat4_key(rung, 1)].append({"item": aid, "calls": calls, "per_question": per_q})
+        return units, "golden replays", None
+    synth = []
+    for r in recs:
+        for pid in sorted({a["preset_id"] for a in r["answers"]}):
             calls, per_q = [], []
-            for q in qs:
-                qc = [call(q["model_id"], q["input_tokens"], q["output_tokens"], q["cache_creation_tokens"], q["cache_read_tokens"], role="synthesis")]
-                if q.get("reranker_model_id"):
-                    qc.append(call(q["reranker_model_id"], q["reranker_input_tokens"], q["reranker_output_tokens"], role="rerank"))
+            for a in (x for x in r["answers"] if x["preset_id"] == pid):
+                qc = [call(c["model_id"], c["input_tokens"], c["output_tokens"], c.get("cache_creation_tokens"), c.get("cache_read_tokens"), role=c["role"])
+                      for c in a["calls"]]
+                s_call = next(c for c in a["calls"] if c["role"] == "synthesis")
+                synth.append(s_call)
                 calls += qc
-                per_q.append({"q": q["question_id"], "calls": qc, "citations": len(q.get("citations") or []),
-                              "bm25_recall": q.get("bm25_recall_pct"), "rerank_recall": q.get("reranker_recall_pct"),
-                              "context_reduction_pct": q.get("context_reduction_pct")})
-            units[rung].append({"item": aid, "calls": calls, "per_question": per_q})
-    return units
+                per_q.append({"q": a["question_id"], "calls": qc, "citations": len(a.get("citations") or []),
+                              "stop_reason": s_call.get("stop_reason"), "thinking": int(s_call.get("thinking_tokens") or 0)})
+            units[_cat4_key(r["rung_id"], int(r["scale"]))].append({"item": f"{pid}/s{r['scale']}/r{r['repeat_index']}", "calls": calls, "per_question": per_q})
+    stats = {
+        "records": len(recs),
+        "answers": len(synth),
+        "synthesis_stop_reasons": dict(sorted(Counter(str(c.get("stop_reason")) for c in synth).items())),
+        "synthesis_outputs_above_app_cap_before": sum(1 for c in synth if int(c["output_tokens"]) > CAT4_APP_MAX_TOKENS_BEFORE),
+        "synthesis_calls_with_thinking": sum(1 for c in synth if int(c.get("thinking_tokens") or 0) > 0),
+        "max_synthesis_output": max(int(c["output_tokens"]) for c in synth),
+    }
+    return units, "quality rerun", stats
+
+
+_CAT4_CELL_FIELDS = ("answers", "fact_recall", "fact_recall_supplier_specific", "citations_per_answer_mean", "zero_citation_answers",
+                     "expected_chunk_recall", "citations_at_expected", "cited_support", "contaminated_answers",
+                     "value_contaminated_unattributed_answers", "exposure_answers", "recall_after_bm25", "recall_after_rerank",
+                     "distractors_selected", "judged", "correctness_mean", "completeness_mean", "material_errors",
+                     "answers_with_material_error")
+
+
+def cat4_quality():
+    """(cells keyed 'rung|scale', break-even tables by scale, source) or (None, None, reason)."""
+    try:
+        d = json.loads(CAT4_QUALITY_SUMMARY.read_text())
+        cells = {_cat4_key(c["rung_id"], c["scale"]): {k: c.get(k) for k in _CAT4_CELL_FIELDS} for c in d["cells"]}
+        return cells, d["break_even"], {"file": "backend/replays/cat4_quality_summary.json", "keys_version": d.get("keys_version"),
+                                        "judge_model": d.get("judge_model"), "judge_passes": d.get("judge_passes"),
+                                        "answers": d.get("answers_scored"), "judged": d.get("answers_judged"),
+                                        "sessions_per_cell": d.get("sessions_per_cell"), "corpus": d.get("corpus")}
+    except (OSError, KeyError, TypeError, json.JSONDecodeError):
+        pass
+    try:
+        d = json.loads(CAT4_QUALITY_ANALYSIS.read_text())
+        cells = {}
+        for key, g in d["rerun"]["groups"].items():
+            ret, j = g.get("retrieval") or {}, g.get("judge") or {}
+            cells[key] = {
+                "answers": g["answers"], "fact_recall": g["fact_recall"], "fact_recall_supplier_specific": g["fact_recall_supplier_specific"],
+                "citations_per_answer_mean": g["citations_per_answer_mean"], "zero_citation_answers": g["zero_citation_answers"],
+                "expected_chunk_recall": g["expected_chunk_recall"], "citations_at_expected": g["citations_at_expected"],
+                "cited_support": g["cited_support"], "contaminated_answers": g["contaminated_answers"],
+                "value_contaminated_unattributed_answers": g.get("value_contaminated_unattributed_answers"),
+                "exposure_answers": g.get("answers_whose_synthesis_saw_distractor_text"),
+                "recall_after_bm25": ret.get("recall_after_bm25"), "recall_after_rerank": ret.get("recall_after_rerank"),
+                "distractors_selected": ret.get("distractors_selected"), "judged": j.get("judgements") or 0,
+                "correctness_mean": j.get("correctness_mean"), "completeness_mean": j.get("completeness_mean"),
+                "material_errors": j.get("material_errors"), "answers_with_material_error": j.get("answers_with_material_error"),
+            }
+        be = {k: v for k, v in d["rerun"]["break_even"].items()}
+        return cells, be, {"file": "analysis/cat4_quality_rerun.json", "keys_version": d.get("keys_version"), "judge_model": None,
+                           "judge_passes": 1, "answers": sum(c["answers"] for c in cells.values()),
+                           "judged": sum(c["judged"] for c in cells.values()), "sessions_per_cell": None, "corpus": d.get("corpus")}
+    except (OSError, KeyError, TypeError, json.JSONDecodeError):
+        return None, None, {"file": None, "reason": "neither backend/replays/cat4_quality_summary.json nor analysis/cat4_quality_rerun.json could be read"}
 
 
 def cat5_units(seeds):
@@ -601,8 +756,11 @@ def analyse():
                "output_median": med([x["call"]["out"] for x in v]), "input_median": med([x["call"]["in"] for x in v])} for m, v in regens.items()}
     hybrid_flow = st.mean(unit_cost(u["calls"]) for u in u2["haiku_templated"]) * 1000 + reg[SONNET]["cost_per_1k"]
     q2, q2_source = cat2_quality()
+    f2, f2_source = cat2_fix()
     res["categories"]["cat2"] = {"rungs": s2, "section_regen": reg, "haiku_draft_plus_1_sonnet_section_regen_per_1k": hybrid_flow,
-                                 "quality": q2, "quality_source": q2_source}
+                                 "quality": q2, "quality_source": q2_source,
+                                 "template_fix": ({**f2, "cells": {f"{a}|{m}": v for (a, m), v in f2["cells"].items()}} if f2 else None),
+                                 "template_fix_source": f2_source}
     ub = s2["sonnet_unbounded"]
     claim("Cat 2", "Input 1,500–4,000 tokens", f"unbounded {ub['prompt_tokens_range'][0]:,}–{ub['prompt_tokens_range'][1]:,}; templated {s2['sonnet_templated']['prompt_tokens_range'][0]:,}–{s2['sonnet_templated']['prompt_tokens_range'][1]:,}",
           verdict(False, True), "In band without the template; the section template adds ~1.2k prompt tokens.")
@@ -647,7 +805,8 @@ def analyse():
               f"Blind LLM judge (`{q2_source['judge_model']}`, not one of the models under test; {q2_source['passes']} rubric passes per draft; every pair shown in both orders, "
               f"position-consistent in {pc[0]}/{pc[1]} pairs), one draft per rung × {q2_source['documents']} documents; the lead verified the serious errors against the source payloads. "
               "Shorter drafts keep every core fact and read better, but they are less accurate and less complete and lose every head-to-head comparison."
-              + ai_txt + " A single judge may favour longer drafts (its prompt tells it to ignore length and layout), but the serious errors were verified against the sources, so they do not rest on the judge's taste.")
+              + ai_txt + " A single judge may favour longer drafts (its prompt tells it to ignore length and layout), but the serious errors were verified against the sources, so they do not rest on the judge's taste."
+              + _cat2_fix_sentence(f2) + (" This row grades the template as the app ships it." if f2 else ""))
     else:
         claim("Cat 2", "…without losing draft quality (implicit)", "no quality data", "NOT TESTABLE", q2_source["reason"])
     claim("Tiers 1–2 rule", "60–80% lower unit inference cost (Cat 1 & 2)", f"Cat 1 −{sav:.0f}%, Cat 2 −{sv2:.0f}% (template only) to −{sv2h:.0f}% (template + Haiku)",
@@ -726,43 +885,114 @@ def analyse():
     else:
         claim("Cat 3", "…without losing answer quality (implicit)", "no quality data", "NOT TESTABLE", q3_source["reason"])
 
-    # ---------------- Cat 4
-    u4 = cat4_units()
-    order4 = ["naive_full_corpus", "cached_full_corpus_citations", "hybrid_rag_rerank_citations"]
+    # ---------------- Cat 4 (quality rerun: 4 rungs x 2 corpus scales x 3 sessions of 8 questions)
+    u4, cat4_source, cat4_stats = cat4_units()
+    order4 = [_cat4_key(r, sc) for r in CAT4_RUNGS for sc in CAT4_SCALES if u4.get(_cat4_key(r, sc))]
     s4 = summarize_rungs(u4, order4)
     per_q = {}
-    for r in order4:
-        qs = [q for u in u4[r] for q in u["per_question"]]
-        per_q[r] = {
-            "synth_prompt_range": rng([prompt_tokens(q["calls"][0]) for q in qs]),
-            "synth_output_range": rng([q["calls"][0]["out"] for q in qs]),
-            "io_ratio_median": med([prompt_tokens(q["calls"][0]) / q["calls"][0]["out"] for q in qs]),
-            "cost_per_1k_q_billed": st.mean(unit_cost(q["calls"]) for q in qs) * 1000,
-            "cost_per_1k_q_warm": st.mean(unit_cost(q["calls"], view="warm") for q in qs) * 1000,
-            "cost_per_1k_q_warm_repo_card": st.mean(unit_cost(q["calls"], "repo", "warm") for q in qs) * 1000,
+    for key in order4:
+        qs = [q for u in u4[key] for q in u["per_question"]]
+        synth = [q["calls"][-1] for q in qs]  # synthesis is the last call of each question
+        per_q[key] = {
+            "answers": len(qs),
+            "synth_prompt_range": rng([prompt_tokens(c) for c in synth]),
+            "synth_prompt_median": med([prompt_tokens(c) for c in synth]),
+            "synth_output_range": rng([c["out"] for c in synth]),
+            "synth_output_median": med([c["out"] for c in synth]),
+            "synth_outputs": [c["out"] for c in synth],
+            "io_ratio_median": med([prompt_tokens(c) / c["out"] for c in synth if c["out"]]),
+            "cost_per_1k_q_billed": s4[key]["cost_per_1k_billed"] / 4,
+            "cost_per_1k_q_warm": s4[key]["cost_per_1k_warm"] / 4,
+            "cost_per_1k_q_cold": s4[key]["cost_per_1k_cold"] / 4,
+            "cost_per_1k_q_billed_repo_card": s4[key]["cost_per_1k_billed_repo_card"] / 4,
             "citations_median": med([q["citations"] for q in qs]),
             "questions_with_zero_citations": sum(1 for q in qs if q["citations"] == 0),
-            "recall": rng([q["rerank_recall"] for q in qs]),
-            "context_reduction_pct_median": med([q["context_reduction_pct"] for q in qs]),
+            "stop_reasons": dict(Counter(str(q["stop_reason"]) for q in qs)),
         }
-    res["categories"]["cat4"] = {"rungs": s4, "per_question": per_q}
-    nq = per_q["naive_full_corpus"]
-    claim("Cat 4", "Input 15k–100k+ tokens", f"full corpus {nq['synth_prompt_range'][0]/1e3:.1f}k–{nq['synth_prompt_range'][1]/1e3:.1f}k per question; hybrid {per_q['hybrid_rag_rerank_citations']['synth_prompt_range'][0]/1e3:.1f}k–{per_q['hybrid_rag_rerank_citations']['synth_prompt_range'][1]/1e3:.1f}k",
-          verdict(True), "Low end of the band: the test corpus is only ~18–21k tokens.")
-    claim("Cat 4", "Output 400–1,500 tokens", f"{nq['synth_output_range'][0]}–{nq['synth_output_range'][1]}", verdict(True))
-    claim("Cat 4", "Input:output ≈ 20:1 to 100:1", f"full-corpus median {nq['io_ratio_median']:.1f}:1", verdict(20 <= nq["io_ratio_median"] <= 100, True),
-          "Right at the 20:1 floor; a larger corpus would move it up.")
-    c_w, h_w = per_q["cached_full_corpus_citations"]["cost_per_1k_q_warm"], per_q["hybrid_rag_rerank_citations"]["cost_per_1k_q_warm"]
-    # questions sharing one cache write before caching the whole corpus beats hybrid retrieval
-    corpus_tok = med([q["calls"][0]["cw"] + q["calls"][0]["cr"] for u in u4["cached_full_corpus_citations"] for q in u["per_question"]])
-    r_in, _, r_cw, r_cr = RATE_CARDS["official"][SONNET]
-    write_premium = corpus_tok * (r_cw - r_cr) / 1e6
-    crossover = write_premium / ((h_w - c_w) / 1000) if h_w > c_w else None
-    res["categories"]["cat4"]["cache_vs_hybrid_crossover_questions"] = crossover
-    res["categories"]["cat4"]["corpus_tokens_cached"] = corpus_tok
-    claim("Cat 4", "Pair hybrid retrieval (reranking + chunk filtering) with context caching",
-          f"steady-state $/1k questions: naive ${nq['cost_per_1k_q_warm']:.1f}, cached corpus ${c_w:.1f} (−{pct_saving(nq['cost_per_1k_q_warm'], c_w):.0f}%), hybrid BM25+rerank ${h_w:.1f} (−{pct_saving(nq['cost_per_1k_q_warm'], h_w):.0f}%)",
-          verdict(False, True), f"Each lever works on its own, but they were never combined: the hybrid rung sends no cache_control. At this {corpus_tok/1e3:.0f}k-token corpus, caching the whole corpus beats hybrid retrieval once ≥{crossover:.0f} questions share one cache write (5-minute TTL).")
+    q4, be4, q4_source = cat4_quality()
+    res["categories"]["cat4"] = {"rungs": s4, "per_question": per_q, "source": cat4_source, "call_stats": cat4_stats,
+                                 "quality": q4, "break_even": be4, "quality_source": q4_source}
+    K = _cat4_key
+    fr4 = lambda m: f"{m['hits']}/{m['total']}" if m else "—"  # noqa: E731
+    pc4 = lambda m: f"{m['hits'] / m['total'] * 100:.0f}%" if m and m["total"] else "—"  # noqa: E731
+    have3 = all(K(r, 3) in per_q for r in CAT4_RUNGS[:3])
+    nq1 = per_q[K("naive_full_corpus", 1)]
+    nq3 = per_q.get(K("naive_full_corpus", 3))
+    hq1 = per_q[K("hybrid_rag_rerank_citations", 1)]
+    full_rows = [per_q[k] for k in (K("naive_full_corpus", 1), K("naive_full_corpus", 3), K("cached_full_corpus_citations", 1), K("cached_full_corpus_citations", 3)) if k in per_q]
+    full_lo = min(r["synth_prompt_range"][0] for r in full_rows)
+    full_hi = max(r["synth_prompt_range"][1] for r in full_rows)
+    claim("Cat 4", "Input 15k–100k+ tokens",
+          f"full corpus {full_lo/1e3:.1f}k–{full_hi/1e3:.1f}k per question (7 documents → 21 documents); retrieval {hq1['synth_prompt_range'][0]/1e3:.1f}k–{hq1['synth_prompt_range'][1]/1e3:.1f}k synthesis prompt",
+          verdict(full_lo >= 15_000 and full_hi <= 100_000),
+          f"n={sum(r['answers'] for r in per_q.values())} answers. Every full-corpus prompt is in the band at both corpus sizes; retrieval cuts the answering model's prompt below it by design.")
+    outs = [o for r in per_q.values() for o in r["synth_outputs"]]
+    in_band = sum(1 for o in outs if 400 <= o <= 1500)
+    out_med = med(outs)
+    claim("Cat 4", "Output 400–1,500 tokens",
+          f"all {len(outs)} answers: median {out_med:.0f}, range {min(outs):,}–{max(outs):,}; {in_band}/{len(outs)} in 400–1,500",
+          verdict(min(outs) >= 400 and max(outs) <= 1500, 400 <= out_med <= 1500),
+          "Output tokens include extended thinking. "
+          + (f"{cat4_stats['synthesis_outputs_above_app_cap_before']} answers used more than the app's former 2,048-token cap (now 4,096). " if cat4_stats else ""))
+    r3 = nq3["io_ratio_median"] if nq3 else None
+    claim("Cat 4", "Input:output ≈ 20:1 to 100:1",
+          f"full-corpus median {nq1['io_ratio_median']:.1f}:1 (7 documents)" + (f", {r3:.1f}:1 (21 documents)" if r3 else ""),
+          verdict(all(x is not None and 20 <= x <= 100 for x in (nq1["io_ratio_median"], r3)), any(x is not None and 20 <= x <= 100 for x in (nq1["io_ratio_median"], r3))),
+          "Grows with the corpus: at the 7-document deal room it sits at the 20:1 floor; at 3× it is inside the range.")
+    # lever row: judged on the combined rung (cached full-corpus rerank -> 5 chunks -> synthesis), which was run
+    paired = q4 and K("cached_rerank_hybrid", 3) in (q4 or {}) and have3
+    if paired:
+        c1, c3 = q4[K("cached_full_corpus_citations", 1)], q4[K("cached_full_corpus_citations", 3)]
+        h1, h3 = q4[K("hybrid_rag_rerank_citations", 1)], q4[K("hybrid_rag_rerank_citations", 3)]
+        p1, p3 = q4[K("cached_rerank_hybrid", 1)], q4[K("cached_rerank_hybrid", 3)]
+        cost = lambda r, sc, v="billed": per_q[K(r, sc)][f"cost_per_1k_q_{v}"] / 1000  # noqa: E731
+        be3 = {(r["a"], r["b"]): r for r in (be4 or {}).get("3", [])}
+        be1 = {(r["a"], r["b"]): r for r in (be4 or {}).get("1", [])}
+        b_cp3, b_cp1 = be3.get(("cached_full_corpus_citations", "cached_rerank_hybrid")), be1.get(("cached_full_corpus_citations", "cached_rerank_hybrid"))
+
+        def worse(a, b):  # a clearly above b: Wilson intervals do not overlap
+            return bool(a and b and a.get("ci_low") is not None and b.get("ci_high") is not None and a["ci_low"] > b["ci_high"])
+        q_worse = worse(p3["answers_with_material_error"], c3["answers_with_material_error"])
+        measured = (f"paired rung (Haiku picks 5 clauses from the cached full corpus, Sonnet answers over them; n=24 per corpus size): "
+                    f"expected clauses kept {pc4(p1['recall_after_rerank'])} / {pc4(p3['recall_after_rerank'])} (7 / 21 documents) vs BM25+rerank "
+                    f"{pc4(h1['recall_after_rerank'])} / {pc4(h3['recall_after_rerank'])}; other suppliers' clauses selected {fr4(p3['distractors_selected'])} vs {fr4(h3['distractors_selected'])}; "
+                    f"$/question billed ${cost('cached_rerank_hybrid', 1):.4f} / ${cost('cached_rerank_hybrid', 3):.4f} vs BM25+rerank ${cost('hybrid_rag_rerank_citations', 1):.4f} / "
+                    f"${cost('hybrid_rag_rerank_citations', 3):.4f} and cached full corpus ${cost('cached_full_corpus_citations', 1):.4f} / ${cost('cached_full_corpus_citations', 3):.4f}; "
+                    f"grader correctness {p1['correctness_mean']:.2f} / {p3['correctness_mean']:.2f} vs cached full corpus {c1['correctness_mean']:.2f} / {c3['correctness_mean']:.2f}; "
+                    f"answers with a serious error {fr4(p1['answers_with_material_error'])} / {fr4(p3['answers_with_material_error'])} vs {fr4(c1['answers_with_material_error'])} / {fr4(c3['answers_with_material_error'])}")
+        note = ("Pairing works on retrieval and cost: reranking over the cached corpus finds every expected clause at both corpus sizes, picks no other supplier's clause, and is "
+                "the cheapest version per question billed in 8-question sessions. It does not match the cached full corpus on answer quality: with 5 clauses the answering "
+                f"model sometimes states that the documents contain no gate or term that is in a clause it was not sent{' (serious-error rate clearly higher at 21 documents, Wilson intervals do not overlap)' if q_worse else ''}. "
+                + (f"Warm, the cached full corpus is cheaper per question; it overtakes the paired rung once {b_cp1['questions']} (7 documents) / {b_cp3['questions']} (21 documents) questions share one cache write. "
+                   if b_cp1 and b_cp3 and b_cp1.get("questions") and b_cp3.get("questions") else "")
+                + "Verdict: cost and retrieval hold; quality does not hold against the version without retrieval.")
+        claim("Cat 4", "Pair hybrid retrieval (reranking + chunk filtering) with context caching", measured, verdict(False, True), note)
+        # implicit quality row
+        n1, n3q = q4[K("naive_full_corpus", 1)], q4[K("naive_full_corpus", 3)]
+        cache_loss = worse(c1["answers_with_material_error"], n1["answers_with_material_error"]) or worse(c3["answers_with_material_error"], n3q["answers_with_material_error"])
+        retr_loss = {(r, sc): worse(q4[K(r, sc)]["answers_with_material_error"], q4[K("cached_full_corpus_citations", sc)]["answers_with_material_error"])
+                     for r in ("hybrid_rag_rerank_citations", "cached_rerank_hybrid") for sc in CAT4_SCALES}
+        any_retr_loss = any(retr_loss.values())
+        claim("Cat 4", "…without losing answer quality (implicit)",
+              f"answers with a serious error (7 / 21 documents, n=24 each): naive {fr4(n1['answers_with_material_error'])} / {fr4(n3q['answers_with_material_error'])}, "
+              f"cached full corpus {fr4(c1['answers_with_material_error'])} / {fr4(c3['answers_with_material_error'])}, BM25+rerank {fr4(h1['answers_with_material_error'])} / {fr4(h3['answers_with_material_error'])}, "
+              f"paired {fr4(p1['answers_with_material_error'])} / {fr4(p3['answers_with_material_error'])}; grader correctness naive {n1['correctness_mean']:.2f} / {n3q['correctness_mean']:.2f}, "
+              f"cached {c1['correctness_mean']:.2f} / {c3['correctness_mean']:.2f}, BM25+rerank {h1['correctness_mean']:.2f} / {h3['correctness_mean']:.2f}, paired {p1['correctness_mean']:.2f} / {p3['correctness_mean']:.2f}; "
+              f"key facts BM25+rerank {fr4(h1['fact_recall'])} / {fr4(h3['fact_recall'])} vs cached {fr4(c1['fact_recall'])} / {fr4(c3['fact_recall'])}",
+              verdict(not cache_loss and not any_retr_loss, not cache_loss),
+              "Rule: a lever loses quality when its share of answers with a serious error is clearly higher (95% Wilson intervals do not overlap) than the full-corpus "
+              "version it replaces (the cached full corpus) at the same corpus size. Caching the full corpus loses nothing (it has the fewest serious errors at both sizes). Retrieval loses nothing "
+              + ("on the 7-document deal room" if not any(v for (r, sc), v in retr_loss.items() if sc == 1) else "even on the 7-document deal room")
+              + (f"; at 21 documents BM25+rerank does ({fr4(h3['answers_with_material_error'])} vs {fr4(c3['answers_with_material_error'])})"
+                 if retr_loss[("hybrid_rag_rerank_citations", 3)] else "")
+              + (", and the paired rung's " + fr4(p3["answers_with_material_error"])
+                 + (" is also clearly higher" if retr_loss[("cached_rerank_hybrid", 3)] else " is higher but its interval still overlaps")
+                 if retr_loss[("hybrid_rag_rerank_citations", 3)] else "")
+              + ". Against the naive full corpus the retrieval rungs' intervals overlap. Blind grader, one pass per answer; the deterministic key facts move less than the grader's error count.")
+    else:
+        claim("Cat 4", "Pair hybrid retrieval (reranking + chunk filtering) with context caching", "no rerun data for the paired rung", "NOT TESTABLE",
+              q4_source.get("reason") or "the Category 4 rerun summary has no paired-rung cells")
+        claim("Cat 4", "…without losing answer quality (implicit)", "no quality data", "NOT TESTABLE", q4_source.get("reason") or "")
 
     # ---------------- Cat 5
     u5 = cat5_units(seeds)
@@ -838,8 +1068,10 @@ def analyse():
         "Cat 1 (item)": s1["haiku_calibrated"]["total_tokens_median"],
         "Cat 2 (document)": s2["sonnet_unbounded"]["total_tokens_median"],
         "Cat 3 (10-turn session)": s3["naive_full_history"]["total_tokens_median"],
-        "Cat 4 (4-question audit)": s4["naive_full_corpus"]["total_tokens_median"],
-        "Cat 4 (single question)": med([tok(q["calls"])["total"] for u in u4["naive_full_corpus"] for q in u["per_question"]]),
+        "Cat 4 (4-question audit)": s4[_cat4_key("naive_full_corpus", 1)]["total_tokens_median"],
+        "Cat 4 (single question)": med([tok(q["calls"])["total"] for u in u4[_cat4_key("naive_full_corpus", 1)] for q in u["per_question"]]),
+        **({"Cat 4 (single question, 3× corpus)": med([tok(q["calls"])["total"] for u in u4[_cat4_key("naive_full_corpus", 3)] for q in u["per_question"]])}
+           if u4.get(_cat4_key("naive_full_corpus", 3)) else {}),
         "Cat 5 (invoice)": s5["unbounded_sonnet_loop"]["total_tokens_median"],
         "Cat 6 (incident run, shared bus)": s6["shared_bus_original"]["total_tokens_median"],
     }
@@ -910,7 +1142,107 @@ def _cat2_owner_issue(res):
                 "exactly 3 items), even when the source gives none; the per-item judge results needed to count the effect were not available.")
     per = "; ".join(f"{name} {a['flagged']}/{a['total']} ({a['flagged_serious']} serious)" for name, a in ai)
     return ("12. **The Category 2 template requires an owner and a time window for every action item** (`action_plan` items: `owner` and `target_window` are required, "
-            f"exactly 3 items), even when the source gives none. Measured: the judge flagged an owner or deadline the source does not support in this many templated action items: {per}. *Not changed:* the model-facing prompt and schema are as captured.")
+            f"exactly 3 items), even when the source gives none. Measured: the judge flagged an owner or deadline the source does not support in this many templated action items: {per}. *Not changed:* the model-facing prompt and schema are as captured."
+            + _cat2_fix_sentence(res["categories"]["cat2"].get("template_fix"))
+            + (" The app keeps the original template; the follow-up is shown beside it." if res["categories"]["cat2"].get("template_fix") else ""))
+
+
+CAT4_LABELS = {
+    "naive_full_corpus": "Full corpus, no cache, no citations",
+    "cached_full_corpus_citations": "Full corpus, cached + native citations",
+    "hybrid_rag_rerank_citations": "BM25 + Haiku rerank → 5 chunks + citations",
+    "cached_rerank_hybrid": "Haiku reranks the cached full corpus → 5 chunks + citations (paired; rerun only)",
+}
+CAT4_SCALE_LABEL = {1: "7 docs", 3: "21 docs"}
+
+
+def _cat4_absence_issue_text():
+    """Counts of the grader's serious errors on the retrieval rungs that claim something is absent (from the analysis file)."""
+    try:
+        d = json.loads(CAT4_QUALITY_ANALYSIS.read_text())
+        me = [m for m in d["for_lead_review"]["material_errors"]
+              if m["source"] == "rerun" and m["rung_id"] in ("hybrid_rag_rerank_citations", "cached_rerank_hybrid")]
+    except (OSError, KeyError, TypeError, json.JSONDecodeError):
+        return ""
+    if not me:
+        return ""
+    absent = [m for m in me if re.search(r"\bno\b|\bnot (in|state|specify|quantif|give|contain)|missing|does not|do not|absent|cannot be quantified",
+                                         m["claim_quote"].lower())]
+    gate = [m for m in absent if "noc" in (m["claim_quote"] + m["problem"]).lower() or "escrow" in (m["claim_quote"] + m["problem"]).lower()]
+    return (f"Of the {len(me)} serious errors the grader reported on the two retrieval rungs, {len(absent)} claim the documents lack something they contain, "
+            f"and {len(gate)} of those concern the NOC/escrow gate (keyword count over `analysis/cat4_quality_rerun.json`). ")
+
+
+def _nstar(r):
+    return "—" if r.get("n_star") is None else f"{r['n_star']:.1f}"
+
+
+def _cat4_label(key):
+    rung, scale = key.split("|")
+    return f"{CAT4_LABELS[rung]} · {CAT4_SCALE_LABEL.get(int(scale), scale)}"
+
+
+def _render_cat4(c):
+    L = []
+    rungs, pq = c["rungs"], c["per_question"]
+    stats = c.get("call_stats")
+    first = next(iter(rungs.values()))
+    if c["source"] == "quality rerun":
+        L += [f"### 4. {TITLE['cat4']} (per 1k questions; n={first['n'] * 4} answers per row)", "",
+              f"Source: the quality rerun, {stats['records']} records = {stats['answers']} answers (4 rungs × 2 corpus sizes × 3 sessions of 8 questions; "
+              "each session asked audit-01 then audit-02, so one unit here is a 4-question audit and each session gives two). Corpus sizes: the app's 7-document deal "
+              "room, and 21 documents (two synthetic look-alike suppliers added). Every question carried a one-line supplier-scope prefix. The golden replays are repeat 0 "
+              "of the three app rungs at 7 documents. Synthesis stop reasons: "
+              + ", ".join(f"{k} {v}" for k, v in stats["synthesis_stop_reasons"].items())
+              + f"; {stats['synthesis_calls_with_thinking']}/{stats['answers']} answers used extended thinking.", ""]
+    else:
+        L += [f"### 4. {TITLE['cat4']} (per 1k questions)", "", "Source: the Category 4 golden replays (the quality-rerun records could not be read).", ""]
+    L += ["| Rung · corpus | Billed | Warm | Cold | Pre-fix card (billed) | Synthesis prompt (median) | Answer output (median) | Citations / answer (median) | Answers with 0 citations | Stop reasons |",
+          "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
+    for key, v in pq.items():
+        cit = "—" if key.startswith("naive") else f"{v['citations_median']:.0f}"
+        zero = "—" if key.startswith("naive") else f"{v['questions_with_zero_citations']}/{v['answers']}"
+        L.append(f"| {_cat4_label(key)} | {_money(v['cost_per_1k_q_billed'])} | {_money(v['cost_per_1k_q_warm'])} | {_money(v['cost_per_1k_q_cold'])} | "
+                 f"{_money(v['cost_per_1k_q_billed_repo_card'])} | {_k(v['synth_prompt_median'])} | {v['synth_output_median']:.0f} | {cit} | {zero} | "
+                 + ", ".join(f"{k} {n}" for k, n in sorted(v["stop_reasons"].items())) + " |")
+    L += ["", "*Cold* here: the first question of each 4-question audit writes the cache (the rerun billed one write per 8-question session). "
+          "Cost includes the Haiku reranker where the rung has one; the prompt column is the answering (synthesis) call.", ""]
+    q, be, src = c.get("quality"), c.get("break_even"), c.get("quality_source") or {}
+    if q:
+        L += [f"Answer quality (read from `{src['file']}`, keys version `{src.get('keys_version')}`; {src.get('answers')} answers, {src.get('judged')} graded by a blind "
+              f"grader (`{src.get('judge_model')}`, not a model under test, {src.get('judge_passes')} pass per answer); deterministic answer-key measures; 95% Wilson intervals):", "",
+              "| Rung · corpus | Key facts stated | Citations at expected clauses | Expected clauses cited | Expected clauses kept by retrieval | Other suppliers' clauses selected | "
+              "Grader correctness (1–5) | Grader completeness (1–5) | Answers with a serious error | Contaminated answers |",
+              "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
+
+        def qm(m):
+            if not m or not m.get("total"):
+                return "—"
+            ci = f" ({m['ci_low']*100:.0f}–{m['ci_high']*100:.0f}%)" if m.get("ci_low") is not None else ""
+            return f"{m['hits']}/{m['total']} = {m['hits']/m['total']*100:.0f}%{ci}"
+        for key in pq:
+            v = q.get(key)
+            if not v:
+                continue
+            L.append(f"| {_cat4_label(key)} | {qm(v['fact_recall'])} | {qm(v['citations_at_expected'])} | {qm(v['expected_chunk_recall'])} | {qm(v['recall_after_rerank'])} | "
+                     f"{qm(v['distractors_selected'])} | {v['correctness_mean']:.2f} | {v['completeness_mean']:.2f} | {qm(v['answers_with_material_error'])} | {qm(v['contaminated_answers'])} |")
+        L += ["", "*Key facts*: fixed answer key (4–7 facts per question), deterministic matching. *Expected clauses kept by retrieval*: after reranking (rows without retrieval: —). "
+              "*Serious error*: a statement the grader marked material (wrong amount, party, date, condition or precedence, or a claim that the documents lack something they contain). "
+              "*Contaminated*: states another supplier's value for a keyed fact or cites another supplier's clause (the one case named the other supplier while excluding its figure).", ""]
+    else:
+        L += [f"Answer quality: not available ({src.get('reason')}).", ""]
+    if be:
+        for scale in ("1", "3"):
+            rows = be.get(scale) or []
+            if not rows:
+                continue
+            L += [f"Break-even, {CAT4_SCALE_LABEL[int(scale)]} (questions that must share one cache write before A is cheaper than B; cost(N) = one-off cache-write premium + N × warm $/question):", "",
+                  "| A vs B | A premium | A warm $/question | B premium | B warm $/question | N* | Result |", "|---|---:|---:|---:|---:|---:|---|"]
+            for r in rows:
+                L.append(f"| {CAT4_LABELS[r['a']]} vs {CAT4_LABELS[r['b']]} | ${r['premium_a_usd']:.4f} | ${r['per_question_a_usd']:.4f} | ${r['premium_b_usd']:.4f} | "
+                         f"${r['per_question_b_usd']:.4f} | {_nstar(r)} | {r['verdict']} |")
+            L.append("")
+    return L
 
 
 def render_markdown(res):
@@ -920,9 +1252,10 @@ def render_markdown(res):
     L += [
         "# Six AI Archetypes deck: claims checked against the NovaMart traces",
         "",
-        "_Generated by `backend/scripts/validate_deck_claims.py` from `backend/replays/*_golden_replays.json` (Categories 1, 2, 4, 5), the Category 2 blind-judge quality summary "
+        "_Generated by `backend/scripts/validate_deck_claims.py` from `backend/replays/*_golden_replays.json` (Categories 1, 2, 5), the Category 2 blind-judge quality summary "
         "(`backend/replays/cat2_quality_summary.json`), the Category 3 quality rerun "
-        "(`backend/experiments/cat3_quality/runs.jsonl` + `backend/replays/cat3_quality_summary.json`), the Category 6 fair rerun "
+        "(`backend/experiments/cat3_quality/runs.jsonl` + `backend/replays/cat3_quality_summary.json`), the Category 4 quality rerun "
+        "(`backend/experiments/cat4_quality/runs.jsonl` + `backend/replays/cat4_quality_summary.json`), the Category 6 fair rerun "
         "(`backend/experiments/cat6_fair_rerun/runs.jsonl` + `analysis/cat6_fair_rerun.json`) and `backend/traces/`. Re-run the script after re-capturing replays._",
         "",
         "## How the data was de-duplicated",
@@ -944,7 +1277,8 @@ def render_markdown(res):
         "Category 6 captures, and replays of them are counted as superseded captures.",
         "",
         "**Unit of analysis:** one canonical run per (item × rung), taken from the current golden-replay files, which match the seed traces one-to-one. "
-        "Categories 3 and 6 are the exceptions. Category 3 uses all 18 quality-rerun records (3 rungs × 2 sessions × 3 repeats, n=6 per rung); its golden replays are repeat 0 of every rung. "
+        "Categories 3, 4 and 6 are the exceptions. Category 3 uses all 18 quality-rerun records (3 rungs × 2 sessions × 3 repeats, n=6 per rung); its golden replays are repeat 0 of every rung. "
+        "Category 4 uses all 24 quality-rerun sessions (4 rungs × 2 corpus sizes × 3 sessions of 8 questions, 192 answers, n=24 per row); its golden replays are repeat 0 of the three app rungs at the 7-document corpus. "
         "Category 6 uses all 60 fair-rerun records (4 arms × 3 incidents × 5 repeats, n=15 per arm); its golden replays are repeat 0 of three of those arms. "
         "Costs are recomputed per API call from recorded token counts, priced by the model that served the call. "
         "The traces' own `finops` blocks are not used, so the results don't depend on how the app priced them.",
@@ -970,6 +1304,9 @@ def render_markdown(res):
 
     L += ["", "## Cost per 1,000 units by rung", ""]
     for cat in ("cat1", "cat2", "cat3", "cat4", "cat5", "cat6"):
+        if cat == "cat4":
+            L += _render_cat4(res["categories"]["cat4"])
+            continue
         rungs = res["categories"][cat]["rungs"]
         first = next(iter(rungs.values()))
         L += [f"### {cat[-1]}. {TITLE[cat]} (per 1k {UNIT[cat]}s, n={first['n']} per rung)", "",
@@ -1024,6 +1361,30 @@ def render_markdown(res):
                       "with the judge's majority verdict. *Action items flagged*: templated action items whose owner or time window the judge reported as an error."]
             else:
                 L.append(f"Draft quality: not available ({qsrc.get('reason')}).")
+            fx, fsrc = c.get("template_fix"), c.get("template_fix_source") or {}
+            L.append("")
+            if fx:
+                L += [f"**Follow-up: the template plus one \"Not stated in source\" sentence** (read from `{fsrc['file']}`; {fsrc['drafts']} fresh drafts, "
+                      f"{fsrc['per_cell']} per document × model × template; blind judge `{fsrc['judge_model']}`, {fsrc['passes']} pass per draft, {fsrc['judge_calls']} calls). "
+                      "Not the app's template, which is the original. Added sentence: \"" + fx["added_instruction"] + "\"", "",
+                      "| Model | Template | Serious errors / draft | Accuracy | Coverage | Actionability | Owners not in source | Time windows not in source | Detail facts | $ / 1k docs |",
+                      "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
+                for m in ("sonnet", "haiku"):
+                    for arm in CAT2_FIX_ARMS:
+                        v = fx["cells"].get(f"{arm}|{m}")
+                        if not v:
+                            continue
+                        r_ = v["rubric"]
+                        L.append(f"| {'Sonnet 5.5' if m == 'sonnet' else 'Haiku 5.5'} | {'original (app)' if arm == 'template_original' else '+ not-stated sentence'} | "
+                                 f"{v['serious']:.2f} | {r_['factual_accuracy']:.2f} | {r_['coverage']:.2f} | {r_['actionability']:.2f} | "
+                                 f"{v['owner']['unsupported']}/{v['items']} ({v['owner']['not_stated']} not stated) | {v['window']['unsupported']}/{v['items']} ({v['window']['not_stated']} not stated) | "
+                                 f"{v['detail']['hits']}/{v['detail']['total']} | {_money(v['cost_per_1k'])} |")
+                h = fx["h2h"]
+                fmt = lambda b: f"{b['overall']['wins']}–{b['overall']['losses']}–{b['overall']['ties']} (accuracy {b['accuracy']['wins']}–{b['accuracy']['losses']}–{b['accuracy']['ties']}, usefulness {b['usefulness_to_reader']['wins']}–{b['usefulness_to_reader']['losses']}–{b['usefulness_to_reader']['ties']})"  # noqa: E731
+                L += ["", f"Head-to-head (W–L–T for the template with the sentence): vs the original template on the same document, model and repeat {fmt(h['vs_original'])}; "
+                      f"vs the stored unbounded draft {fmt(h['vs_unbounded'])}. *Not in source* uses the follow-up's deterministic rule (name or date not found in the source)."]
+            else:
+                L.append(f"Follow-up: not available ({fsrc.get('reason')}).")
         if cat == "cat3":
             if c["source"] == "quality rerun":
                 L += [f"Source: the quality rerun, {c['records']} records (3 rungs × 2 sessions × 3 repeats). Costs cover turns 1–10 and the compactions before them; "
@@ -1058,14 +1419,6 @@ def render_markdown(res):
                       "each about one detail stated once in an early turn."]
             else:
                 L.append(f"Answer quality: not available ({qsrc['reason']}).")
-        if cat == "cat4":
-            pq = c["per_question"]
-            L.append("| Rung | $/1k questions (billed) | $/1k questions (warm) | Citations / answer (median) | Answers with 0 citations | Rerank recall |")
-            L.append("|---|---:|---:|---:|---:|---:|")
-            for r, v in pq.items():
-                rec = "—" if v["recall"][0] is None else (f"{v['recall'][0]:.0f}%" if v["recall"][0] == v["recall"][1] else f"{v['recall'][0]:.0f}–{v['recall'][1]:.0f}%")
-                L.append(f"| {RUNG_LABELS[r]} | {_money(v['cost_per_1k_q_billed'])} | {_money(v['cost_per_1k_q_warm'])} | {v['citations_median']:.0f} | {v['questions_with_zero_citations']}/8 | {rec} |")
-            L += ["", f"Break-even: caching the {_k(c['corpus_tokens_cached'])}-token corpus beats hybrid retrieval once **≥{c['cache_vs_hybrid_crossover_questions']:.1f} questions** share a cache write."]
         if cat == "cat5":
             L.append("Quality: " + "; ".join(f"{RUNG_LABELS[r]}: exact voucher {q['exact_match']}/3, tool precision {q['tool_precision_median']:.0f}%, policy gate verified {q['gate_verified']}/3, steps {q['steps']}"
                                             for r, q in c["quality"].items()) + ".")
@@ -1099,7 +1452,7 @@ def render_markdown(res):
           "so some traces had `total_cost_usd` < `output_cost_usd`. All four now use `rollup_multi_call_finops`, which prices each call at its own model's rate.",
           "2. **CpO was zero for failed runs.** *Fixed:* `cpo_*_per_1k_usd` is now `None` for an unverified run, and the portfolio CpO and savings are `None` when a rung has no verified outcomes (`cat6_swarms/runner.py`).",
           "3. **Naive rungs are truncated (Category 1).** Category 1 prose hits `max_tokens=2048` on most items, so its naive costs are lower bounds.",
-          "4. **Cross-rung cache warming.** Capture order lets later rungs and items read caches warmed by earlier ones (e.g. Category 4 audit-02 shows zero cache writes). "
+          "4. **Cross-rung cache warming.** Capture order lets later rungs and items read caches warmed by earlier ones (e.g. Category 4 audit-02 read the cache audit-01 wrote in the same session, so it shows zero cache writes). "
           "The *billed* column includes this effect; the *cold* column removes it. The Category 6 fair rerun avoids it: each run writes its own cache (a per-run nonce in the cached prefix).",
           "5. **Trace index is not de-duplicated.** `index.jsonl`/`summarize_traces()` average replays, superseded captures and session rollups together. "
           "Any dashboard built on it over-weights frequently viewed items.",
@@ -1119,16 +1472,33 @@ def render_markdown(res):
           "returns it on each rung result. The stored drafts were not re-captured, so they still carry the constant; their normal completion is inferred from text that "
           "ends cleanly and output below the cap.",
           _cat2_owner_issue(res),
+          "13. **The Category 4 capture script rejected answers with zero citations** (`capture_cat4_replays.py::_validate_rung`), which selects the recorded runs by outcome. "
+          "*Fixed:* it now checks infrastructure only (every question answered and ended normally, cache written/read, reranker ran); the quality rerun kept every answer "
+          f"and found {sum(v['questions_with_zero_citations'] for k, v in res['categories']['cat4']['per_question'].items() if not k.startswith('naive'))} zero-citation answers on the citation rungs.",
+          "14. **The Category 4 answer cap truncated answers.** At the app's `max_tokens=2048`, 3 of 64 pilot answers stopped on `max_tokens`, and the live path raises on truncation. "
+          + (f"In the rerun at 4,096, {res['categories']['cat4']['call_stats']['synthesis_outputs_above_app_cap_before']}/{res['categories']['cat4']['call_stats']['answers']} answers used more than 2,048 output tokens (extended thinking included). "
+             if res["categories"]["cat4"].get("call_stats") else "")
+          + "*Fixed:* the app's synthesis cap is now 4,096 and real stop reasons are recorded.",
+          "15. **Category 4 BM25 is tuned to these questions.** `retriever.py` adds phrase bonuses for specific terms and values in the 8 test questions and Deccan's contracts, "
+          "and the reranker prompt names the clauses the questions ask about, so BM25+rerank recall here is optimistic for unseen questions; with two look-alike suppliers added, "
+          "it still dropped to the figures in the quality table.",
+          "16. **The Category 4 answer template invites absence claims.** The synthesis prompt's last bullet asks for a \"Required Sign-Off Gate: concrete operational, banking NOC, escrow, "
+          "or delisting gate\". When the answering model sees only 5 retrieved chunks, it fills that bullet by stating the documents contain no NOC or escrow gate. "
+          + _cat4_absence_issue_text()
+          + "The prompt is unchanged here (changing it would change the measured system).",
           "",
           "## Limitations",
           "",
-          "- Small samples: 12 items (Category 1), 4 documents, 2 audits (8 questions), 3 invoices; Category 3 has 6 sessions per rung (2 scenarios × 3 repeats) and Category 6 has 15 runs per arm (3 incidents × 5 repeats). Treat percentages as indicative, not statistically robust.",
+          "- Small samples: 12 items (Category 1), 4 documents, 3 invoices; Category 4 has 24 answers per rung and corpus size (8 questions × 3 sessions); Category 3 has 6 sessions per rung (2 scenarios × 3 repeats) and Category 6 has 15 runs per arm (3 incidents × 5 repeats). Treat percentages as indicative, not statistically robust.",
           "- Category 6 ceiling effect: every arm verified 15/15, so these incidents are too easy to show a quality difference between context designs, and CpO equals cost per run in every arm.",
           "- Category 2 now has a quality measurement: a deterministic fact key plus a single blind LLM judge (`claude-opus-5-5`; rubric with 3 passes per draft and "
           "position-swapped head-to-head comparisons) on one draft per rung per document (12 drafts). Judge repeats measure judge noise, not drafting variance, and no "
           "second judge or human grading cross-checks the judge's taste; the lead hand-verified the serious errors against the sources.",
           "- Category 3 now has a quality measurement: a fixed answer key scored by deterministic string matching (no LLM judge). It checks whether specific IDs, amounts and dates "
           "survive, not whether an answer is helpful, and the recall questions are 6 per scenario (12 in all), each asked once per session.",
+          "- Category 4 quality: one blind-grader pass per answer (`claude-opus-5-5`, not a model under test) plus a deterministic answer key; 8 questions on one deal room; "
+          "the larger corpus adds two synthetic look-alike suppliers generated by a deterministic transform of Deccan's documents, not real contracts. Grader noise was not "
+          "measured (no repeat grading) and no human graded the answers; the lead checked the serious errors' source quotes against the documents.",
           "- Several rungs change more than one lever at once (model + template, caching + step cap + projection), so savings cannot be attributed to individual levers.",
           "- The deck's daily-volume claim (Category 6: 1.5M–10M tokens/dev/day) and its production-scale framing can't be checked from single runs.",
           ""]

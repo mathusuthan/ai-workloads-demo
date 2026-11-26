@@ -1,0 +1,997 @@
+{
+ "meta": {
+  "keys_version": "2026-11-25.1",
+  "derived_from": "the 8 question texts and the 28 Deccan chunks in app/data/cat4_fixtures.py only; never from stored answers",
+  "categories": {
+   "commercial": "a commercial term of this supplier's contracts (amount, %, date, duration, named party, certificate/contract/registration number); supplier_specific = true",
+   "statutory": "statutory constant or section number identical for any supplier; supplier_specific = false",
+   "mechanism": "contractual mechanism worded identically in every supplier's documents (not transformed), so it cannot distinguish suppliers; supplier_specific = false",
+   "structure": "schedule / clause label identical across suppliers (document structure); supplier_specific = false"
+  },
+  "matching": "Category 3 normaliser + boundary guard (app/archetypes/cat3_assistants/scoring.py), plus a decimal guard: an alternative that starts with a digit must not follow '<digit>.' and one that ends with a digit must not be followed by '.<digit>' (so '25 crore' does not hit '33.25 crore')",
+  "alternative_sources": "any_of: strings found in the fact's own chunk (block text, section heading or keywords; tested). also_in_corpus: the same value as worded in another Deccan chunk (tested). format_variants: added by one dry pass over the 24 golden answers, solely as other spellings of the same value (listed in meta.format_variants_added).",
+  "question_values_excluded": "no alternative occurs in its own question text (tested), so restating the question earns nothing",
+  "format_variants_added": [
+   {
+    "fact_id": "a1q1-cyber-15-cr",
+    "added": [
+     "15.00 Cr",
+     "15 Cr"
+    ],
+    "observed": "golden naive audit-01/q1 writes 'INR 15.00 Cr' / 'INR 15 Cr'"
+   },
+   {
+    "fact_id": "a1q3-po-hurdle-85-cr",
+    "added": [
+     "85.00 Cr"
+    ],
+    "observed": "golden naive and cached audit-01/q3 write 'INR 85.00 Cr'"
+   },
+   {
+    "fact_id": "a2q4-hurdle-date",
+    "added": [
+     "Sept 30, 2027"
+    ],
+    "observed": "golden naive audit-02/q4 writes 'Sept 30, 2027' (comma)"
+   }
+  ],
+  "format_variant_pass": "One dry pass over the 24 golden answers (2026-11-25): every miss was read in context; only pure format variants of an already-keyed value were added. Misses left as genuine omissions: a2q1-itc-16-2-aa (all 3 golden answers cite Sec 16(2)(c), not 16(2)(aa)) and a2q4-rebate-2-75 (golden hybrid answer omits the 2.75% tier)."
+ },
+ "facts": [
+  {
+   "id": "a1q1-cap-4-50-cr",
+   "preset_id": "audit-01",
+   "question_id": "q1",
+   "description": "MSA Clause 9.1 general cap is INR 4.50 Crore (greater-of with trailing GMV payouts)",
+   "any_of": [
+    "4,50,00,000",
+    "Four Crore Fifty Lakh",
+    "4.50 Cr"
+   ],
+   "chunk_id": "DOC-01#c03",
+   "evidence": {
+    "quote": "INR 4,50,00,000 (Rupees Four Crore Fifty Lakh Only)"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [
+    {
+     "alt": "4.50 Crore",
+     "chunk_id": "DOC-03#c04"
+    }
+   ],
+   "format_variants": []
+  },
+  {
+   "id": "a1q1-schedule-b",
+   "preset_id": "audit-01",
+   "question_id": "q1",
+   "description": "Schedule B (DPDP / CERT-In data protection) is carved out as uncapped",
+   "any_of": [
+    "Schedule B",
+    "DPA-DPDP-2026"
+   ],
+   "chunk_id": "DOC-01#c03",
+   "evidence": {
+    "quote": "statutory penalty under Schedule B (DPDP Act 2023 & CERT-In Addendum, DPA-DPDP-2026)"
+   },
+   "category": "structure",
+   "supplier_specific": false,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q1-dpdp-250-cr",
+   "preset_id": "audit-01",
+   "question_id": "q1",
+   "description": "DPDP Act statutory penalty ceiling up to INR 250 Crore",
+   "any_of": [
+    "250 Crore",
+    "INR 250 Cr"
+   ],
+   "chunk_id": "DOC-03#c04",
+   "evidence": {
+    "quote": "statutory maximums up to INR 250 Crore under the Schedule to the DPDP Act, 2023"
+   },
+   "category": "statutory",
+   "supplier_specific": false,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q1-cyber-15-cr",
+   "preset_id": "audit-01",
+   "question_id": "q1",
+   "description": "Cyber-risk insurance minimum INR 15.00 Crore",
+   "any_of": [
+    "15.00 Crore"
+   ],
+   "chunk_id": "DOC-03#c04",
+   "evidence": {
+    "quote": "Cyber-risk insurance of INR 15.00 Crore minimum"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": [
+    "15.00 Cr",
+    "15 Cr"
+   ]
+  },
+  {
+   "id": "a1q1-schedule-c",
+   "preset_id": "audit-01",
+   "question_id": "q1",
+   "description": "Schedule C (BIS / UN 3480 / recall safety) is carved out as uncapped",
+   "any_of": [
+    "Schedule C",
+    "REG-BIS-EPR-2026"
+   ],
+   "chunk_id": "DOC-01#c03",
+   "evidence": {
+    "quote": "mandatory 48-hour nationwide recall under Schedule C (REG-BIS-EPR-2026)"
+   },
+   "category": "structure",
+   "supplier_specific": false,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q1-product-liability-25-cr",
+   "preset_id": "audit-01",
+   "question_id": "q1",
+   "description": "Product liability / recall insurance of at least INR 25 Crore per occurrence",
+   "any_of": [
+    "25,00,00,000",
+    "Twenty-Five Crore",
+    "INR 25 Cr",
+    "25 Crore"
+   ],
+   "chunk_id": "DOC-04#c04",
+   "evidence": {
+    "quote": "insurance of at least INR 25,00,00,000 (Rupees Twenty-Five Crore) per occurrence"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q1-schedule-d",
+   "preset_id": "audit-01",
+   "question_id": "q1",
+   "description": "Schedule D (GST / ITC tax indemnity) is carved out as uncapped",
+   "any_of": [
+    "Schedule D",
+    "TAX-GST-ITC-2026"
+   ],
+   "chunk_id": "DOC-01#c03",
+   "evidence": {
+    "quote": "unreimbursed tax assessments under Schedule D (TAX-GST-ITC-2026)"
+   },
+   "category": "structure",
+   "supplier_specific": false,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q2-peak-otif-98-8",
+   "preset_id": "audit-01",
+   "question_id": "q2",
+   "description": "Peak OTIF rises to 98.8%",
+   "any_of": [
+    "98.8%"
+   ],
+   "chunk_id": "DOC-02#c02",
+   "evidence": {
+    "quote": "escalates from the MSA baseline of 96.5% to 98.8%"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q2-baseline-otif-96-5",
+   "preset_id": "audit-01",
+   "question_id": "q2",
+   "description": "Baseline MSA OTIF is 96.5%",
+   "any_of": [
+    "96.5%"
+   ],
+   "chunk_id": "DOC-01#c02",
+   "evidence": {
+    "quote": "fill rate of 96.5%"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q2-pallet-fee-1250",
+   "preset_id": "audit-01",
+   "question_id": "q2",
+   "description": "Peak dock / late fee INR 1,250 per delayed pallet-hour",
+   "any_of": [
+    "1,250"
+   ],
+   "chunk_id": "DOC-02#c03",
+   "evidence": {
+    "quote": "incur INR 1,250 per delayed pallet-hour"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q2-flash-deduction-3-5",
+   "preset_id": "audit-01",
+   "question_id": "q2",
+   "description": "Instant 3.5% flash-sale unfulfilled deduction",
+   "any_of": [
+    "3.50%",
+    "3.5%"
+   ],
+   "chunk_id": "DOC-02#c03",
+   "evidence": {
+    "quote": "an instant 3.50% commercial invoice deduction"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q2-peak-cap-6-5",
+   "preset_id": "audit-01",
+   "question_id": "q2",
+   "description": "Peak penalty cap 6.5% of Festive Peak PO value",
+   "any_of": [
+    "6.50%",
+    "6.5%"
+   ],
+   "chunk_id": "DOC-02#c03",
+   "evidence": {
+    "quote": "capped at 6.50% of total Festive Peak PO landed value"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q2-baseline-cap-2-0",
+   "preset_id": "audit-01",
+   "question_id": "q2",
+   "description": "Baseline MSA monthly SLA penalty cap is 2.0%",
+   "any_of": [
+    "2.0%"
+   ],
+   "chunk_id": "DOC-01#c02",
+   "evidence": {
+    "quote": "overall baseline monthly SLA penalty cap of 2.0%"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q2-baseline-fm-24h",
+   "preset_id": "audit-01",
+   "question_id": "q2",
+   "description": "Baseline Force Majeure covers blockades lasting longer than 24 consecutive hours",
+   "any_of": [
+    "twenty-four (24) consecutive hours",
+    "24 hours"
+   ],
+   "chunk_id": "DOC-01#c02",
+   "evidence": {
+    "quote": "lasting longer than twenty-four (24) consecutive hours"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [
+    {
+     "alt": "24-hour",
+     "chunk_id": "DOC-02#c04"
+    }
+   ],
+   "format_variants": []
+  },
+  {
+   "id": "a1q3-coc-threshold-25",
+   "preset_id": "audit-01",
+   "question_id": "q3",
+   "description": "Clause 11.4 Change-of-Control trigger at 25% or more of voting capital",
+   "any_of": [
+    "25.0%",
+    "25%"
+   ],
+   "chunk_id": "DOC-01#c04",
+   "evidence": {
+    "quote": "transferring 25.0% or more of Deccan's fully diluted voting share capital"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q3-tooling-clawback-3-80-cr",
+   "preset_id": "audit-01",
+   "question_id": "q3",
+   "description": "Termination right includes claw-back of unamortised INR 3.80 Cr tooling advance",
+   "any_of": [
+    "3.80 Cr"
+   ],
+   "chunk_id": "DOC-01#c04",
+   "evidence": {
+    "quote": "claw back unamortized INR 3.80 Cr tooling advances"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [
+    {
+     "alt": "3.80 Crore",
+     "chunk_id": "DOC-01#c02"
+    }
+   ],
+   "format_variants": []
+  },
+  {
+   "id": "a1q3-noc-5-business-days",
+   "preset_id": "audit-01",
+   "question_id": "q3",
+   "description": "SBI NOC must be delivered at least 5 business days before share allotment",
+   "any_of": [
+    "5 business days"
+   ],
+   "chunk_id": "DOC-07#c01",
+   "evidence": {
+    "quote": "at least 5 business days before share allotment"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q3-charge-id",
+   "preset_id": "audit-01",
+   "question_id": "q3",
+   "description": "SBI charge is Form CHG-1 Charge ID 100884129",
+   "any_of": [
+    "100884129"
+   ],
+   "chunk_id": "DOC-07#c01",
+   "evidence": {
+    "quote": "Charge ID 100884129"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q3-telemetry-firewall-b2",
+   "preset_id": "audit-01",
+   "question_id": "q3",
+   "description": "Second condition: telemetry firewall under Schedule B Clause B.2",
+   "any_of": [
+    "Clause B.2",
+    "Schedule B"
+   ],
+   "chunk_id": "DOC-07#c01",
+   "evidence": {
+    "quote": "maintaining strict compliance with Schedule B (Clause B.2)"
+   },
+   "category": "structure",
+   "supplier_specific": false,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q3-exclusivity-9-months",
+   "preset_id": "audit-01",
+   "question_id": "q3",
+   "description": "SL.2 cuts LFP exclusivity to nine months",
+   "any_of": [
+    "NINE (9) MONTHS",
+    "9 months",
+    "9-month"
+   ],
+   "chunk_id": "DOC-07#c02",
+   "evidence": {
+    "quote": "SHALL AUTOMATICALLY EXPIRE AT NINE (9) MONTHS"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q3-po-hurdle-85-cr",
+   "preset_id": "audit-01",
+   "question_id": "q3",
+   "description": "Unless NovaMart places at least INR 85 Crore of binding POs",
+   "any_of": [
+    "85.00 Crore",
+    "Eighty-Five Crore",
+    "85 Cr"
+   ],
+   "chunk_id": "DOC-07#c02",
+   "evidence": {
+    "quote": "at least INR 85.00 Crore (Rupees Eighty-Five Crore landed value, net of GST)"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": [
+    "85.00 Cr"
+   ]
+  },
+  {
+   "id": "a1q4-primary-region",
+   "preset_id": "audit-01",
+   "question_id": "q4",
+   "description": "Telemetry must reside in AWS ap-south-1 (Mumbai)",
+   "any_of": [
+    "ap-south-1"
+   ],
+   "chunk_id": "DOC-03#c02",
+   "evidence": {
+    "quote": "exclusively within AWS Asia Pacific ap-south-1 (Mumbai)"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q4-dr-region",
+   "preset_id": "audit-01",
+   "question_id": "q4",
+   "description": "Disaster-recovery failover region ap-south-2 (Hyderabad)",
+   "any_of": [
+    "ap-south-2"
+   ],
+   "chunk_id": "DOC-03#c02",
+   "evidence": {
+    "quote": "disaster-recovery failover region ap-south-2 (Hyderabad)"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q4-key-rotation-90-day",
+   "preset_id": "audit-01",
+   "question_id": "q4",
+   "description": "Customer-managed keys rotate every 90 days",
+   "any_of": [
+    "90-day"
+   ],
+   "chunk_id": "DOC-03#c02",
+   "evidence": {
+    "quote": "AWS KMS with 90-day automatic key rotation"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q4-customer-managed-keys",
+   "preset_id": "audit-01",
+   "question_id": "q4",
+   "description": "Keys are NovaMart Customer-Managed Keys (CMK)",
+   "any_of": [
+    "Customer-Managed Key",
+    "CMK"
+   ],
+   "chunk_id": "DOC-03#c02",
+   "evidence": {
+    "quote": "NovaMart Customer-Managed Keys ('CMK' via AWS KMS"
+   },
+   "category": "mechanism",
+   "supplier_specific": false,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a1q4-certin-6-hours",
+   "preset_id": "audit-01",
+   "question_id": "q4",
+   "description": "Statutory CERT-In reporting window is six hours",
+   "any_of": [
+    "six (6) hours",
+    "6 hours",
+    "6-hour"
+   ],
+   "chunk_id": "DOC-03#c03",
+   "evidence": {
+    "quote": "within six (6) hours of noticing or being brought to notice"
+   },
+   "category": "statutory",
+   "supplier_specific": false,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q1-principal-t-plus-43",
+   "preset_id": "audit-02",
+   "question_id": "q1",
+   "description": "100% of pre-tax principal still released by T+43 from GRN",
+   "any_of": [
+    "T+43"
+   ],
+   "chunk_id": "DOC-05#c02",
+   "evidence": {
+    "quote": "releases 100% of the undisputed pre-tax base principal invoice value on schedule by T+43 days from GRN"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q1-gst-only-holdback",
+   "preset_id": "audit-02",
+   "question_id": "q1",
+   "description": "Only the 18% GST tax component is held back",
+   "any_of": [
+    "18% GST",
+    "GST tax component"
+   ],
+   "chunk_id": "DOC-05#c02",
+   "evidence": {
+    "quote": "withholds ONLY the 18% GST tax component"
+   },
+   "category": "statutory",
+   "supplier_specific": false,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q1-itc-16-2-aa",
+   "preset_id": "audit-02",
+   "question_id": "q1",
+   "description": "ITC eligibility rule is CGST Section 16(2)(aa)",
+   "any_of": [
+    "16(2)(aa)"
+   ],
+   "chunk_id": "DOC-05#c02",
+   "evidence": {
+    "quote": "CGST Section 16(2)(aa) ITC disallowance notices"
+   },
+   "category": "statutory",
+   "supplier_specific": false,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q1-cure-sept-30",
+   "preset_id": "audit-02",
+   "question_id": "q1",
+   "description": "Cure deadline is the earlier of 180 days or September 30 after the financial year",
+   "any_of": [
+    "September 30",
+    "Sept 30"
+   ],
+   "chunk_id": "DOC-05#c03",
+   "evidence": {
+    "quote": "September 30 following the close of the relevant Financial Year"
+   },
+   "category": "statutory",
+   "supplier_specific": false,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q1-permanent-debit-note",
+   "preset_id": "audit-02",
+   "question_id": "q1",
+   "description": "Uncured holdback converts into a permanent commercial debit note",
+   "any_of": [
+    "debit note"
+   ],
+   "chunk_id": "DOC-05#c03",
+   "evidence": {
+    "quote": "converts permanently into a non-refundable commercial debit note"
+   },
+   "category": "mechanism",
+   "supplier_specific": false,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q1-interest-sec-50-3",
+   "preset_id": "audit-02",
+   "question_id": "q1",
+   "description": "Interest recovery under CGST Section 50(3)",
+   "any_of": [
+    "50(3)"
+   ],
+   "chunk_id": "DOC-05#c03",
+   "evidence": {
+    "quote": "statutory interest recovery at 18% per annum under CGST Section 50(3)"
+   },
+   "category": "statutory",
+   "supplier_specific": false,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q2-revenue-312-40",
+   "preset_id": "audit-02",
+   "question_id": "q2",
+   "description": "FY26 revenue INR 312.40 Crore",
+   "any_of": [
+    "312.40"
+   ],
+   "chunk_id": "DOC-06#c01",
+   "evidence": {
+    "quote": "Revenue from Operations: INR 312.40 Crore in FY 2025-26"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q2-net-worth-74-10",
+   "preset_id": "audit-02",
+   "question_id": "q2",
+   "description": "Net worth INR 74.10 Crore",
+   "any_of": [
+    "74.10"
+   ],
+   "chunk_id": "DOC-06#c01",
+   "evidence": {
+    "quote": "Shareholders' Net Worth: INR 74.10 Crore"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q2-gst-dispute-6-85",
+   "preset_id": "audit-02",
+   "question_id": "q2",
+   "description": "Disputed Maharashtra GST demand INR 6.85 Crore",
+   "any_of": [
+    "6.85"
+   ],
+   "chunk_id": "DOC-06#c02",
+   "evidence": {
+    "quote": "Disputed Gross Amount: INR 6.85 Crore"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q2-pre-deposit-0-685",
+   "preset_id": "audit-02",
+   "question_id": "q2",
+   "description": "10% pre-deposit of INR 0.685 Crore (INR 68.50 Lakh) paid",
+   "any_of": [
+    "0.685",
+    "68.50 Lakh"
+   ],
+   "chunk_id": "DOC-06#c02",
+   "evidence": {
+    "quote": "pre-deposit of INR 0.685 Crore (INR 68.50 Lakh)"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q2-dscr-covenant-1-40",
+   "preset_id": "audit-02",
+   "question_id": "q2",
+   "description": "SBI covenant minimum DSCR 1.40x",
+   "any_of": [
+    "1.40x"
+   ],
+   "chunk_id": "DOC-06#c03",
+   "evidence": {
+    "quote": "Minimum Debt-Service Coverage Ratio ('DSCR') >= 1.40x"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q2-dscr-actual-1-62",
+   "preset_id": "audit-02",
+   "question_id": "q2",
+   "description": "Audited DSCR 1.62x",
+   "any_of": [
+    "1.62x"
+   ],
+   "chunk_id": "DOC-06#c03",
+   "evidence": {
+    "quote": "audited DSCR = 1.62x"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q2-warranty-reserve-2-85",
+   "preset_id": "audit-02",
+   "question_id": "q2",
+   "description": "Note 21 closing warranty reserve INR 2.85 Crore",
+   "any_of": [
+    "2.85 Crore",
+    "2.85 Cr"
+   ],
+   "chunk_id": "DOC-06#c04",
+   "evidence": {
+    "quote": "closing Warranty Reserve of INR 2.85 Crore"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q3-is-16046",
+   "preset_id": "audit-02",
+   "question_id": "q3",
+   "description": "BIS CRS standard IS 16046 covers the LFP pack",
+   "any_of": [
+    "IS 16046"
+   ],
+   "chunk_id": "DOC-04#c01",
+   "evidence": {
+    "quote": "IS 16046 (Part 2): 2018"
+   },
+   "category": "statutory",
+   "supplier_specific": false,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q3-bis-registration",
+   "preset_id": "audit-02",
+   "question_id": "q3",
+   "description": "BIS CRS Registration No. R-41209877",
+   "any_of": [
+    "R-41209877"
+   ],
+   "chunk_id": "DOC-04#c01",
+   "evidence": {
+    "quote": "BIS CRS Registration No. R-41209877"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q3-epr-expiry",
+   "preset_id": "audit-02",
+   "question_id": "q3",
+   "description": "EPR certificate expires December 31, 2026",
+   "any_of": [
+    "December 31, 2026",
+    "2026-12-31"
+   ],
+   "chunk_id": "DOC-04#c02",
+   "evidence": {
+    "quote": "statutory validity expiry date of December 31, 2026"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q3-threshold-100-wh",
+   "preset_id": "audit-02",
+   "question_id": "q3",
+   "description": "Pack exceeds the 100 Wh air-cargo exception threshold",
+   "any_of": [
+    "100 Wh"
+   ],
+   "chunk_id": "DOC-04#c03",
+   "evidence": {
+    "quote": "exceeding the 100 Wh civil aviation / IATA PI 965 cargo exception threshold"
+   },
+   "category": "statutory",
+   "supplier_specific": false,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q3-class-9",
+   "preset_id": "audit-02",
+   "question_id": "q3",
+   "description": "Classified UN 3480 Class 9 dangerous goods",
+   "any_of": [
+    "Class 9"
+   ],
+   "chunk_id": "DOC-04#c03",
+   "evidence": {
+    "quote": "strictly classified as UN 3480 Class 9 Miscellaneous Dangerous Goods"
+   },
+   "category": "statutory",
+   "supplier_specific": false,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q3-soc-30-pct",
+   "preset_id": "audit-02",
+   "question_id": "q3",
+   "description": "Surface dispatch only at <= 30% state of charge",
+   "any_of": [
+    "30%"
+   ],
+   "chunk_id": "DOC-04#c03",
+   "evidence": {
+    "quote": "State-of-Charge ('SoC') <= 30%"
+   },
+   "category": "statutory",
+   "supplier_specific": false,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q3-misdeclaration-5-lakh",
+   "preset_id": "audit-02",
+   "question_id": "q3",
+   "description": "Misdeclaration triggers INR 5,00,000 per-consignment indemnity",
+   "any_of": [
+    "5,00,000"
+   ],
+   "chunk_id": "DOC-04#c03",
+   "evidence": {
+    "quote": "immediate INR 5,00,000 per-consignment liquidated indemnity"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q4-cash-discount-1-75",
+   "preset_id": "audit-02",
+   "question_id": "q4",
+   "description": "T+10 early-settlement cash discount is 1.75%",
+   "any_of": [
+    "1.75%"
+   ],
+   "chunk_id": "DOC-01#c01",
+   "evidence": {
+    "quote": "earn a flat 1.75% Early-Settlement Cash Discount"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q4-peak-cap-6-5",
+   "preset_id": "audit-02",
+   "question_id": "q4",
+   "description": "Addendum A peak penalty cap 6.5%",
+   "any_of": [
+    "6.50%",
+    "6.5%"
+   ],
+   "chunk_id": "DOC-02#c03",
+   "evidence": {
+    "quote": "capped at 6.50% of total Festive Peak PO landed value"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q4-baseline-cap-2-0",
+   "preset_id": "audit-02",
+   "question_id": "q4",
+   "description": "MSA baseline monthly cap 2.0%",
+   "any_of": [
+    "2.0%"
+   ],
+   "chunk_id": "DOC-02#c03",
+   "evidence": {
+    "quote": "explicitly overriding the baseline 2.0% monthly cap in MSA Clause 4"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q4-exclusivity-9-months",
+   "preset_id": "audit-02",
+   "question_id": "q4",
+   "description": "Missing the hurdle cuts exclusivity to nine months",
+   "any_of": [
+    "NINE (9) MONTHS",
+    "9 months",
+    "9-month"
+   ],
+   "chunk_id": "DOC-07#c02",
+   "evidence": {
+    "quote": "SHALL AUTOMATICALLY EXPIRE AT NINE (9) MONTHS"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q4-hurdle-date",
+   "preset_id": "audit-02",
+   "question_id": "q4",
+   "description": "INR 85 Cr hurdle must be met by September 30, 2027",
+   "any_of": [
+    "September 30, 2027",
+    "2027-09-30",
+    "Sept 30 2027"
+   ],
+   "chunk_id": "DOC-07#c02",
+   "evidence": {
+    "quote": "prior to 23:59 IST on September 30, 2027"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": [
+    "Sept 30, 2027"
+   ]
+  },
+  {
+   "id": "a2q4-interim-42-cr",
+   "preset_id": "audit-02",
+   "question_id": "q4",
+   "description": "Interim INR 42 Crore gate in the first nine months",
+   "any_of": [
+    "42.00 Crore",
+    "42.00 Cr"
+   ],
+   "chunk_id": "DOC-07#c02",
+   "evidence": {
+    "quote": "at least INR 42.00 Crore ordered in the initial 9-month milestone"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  },
+  {
+   "id": "a2q4-rebate-2-75",
+   "preset_id": "audit-02",
+   "question_id": "q4",
+   "description": "Rebate ladder includes 2.75% above INR 85 Crore",
+   "any_of": [
+    "2.75%"
+   ],
+   "chunk_id": "DOC-07#c03",
+   "evidence": {
+    "quote": "2.75% upon crossing INR 85.00 Crore"
+   },
+   "category": "commercial",
+   "supplier_specific": true,
+   "also_in_corpus": [],
+   "format_variants": []
+  }
+ ]
+}

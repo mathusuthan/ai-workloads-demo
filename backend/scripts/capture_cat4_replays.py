@@ -35,6 +35,10 @@ def _validate_rung(
     raw_queries: list[dict[str, Any]],
     expected_count: int,
 ) -> str | None:
+    """Infrastructure checks only: every question answered and ended normally, the cache prefix was written/read,
+    the reranker ran. Answer content is NOT checked: an answer with zero citations is a legitimate (and measured)
+    outcome, and rejecting it would select the recorded runs by outcome. The quality rerun reports zero-citation
+    answers as data (scripts/analyze_cat4_quality.py)."""
     if len(raw_queries) != expected_count:
         return f"expected {expected_count} queries, got {len(raw_queries)}"
     for idx, q in enumerate(raw_queries):
@@ -47,13 +51,9 @@ def _validate_rung(
                 return f"Q{q.get('question_number')} below 14k prefix cache (cw={cw}, cr={cr})"
             if idx >= 1 and cr < 14000:
                 return f"Q{q.get('question_number')} missed prefix cache read (cw={cw}, cr={cr})"
-            if not q.get("citations"):
-                return f"Q{q.get('question_number')} returned 0 native citations"
         if rid == "hybrid_rag_rerank_citations":
             if int(q.get("reranker_input_tokens") or 0) <= 0:
                 return f"Q{q.get('question_number')} missing Haiku reranker usage"
-            if not q.get("citations"):
-                return f"Q{q.get('question_number')} returned 0 native citations"
     return None
 
 
@@ -68,7 +68,8 @@ async def capture_cat4() -> None:
     out_path = settings.replays_dir / "cat4_golden_replays.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     existing = json.loads(out_path.read_text(encoding="utf-8")) if out_path.is_file() else {}
-    captured: dict[str, Any] = {"presets": dict(existing.get("presets") or {})}
+    # keep top-level provenance and per-preset provenance of the existing file (e.g. the rerun-built golden set)
+    captured: dict[str, Any] = {**existing, "presets": dict(existing.get("presets") or {})}
 
     for preset in CAT4_PRESETS:
         pid = preset["id"]
@@ -121,9 +122,16 @@ async def capture_cat4() -> None:
                 rungs_payload[rid] = raw_queries
 
         if rungs_payload:
+            prev = dict(captured["presets"].get(pid) or {})
+            prov = dict(prev.get("provenance") or {})
+            for rid in rungs_payload:
+                if rid in missing_rungs:
+                    prov[rid] = {"source": "scripts/capture_cat4_replays.py live capture"}
             captured["presets"][pid] = {
+                **prev,
                 "use_case": preset["use_case"],
                 "rungs": rungs_payload,
+                "provenance": prov,
             }
             out_path.write_text(json.dumps(captured, indent=2), encoding="utf-8")
             print(

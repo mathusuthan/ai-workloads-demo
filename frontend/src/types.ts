@@ -429,6 +429,79 @@ export interface Cat2QualityPortfolio {
   >
 }
 
+export interface Cat2FieldClasses {
+  supported: number
+  not_stated: number
+  unsupported: number
+}
+
+export type Cat2FixArm = 'template_original' | 'template_not_stated'
+
+export interface Cat2TemplateFixCell {
+  arm: Cat2FixArm
+  model_key: 'sonnet' | 'haiku'
+  drafts: number
+  action_items: number
+  owner: Cat2FieldClasses
+  time_window: Cat2FieldClasses
+  owner_not_stated_by_preset: Record<string, number>
+  owner_supported_by_preset: Record<string, number>
+  serious_per_draft: number | null
+  minor_per_draft: number | null
+  serious_total: number | null
+  flagged_items_total: number | null
+  rubric: Partial<Record<Cat2Dimension, number | null>>
+  core_facts: Cat2Count
+  detail_facts: Cat2Count
+  cost_per_1k_docs_usd: number | null
+  output_tokens_mean: number | null
+  truncated: number
+}
+
+export interface Cat2FixRecord {
+  wins: number
+  losses: number
+  ties: number
+}
+
+export interface Cat2FixHeadToHead {
+  overall: Cat2FixRecord
+  accuracy: Cat2FixRecord
+  usefulness_to_reader: Cat2FixRecord
+  calls: number
+  position_consistency: Record<string, number>
+}
+
+export interface Cat2FixActionItem {
+  milestone: string | null
+  owner: string | null
+  time_window: string | null
+  owner_class: string
+  window_class: string
+}
+
+export interface Cat2TemplateFix {
+  schema_version: number
+  source: string
+  app_template: string
+  added_instruction: string
+  not_stated_literal: string
+  keys_version: string | null
+  judge_model: string
+  judge_passes_per_draft: number
+  counts: Record<string, number>
+  field_rules: string[]
+  cells: Cat2TemplateFixCell[]
+  head_to_head: Record<string, { all: Cat2FixHeadToHead | null; by_model: Record<string, Cat2FixHeadToHead> }>
+  example: {
+    rule: string
+    preset_id: string
+    model_key: string
+    repeat_index: number
+    items: { slot: number; original: Cat2FixActionItem; not_stated: Cat2FixActionItem }[]
+  } | null
+}
+
 export interface Cat2RungResult {
   rung_id: Cat2RungId
   rung_title: string
@@ -458,6 +531,7 @@ export interface Cat2RunResponse {
   haiku_batch_comparator: FinOpsBreakdown | null
   output_tax_callout: string
   quality_portfolio?: Cat2QualityPortfolio | null
+  template_fix?: Cat2TemplateFix | null
 }
 
 export interface HitlCostComparison {
@@ -752,11 +826,153 @@ export interface Cat4RetrievalChunkTrace {
   is_expected_gold: boolean
 }
 
+export interface Cat4Measure {
+  hits: number
+  total: number
+  rate?: number | null
+  ci_low?: number | null
+  ci_high?: number | null
+}
+
+export interface Cat4GraderError {
+  claim_quote: string
+  problem: string
+  source_quote: string
+}
+
+export interface Cat4GraderVerdict {
+  grader_model: string
+  correctness: number
+  completeness: number
+  correctness_justification: string
+  completeness_justification: string
+  answers_the_question: 'yes' | 'partly' | 'no'
+  material_errors: Cat4GraderError[]
+  minor_error_count: number
+}
+
+export interface Cat4QuestionQuality {
+  question_id: string
+  question_number: number
+  key_facts: Cat4Measure
+  missed_facts: string[]
+  citations_requested: boolean
+  citation_count: number | null
+  zero_citations: boolean | null
+  citations_at_expected: Cat4Measure | null
+  expected_clause_recall: Cat4Measure | null
+  retrieval_recall: Cat4Measure | null
+  stop_reason: string | null
+  grader: Cat4GraderVerdict | null
+}
+
+export interface Cat4AuditQuality {
+  questions: number
+  key_facts: Cat4Measure
+  key_facts_supplier_specific: Cat4Measure
+  citations_requested: boolean
+  citations_at_expected: Cat4Measure | null
+  expected_clause_recall: Cat4Measure | null
+  zero_citation_answers: number | null
+  retrieval_recall: Cat4Measure | null
+  judged: number
+  correctness_mean: number | null
+  completeness_mean: number | null
+  material_errors: number | null
+  answers_with_material_error: number | null
+}
+
+export interface Cat4RungQuality {
+  keys_version: string | null
+  audit: Cat4AuditQuality
+  questions: Cat4QuestionQuality[]
+  grader_unavailable_reason: string | null
+}
+
+export interface Cat4PortfolioCell {
+  rung_id: string
+  runnable_in_app: boolean
+  scale: number
+  sessions: number
+  answers: number
+  fact_recall: Cat4Measure
+  fact_recall_supplier_specific: Cat4Measure
+  fact_recall_non_specific: Cat4Measure
+  citations_requested: boolean
+  citations_per_answer_mean: number | null
+  zero_citation_answers: Cat4Measure | null
+  expected_chunk_recall: Cat4Measure | null
+  citations_at_expected: Cat4Measure | null
+  cited_support: Cat4Measure | null
+  contaminated_answers: Cat4Measure
+  value_contaminated_answers: Cat4Measure
+  value_contaminated_unattributed_answers: Cat4Measure | null
+  citation_contaminated_answers: Cat4Measure
+  exposure_answers: Cat4Measure | null
+  recall_after_bm25: Cat4Measure | null
+  recall_after_rerank: Cat4Measure | null
+  distractors_selected: Cat4Measure | null
+  backfilled: number | null
+  invalid_picks: number | null
+  judged: number
+  correctness_mean: number | null
+  completeness_mean: number | null
+  material_errors: number | null
+  minor_errors: number | null
+  answers_with_material_error: Cat4Measure | null
+  answers_the_question: Record<string, number>
+  cost_per_question_billed_usd: number | null
+  cost_per_question_cold_usd: number | null
+  cost_per_question_warm_usd: number | null
+  cost_per_question_billed_sonnet_usd: number | null
+  cost_per_question_billed_haiku_usd: number | null
+  cache_write_premium_usd: number
+}
+
+export interface Cat4BreakEven {
+  a: string
+  b: string
+  premium_a_usd: number
+  per_question_a_usd: number
+  premium_b_usd: number
+  per_question_b_usd: number
+  n_star: number | null
+  questions: number | null
+  verdict: string
+}
+
+export interface Cat4QualityPortfolio {
+  schema_version: number
+  source: string
+  source_file: string | null
+  judgements_file: string | null
+  keys_version: string | null
+  judge_model: string | null
+  judge_passes: number
+  scope_line: string | null
+  record_count: number
+  ok_sessions: number
+  error_records: number
+  superseded_records: number
+  answers_scored: number
+  answers_judged: number
+  sessions_per_cell: number | null
+  questions_per_session: number
+  scales: number[]
+  corpus: Record<string, Record<string, number>>
+  synth_max_tokens: number | null
+  matrix_complete: boolean
+  cells: Cat4PortfolioCell[]
+  break_even: Record<string, Cat4BreakEven[]>
+}
+
 export interface Cat4QueryResult {
   question_id: string
   question_number: number
   topic_tag: string
   question: string
+  question_as_asked?: string | null
+  stop_reason?: string | null
   expected_doc_ids: string[]
   expected_chunk_ids: string[]
   answer_markdown: string
@@ -770,6 +986,7 @@ export interface Cat4QueryResult {
   warm_query_cost_usd: number
   reranker_finops: FinOpsBreakdown | null
   reranker_latency_ms: number
+  reranker_stop_reason?: string | null
   retrieval_funnel: Cat4RetrievalChunkTrace[]
   bm25_recall_pct: number | null
   reranker_recall_pct: number | null
@@ -808,6 +1025,8 @@ export interface Cat4RungSummary {
   avg_reranker_recall_pct: number | null
   total_latency_ms: number
   architectural_notes: string[]
+  quality?: Cat4RungQuality | null
+  quality_unavailable_reason?: string | null
 }
 
 export interface Cat4RunResponse {
@@ -822,6 +1041,8 @@ export interface Cat4RunResponse {
   approx_corpus_tokens: number
   results: Cat4RungSummary[]
   rag_callout: string
+  billing_note?: string | null
+  quality_portfolio?: Cat4QualityPortfolio | null
 }
 
 export interface Cat4AdhocQueryResponse {
@@ -829,6 +1050,7 @@ export interface Cat4AdhocQueryResponse {
   preset_id: string
   question: string
   results: Cat4RungSummary[]
+  quality_portfolio?: Cat4QualityPortfolio | null
 }
 
 // --- Category 5: Autonomous Process Orchestration (3-Way ERP Invoice Agent) ---

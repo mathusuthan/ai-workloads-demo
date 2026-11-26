@@ -50,6 +50,7 @@ import type {
   StructuredDraftRiskRow,
 } from '../types'
 import { Cat2QualityPanel } from './Cat2QualityPanel'
+import { Cat2TemplateFixPanel } from './Cat2TemplateFixPanel'
 import { NativeModal } from './NativeModal'
 
 interface Cat2WorkbenchProps {
@@ -916,6 +917,9 @@ export function Cat2Workbench({
 
               {/* Draft quality vs cost (blind-judge summary in replay mode; free checks only in live mode) */}
               <Cat2QualityPanel results={runResponse.results} portfolio={runResponse.quality_portfolio} />
+
+              {/* Measured follow-up beside the app's rungs (the app keeps the original template) */}
+              <Cat2TemplateFixPanel fix={runResponse.template_fix} />
 
               {/* Category 2 FinOps HUD: Input vs 5x Output Weight */}
               <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">

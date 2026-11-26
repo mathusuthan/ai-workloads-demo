@@ -1,6 +1,6 @@
 # Six AI Workload Archetypes: experiment notes for the post series
 
-Source material for seven posts: one introduction and one post per archetype. Every number here comes from `analysis/deck_claims_validation.md` (regenerated 25 Nov 2026), the reruns and scoring in `analysis/cat6_fair_rerun.md`, `analysis/cat3_quality_rerun.md` and `analysis/cat2_quality.md`, or the golden replays the lab app serves. Part 0 feeds the intro post; Parts 1–6 each feed one archetype post; the appendix holds the rate card and definitions that every post may need.
+Source material for seven posts: one introduction and one post per archetype. Every number here comes from `analysis/deck_claims_validation.md` (regenerated 26 Nov 2026), the reruns and scoring in `analysis/cat6_fair_rerun.md`, `analysis/cat3_quality_rerun.md`, `analysis/cat4_quality_rerun.md` and `analysis/cat2_quality.md`, or the golden replays the lab app serves. Part 0 feeds the intro post; Parts 1–6 each feed one archetype post; the appendix holds the rate card and definitions that every post may need.
 
 ## How to read the numbers
 
@@ -13,7 +13,7 @@ Source material for seven posts: one introduction and one post per archetype. Ev
   - *Billed*: what the recorded runs actually cost, cache hits and misses as they happened.
   - *Cold*: the first call has to write the cache. This is a single user starting from nothing.
   - *Warm*: the cached prefix is already there. This is a busy fleet in steady state.
-- **Sample sizes are small**: 12 items, 4 documents, 2 sessions (each run 3 times), 8 questions, 3 invoices, 3 incidents (each run 5 times). Quote the percentages as indicative results from one lab, not as benchmarks.
+- **Sample sizes are small**: 12 items, 4 documents, 2 sessions (each run 3 times), 8 questions (each asked 3 times per version and corpus size), 3 invoices, 3 incidents (each run 5 times). Quote the percentages as indicative results from one lab, not as benchmarks.
 
 ---
 
@@ -45,16 +45,16 @@ The deck closes with three rules:
 | 1 | 1,000 items | $22.04 | $0.189 (Haiku, strict JSON) | −99.1% | Fields correct rose from 27/42 to 40/42 |
 | 2 | 1,000 documents | $58.92 | $1.39 (Haiku, section template); $27.25 with the template on Sonnet | −98%; −54% | Every core fact kept, but a blind grader preferred the long draft in 16 of 16 comparisons; serious errors rose from 1 to 6 (Sonnet template) and 10 (Haiku template) |
 | 3 | 1,000 ten-turn sessions | $399 | $212 (cache + compaction); $240 with caching alone | −47%; −40% | Caching: no change. Compaction: new answers unaffected, but recall of earlier details fell from 36/36 to 2/36 |
-| 4 | 1,000 questions | $46.29 | $13.35 (cached corpus, warm) | −71% | Citations per answer rose from 0 to 10 |
+| 4 | 1,000 questions | $46 | $19 (cached corpus, warm); $24–25 with retrieval | −59%; −46% | Caching: best answers, no serious errors in 48. Retrieval: fine on the small corpus; on one three times larger, 6 to 8 answers in 24 had a serious error |
 | 5 | 1,000 invoices | $191 | $16.99 (Haiku first, Sonnet on escalation) | −91.1% | Correct voucher on 3/3 at every rung |
 | 6 | 1,000 incidents | $696 | $56.20 (Haiku agents, Sonnet patch author, cold start) | −92% | Unchanged: every arm fixed 15 of 15 |
 
 ### The scorecard
 
-The scorecard has 29 rows: the deck's 26 testable claims plus three implicit ones we added, that the cheaper version loses no quality in Archetypes 1, 2 and 3. Against the lab data:
+The scorecard has 30 rows: the deck's 26 testable claims plus four implicit ones we added, that the cheaper version loses no quality in Archetypes 1, 2, 3 and 4. Against the lab data:
 
 - **11 supported**: the measurement falls inside the claimed range or clears the threshold.
-- **15 partly supported**: the direction holds, but the magnitude is outside the range or a confound limits the conclusion.
+- **16 partly supported**: the direction holds, but the magnitude is outside the range or a confound limits the conclusion.
 - **2 not supported**: our added rows for Archetypes 2 and 3. Templated drafts lose to the long draft on quality, and compacting old turns loses recall.
 - **1 not testable**: the per-developer daily token volume for swarms.
 
@@ -64,7 +64,7 @@ The Archetype 6 rows were re-judged on the fair rerun; none of the verdicts chan
 
 - **Every cost lever worked in the direction the deck says.** None of the deck's own claims was contradicted. The two failures are quality costs the deck does not mention.
 - **The "60–80%" rule missed on both sides.** Changing the model as well as the prompt gave 98–99%. A template alone, on the same model, gave 54%.
-- **Cheaper was not worse where the work has a checkable right answer, and was worse where it does not.** The governed rungs were more accurate in Archetype 1 and equally accurate in Archetypes 5 and 6. In Archetype 2 the templated drafts kept every core fact but lost every blind comparison with the long draft, mostly by inventing owners and deadlines the template demanded. In Archetype 3, caching cost nothing in quality, but compacting old turns bought an extra 11% saving at the price of nearly all recall of earlier details.
+- **Cheaper was not worse where the work has a checkable right answer, and was worse where it does not.** The governed rungs were more accurate in Archetype 1 and equally accurate in Archetypes 5 and 6. In Archetype 2 the templated drafts kept every core fact but lost every blind comparison with the long draft, mostly by inventing owners and deadlines the template demanded; one added sentence allowing "not stated" removed nearly all of those errors but did not close the gap. In Archetype 3, caching cost nothing in quality, but compacting old turns bought an extra 11% saving at the price of nearly all recall of earlier details. In Archetype 4, caching the whole corpus gave the best answers, while answering from five retrieved clauses led the model to report terms as absent that it had simply not been shown.
 - **The deck's token bands describe context size, not the bill.** A ten-turn session peaks at 22k tokens of context but bills 163k prompt tokens, because every turn re-sends the history.
 - **The archetype ordering depends on the unit.** The deck's scale runs 1 < 2 < 3 < 4 < 5 << 6. Measured, 1 < 2 < {3, 4, 5} < 6 holds, but a ten-turn session moves more tokens than a whole invoice or a four-question audit.
 - **The Archetype 1 naive baseline is understated.** Most of its naive runs hit their output cap and were cut off, so the true naive cost is higher than shown. Archetype 6 had the same problem and was rerun without it.
@@ -78,7 +78,7 @@ Median total tokens per unit of work, on the rung closest to what the deck descr
 |---|---:|
 | Archetype 1, one item | 1.5k |
 | Archetype 2, one document | 8.5k |
-| Archetype 4, one question | 19.3k |
+| Archetype 4, one question | 19.4k (55.1k on the 3× corpus) |
 | Archetype 4, one four-question audit | 77.5k |
 | Archetype 5, one invoice | 116.9k |
 | Archetype 3, one ten-turn session | 169.6k |
@@ -97,8 +97,8 @@ Good material for the intro: the measurement itself needed six corrections.
 
 ### Limits to state in the intro
 
-- Samples are small. Archetypes 3 and 6 were repeated (3 and 5 times); everything else ran once.
-- Archetype 2's quality grades come from one model acting as a blind grader, with its serious findings checked by hand. Archetype 4's quality scoring is still to come.
+- Samples are small. Archetypes 3, 4 and 6 were repeated (3, 3 and 5 times); Archetypes 1, 2 and 5 ran once, apart from the Archetype 2 follow-up.
+- Archetype 2's quality grades come from one model acting as a blind grader, with its serious findings checked by hand. Archetype 4's answers were graded the same way, in one pass.
 - Several rungs change more than one thing at a time, so a saving cannot always be split between levers.
 - All data is synthetic and the corpus sizes are at the low end of the deck's bands.
 
@@ -171,7 +171,7 @@ Accuracy was scored on 42 ground-truth fields across the 12 items. PII masking i
 
 ## Part 2: Generative synthesis and drafting
 
-**One-line result:** a section template halved the cost of a draft and made it clearer and tighter, but a blind grader preferred the long draft every time, and the template itself pushed both models to invent owners and deadlines.
+**One-line result:** a section template halved the cost of a draft and made it clearer and tighter, but a blind grader preferred the long draft every time, and the template itself pushed both models to invent owners and deadlines. One added sentence, allowing the template to say "not stated", removed almost all of those errors at no cost.
 
 Cost figures are from the original 12 recorded drafts. Quality was added on 25 Nov 2026 by scoring those same drafts; nothing was redrafted.
 
@@ -256,6 +256,35 @@ Of the 17 serious errors, most are the same kind: an owner or a deadline the sou
 
 The template requires an owner and a time window for every action. Across the eight templated drafts, the grader flagged an owner or deadline the source does not support in 16 of 24 action items, 8 for each model, and 12 of those were serious. The one document whose source names its owners and dates had none. Where the source left a field open, the model filled it anyway.
 
+### Follow-up: letting the template say "not stated"
+
+On 26 Nov 2026 one sentence was added to the template's instructions: give an owner and a time window only if the source states them, otherwise write "Not stated in source", and never supply one the source does not give. Nothing else changed.
+
+The test was 48 fresh drafts: the four documents, both models, the original template and the new one, three drafts of each. All were graded blind, and each new-template draft was compared head to head with its matching original-template draft. Each row below covers 12 drafts and 36 action items.
+
+| Template | Model | Owners: found in source / "not stated" / unsupported | Time windows: found in source / "not stated" / unsupported | Serious errors per draft | Accuracy | Actionability | Cost per 1,000 documents |
+|---|---|---|---|---:|---:|---:|---:|
+| Original | Sonnet | 14 / 0 / 22 | 23 / 0 / 13 | 1.25 | 3.3 | 3.7 | $27.19 |
+| Original | Haiku | 10 / 0 / 26 | 17 / 0 / 19 | 2.25 | 2.7 | 3.3 | $1.39 |
+| With the sentence | Sonnet | 8 / 28 / 0 | 21 / 15 / 0 | 0.00 | 4.2 | 3.1 | $26.82 |
+| With the sentence | Haiku | 0 / 36 / 0 | 22 / 14 / 0 | 0.25 | 3.8 | 2.7 | $1.36 |
+
+Head to head:
+
+| Pairing | Result |
+|---|---|
+| New template against original template, same document, model and draft number | New preferred in 47 of 48 |
+| New template against the stored long draft | Long draft preferred in 15 of 16 |
+
+What it shows:
+
+- **One sentence removed almost all the serious errors, at no cost.** Across 24 drafts each, serious errors fell from 42 to 3.
+- **Accuracy grades rose by about a point** on both models. The Sonnet template's 4.2 is in the range of the long draft's 3.9, though those are different drafts.
+- **It did not close the gap to the long draft.** The long draft was still preferred 15 times in 16. The grader now split on accuracy (long draft 11, new template 1, tie 4) and chose the long draft every time on usefulness to the reader.
+- **An honest blank scores lower on actionability.** A plan that says "owner not stated" is less actionable than one that names an owner, even an invented one. The grade fell from 3.7 to 3.1 on Sonnet and from 3.3 to 2.7 on Haiku.
+- **The small model over-corrected.** Haiku wrote "not stated" for all 36 owners, including on the document whose source names them. Sonnet kept 8 owners the source did give. Supporting facts covered fell as a result, from 110 to 94 of 120 on Sonnet and from 104 to 92 on Haiku.
+- **The fresh original-template drafts reproduced the first finding.** By a mechanical check, 48 of their 72 owners and 32 of their 72 time windows had no support in the source.
+
 ### Deck claims against the data
 
 | Claim | Measured | Verdict |
@@ -287,9 +316,10 @@ The template requires an owner and a time window for every action. Across the ei
 - The grader can see that a draft is long or short, even though it does not know what wrote it.
 - The unbounded version was asked for an exhaustive report, the templated ones for a tight one. Coverage and concision grades partly reflect those instructions.
 - Only four documents.
-- The obvious fix, letting the template say "not stated in the source", was not tested.
+- The follow-up used one grading pass per draft, where the first round used three, and the phrase "Not stated in source" lets the grader tell the two templates apart in a head-to-head comparison.
+- The follow-up's check of whether an owner or date is "found in source" only tests that the words occur there, not that the source assigns that action to them.
 
-Full results: `analysis/cat2_quality.md`. Grader records: `backend/experiments/cat2_quality/judgements.jsonl`. Fact checklist: `backend/app/data/cat2_quality_keys.json`.
+Full results: `analysis/cat2_quality.md`, and `analysis/cat2_not_stated.md` for the follow-up. Grader records: `backend/experiments/cat2_quality/judgements.jsonl` and `backend/experiments/cat2_not_stated/`. Fact checklist: `backend/app/data/cat2_quality_keys.json`.
 
 ---
 
@@ -408,7 +438,9 @@ Full results: `analysis/cat3_quality_rerun.md`. Raw records: `backend/experiment
 
 ## Part 4: Multi-document RAG and deep ingestion
 
-**One-line result:** caching the whole corpus and trimming it with retrieval each cut cost roughly in half, and which one wins depends on how many questions share a cache.
+**One-line result:** caching the whole corpus gave the best answers and the lowest steady-state cost; retrieval was cheaper for a short session but, once look-alike contracts were added, it began telling the reader that terms were "not in the documents" when they were.
+
+This section uses the rerun of 26 Nov 2026: 192 live answers (four versions, two corpus sizes, three sessions of eight questions each), scored against an answer key and graded blind.
 
 ### What the deck says
 
@@ -419,59 +451,122 @@ Full results: `analysis/cat3_quality_rerun.md`. Raw records: `backend/experiment
 
 ### What was built
 
-The NovaMart Supplier Deal-Room: seven contract and compliance documents split into 28 clauses, about 18.4k tokens. The documents include a wholesale master agreement, a peak-season service-level addendum, a data-protection schedule, safety and tax riders, a statutory audit extract and a side letter.
+The NovaMart Supplier Deal-Room: seven contract and compliance documents for one supplier, split into 28 clauses. The documents include a wholesale master agreement, a peak-season service-level addendum, a data-protection schedule, safety and tax riders, a statutory audit extract and a side letter.
 
-Two audit packs of four questions each, eight questions in total:
+Eight due-diligence questions, each needing clauses from several documents: liability caps and carve-outs, peak-season overrides, an equity-stake condition, data localisation, tax escrow, statutory audit notes, product safety, and commercial price adjustments.
 
-- **Legal and privacy pack.** Liability caps and carve-outs, peak-season overrides, an equity-stake condition, data localisation.
-- **Finance and compliance pack.** Tax escrow, small-supplier payment rules, statutory audit notes, product safety.
+Two corpus sizes:
 
-Three rungs:
+- **1×.** The seven documents: 18.5k tokens as plain text.
+- **3×.** The same deal room plus the equivalent seven documents for two other suppliers, 21 documents and 54k tokens. The added contracts have the same structure and clause numbers but different parties, amounts, percentages and dates. Every question is scoped to the first supplier.
 
-- **Naive.** All seven documents pasted as plain text on every question. No citations.
-- **Cached corpus.** All seven documents sent as cached document blocks, with the API's native citations.
-- **Hybrid retrieval.** Keyword search narrows 28 clauses to 10, Haiku reranks to the best 5, Sonnet answers with citations. Not cached.
+Four versions:
 
-### Results
+- **Full corpus, no cache.** Every document pasted as plain text on every question. No citations.
+- **Full corpus, cached and cited.** Every document sent as a cached document block, with the API's native citations.
+- **Keyword search plus rerank.** Keyword search narrows the clauses to 10, Haiku picks the best 5, Sonnet answers from those 5 with citations. Nothing cached.
+- **Combined, the deck's lever.** Haiku reads the whole cached corpus and picks the best 5 clauses; Sonnet answers from those 5 with citations.
 
-| Rung | Cost per 1,000 questions (billed) | Steady state (warm) | vs naive (warm) | Prompt tokens per question |
+Quality was measured three ways:
+
+- **Key facts.** 53 facts across the eight questions, written from the contracts alone, scored by deterministic matching.
+- **Citations and retrieval.** Whether citations point at the clauses each question needs, whether the needed clauses reached the answering model, and whether another supplier's clauses or figures crept in.
+- **Blind grading.** A model not under test (Opus 5.5) graded each answer for correctness and completeness against the first supplier's contracts and listed every factual error with quotes. Every serious error's source quote was then checked against the contracts.
+
+### Results: cost
+
+Cost per question, in dollars. "Session from cold" is the average over an eight-question session that starts with an empty cache; "warm" is the steady state once the cache exists.
+
+| Version | 1× session from cold | 1× warm | 3× session from cold | 3× warm |
 |---|---:|---:|---:|---:|
-| Full corpus, no cache, no citations | $46.29 | $46.29 | — | 18.4k |
-| Full corpus, cached, native citations | $19.79 | $13.35 | −71% | 21.5k |
-| Keyword search + Haiku rerank + citations | $24.33 | $24.33 | −47% | 5.7k–6.7k |
+| Full corpus, no cache | $0.046 | $0.046 | $0.117 | $0.117 |
+| Full corpus, cached and cited | $0.025 | $0.019 | $0.038 | $0.019 |
+| Keyword search plus rerank | $0.025 | $0.025 | $0.028 | $0.028 |
+| Combined | $0.024 | $0.024 | $0.026 | $0.025 |
 
-| Rung | Citations per answer (median) | Answers with no citation | Rerank recall |
-|---|---:|---:|---:|
-| Full corpus, no cache, no citations | 0 | 8 of 8 | — |
-| Full corpus, cached, native citations | 10 | 0 of 8 | — |
-| Keyword search + Haiku rerank + citations | 10 | 0 of 8 | 100% |
+How many questions must share one cache write before the first version is the cheaper of the pair:
 
-Per four-question audit, starting cold: naive $185, cached corpus $105, hybrid $97 per 1,000 audits.
+| Comparison | 1× corpus | 3× corpus |
+|---|---:|---:|
+| Cached full corpus against keyword search plus rerank | 9 | 18 |
+| Combined against keyword search plus rerank | 5 | 4 |
+| Cached full corpus against combined | 10 | 23 |
+
+The one-off cost of writing the cache is $0.052 at 1× and $0.149 at 3× for the full corpus on Sonnet, and under one cent for the combined version, where the cache is on Haiku.
+
+### Results: quality
+
+Each cell is 24 answers.
+
+| Version | Corpus | Key facts stated | Answers with a serious error | Correctness (1–5) | Completeness (1–5) |
+|---|---|---:|---:|---:|---:|
+| Full corpus, no cache | 1× | 98% | 1 | 4.5 | 4.8 |
+| | 3× | 94% | 3 | 4.5 | 4.8 |
+| Full corpus, cached and cited | 1× | 94% | 0 | 5.0 | 4.6 |
+| | 3× | 94% | 0 | 4.8 | 4.7 |
+| Keyword search plus rerank | 1× | 96% | 0 | 4.7 | 4.7 |
+| | 3× | 91% | 8 | 4.0 | 4.2 |
+| Combined | 1× | 97% | 1 | 4.5 | 4.7 |
+| | 3× | 96% | 6 | 4.4 | 4.5 |
+
+Retrieval, for the two versions that pass only five clauses to the answering model:
+
+| Version | Corpus | Needed clauses that reached the answering model | Clauses passed on that belonged to another supplier |
+|---|---|---:|---:|
+| Keyword search plus rerank | 1× | 99% | 0 of 120 |
+| | 3× | 86% | 25 of 120 |
+| Combined | 1× | 100% | 0 of 120 |
+| | 3× | 100% | 0 of 120 |
+
+Citations and supplier mix-ups:
+
+- **Every cited version cited every answer.** 144 of 144, with nothing filtered out.
+- **No citation pointed at another supplier's contract**, out of 746 citations on the larger corpus.
+- **One answer in 192 stated another supplier's figure**, and it did so to exclude it by name.
+
+### What the serious errors were
+
+Nearly all of the retrieval versions' serious errors are the same statement: that the documents contain no such term.
+
+- "The documents specify no banking NOC or escrow gate." The side letter makes a bank's no-objection certificate a condition, and the tax schedule sets up an escrow holdback.
+- "The MSA baseline cap is not in the excerpts, so that contrast cannot be quantified." The master agreement states a 2.0% cap, and the addendum overrides it.
+- "The Note 21 warranty reserve is not in the provided deal-room text." It is in the audit extract.
+
+The answer format asks every answer to name a sign-off gate, such as a bank certificate or an escrow. When the five clauses in front of the model did not contain one, it reported that the documents had none. With the whole corpus in context, that error did not occur.
 
 ### Deck claims against the data
 
 | Claim | Measured | Verdict |
 |---|---|---|
-| Input 15k–100k+ tokens | 18.4k per question | Supported |
-| Output 400–1,500 tokens | 798–1,039 | Supported |
-| Ratio 20:1 to 100:1 | 19.4:1 | Partly |
-| Pair hybrid retrieval with caching | Each lever works alone; they were never combined | Partly |
+| Input 15k–100k+ tokens | 18.5k per question at 1×, 54k at 3×; 6k when only five clauses are sent | Supported |
+| Output 400–1,500 tokens | Median 1,036, range 760–2,992; 150 of 192 answers in range | Partly |
+| Ratio 20:1 to 100:1 | 21:1 at 1×, 62:1 at 3× | Supported |
+| Pair hybrid retrieval with context caching | The pairing found every needed clause and no wrong-supplier clauses at retrieval cost, but answered less accurately than the cached full corpus | Partly |
+| …without losing answer quality (our addition; the deck does not claim it) | Caching: no loss. Retrieval on the larger corpus: 6 to 8 answers in 24 with a serious error, against 0 | Partly |
 
 ### Points worth making in the post
 
-- **There is a break-even.** Caching the whole corpus beats hybrid retrieval once about 4.7 questions share one cache write. Below that, retrieval is cheaper.
-- **So the answer depends on traffic shape.** One analyst asking four questions: retrieval wins narrowly ($97 against $105). A team asking questions all day against the same contracts: the cached corpus wins clearly ($13 against $24).
-- **The cache has a short life.** The standard cache lasts five minutes between uses, so the warm figure needs steady traffic.
-- **Retrieval cut prompt tokens by 81% and lost nothing.** The reranker kept every clause the answers needed across all eight questions.
-- **Citations are the quality gain.** The naive rung produced no verifiable citations on any answer. Both governed rungs averaged ten per answer.
-- **Citations cost tokens.** Document blocks with citations raise the prompt from 18.4k to 21.5k tokens per question. Caching more than pays for it.
-- **The deck's "pair them" was not tested.** The hybrid rung sends no cache instruction, so the combined effect is unknown.
+- **Caching beats retrieval on quality when the corpus fits in context.** The cached full corpus had no serious errors in 48 answers and the highest correctness grade at both sizes.
+- **Which is cheaper depends on traffic.** An eight-question session from a cold cache is cheapest with retrieval on the larger corpus ($0.026–0.028 against $0.038 a question). Steady traffic against a warm cache is cheapest with caching ($0.019). The crossover is 9 questions per cache write at 1× and 18 at 3×, and the cache lasts five minutes between uses.
+- **Cached cost barely grows with the corpus.** Tripling the corpus raised the uncached cost per question 2.6 times. Warm cached cost rose 3%.
+- **Keyword retrieval broke down among look-alike documents.** With two other suppliers' contracts added, it delivered 86% of the needed clauses instead of 99%, and one clause in five it passed on was from the wrong supplier.
+- **The deck's pairing fixes retrieval, cheaply.** Letting the small model read the whole cached corpus found every needed clause and passed on nothing from another supplier, for the same cost as keyword retrieval. The cache it needs costs under a cent to write.
+- **But perfect retrieval is not the same as full context.** The combined version still had a serious error in 6 of 24 answers on the larger corpus. Five clauses answer the question asked; they cannot show what else the contracts say.
+- **"Not found" from a retrieval system means "not in what I was shown".** The dominant error was a confident statement that the documents lacked a term. A reader has no way to tell that from a true absence.
+- **Nobody confused the suppliers.** Even with three near-identical deal rooms in one prompt, no version attributed one supplier's terms to another.
+- **Citations held up without filtering.** The original experiment rejected uncited answers and tried again. Here every answer was kept, and all 144 were cited.
+- **The cheapest good answer had no citations.** Pasting everything with no cache scored 4.5 for correctness, above both retrieval versions on the larger corpus, at two to six times the cost and with nothing for a reviewer to check.
 
 ### Caveats
 
-- The corpus is at the very bottom of the deck's band. At 100k tokens the break-even and the ratio would both shift.
-- The billed figure for the cached rung is flattered by run order: the second audit pack found the cache already warm.
-- Eight questions; answer correctness was not scored beyond citation counts and rerank recall.
+- Eight questions on one deal room, three sessions per cell. The added suppliers' contracts are mechanical variants of the first supplier's, not independently written.
+- One grading pass per answer by a single model. Its serious findings were checked against the contracts by hand.
+- The largest corpus is 54k tokens. The comparison will change where a corpus no longer fits in context or a cache write becomes too expensive to repeat.
+- The keyword search was tuned on these questions and this supplier, so its results on the small corpus are optimistic.
+- The answer format's request for a sign-off gate is what exposes the partial-context error. A different format would expose it less often; it would not remove the cause.
+- Break-even points depend on answer length. Cited answers ran longer in this rerun than in the original capture, which had put the 1× crossover at 5 questions.
+
+Full results: `analysis/cat4_quality_rerun.md`. Raw records: `backend/experiments/cat4_quality/runs.jsonl` and `judgements.jsonl`. Answer key: `backend/app/data/cat4_quality_keys.json`.
 
 ---
 
@@ -680,7 +775,8 @@ US dollars per million tokens.
 - Full validation report: `analysis/deck_claims_validation.md` (and `.json` for raw values).
 - Script that produces it: `backend/scripts/validate_deck_claims.py`.
 - Recorded runs: `backend/replays/cat{1..6}_golden_replays.json`.
-- Trace files: `backend/traces/` (953 files, 244 distinct canonical runs).
+- Trace files: `backend/traces/` (985 files, 244 distinct canonical runs).
+- Archetype 4 rerun: `analysis/cat4_quality_rerun.md`, with raw records in `backend/experiments/cat4_quality/`.
 - Archetype 2 quality scoring: `analysis/cat2_quality.md`, with grader records in `backend/experiments/cat2_quality/judgements.jsonl`.
 - Archetype 3 rerun: `analysis/cat3_quality_rerun.md`, with raw records in `backend/experiments/cat3_quality/runs.jsonl`.
 - Archetype 6 rerun: `analysis/cat6_fair_rerun.md`, with raw records in `backend/experiments/cat6_fair_rerun/runs.jsonl`.

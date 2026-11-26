@@ -1,7 +1,7 @@
 """Seed backend/traces/ from the golden replays.
 
 Default: clears every prior `live_captured_seed` trace (all categories) and re-seeds Categories 1-6.
-`--cat3-only` / `--cat6-only`: appends that category's seeds only, without deleting or rewriting any other
+`--cat3-only` / `--cat4-only` / `--cat6-only`: appends that category's seeds only, without deleting or rewriting any other
 trace (older seeds of that category stay on disk and are superseded by the new ones).
 """
 
@@ -53,7 +53,9 @@ from app.archetypes.cat4_rag.prompts import (  # noqa: E402
     get_cat4_synthesis_system_prompt,
 )
 from app.archetypes.cat4_rag.runner import (  # noqa: E402
+    CAT4_RERANK_MAX_TOKENS,
     CAT4_RUNG_TO_PATTERN,
+    CAT4_SYNTH_MAX_TOKENS,
     RERANKER_PATTERN as CAT4_RERANKER_PATTERN,
     load_cat4_replays,
     persist_cat4_trace,
@@ -382,107 +384,7 @@ def seed_all() -> None:
 
     written += seed_cat3()
 
-    # Seed Category 4 traces (24 synthesis calls across 3 rungs + 8 Haiku reranker calls)
-    cat4_replays = load_cat4_replays()
-    cat4_presets_replays = cat4_replays.get("presets") or {}
-    for preset in CAT4_PRESETS:
-        pid = preset["id"]
-        if pid not in cat4_presets_replays:
-            continue
-        rungs_map = cat4_presets_replays[pid].get("rungs") or {}
-        for rung_id in (
-            "naive_full_corpus",
-            "cached_full_corpus_citations",
-            "hybrid_rag_rerank_citations",
-        ):
-            raw_queries = rungs_map.get(rung_id) or []
-            sys_inst = get_cat4_synthesis_system_prompt(
-                with_citations=(rung_id != "naive_full_corpus")
-            )
-            run_group = f"seed-cat4-{pid}-{rung_id}"
-            for rq in raw_queries:
-                qid = str(rq["question_id"])
-                qnum = int(rq["question_number"])
-                model_id = str(rq.get("model_id") or "claude-sonnet-5-5")
-                if int(rq.get("reranker_input_tokens") or 0) > 0:
-                    rerank_fin = compute_run_finops(
-                        model_id=str(rq.get("reranker_model_id") or "claude-haiku-5-5"),
-                        input_tokens=int(rq["reranker_input_tokens"]),
-                        output_tokens=int(rq.get("reranker_output_tokens") or 0),
-                    )
-                    rerank_struct = rq.get("reranker_structured") or {}
-                    persist_cat4_trace(
-                        source_mode="live_captured_seed",
-                        run_group_id=run_group,
-                        item_id=f"{pid}__{qid}_rerank",
-                        item_title=f"{preset['title']} · Haiku Rerank Q{qnum}",
-                        model_id=str(rq.get("reranker_model_id") or "claude-haiku-5-5"),
-                        pattern=CAT4_RERANKER_PATTERN,
-                        system_instruction=get_cat4_haiku_reranker_system_prompt(),
-                        payload_text=str(rq.get("reranker_payload") or rq["question"]),
-                        status="ok",
-                        latency_ms=int(rq.get("reranker_latency_ms") or 0),
-                        finops_dict=rerank_fin.model_dump(),
-                        raw_text=json.dumps(rerank_struct, indent=2),
-                        structured_output=rerank_struct,
-                        request_params={
-                            "max_tokens": 800,
-                            "endpoint": "messages.create",
-                            "thinking": {"type": "disabled"},
-                            "output_config": {"format": {"type": "json_schema"}},
-                        },
-                        json_schema=RERANK_JSON_SCHEMA,
-                        stop_reason="end_turn",
-                        extra_metadata={
-                            "source_endpoint": "capture_cat4_replays.py",
-                            "question_id": qid,
-                        },
-                    )
-                    written += 1
-
-                q_fin = compute_run_finops(
-                    model_id=model_id,
-                    input_tokens=int(rq["input_tokens"]),
-                    output_tokens=int(rq["output_tokens"]),
-                    cache_creation_tokens=int(rq.get("cache_creation_tokens") or 0),
-                    cache_read_tokens=int(rq.get("cache_read_tokens") or 0),
-                )
-                persist_cat4_trace(
-                    source_mode="live_captured_seed",
-                    run_group_id=run_group,
-                    item_id=f"{pid}__{qid}",
-                    item_title=f"{preset['title']} · Q{qnum} ({rq['topic_tag']})",
-                    model_id=model_id,
-                    pattern=CAT4_RUNG_TO_PATTERN[rung_id],
-                    system_instruction=sys_inst,
-                    payload_text=str(rq["question"]),
-                    status="ok",
-                    latency_ms=int(rq["latency_ms"]),
-                    finops_dict=q_fin.model_dump(),
-                    raw_text=str(rq["answer_markdown"]),
-                    structured_output={
-                        "question_id": qid,
-                        "topic_tag": rq["topic_tag"],
-                        "citations_count": len(rq.get("citations") or []),
-                        "citations": rq.get("citations") or [],
-                        "context_reduction_pct": rq.get("context_reduction_pct", 0.0),
-                        "reranker_recall_pct": rq.get("reranker_recall_pct"),
-                    },
-                    request_params={
-                        "max_tokens": 2048,
-                        "endpoint": "messages.create",
-                        "thinking": {"type": "between_tools"},
-                        "prefix_cache_enabled": rung_id == "cached_full_corpus_citations",
-                        "native_document_citations": rung_id != "naive_full_corpus",
-                    },
-                    stop_reason=rq.get("stop_reason") or "end_turn",
-                    extra_metadata={
-                        "source_endpoint": "capture_cat4_replays.py",
-                        "question_id": qid,
-                        "rung_id": rung_id,
-                    },
-                )
-                written += 1
+    written += seed_cat4()
 
     # Seed Category 5 traces (9 orchestration rollups across 3 invoices x 3 rungs)
     cat5_replays = load_cat5_replays()
@@ -773,6 +675,129 @@ def seed_cat3() -> int:
     return written
 
 
+def seed_cat4() -> int:
+    """Seed Category 4 traces from cat4_golden_replays.json; appends only.
+
+    When the golden replays come from the quality rerun (scripts/build_cat4_golden_from_rerun.py) the traces
+    carry the real stop reasons, the question as the model received it and the rerun provenance; older Category 4
+    seeds stay on disk and are superseded by these (newest seed per category/model/pattern/item)."""
+    written = 0
+    cat4_replays = load_cat4_replays()
+    file_prov = cat4_replays.get("provenance") or {}
+    from_rerun = file_prov.get("source") == "cat4 quality rerun"
+    source_endpoint = "build_cat4_golden_from_rerun.py" if from_rerun else "capture_cat4_replays.py"
+    cat4_presets_replays = cat4_replays.get("presets") or {}
+    for preset in CAT4_PRESETS:
+        pid = preset["id"]
+        if pid not in cat4_presets_replays:
+            continue
+        rungs_map = cat4_presets_replays[pid].get("rungs") or {}
+        rung_prov = cat4_presets_replays[pid].get("provenance") or {}
+        for rung_id in (
+            "naive_full_corpus",
+            "cached_full_corpus_citations",
+            "hybrid_rag_rerank_citations",
+        ):
+            raw_queries = rungs_map.get(rung_id) or []
+            sys_inst = get_cat4_synthesis_system_prompt(
+                with_citations=(rung_id != "naive_full_corpus")
+            )
+            run_group = f"seed-cat4-rerun-{pid}-{rung_id}" if from_rerun else f"seed-cat4-{pid}-{rung_id}"
+            prov = rung_prov.get(rung_id) or {}
+            for rq in raw_queries:
+                qid = str(rq["question_id"])
+                qnum = int(rq["question_number"])
+                model_id = str(rq.get("model_id") or "claude-sonnet-5-5")
+                asked = str(rq.get("question_as_asked") or rq["question"])
+                meta = {"source_endpoint": source_endpoint, "question_id": qid}
+                if from_rerun:
+                    meta.update({"rerun_run_id": prov.get("run_id"), "repeat_index": prov.get("repeat_index"),
+                                 "scale": prov.get("scale"), "session_q_index": rq.get("session_q_index")})
+                if int(rq.get("reranker_input_tokens") or 0) > 0:
+                    rerank_fin = compute_run_finops(
+                        model_id=str(rq.get("reranker_model_id") or "claude-haiku-5-5"),
+                        input_tokens=int(rq["reranker_input_tokens"]),
+                        output_tokens=int(rq.get("reranker_output_tokens") or 0),
+                    )
+                    rerank_struct = rq.get("reranker_structured") or {}
+                    persist_cat4_trace(
+                        source_mode="live_captured_seed",
+                        run_group_id=run_group,
+                        item_id=f"{pid}__{qid}_rerank",
+                        item_title=f"{preset['title']} · Haiku Rerank Q{qnum}",
+                        model_id=str(rq.get("reranker_model_id") or "claude-haiku-5-5"),
+                        pattern=CAT4_RERANKER_PATTERN,
+                        system_instruction=get_cat4_haiku_reranker_system_prompt(),
+                        payload_text=str(rq.get("reranker_payload") or asked),
+                        status="ok",
+                        latency_ms=int(rq.get("reranker_latency_ms") or 0),
+                        finops_dict=rerank_fin.model_dump(),
+                        raw_text=json.dumps(rerank_struct, indent=2),
+                        structured_output=rerank_struct,
+                        request_params={
+                            "max_tokens": CAT4_RERANK_MAX_TOKENS,
+                            "endpoint": "messages.create",
+                            "thinking": {"type": "disabled"},
+                            "output_config": {"format": {"type": "json_schema"}},
+                        },
+                        json_schema=RERANK_JSON_SCHEMA,
+                        stop_reason=rq.get("reranker_stop_reason") if from_rerun else "end_turn",
+                        extra_metadata=dict(meta),
+                    )
+                    written += 1
+
+                q_fin = compute_run_finops(
+                    model_id=model_id,
+                    input_tokens=int(rq["input_tokens"]),
+                    output_tokens=int(rq["output_tokens"]),
+                    cache_creation_tokens=int(rq.get("cache_creation_tokens") or 0),
+                    cache_read_tokens=int(rq.get("cache_read_tokens") or 0),
+                )
+                judgement = rq.get("judgement") or None
+                persist_cat4_trace(
+                    source_mode="live_captured_seed",
+                    run_group_id=run_group,
+                    item_id=f"{pid}__{qid}",
+                    item_title=f"{preset['title']} · Q{qnum} ({rq['topic_tag']})",
+                    model_id=model_id,
+                    pattern=CAT4_RUNG_TO_PATTERN[rung_id],
+                    system_instruction=sys_inst,
+                    payload_text=asked,
+                    status="ok",
+                    latency_ms=int(rq["latency_ms"]),
+                    finops_dict=q_fin.model_dump(),
+                    raw_text=str(rq["answer_markdown"]),
+                    structured_output={
+                        "question_id": qid,
+                        "topic_tag": rq["topic_tag"],
+                        "citations_count": len(rq.get("citations") or []),
+                        "citations": rq.get("citations") or [],
+                        "context_reduction_pct": rq.get("context_reduction_pct", 0.0),
+                        "reranker_recall_pct": rq.get("reranker_recall_pct"),
+                        "grader": (
+                            {
+                                "correctness": judgement["correctness"]["score"],
+                                "completeness": judgement["completeness"]["score"],
+                                "material_errors": sum(1 for e in judgement["factual_errors"] if e["severity"] == "material"),
+                            }
+                            if judgement
+                            else None
+                        ),
+                    },
+                    request_params={
+                        "max_tokens": int(rq.get("max_tokens") or CAT4_SYNTH_MAX_TOKENS),
+                        "endpoint": "messages.create",
+                        "thinking": {"type": "between_tools"},
+                        "prefix_cache_enabled": rung_id == "cached_full_corpus_citations",
+                        "native_document_citations": rung_id != "naive_full_corpus",
+                    },
+                    stop_reason=rq.get("stop_reason") if from_rerun else (rq.get("stop_reason") or "end_turn"),
+                    extra_metadata={**meta, "rung_id": rung_id},
+                )
+                written += 1
+    return written
+
+
 def seed_cat6() -> int:
     """Seed Category 6 traces (9 swarm rollups: 3 incidents x 3 rungs) from cat6_golden_replays.json.
 
@@ -868,9 +893,18 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="append Category 3 seed traces only; no other trace is deleted or rewritten",
     )
+    ap.add_argument(
+        "--cat4-only",
+        action="store_true",
+        help="append Category 4 seed traces only; no other trace is deleted or rewritten",
+    )
     args = ap.parse_args(argv)
-    if args.cat3_only and args.cat6_only:
-        ap.error("--cat3-only and --cat6-only are mutually exclusive")
+    if sum(map(bool, (args.cat3_only, args.cat4_only, args.cat6_only))) > 1:
+        ap.error("--cat3-only, --cat4-only and --cat6-only are mutually exclusive")
+    if args.cat4_only:
+        n = seed_cat4()
+        print(f"Seeded {n} Category 4 trace files into {get_settings().traces_dir} (append-only)")
+        return
     if args.cat3_only:
         n = seed_cat3()
         print(f"Seeded {n} Category 3 trace files into {get_settings().traces_dir} (append-only)")

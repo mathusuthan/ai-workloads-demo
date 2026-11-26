@@ -107,7 +107,8 @@ def test_quality_absent_without_summary_file(monkeypatch: pytest.MonkeyPatch, tm
     monkeypatch.setattr(runner, "load_cat2_quality_summary", lambda: None)
     data = _replay("brief-02")
     assert data["quality_portfolio"] is None
-    assert data["output_tax_callout"].endswith("Draft quality is not graded on this run.")
+    # The baseline grades are gone; the separately measured template fix (independent file) may still follow.
+    assert " Draft quality is not graded on this run." in data["output_tax_callout"]
     for r in data["results"]:
         # Without the summary the replay falls back to the free checks with the judge fields empty.
         assert r["quality"]["source"] == "live_deterministic" and r["quality"]["rubric"] is None
@@ -200,3 +201,55 @@ def test_section_regen_has_no_quality_block() -> None:
     )
     assert r.status_code == 200, r.text
     assert "quality" not in r.json() and "quality_portfolio" not in r.json()
+
+
+# ---------------------------------------------------------------- template fix (not_stated follow-up)
+
+FIX = json.loads((BACKEND_DIR / "replays" / "cat2_not_stated_summary.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("pid", PRESET_IDS)
+def test_template_fix_block_on_every_replay(pid: str) -> None:
+    data = _replay(pid)
+    tf = data["template_fix"]
+    assert tf is not None and tf["app_template"] == "template_original"
+    assert tf["added_instruction"] == FIX["added_instruction"] and len(tf["cells"]) == 4
+    assert tf["head_to_head"]["vs_unbounded"]["all"]["overall"] == {"wins": 1, "losses": 15, "ties": 0}
+
+
+def test_template_fix_notes_and_callout_quote_the_summary() -> None:
+    data = _replay("reg-02")
+    by = {r["rung_id"]: r for r in data["results"]}
+    cell = {(c["arm"], c["model_key"]): c for c in FIX["cells"]}
+    for rid, m in (("sonnet_templated", "sonnet"), ("haiku_templated", "haiku")):
+        o, n = cell[("template_original", m)], cell[("template_not_stated", m)]
+        note = by[rid]["architectural_notes"][3]
+        assert note.startswith("The template requires an owner and a time window")
+        assert f"cut serious errors per draft from {o['serious_per_draft']:.2f} to {n['serious_per_draft']:.2f}" in note
+        assert "not used by the app" in note
+    assert not any("Measured fix" in n for n in by["sonnet_unbounded"]["architectural_notes"])
+    assert "the long draft was still preferred in 15 of 16 comparisons; the app keeps the original template." in data["output_tax_callout"]
+
+
+def test_template_fix_absent_gives_none_and_number_free_pointer(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(runner, "load_cat2_template_fix", lambda: None)
+    data = _replay("reg-02")
+    assert data["template_fix"] is None and "Measured fix" not in data["output_tax_callout"]
+    note = {r["rung_id"]: r for r in data["results"]}["sonnet_templated"]["architectural_notes"][3]
+    assert note.endswith(runner.FIX_POINTER_FALLBACK) and not any(ch.isdigit() for ch in runner.FIX_POINTER_FALLBACK)
+
+
+def test_template_fix_loader_falls_back_to_none(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    class _S:
+        replays_dir = str(tmp_path)
+
+    monkeypatch.setattr(runner, "get_settings", lambda: _S())
+    assert runner.load_cat2_template_fix() is None
+    (tmp_path / "cat2_not_stated_summary.json").write_text("{not json")
+    assert runner.load_cat2_template_fix() is None
+
+
+def test_template_fix_present_in_live_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_live(monkeypatch, runner.load_cat2_replays()["presets"]["brief-01"]["rungs"])
+    resp = asyncio.run(runner.execute_cat2_run(Cat2RunRequest(custom_input="Revenue rose 12% in Q3.", mode="live")))
+    assert resp.template_fix is not None and resp.template_fix.counts["drafts"] == 48

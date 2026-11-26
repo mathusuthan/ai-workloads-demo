@@ -285,8 +285,14 @@ async def run_cat2_structured_draft(
     model_tier: str,
     api_key: str,
     max_tokens: int = 3000,
+    *,
+    raise_on_max_tokens: bool = True,
 ) -> AnthropicRawResult:
-    """Category 2 Templated / Surgical Section synthesis via strict JSON schema (thinking disabled on Haiku only)."""
+    """Category 2 Templated / Surgical Section synthesis via strict JSON schema (thinking disabled on Haiku only).
+
+    raise_on_max_tokens=False (experiments only) returns a truncated draft instead of raising: its text, usage and
+    stop_reason are kept, and `structured` is {} when the JSON does not parse.
+    """
     settings = get_settings()
     is_sonnet = "sonnet" in model_tier
     primary_model = settings.anthropic_sonnet_model if is_sonnet else settings.anthropic_haiku_model
@@ -324,12 +330,18 @@ async def run_cat2_structured_draft(
     raw_text = "\n".join(
         b.text for b in resp.content if getattr(b, "type", None) == "text"
     ).strip()
-    if getattr(resp, "stop_reason", None) == "max_tokens":
+    if getattr(resp, "stop_reason", None) == "max_tokens" and raise_on_max_tokens:
         out_cnt = int(getattr(resp.usage, "output_tokens", 0) or 0)
         raise RuntimeError(
             f"Structured draft hit max_tokens={max_tokens} ({out_cnt} out tokens)"
         )
-    structured = json.loads(raw_text) if raw_text else {}
+    if raise_on_max_tokens:
+        structured = json.loads(raw_text) if raw_text else {}
+    else:
+        try:
+            structured = json.loads(raw_text) if raw_text else {}
+        except json.JSONDecodeError:
+            structured = {}
 
     latency_ms = int((time.perf_counter() - t0) * 1000)
     in_tok, out_tok, c_write, c_read, think_tok = _extract_usage_tokens(resp.usage)
@@ -758,6 +770,7 @@ async def run_cat5_tool_loop_step(
     use_prefix_cache: bool,
     api_key: str,
     max_tokens: int = 2048,
+    timeout_s: float = 60.0,
 ) -> AnthropicRawResult:
     """Execute one LLM step inside Category 5 SQLite ERP agent tool-use loop."""
     settings = get_settings()
@@ -783,7 +796,7 @@ async def run_cat5_tool_loop_step(
         else system_text
     )
 
-    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=60.0)
+    client = anthropic.AsyncAnthropic(api_key=api_key, timeout=timeout_s)
     request_params: dict[str, Any] = {
         "max_tokens": max_tokens,
         "endpoint": "messages.create",
